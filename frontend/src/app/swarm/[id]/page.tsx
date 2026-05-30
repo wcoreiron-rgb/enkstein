@@ -86,6 +86,7 @@ export default function SwarmJobDetailPage() {
   const [streaming, setStreaming] = useState(false);
   const [eventFilter, setEventFilter] = useState<'all' | 'job' | 'task' | 'errors'>('all');
   const [taskFilter, setTaskFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all');
+  const [copiedEventIdx, setCopiedEventIdx] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -216,6 +217,17 @@ export default function SwarmJobDetailPage() {
     return true;
   });
 
+  const copyEvent = async (evt: { type: string; data: any; ts: string }, idx: number) => {
+    const payload = `[${new Date(evt.ts).toISOString()}] ${evt.type}: ${eventText(evt.type, evt.data)} | ${JSON.stringify(evt.data)}`;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopiedEventIdx(idx);
+      setTimeout(() => setCopiedEventIdx((prev) => (prev === idx ? null : prev)), 1200);
+    } catch {
+      // best effort; no-op if clipboard is unavailable
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -317,7 +329,15 @@ export default function SwarmJobDetailPage() {
           <div className="mt-3 space-y-2 max-h-44 overflow-auto pr-1">
             {visibleEvents.map((evt, idx) => (
               <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
-                <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
+                  <button
+                    onClick={() => copyEvent(evt, idx)}
+                    className="text-[11px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+                  >
+                    {copiedEventIdx === idx ? 'copied' : 'copy'}
+                  </button>
+                </div>
                 <p className="text-[11px] text-gray-500 mt-0.5">
                   {evt.type} · {new Date(evt.ts).toLocaleTimeString()}
                 </p>
