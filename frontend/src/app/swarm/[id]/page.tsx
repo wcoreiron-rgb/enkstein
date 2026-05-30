@@ -359,6 +359,17 @@ export default function SwarmJobDetailPage() {
               <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
                 {streaming ? 'connected' : 'idle'}
               </span>
+              {eventCounts.errors > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-800">
+                  errors {eventCounts.errors}
+                </span>
+              )}
+              <button
+                onClick={() => setEventFilter('errors')}
+                className="text-xs px-2 py-0.5 rounded border border-red-800 text-red-300 hover:bg-red-900/20"
+              >
+                errors only
+              </button>
               <button
                 onClick={() => {
                   setEventsPaused(v => {
