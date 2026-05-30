@@ -34,6 +34,8 @@ export default function SwarmJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<Array<{ type: string; data: any }>>([]);
+  const [streaming, setStreaming] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -50,7 +52,67 @@ export default function SwarmJobDetailPage() {
     }
   }, [id]);
 
-useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!id) return;
+    const terminal = ['completed', 'failed', 'cancelled', 'blocked', 'requires_approval'].includes((job?.status || '').toLowerCase());
+    if (terminal) return;
+
+    const controller = new AbortController();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('rc_token') : null;
+
+    (async () => {
+      try {
+        setStreaming(true);
+        const res = await fetch(`/api/v1/swarm/jobs/${id}/stream?timeout_seconds=20&poll_interval_ms=400`, {
+          signal: controller.signal,
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (!res.body) return;
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let currentEvent = 'message';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split('\n');
+          buffer = chunks.pop() || '';
+
+          for (const raw of chunks) {
+            const line = raw.trim();
+            if (!line) continue;
+            if (line.startsWith('event:')) {
+              currentEvent = line.replace('event:', '').trim();
+              continue;
+            }
+            if (line.startsWith('data:')) {
+              const payloadText = line.replace('data:', '').trim();
+              let payload: any = payloadText;
+              try { payload = JSON.parse(payloadText); } catch {}
+              setEvents(prev => [{ type: currentEvent, data: payload }, ...prev].slice(0, 40));
+              if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
+                load();
+              }
+            }
+          }
+        }
+      } catch {
+        // stream interruptions are non-fatal; UI still supports manual refresh.
+      } finally {
+        setStreaming(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [id, job?.status, load]);
 
   const cancelJob = async () => {
     if (!id) return;
@@ -117,6 +179,27 @@ useEffect(() => { load(); }, [load]);
           <p className="text-sm text-gray-300 mt-2 leading-relaxed">{summary.executive_summary}</p>
         </div>
       )}
+
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-semibold">Live Stream</h2>
+          <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
+            {streaming ? 'connected' : 'idle'}
+          </span>
+        </div>
+        {events.length === 0 ? (
+          <p className="text-sm text-gray-500 mt-3">Waiting for stream events…</p>
+        ) : (
+          <div className="mt-3 space-y-2 max-h-44 overflow-auto pr-1">
+            {events.map((evt, idx) => (
+              <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
+                <p className="text-xs text-cyan-300">{evt.type}</p>
+                <p className="text-xs text-gray-400 mt-0.5 break-words">{JSON.stringify(evt.data)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800">

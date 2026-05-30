@@ -234,6 +234,16 @@ export const getModelRouterAudit = (limit = 50) =>
 export const getModelRouterSensitivityLevels = () =>
   apiFetch<any>('/model-router/sensitivity-levels');
 
+// ModelClaw
+export const getModelClawProviders = () => apiFetch<any[]>('/modelclaw/providers');
+export const getModelClawProfiles = () => apiFetch<any[]>('/modelclaw/profiles');
+export const createOrUpdateModelClawProfile = (body: object) =>
+  apiFetch<any>('/modelclaw/profiles', { method: 'POST', body: JSON.stringify(body) });
+export const routeModelClawCall = (body: object) =>
+  apiFetch<any>('/modelclaw/route', { method: 'POST', body: JSON.stringify(body) });
+export const getModelClawCalls = (limit = 50) =>
+  apiFetch<any[]>(`/modelclaw/calls?limit=${limit}`);
+
 // Memory / State Layer
 export const getMemorySummary = () => apiFetch<any>('/memory/summary');
 export const getIncidents = (params?: Record<string, string>) => {

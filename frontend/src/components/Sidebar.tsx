@@ -54,6 +54,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Aegis',            href: '/aegis',            icon: Sparkles,         tag: 'Workflow' },
       { label: 'External Agents',  href: '/external-agents',  icon: Globe,            tag: 'OpenClaw' },
       { label: 'Model Router',     href: '/model-router',     icon: Cpu,              tag: 'LLM Sec' },
+      { label: 'ModelClaw',        href: '/modelclaw',        icon: Sparkles,         tag: 'Profiles' },
       { label: 'Memory',           href: '/memory',           icon: Layers,           tag: 'State' },
       { label: 'Skill Packs',      href: '/skill-packs',      icon: Package,          tag: 'Skills' },
       { label: 'Connector Health', href: '/connectors/health',icon: Activity,         tag: 'Monitor' },
