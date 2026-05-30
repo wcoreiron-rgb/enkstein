@@ -234,6 +234,12 @@ export default function SwarmJobDetailPage() {
     if (eventFilter === 'errors') return evt.type === 'error' || evt.type === 'task_status_changed';
     return true;
   });
+  const eventCounts = {
+    all: events.length,
+    job: events.filter((evt) => evt.type.startsWith('job_')).length,
+    task: events.filter((evt) => evt.type.startsWith('task_')).length,
+    errors: events.filter((evt) => evt.type === 'error' || evt.type === 'task_status_changed').length,
+  };
   const latestJobEvent = events.find((evt) => evt.type.startsWith('job_'));
   const visibleTasks = tasks.filter((task) => {
     if (taskFilter === 'all') return true;
@@ -380,10 +386,10 @@ export default function SwarmJobDetailPage() {
           </div>
           <div className="mt-3 flex items-center gap-1.5">
             {[
-              { id: 'all', label: 'All' },
-              { id: 'job', label: 'Job' },
-              { id: 'task', label: 'Task' },
-              { id: 'errors', label: 'Errors' },
+              { id: 'all', label: `All (${eventCounts.all})` },
+              { id: 'job', label: `Job (${eventCounts.job})` },
+              { id: 'task', label: `Task (${eventCounts.task})` },
+              { id: 'errors', label: `Errors (${eventCounts.errors})` },
             ].map((f) => (
               <button
                 key={f.id}
