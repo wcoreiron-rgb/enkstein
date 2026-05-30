@@ -87,6 +87,7 @@ export default function SwarmJobDetailPage() {
   const [eventFilter, setEventFilter] = useState<'all' | 'job' | 'task' | 'errors'>('all');
   const [taskFilter, setTaskFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all');
   const [copiedEventIdx, setCopiedEventIdx] = useState<number | null>(null);
+  const [eventsPaused, setEventsPaused] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -148,7 +149,9 @@ export default function SwarmJobDetailPage() {
               const payloadText = line.replace('data:', '').trim();
               let payload: any = payloadText;
               try { payload = JSON.parse(payloadText); } catch {}
-              setEvents(prev => [{ type: currentEvent, data: payload, ts: new Date().toISOString() }, ...prev].slice(0, 50));
+              if (!eventsPaused) {
+                setEvents(prev => [{ type: currentEvent, data: payload, ts: new Date().toISOString() }, ...prev].slice(0, 50));
+              }
               if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
                 load();
               }
@@ -163,7 +166,7 @@ export default function SwarmJobDetailPage() {
     })();
 
     return () => controller.abort();
-  }, [id, job?.status, load]);
+  }, [id, job?.status, load, eventsPaused]);
 
   const cancelJob = async () => {
     if (!id) return;
@@ -318,6 +321,16 @@ export default function SwarmJobDetailPage() {
             <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
               {streaming ? 'connected' : 'idle'}
             </span>
+            <button
+              onClick={() => setEventsPaused(v => !v)}
+              className={`text-xs px-2 py-0.5 rounded border ${
+                eventsPaused
+                  ? 'border-yellow-800 bg-yellow-900/30 text-yellow-300'
+                  : 'border-gray-700 text-gray-400 hover:text-white'
+              }`}
+            >
+              {eventsPaused ? 'resume' : 'pause'}
+            </button>
             <button
               onClick={exportEvents}
               className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
