@@ -9,6 +9,10 @@ import pytest
         ("/api/v1/cloudclaw/task", "cloudclaw"),
         ("/api/v1/threatclaw/task", "threatclaw"),
         ("/api/v1/arcclaw/task", "arcclaw"),
+        ("/api/v1/accessclaw/task", "accessclaw"),
+        ("/api/v1/dataclaw/task", "dataclaw"),
+        ("/api/v1/devclaw/task", "devclaw"),
+        ("/api/v1/endpointclaw/task", "endpointclaw"),
     ],
 )
 async def test_claw_task_contract_shape(client, path, claw):

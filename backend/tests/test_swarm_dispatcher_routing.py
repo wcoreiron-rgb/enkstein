@@ -20,13 +20,14 @@ def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
 
 
 @pytest.mark.asyncio
-async def test_dispatcher_routes_to_real_identity_task(db_session):
-    task = _mk_task("identityclaw")
+@pytest.mark.parametrize("claw", ["identityclaw", "accessclaw", "dataclaw", "devclaw", "endpointclaw"])
+async def test_dispatcher_routes_to_real_task(db_session, claw):
+    task = _mk_task(claw)
     db_session.add(task)
     await db_session.commit()
 
     out = await execute_task(db_session, task)
-    assert out["claw"] == "identityclaw"
+    assert out["claw"] == claw
     assert out["status"] == "completed"
     assert isinstance(out["recommended_actions"], list)
     # Real /task path has specific recommendations, not simulated fallback title.

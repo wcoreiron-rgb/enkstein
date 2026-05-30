@@ -1,10 +1,12 @@
 """EndpointClaw — Endpoint Security API Routes."""
+from datetime import datetime
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
+from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
@@ -25,6 +27,15 @@ PROVIDER_CONFIG = [
     {"provider": "defender_endpoint",    "connector_type": "defender_endpoint",   "adapter": defender_adapter},
     {"provider": "sentinelone",          "connector_type": "sentinelone",         "adapter": sentinelone_adapter},
 ]
+
+
+class EndpointTaskRequest(BaseModel):
+    swarm_job_id: str | None = None
+    task_type: str = "investigate_endpoint_risk"
+    input: dict = Field(default_factory=dict)
+    classification: str = "internal"
+    model_profile: str | None = None
+    allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
 async def _get_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
@@ -158,3 +169,48 @@ PROVIDER_MAP = [
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
+
+
+@router.post("/task", summary="Execute focused EndpointClaw swarm task")
+async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.utcnow()
+    stmt = (
+        select(Finding)
+        .where(Finding.claw == CLAW_NAME)
+        .order_by(desc(Finding.risk_score), desc(Finding.created_at))
+        .limit(5)
+    )
+    result = await db.execute(stmt)
+    findings = result.scalars().all()
+    max_risk = max([float(f.risk_score or 0.0) for f in findings], default=0.0)
+    severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
+    confidence = 0.88 if findings else 0.7
+    elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+
+    finding_rows = [
+        {
+            "title": f.title,
+            "detail": f"{f.provider or 'endpoint'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}",
+        }
+        for f in findings[:3]
+    ] or [{"title": "No endpoint findings persisted yet", "detail": "Run /endpointclaw/scan or configure providers."}]
+
+    return {
+        "task_id": f"endpoint-task-{int(started.timestamp())}",
+        "swarm_job_id": payload.swarm_job_id,
+        "claw": "endpointclaw",
+        "status": "completed",
+        "severity": severity,
+        "confidence": confidence,
+        "risk_score": max_risk,
+        "findings": finding_rows,
+        "evidence": [],
+        "recommended_actions": [
+            "Contain impacted hosts and isolate high-risk endpoints",
+            "Validate EDR coverage and patch compliance baselines",
+        ],
+        "blocked_actions": [],
+        "policy_decisions": [],
+        "compliance_mappings": ["NIST SI-3", "CIS Control 10"],
+        "execution_time_ms": elapsed_ms,
+    }

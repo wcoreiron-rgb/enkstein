@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.claws.arcclaw.routes import ArcTaskRequest, run_arc_task
+from app.claws.accessclaw.routes import AccessTaskRequest, run_access_task
 from app.claws.cloudclaw.routes import CloudTaskRequest, run_cloud_task
+from app.claws.dataclaw.routes import DataTaskRequest, run_data_task
+from app.claws.devclaw.routes import DevTaskRequest, run_dev_task
+from app.claws.endpointclaw.routes import EndpointTaskRequest, run_endpoint_task
 from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
 from app.fabric.providers.agt import get_agt_adapter
@@ -148,6 +152,14 @@ async def _execute_real_task_if_supported(
         output = await run_threat_task(ThreatTaskRequest(**payload), db)
     elif claw == "arcclaw":
         output = await run_arc_task(ArcTaskRequest(**payload), db)
+    elif claw == "accessclaw":
+        output = await run_access_task(AccessTaskRequest(**payload), db)
+    elif claw == "dataclaw":
+        output = await run_data_task(DataTaskRequest(**payload), db)
+    elif claw == "devclaw":
+        output = await run_dev_task(DevTaskRequest(**payload), db)
+    elif claw == "endpointclaw":
+        output = await run_endpoint_task(EndpointTaskRequest(**payload), db)
     else:
         return None
 
