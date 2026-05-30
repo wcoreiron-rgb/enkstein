@@ -113,6 +113,7 @@ export default function SwarmJobDetailPage() {
   const [eventsPaused, setEventsPaused] = useState(false);
   const [unreadWhilePaused, setUnreadWhilePaused] = useState(0);
   const lastIngestedEventRef = useRef<{ type: string; data: any } | null>(null);
+  const [newEventCutoffMs, setNewEventCutoffMs] = useState<number>(Date.now());
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -180,6 +181,7 @@ export default function SwarmJobDetailPage() {
               if (eventsPaused) {
                 setUnreadWhilePaused(v => v + 1);
               } else {
+                setNewEventCutoffMs(Date.now());
                 setEvents(prev => [nextEvt, ...prev].slice(0, 50));
               }
               if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
@@ -248,6 +250,7 @@ export default function SwarmJobDetailPage() {
     task: events.filter((evt) => evt.type.startsWith('task_')).length,
     errors: events.filter((evt) => evt.type === 'error' || evt.type === 'task_status_changed').length,
   };
+  const newEventThresholdMs = newEventCutoffMs - 6000;
   const latestJobEvent = events.find((evt) => evt.type.startsWith('job_'));
   const visibleTasks = tasks.filter((task) => {
     if (taskFilter === 'all') return true;
@@ -435,7 +438,14 @@ export default function SwarmJobDetailPage() {
         ) : (
           <div className="mt-3 space-y-2 max-h-44 overflow-auto pr-1">
             {visibleEvents.map((evt, idx) => (
-              <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
+              <div
+                key={`${evt.type}-${idx}`}
+                className={`rounded-lg border px-3 py-2 ${
+                  new Date(evt.ts).getTime() >= newEventThresholdMs
+                    ? 'border-cyan-800/70 bg-cyan-950/20'
+                    : 'border-gray-800 bg-gray-950'
+                }`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2 min-w-0">
                     {(() => {
