@@ -51,6 +51,30 @@ function judgeBadgeMeta(judgeMeta: { blocked?: boolean; label: string }) {
   return { icon: Sparkles, cls: 'bg-cyan-900/30 text-cyan-300 border-cyan-800' };
 }
 
+function eventText(type: string, data: any): string {
+  const claw = data?.claw ? ` ${data.claw}` : '';
+  if (type === 'job_started') return `Swarm job started.`;
+  if (type === 'job_completed') return `Swarm job completed with status ${data?.status || 'unknown'}.`;
+  if (type === 'task_started') return `Task started for${claw}.`;
+  if (type === 'task_completed') {
+    const sev = data?.severity ? ` (${data.severity})` : '';
+    const risk = data?.risk_score != null ? ` risk ${data.risk_score}` : '';
+    return `Task completed for${claw}${sev}${risk ? ` ·${risk}` : ''}.`;
+  }
+  if (type === 'task_status_changed') return `Task status changed for${claw}: ${data?.status || 'unknown'}.`;
+  if (type === 'job_snapshot') return `Snapshot: ${data?.status || 'unknown'} · ${data?.task_count ?? 0} tasks.`;
+  if (type === 'stream_timeout') return `Stream timed out after ${data?.timeout_seconds || '?'}s.`;
+  if (type === 'error') return data?.message || 'Stream error.';
+  return `${type}`;
+}
+
+function eventTone(type: string): string {
+  if (type === 'job_completed' || type === 'task_completed') return 'text-green-300';
+  if (type === 'error') return 'text-red-300';
+  if (type === 'task_status_changed') return 'text-yellow-300';
+  return 'text-cyan-300';
+}
+
 export default function SwarmJobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
@@ -226,8 +250,8 @@ export default function SwarmJobDetailPage() {
           <div className="mt-3 space-y-2 max-h-44 overflow-auto pr-1">
             {events.map((evt, idx) => (
               <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
-                <p className="text-xs text-cyan-300">{evt.type}</p>
-                <p className="text-xs text-gray-400 mt-0.5 break-words">{JSON.stringify(evt.data)}</p>
+                <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">{evt.type}</p>
               </div>
             ))}
           </div>
