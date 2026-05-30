@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Users2, XCircle } from 'lucide-react';
+import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Users2, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, createSwarmJob, getSwarmJobs } from '@/lib/api';
 
@@ -33,21 +33,27 @@ function runtimeLabel(startedAt?: string | null, completedAt?: string | null): s
   return `${seconds}s`;
 }
 
-function parseJudgeModel(resultJson?: string | null): { label: string; detail?: string } {
-  if (!resultJson) return { label: '—' };
+function parseJudgeModel(resultJson?: string | null): { label: string; detail?: string; state: 'allowed' | 'blocked' | 'fallback' } {
+  if (!resultJson) return { label: '—', state: 'fallback' };
   try {
     const parsed = JSON.parse(resultJson);
     const jm = parsed?.judge_model;
-    if (!jm) return { label: 'deterministic' };
-    if (jm.blocked) return { label: 'blocked', detail: jm.reason || jm.policy_name || 'policy blocked' };
+    if (!jm) return { label: 'deterministic', state: 'fallback' };
+    if (jm.blocked) return { label: 'blocked', detail: jm.reason || jm.policy_name || 'policy blocked', state: 'blocked' };
     if (jm.provider || jm.profile) {
-      return { label: `${jm.provider || 'model'} / ${jm.profile || 'profile'}`, detail: jm.model || '' };
+      return { label: `${jm.provider || 'model'} / ${jm.profile || 'profile'}`, detail: jm.model || '', state: 'allowed' };
     }
-    if (jm.error) return { label: 'fallback', detail: jm.error };
-    return { label: 'deterministic' };
+    if (jm.error) return { label: 'fallback', detail: jm.error, state: 'fallback' };
+    return { label: 'deterministic', state: 'fallback' };
   } catch {
-    return { label: '—' };
+    return { label: '—', state: 'fallback' };
   }
+}
+
+function judgeStateMeta(state: 'allowed' | 'blocked' | 'fallback') {
+  if (state === 'allowed') return { icon: Sparkles, cls: 'bg-cyan-900/30 text-cyan-300 border-cyan-800' };
+  if (state === 'blocked') return { icon: Ban, cls: 'bg-yellow-900/30 text-yellow-300 border-yellow-800' };
+  return { icon: RotateCcw, cls: 'bg-gray-800 text-gray-300 border-gray-700' };
 }
 
 export default function SwarmPage() {
@@ -183,6 +189,8 @@ export default function SwarmPage() {
                   const busy = busyId === job.id;
                   const participants = parseParticipants(job.participants_json);
                   const judge = parseJudgeModel(job.result_json);
+                  const judgeMeta = judgeStateMeta(judge.state);
+                  const JudgeIcon = judgeMeta.icon;
                   return (
                     <tr key={job.id} className="hover:bg-gray-800/40">
                       <td className="px-5 py-3">
@@ -200,8 +208,10 @@ export default function SwarmPage() {
                       <td className="px-5 py-3 text-gray-300">{job.confidence ?? '—'}</td>
                       <td className="px-5 py-3 text-gray-300">{runtimeLabel(job.started_at, job.completed_at)}</td>
                       <td className="px-5 py-3 text-gray-300">
-                        <div className="text-xs">
-                          <p className="text-gray-200">{judge.label}</p>
+                        <div className="text-xs space-y-1">
+                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${judgeMeta.cls}`}>
+                            <JudgeIcon className="w-3 h-3" /> {judge.label}
+                          </span>
                           {judge.detail && <p className="text-gray-500 truncate max-w-[180px]" title={judge.detail}>{judge.detail}</p>}
                         </div>
                       </td>

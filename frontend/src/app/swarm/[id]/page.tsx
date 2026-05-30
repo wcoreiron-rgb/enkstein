@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks } from '@/lib/api';
 
@@ -39,6 +39,16 @@ function judgeModelMeta(summary: any): { label: string; detail?: string; blocked
   }
   if (jm.error) return { label: 'error fallback', detail: jm.error, blocked: true };
   return { label: 'deterministic fallback' };
+}
+
+function judgeBadgeMeta(judgeMeta: { blocked?: boolean; label: string }) {
+  if (judgeMeta.blocked) {
+    return { icon: Ban, cls: 'bg-yellow-900/30 text-yellow-300 border-yellow-800' };
+  }
+  if (judgeMeta.label.includes('fallback') || judgeMeta.label.includes('deterministic')) {
+    return { icon: RotateCcw, cls: 'bg-gray-800 text-gray-300 border-gray-700' };
+  }
+  return { icon: Sparkles, cls: 'bg-cyan-900/30 text-cyan-300 border-cyan-800' };
 }
 
 export default function SwarmJobDetailPage() {
@@ -158,6 +168,8 @@ export default function SwarmJobDetailPage() {
   let summary: any = null;
   try { summary = job.result_json ? JSON.parse(job.result_json) : null; } catch { summary = null; }
   const judgeMeta = judgeModelMeta(summary);
+  const judgeBadge = judgeBadgeMeta(judgeMeta);
+  const JudgeIcon = judgeBadge.icon;
 
   return (
     <div className="space-y-6">
@@ -192,8 +204,8 @@ export default function SwarmJobDetailPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex items-start justify-between gap-3">
             <h2 className="text-white font-semibold">Judge Summary</h2>
-            <span className={`text-xs px-2 py-0.5 rounded ${judgeMeta.blocked ? 'bg-yellow-900/30 text-yellow-300' : 'bg-cyan-900/30 text-cyan-300'}`}>
-              {judgeMeta.label}
+            <span className={`text-xs px-2 py-0.5 rounded border inline-flex items-center gap-1 ${judgeBadge.cls}`}>
+              <JudgeIcon className="w-3 h-3" /> {judgeMeta.label}
             </span>
           </div>
           {judgeMeta.detail && <p className="text-xs text-gray-500 mt-1">{judgeMeta.detail}</p>}
