@@ -228,6 +228,29 @@ export default function SwarmJobDetailPage() {
     }
   };
 
+  const exportEvents = () => {
+    try {
+      const payload = {
+        job_id: id,
+        exported_at: new Date().toISOString(),
+        filter: eventFilter,
+        count: visibleEvents.length,
+        events: visibleEvents,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = href;
+      a.download = `swarm-${id}-stream-events.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+    } catch {
+      // no-op
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -295,6 +318,12 @@ export default function SwarmJobDetailPage() {
             <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
               {streaming ? 'connected' : 'idle'}
             </span>
+            <button
+              onClick={exportEvents}
+              className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+            >
+              export
+            </button>
             <button
               onClick={() => setEvents([])}
               className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
