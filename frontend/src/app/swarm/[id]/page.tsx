@@ -27,6 +27,20 @@ function secureChannelMeta(outputJson?: string | null): string {
   }
 }
 
+function judgeModelMeta(summary: any): { label: string; detail?: string; blocked?: boolean } {
+  const jm = summary?.judge_model;
+  if (!jm) return { label: 'deterministic fallback' };
+  if (jm.blocked) return { label: 'blocked by policy', detail: jm.reason || jm.policy_name || 'ModelClaw denied', blocked: true };
+  if (jm.provider || jm.profile) {
+    return {
+      label: `${jm.provider || 'model'} / ${jm.profile || 'profile'}`,
+      detail: jm.model || '',
+    };
+  }
+  if (jm.error) return { label: 'error fallback', detail: jm.error, blocked: true };
+  return { label: 'deterministic fallback' };
+}
+
 export default function SwarmJobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
@@ -143,6 +157,7 @@ export default function SwarmJobDetailPage() {
   const Icon = meta.icon;
   let summary: any = null;
   try { summary = job.result_json ? JSON.parse(job.result_json) : null; } catch { summary = null; }
+  const judgeMeta = judgeModelMeta(summary);
 
   return (
     <div className="space-y-6">
@@ -175,7 +190,13 @@ export default function SwarmJobDetailPage() {
 
       {summary?.executive_summary && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-white font-semibold">Judge Summary</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-white font-semibold">Judge Summary</h2>
+            <span className={`text-xs px-2 py-0.5 rounded ${judgeMeta.blocked ? 'bg-yellow-900/30 text-yellow-300' : 'bg-cyan-900/30 text-cyan-300'}`}>
+              {judgeMeta.label}
+            </span>
+          </div>
+          {judgeMeta.detail && <p className="text-xs text-gray-500 mt-1">{judgeMeta.detail}</p>}
           <p className="text-sm text-gray-300 mt-2 leading-relaxed">{summary.executive_summary}</p>
         </div>
       )}

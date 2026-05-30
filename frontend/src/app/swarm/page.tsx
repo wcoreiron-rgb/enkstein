@@ -33,6 +33,23 @@ function runtimeLabel(startedAt?: string | null, completedAt?: string | null): s
   return `${seconds}s`;
 }
 
+function parseJudgeModel(resultJson?: string | null): { label: string; detail?: string } {
+  if (!resultJson) return { label: '—' };
+  try {
+    const parsed = JSON.parse(resultJson);
+    const jm = parsed?.judge_model;
+    if (!jm) return { label: 'deterministic' };
+    if (jm.blocked) return { label: 'blocked', detail: jm.reason || jm.policy_name || 'policy blocked' };
+    if (jm.provider || jm.profile) {
+      return { label: `${jm.provider || 'model'} / ${jm.profile || 'profile'}`, detail: jm.model || '' };
+    }
+    if (jm.error) return { label: 'fallback', detail: jm.error };
+    return { label: 'deterministic' };
+  } catch {
+    return { label: '—' };
+  }
+}
+
 export default function SwarmPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,7 +161,7 @@ export default function SwarmPage() {
           <p className="px-5 py-8 text-sm text-gray-500">No swarm jobs yet. Start one with New Job.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="text-xs text-gray-500 border-b border-gray-800">
                 <tr>
                   <th className="px-5 py-3 text-left">Name</th>
@@ -154,6 +171,7 @@ export default function SwarmPage() {
                   <th className="px-5 py-3 text-left">Severity</th>
                   <th className="px-5 py-3 text-left">Confidence</th>
                   <th className="px-5 py-3 text-left">Runtime</th>
+                  <th className="px-5 py-3 text-left">Judge Model</th>
                   <th className="px-5 py-3 text-left">Requested By</th>
                   <th className="px-5 py-3 text-left">Actions</th>
                 </tr>
@@ -164,6 +182,7 @@ export default function SwarmPage() {
                   const Icon = meta.icon;
                   const busy = busyId === job.id;
                   const participants = parseParticipants(job.participants_json);
+                  const judge = parseJudgeModel(job.result_json);
                   return (
                     <tr key={job.id} className="hover:bg-gray-800/40">
                       <td className="px-5 py-3">
@@ -180,6 +199,12 @@ export default function SwarmPage() {
                       <td className="px-5 py-3"><RiskBadge value={job.overall_severity || 'info'} /></td>
                       <td className="px-5 py-3 text-gray-300">{job.confidence ?? '—'}</td>
                       <td className="px-5 py-3 text-gray-300">{runtimeLabel(job.started_at, job.completed_at)}</td>
+                      <td className="px-5 py-3 text-gray-300">
+                        <div className="text-xs">
+                          <p className="text-gray-200">{judge.label}</p>
+                          {judge.detail && <p className="text-gray-500 truncate max-w-[180px]" title={judge.detail}>{judge.detail}</p>}
+                        </div>
+                      </td>
                       <td className="px-5 py-3 text-gray-400">{job.requested_by}</td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2">
