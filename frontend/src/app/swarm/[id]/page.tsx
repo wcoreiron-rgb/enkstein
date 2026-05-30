@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks } from '@/lib/api';
@@ -103,6 +103,8 @@ export default function SwarmJobDetailPage() {
   const [taskFilter, setTaskFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all');
   const [copiedEventIdx, setCopiedEventIdx] = useState<number | null>(null);
   const [eventsPaused, setEventsPaused] = useState(false);
+  const [unreadWhilePaused, setUnreadWhilePaused] = useState(0);
+  const lastIngestedEventRef = useRef<{ type: string; data: any } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -164,12 +166,13 @@ export default function SwarmJobDetailPage() {
               const payloadText = line.replace('data:', '').trim();
               let payload: any = payloadText;
               try { payload = JSON.parse(payloadText); } catch {}
-              if (!eventsPaused) {
-                setEvents(prev => {
-                  const nextEvt = { type: currentEvent, data: payload, ts: new Date().toISOString() };
-                  if (isDuplicateEvent(prev[0], nextEvt)) return prev;
-                  return [nextEvt, ...prev].slice(0, 50);
-                });
+              const nextEvt = { type: currentEvent, data: payload, ts: new Date().toISOString() };
+              if (isDuplicateEvent(lastIngestedEventRef.current || undefined, nextEvt)) continue;
+              lastIngestedEventRef.current = { type: nextEvt.type, data: nextEvt.data };
+              if (eventsPaused) {
+                setUnreadWhilePaused(v => v + 1);
+              } else {
+                setEvents(prev => [nextEvt, ...prev].slice(0, 50));
               }
               if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
                 load();
@@ -335,62 +338,73 @@ export default function SwarmJobDetailPage() {
       )}
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-white font-semibold">Live Stream</h2>
-          <div className="flex items-center gap-2">
-            <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
-              {streaming ? 'connected' : 'idle'}
-            </span>
-            <button
-              onClick={() => setEventsPaused(v => !v)}
-              className={`text-xs px-2 py-0.5 rounded border ${
-                eventsPaused
-                  ? 'border-yellow-800 bg-yellow-900/30 text-yellow-300'
-                  : 'border-gray-700 text-gray-400 hover:text-white'
-              }`}
-            >
-              {eventsPaused ? 'resume' : 'pause'}
-            </button>
-            <button
-              onClick={exportEvents}
-              className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
-            >
-              export
-            </button>
-            <button
-              onClick={() => setEvents([])}
-              className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
-            >
-              clear
-            </button>
+        <div className="sticky top-0 z-10 -mx-5 px-5 py-2 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/80 border-b border-gray-800">
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-semibold">Live Stream</h2>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
+                {streaming ? 'connected' : 'idle'}
+              </span>
+              <button
+                onClick={() => {
+                  setEventsPaused(v => {
+                    const next = !v;
+                    if (!next) setUnreadWhilePaused(0);
+                    return next;
+                  });
+                }}
+                className={`text-xs px-2 py-0.5 rounded border ${
+                  eventsPaused
+                    ? 'border-yellow-800 bg-yellow-900/30 text-yellow-300'
+                    : 'border-gray-700 text-gray-400 hover:text-white'
+                }`}
+              >
+                {eventsPaused ? `resume${unreadWhilePaused > 0 ? ` (${unreadWhilePaused})` : ''}` : 'pause'}
+              </button>
+              <button
+                onClick={exportEvents}
+                className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+              >
+                export
+              </button>
+              <button
+                onClick={() => {
+                  setEvents([]);
+                  setUnreadWhilePaused(0);
+                }}
+                className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+              >
+                clear
+              </button>
+            </div>
           </div>
+          <div className="mt-3 flex items-center gap-1.5">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'job', label: 'Job' },
+              { id: 'task', label: 'Task' },
+              { id: 'errors', label: 'Errors' },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setEventFilter(f.id as 'all' | 'job' | 'task' | 'errors')}
+                className={`text-xs px-2 py-0.5 rounded border ${
+                  eventFilter === f.id
+                    ? 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
+                    : 'bg-gray-950 text-gray-400 border-gray-800 hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {latestJobEvent && (
+            <p className="mt-2 text-xs text-gray-400">
+              latest: <span className="text-gray-300">{eventText(latestJobEvent.type, latestJobEvent.data)}</span>{' '}
+              <span className="text-gray-500">({new Date(latestJobEvent.ts).toLocaleTimeString()})</span>
+            </p>
+          )}
         </div>
-        <div className="mt-3 flex items-center gap-1.5">
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'job', label: 'Job' },
-            { id: 'task', label: 'Task' },
-            { id: 'errors', label: 'Errors' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setEventFilter(f.id as 'all' | 'job' | 'task' | 'errors')}
-              className={`text-xs px-2 py-0.5 rounded border ${
-                eventFilter === f.id
-                  ? 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
-                  : 'bg-gray-950 text-gray-400 border-gray-800 hover:text-white'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        {latestJobEvent && (
-          <p className="mt-2 text-xs text-gray-400">
-            latest: <span className="text-gray-300">{eventText(latestJobEvent.type, latestJobEvent.data)}</span>{' '}
-            <span className="text-gray-500">({new Date(latestJobEvent.ts).toLocaleTimeString()})</span>
-          </p>
-        )}
         {events.length === 0 ? (
           <p className="text-sm text-gray-500 mt-3">Waiting for stream events…</p>
         ) : (
