@@ -195,6 +195,11 @@ export default function SwarmJobDetailPage() {
   const judgeMeta = judgeModelMeta(summary);
   const judgeBadge = judgeBadgeMeta(judgeMeta);
   const JudgeIcon = judgeBadge.icon;
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
+  const failedTasks = tasks.filter(t => t.status === 'failed' || t.status === 'blocked').length;
+  const runningTasks = tasks.filter(t => t.status === 'running').length;
+  const progressPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const visibleEvents = events.filter((evt) => {
     if (eventFilter === 'all') return true;
     if (eventFilter === 'job') return evt.type.startsWith('job_');
@@ -230,6 +235,24 @@ export default function SwarmJobDetailPage() {
         <Card label="Confidence">{job.confidence ?? '—'}</Card>
         <Card label="Parallelism">{job.parallelism}</Card>
         <Card label="Tasks">{String(tasks.length)}</Card>
+      </div>
+
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-white font-semibold text-sm">Task Progress</h2>
+          <span className="text-xs text-gray-400">{completedTasks}/{totalTasks} completed</span>
+        </div>
+        <div className="h-2 w-full rounded-full bg-gray-800 overflow-hidden">
+          <div
+            className="h-full bg-cyan-500 transition-all duration-300"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <div className="mt-3 flex items-center gap-4 text-xs">
+          <span className="text-green-300">completed: {completedTasks}</span>
+          <span className="text-blue-300">running: {runningTasks}</span>
+          <span className="text-red-300">failed/blocked: {failedTasks}</span>
+        </div>
       </div>
 
       {summary?.executive_summary && (
