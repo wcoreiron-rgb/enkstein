@@ -112,8 +112,35 @@ export default function SwarmJobDetailPage() {
   const [copiedEventIdx, setCopiedEventIdx] = useState<number | null>(null);
   const [eventsPaused, setEventsPaused] = useState(false);
   const [unreadWhilePaused, setUnreadWhilePaused] = useState(0);
+  const [streamErrorCount, setStreamErrorCount] = useState(0);
+  const [lastEventAt, setLastEventAt] = useState<string | null>(null);
+  const [eventSearch, setEventSearch] = useState('');
+  const [eventSort, setEventSort] = useState<'newest' | 'oldest'>('newest');
   const lastIngestedEventRef = useRef<{ type: string; data: any } | null>(null);
   const [newEventCutoffMs, setNewEventCutoffMs] = useState<number>(Date.now());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem('rc_swarm_stream_prefs');
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (parsed?.eventFilter) setEventFilter(parsed.eventFilter);
+      if (parsed?.taskFilter) setTaskFilter(parsed.taskFilter);
+      if (parsed?.eventSort) setEventSort(parsed.eventSort);
+      if (typeof parsed?.eventsPaused === 'boolean') setEventsPaused(parsed.eventsPaused);
+    } catch {
+      // ignore persisted state parse errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(
+      'rc_swarm_stream_prefs',
+      JSON.stringify({ eventFilter, taskFilter, eventSort, eventsPaused })
+    );
+  }, [eventFilter, taskFilter, eventSort, eventsPaused]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -178,6 +205,7 @@ export default function SwarmJobDetailPage() {
               const nextEvt = { type: currentEvent, data: payload, ts: new Date().toISOString() };
               if (isDuplicateEvent(lastIngestedEventRef.current || undefined, nextEvt)) continue;
               lastIngestedEventRef.current = { type: nextEvt.type, data: nextEvt.data };
+              setLastEventAt(nextEvt.ts);
               if (eventsPaused) {
                 setUnreadWhilePaused(v => v + 1);
               } else {
@@ -192,6 +220,7 @@ export default function SwarmJobDetailPage() {
         }
       } catch {
         // stream interruptions are non-fatal; UI still supports manual refresh.
+        setStreamErrorCount(v => v + 1);
       } finally {
         setStreaming(false);
       }
@@ -237,13 +266,23 @@ export default function SwarmJobDetailPage() {
   const failedTasks = tasks.filter(t => t.status === 'failed' || t.status === 'blocked').length;
   const runningTasks = tasks.filter(t => t.status === 'running').length;
   const progressPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-  const visibleEvents = events.filter((evt) => {
+  const filteredEvents = events.filter((evt) => {
     if (eventFilter === 'all') return true;
     if (eventFilter === 'job') return evt.type.startsWith('job_');
     if (eventFilter === 'task') return evt.type.startsWith('task_');
     if (eventFilter === 'errors') return evt.type === 'error' || evt.type === 'task_status_changed';
     return true;
   });
+  const visibleEvents = filteredEvents
+    .filter((evt) => {
+      if (!eventSearch.trim()) return true;
+      const q = eventSearch.toLowerCase();
+      const txt = eventText(evt.type, evt.data).toLowerCase();
+      return txt.includes(q) || evt.type.toLowerCase().includes(q);
+    })
+    .sort((a, b) => (eventSort === 'newest'
+      ? new Date(b.ts).getTime() - new Date(a.ts).getTime()
+      : new Date(a.ts).getTime() - new Date(b.ts).getTime()));
   const eventCounts = {
     all: events.length,
     job: events.filter((evt) => evt.type.startsWith('job_')).length,
@@ -289,6 +328,17 @@ export default function SwarmJobDetailPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(href);
+    } catch {
+      // no-op
+    }
+  };
+  const copyVisibleEvents = async () => {
+    if (visibleEvents.length === 0) return;
+    const text = visibleEvents
+      .map((evt) => `[${new Date(evt.ts).toISOString()}] ${evt.type}: ${eventText(evt.type, evt.data)}`)
+      .join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
     } catch {
       // no-op
     }
@@ -362,6 +412,16 @@ export default function SwarmJobDetailPage() {
               <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
                 {streaming ? 'connected' : 'idle'}
               </span>
+              {lastEventAt && (
+                <span className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400">
+                  last {new Date(lastEventAt).toLocaleTimeString()}
+                </span>
+              )}
+              {streamErrorCount > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded border border-yellow-800 bg-yellow-900/20 text-yellow-300">
+                  reconnects {streamErrorCount}
+                </span>
+              )}
               {eventCounts.errors > 0 && (
                 <span className="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-300 border border-red-800">
                   errors {eventCounts.errors}
@@ -396,6 +456,12 @@ export default function SwarmJobDetailPage() {
                 export
               </button>
               <button
+                onClick={copyVisibleEvents}
+                className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+              >
+                copy visible
+              </button>
+              <button
                 onClick={() => {
                   setEvents([]);
                   setUnreadWhilePaused(0);
@@ -425,6 +491,20 @@ export default function SwarmJobDetailPage() {
                 {f.label}
               </button>
             ))}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              placeholder="Search stream events"
+              className="w-full max-w-xs px-2 py-1 rounded border border-gray-700 bg-gray-950 text-xs text-gray-200 placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-cyan-700"
+            />
+            <button
+              onClick={() => setEventSort((s) => (s === 'newest' ? 'oldest' : 'newest'))}
+              className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-white"
+            >
+              {eventSort === 'newest' ? 'newest first' : 'oldest first'}
+            </button>
           </div>
           {latestJobEvent && (
             <p className="mt-2 text-xs text-gray-400">
