@@ -85,6 +85,7 @@ export default function SwarmJobDetailPage() {
   const [events, setEvents] = useState<Array<{ type: string; data: any; ts: string }>>([]);
   const [streaming, setStreaming] = useState(false);
   const [eventFilter, setEventFilter] = useState<'all' | 'job' | 'task' | 'errors'>('all');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'running' | 'completed' | 'failed'>('all');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -207,6 +208,13 @@ export default function SwarmJobDetailPage() {
     if (eventFilter === 'errors') return evt.type === 'error' || evt.type === 'task_status_changed';
     return true;
   });
+  const visibleTasks = tasks.filter((task) => {
+    if (taskFilter === 'all') return true;
+    if (taskFilter === 'running') return task.status === 'running';
+    if (taskFilter === 'completed') return task.status === 'completed';
+    if (taskFilter === 'failed') return task.status === 'failed' || task.status === 'blocked' || task.status === 'cancelled';
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -324,7 +332,29 @@ export default function SwarmJobDetailPage() {
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800">
-          <h2 className="text-white font-semibold">Tasks</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-white font-semibold">Tasks</h2>
+            <div className="flex items-center gap-1.5">
+              {[
+                { id: 'all', label: `All (${tasks.length})` },
+                { id: 'running', label: `Running (${runningTasks})` },
+                { id: 'completed', label: `Completed (${completedTasks})` },
+                { id: 'failed', label: `Failed (${failedTasks})` },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setTaskFilter(f.id as 'all' | 'running' | 'completed' | 'failed')}
+                  className={`text-xs px-2 py-0.5 rounded border ${
+                    taskFilter === f.id
+                      ? 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
+                      : 'bg-gray-950 text-gray-400 border-gray-800 hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         {tasks.length === 0 ? (
           <p className="px-5 py-6 text-sm text-gray-500">No tasks attached to this job.</p>
@@ -344,7 +374,7 @@ export default function SwarmJobDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {tasks.map((task) => {
+                {visibleTasks.map((task) => {
                   const tMeta = statusMeta(task.status);
                   const TIcon = tMeta.icon;
                   const secureState = secureChannelMeta(task.output_json);
@@ -364,6 +394,9 @@ export default function SwarmJobDetailPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {tasks.length > 0 && visibleTasks.length === 0 && (
+          <p className="px-5 py-4 text-xs text-gray-500">No tasks in this filter.</p>
         )}
       </div>
     </div>
