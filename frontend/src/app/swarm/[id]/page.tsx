@@ -82,8 +82,9 @@ export default function SwarmJobDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [events, setEvents] = useState<Array<{ type: string; data: any }>>([]);
+  const [events, setEvents] = useState<Array<{ type: string; data: any; ts: string }>>([]);
   const [streaming, setStreaming] = useState(false);
+  const [eventFilter, setEventFilter] = useState<'all' | 'job' | 'task' | 'errors'>('all');
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -145,7 +146,7 @@ export default function SwarmJobDetailPage() {
               const payloadText = line.replace('data:', '').trim();
               let payload: any = payloadText;
               try { payload = JSON.parse(payloadText); } catch {}
-              setEvents(prev => [{ type: currentEvent, data: payload }, ...prev].slice(0, 40));
+              setEvents(prev => [{ type: currentEvent, data: payload, ts: new Date().toISOString() }, ...prev].slice(0, 50));
               if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
                 load();
               }
@@ -194,6 +195,13 @@ export default function SwarmJobDetailPage() {
   const judgeMeta = judgeModelMeta(summary);
   const judgeBadge = judgeBadgeMeta(judgeMeta);
   const JudgeIcon = judgeBadge.icon;
+  const visibleEvents = events.filter((evt) => {
+    if (eventFilter === 'all') return true;
+    if (eventFilter === 'job') return evt.type.startsWith('job_');
+    if (eventFilter === 'task') return evt.type.startsWith('task_');
+    if (eventFilter === 'errors') return evt.type === 'error' || evt.type === 'task_status_changed';
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -240,20 +248,53 @@ export default function SwarmJobDetailPage() {
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-white font-semibold">Live Stream</h2>
-          <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
-            {streaming ? 'connected' : 'idle'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`text-xs px-2 py-0.5 rounded ${streaming ? 'bg-green-900/30 text-green-400' : 'bg-gray-800 text-gray-400'}`}>
+              {streaming ? 'connected' : 'idle'}
+            </span>
+            <button
+              onClick={() => setEvents([])}
+              className="text-xs px-2 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
+            >
+              clear
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-1.5">
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'job', label: 'Job' },
+            { id: 'task', label: 'Task' },
+            { id: 'errors', label: 'Errors' },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setEventFilter(f.id as 'all' | 'job' | 'task' | 'errors')}
+              className={`text-xs px-2 py-0.5 rounded border ${
+                eventFilter === f.id
+                  ? 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
+                  : 'bg-gray-950 text-gray-400 border-gray-800 hover:text-white'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
         {events.length === 0 ? (
           <p className="text-sm text-gray-500 mt-3">Waiting for stream events…</p>
         ) : (
           <div className="mt-3 space-y-2 max-h-44 overflow-auto pr-1">
-            {events.map((evt, idx) => (
+            {visibleEvents.map((evt, idx) => (
               <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
                 <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{evt.type}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {evt.type} · {new Date(evt.ts).toLocaleTimeString()}
+                </p>
               </div>
             ))}
+            {visibleEvents.length === 0 && (
+              <p className="text-xs text-gray-500 px-1 py-2">No events for this filter yet.</p>
+            )}
           </div>
         )}
       </div>
