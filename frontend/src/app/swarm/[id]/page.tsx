@@ -75,6 +75,21 @@ function eventTone(type: string): string {
   return 'text-cyan-300';
 }
 
+function isDuplicateEvent(
+  prev: { type: string; data: any } | undefined,
+  next: { type: string; data: any }
+): boolean {
+  if (!prev) return false;
+  if (prev.type !== next.type) return false;
+  if (next.type === 'job_snapshot') {
+    return prev.data?.status === next.data?.status && prev.data?.task_count === next.data?.task_count;
+  }
+  if (next.type === 'task_status_changed') {
+    return prev.data?.claw === next.data?.claw && prev.data?.status === next.data?.status;
+  }
+  return false;
+}
+
 export default function SwarmJobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
@@ -150,7 +165,11 @@ export default function SwarmJobDetailPage() {
               let payload: any = payloadText;
               try { payload = JSON.parse(payloadText); } catch {}
               if (!eventsPaused) {
-                setEvents(prev => [{ type: currentEvent, data: payload, ts: new Date().toISOString() }, ...prev].slice(0, 50));
+                setEvents(prev => {
+                  const nextEvt = { type: currentEvent, data: payload, ts: new Date().toISOString() };
+                  if (isDuplicateEvent(prev[0], nextEvt)) return prev;
+                  return [nextEvt, ...prev].slice(0, 50);
+                });
               }
               if (['task_started', 'task_completed', 'job_completed', 'job_snapshot'].includes(currentEvent)) {
                 load();
@@ -212,6 +231,7 @@ export default function SwarmJobDetailPage() {
     if (eventFilter === 'errors') return evt.type === 'error' || evt.type === 'task_status_changed';
     return true;
   });
+  const latestJobEvent = events.find((evt) => evt.type.startsWith('job_'));
   const visibleTasks = tasks.filter((task) => {
     if (taskFilter === 'all') return true;
     if (taskFilter === 'running') return task.status === 'running';
@@ -365,6 +385,12 @@ export default function SwarmJobDetailPage() {
             </button>
           ))}
         </div>
+        {latestJobEvent && (
+          <p className="mt-2 text-xs text-gray-400">
+            latest: <span className="text-gray-300">{eventText(latestJobEvent.type, latestJobEvent.data)}</span>{' '}
+            <span className="text-gray-500">({new Date(latestJobEvent.ts).toLocaleTimeString()})</span>
+          </p>
+        )}
         {events.length === 0 ? (
           <p className="text-sm text-gray-500 mt-3">Waiting for stream events…</p>
         ) : (
