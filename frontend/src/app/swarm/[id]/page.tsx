@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks } from '@/lib/api';
 
@@ -73,6 +73,14 @@ function eventTone(type: string): string {
   if (type === 'error') return 'text-red-300';
   if (type === 'task_status_changed') return 'text-yellow-300';
   return 'text-cyan-300';
+}
+
+function eventIconMeta(type: string): { icon: any; cls: string } {
+  if (type === 'job_completed' || type === 'task_completed') return { icon: CheckCircle2, cls: 'text-green-300' };
+  if (type === 'error') return { icon: AlertTriangle, cls: 'text-red-300' };
+  if (type === 'task_status_changed') return { icon: ShieldAlert, cls: 'text-yellow-300' };
+  if (type === 'task_started') return { icon: Activity, cls: 'text-blue-300' };
+  return { icon: Clock, cls: 'text-cyan-300' };
 }
 
 function isDuplicateEvent(
@@ -418,7 +426,14 @@ export default function SwarmJobDetailPage() {
             {visibleEvents.map((evt, idx) => (
               <div key={`${evt.type}-${idx}`} className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
-                  <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
+                  <div className="flex items-start gap-2 min-w-0">
+                    {(() => {
+                      const meta = eventIconMeta(evt.type);
+                      const EIcon = meta.icon;
+                      return <EIcon className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${meta.cls}`} />;
+                    })()}
+                    <p className={`text-xs font-medium ${eventTone(evt.type)}`}>{eventText(evt.type, evt.data)}</p>
+                  </div>
                   <button
                     onClick={() => copyEvent(evt, idx)}
                     className="text-[11px] px-1.5 py-0.5 rounded border border-gray-700 text-gray-400 hover:text-white"
@@ -427,7 +442,8 @@ export default function SwarmJobDetailPage() {
                   </button>
                 </div>
                 <p className="text-[11px] text-gray-500 mt-0.5">
-                  {evt.type} · {new Date(evt.ts).toLocaleTimeString()}
+                  <span className="inline-block px-1 py-0 rounded border border-gray-700 text-gray-400 mr-1">{evt.type}</span>
+                  {new Date(evt.ts).toLocaleTimeString()}
                 </p>
               </div>
             ))}
