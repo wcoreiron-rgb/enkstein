@@ -188,13 +188,28 @@ def test_asi04_supply_chain_scan_returns_result():
     """
     from app.trust_fabric.agt_bridge import scan_requirements
 
-    # Use a non-existent path — should gracefully return safe/zero result
-    result = scan_requirements("/nonexistent/requirements.txt")
+    # Use a repo-relative, non-existent path — should gracefully return safe/zero result
+    result = scan_requirements("backend/requirements-does-not-exist.txt")
 
     assert hasattr(result, "is_safe"), "SupplyChainResult must have is_safe"
     assert hasattr(result, "risk_score"), "SupplyChainResult must have risk_score"
     assert isinstance(result.risk_score, float)
     assert 0.0 <= result.risk_score <= 100.0
+
+
+def test_asi04_supply_chain_scan_blocks_outside_repo_path_when_agt_enabled():
+    """
+    ASI-04 hardening: when AGT is enabled, out-of-repo dependency scan paths
+    must fail closed with an unsafe/high-risk result.
+    """
+    import app.trust_fabric.agt_bridge as agt_bridge
+
+    if not agt_bridge.AGT_AVAILABLE:
+        pytest.skip("AGT not installed; path-policy behavior applies when AGT scanners are active")
+
+    result = agt_bridge.scan_requirements("/etc/passwd")
+    assert result.is_safe is False
+    assert result.risk_score >= 90.0
 
 
 @pytest.mark.xfail(

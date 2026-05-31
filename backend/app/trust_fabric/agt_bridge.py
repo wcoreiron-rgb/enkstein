@@ -235,6 +235,14 @@ def scan_requirements(requirements_path: str) -> SupplyChainResult:
             agt_used=True,
         )
 
+    except ValueError:
+        logger.warning("Rejected requirements scan path outside repository root")
+        return SupplyChainResult(
+            is_safe=False,
+            risk_score=100.0,
+            issues=[{"type": "path_policy_violation", "package": "n/a", "detail": "path escapes repository root"}],
+            agt_used=True,
+        )
     except Exception:
         logger.warning("AGT supply chain scan failed")
         return SupplyChainResult(is_safe=True, risk_score=0.0, agt_used=False)
@@ -269,6 +277,14 @@ def scan_package_json(package_json_path: str) -> SupplyChainResult:
             is_safe=risk_score < 40,
             risk_score=risk_score,
             issues=issues,
+            agt_used=True,
+        )
+    except ValueError:
+        logger.warning("Rejected package.json scan path outside repository root")
+        return SupplyChainResult(
+            is_safe=False,
+            risk_score=100.0,
+            issues=[{"type": "path_policy_violation", "package": "n/a", "detail": "path escapes repository root"}],
             agt_used=True,
         )
     except Exception:
