@@ -13,12 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal
 from app.claws.arcclaw.routes import ArcTaskRequest, run_arc_task
 from app.claws.accessclaw.routes import AccessTaskRequest, run_access_task
+from app.claws.attackpathclaw.routes import AttackPathTaskRequest, run_attackpath_task
 from app.claws.appclaw.routes import AppTaskRequest, run_app_task
+from app.claws.automationclaw.routes import AutomationTaskRequest, run_automation_task
 from app.claws.cloudclaw.routes import CloudTaskRequest, run_cloud_task
 from app.claws.complianceclaw.routes import ComplianceTaskRequest, run_compliance_task
+from app.claws.configclaw.routes import ConfigTaskRequest, run_config_task
 from app.claws.dataclaw.routes import DataTaskRequest, run_data_task
 from app.claws.devclaw.routes import DevTaskRequest, run_dev_task
 from app.claws.endpointclaw.routes import EndpointTaskRequest, run_endpoint_task
+from app.claws.exposureclaw.routes import ExposureTaskRequest, run_exposure_task
 from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
 from app.claws.intelclaw.routes import IntelTaskRequest, run_intel_task
 from app.claws.logclaw.routes import LogTaskRequest, run_log_task
@@ -193,6 +197,14 @@ async def _execute_real_task_if_supported(
         output = await run_insider_task(InsiderTaskRequest(**payload), db)
     elif claw == "vendorclaw":
         output = await run_vendor_task(VendorTaskRequest(**payload), db)
+    elif claw == "attackpathclaw":
+        output = await run_attackpath_task(AttackPathTaskRequest(**payload), db)
+    elif claw == "automationclaw":
+        output = await run_automation_task(AutomationTaskRequest(**payload), db)
+    elif claw == "configclaw":
+        output = await run_config_task(ConfigTaskRequest(**payload), db)
+    elif claw == "exposureclaw":
+        output = await run_exposure_task(ExposureTaskRequest(**payload), db)
     else:
         return None
 

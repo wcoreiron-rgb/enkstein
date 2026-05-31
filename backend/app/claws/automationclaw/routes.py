@@ -1,11 +1,26 @@
 """AutomationClaw — CI/CD & Automation Security API Routes."""
+from datetime import datetime
+from typing import Any
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 
 from app.core.database import get_db
+from app.models.finding import Finding
 
 router = APIRouter(prefix="/automationclaw", tags=["AutomationClaw"])
 CLAW_NAME = "automationclaw"
+
+
+class AutomationTaskRequest(BaseModel):
+    swarm_job_id: str
+    task_type: str
+    input: dict[str, Any] = {}
+    classification: str = "internal"
+    model_profile: str | None = None
+    allowed_actions: list[str] = ["read", "analyze", "recommend"]
 
 PROVIDER_MAP = [
     {"provider": "github_actions", "label": "GitHub Actions",  "connector_type": "github"},
@@ -340,4 +355,47 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         "findings_updated": summary["updated"],
         "critical": summary["critical"],
         "high": summary["high"],
+    }
+
+
+@router.post("/task", summary="Execute focused AutomationClaw swarm task")
+async def run_automation_task(payload: AutomationTaskRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.utcnow()
+    result = await db.execute(
+        select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
+    )
+    findings = result.scalars().all()
+    fallback = _FINDINGS[:3] if not findings else []
+    max_risk = max(
+        [float(f.risk_score or 0.0) for f in findings],
+        default=max([float(f.get("risk_score") or 0.0) for f in fallback], default=0.0),
+    )
+    severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
+    confidence = 0.88 if findings else 0.74
+    elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+    rows = [
+        {"title": f.title, "detail": f"{f.provider or 'automation'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}"}
+        for f in findings[:3]
+    ] or [
+        {"title": f.get("title", "Automation finding"), "detail": (f.get("description", "")[:220] or "Simulation finding")}
+        for f in fallback
+    ]
+    return {
+        "task_id": f"automation-task-{int(started.timestamp())}",
+        "swarm_job_id": payload.swarm_job_id,
+        "claw": "automationclaw",
+        "status": "completed",
+        "severity": severity,
+        "confidence": confidence,
+        "risk_score": max_risk,
+        "findings": rows or [{"title": "No automation findings", "detail": "Run /automationclaw/scan first."}],
+        "evidence": [],
+        "recommended_actions": [
+            "Rotate CI/CD credentials and enforce OIDC federation",
+            "Apply least-privilege and branch protection on deployment workflows",
+        ],
+        "blocked_actions": [],
+        "policy_decisions": [],
+        "compliance_mappings": ["SLSA", "NIST CM-5"],
+        "execution_time_ms": elapsed_ms,
     }

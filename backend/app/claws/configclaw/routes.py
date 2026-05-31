@@ -1,13 +1,28 @@
 """ConfigClaw — Cloud Configuration & CIS Benchmarks API Routes."""
+from datetime import datetime
+from typing import Any
+
 import uuid
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 
 from app.core.database import get_db
+from app.models.finding import Finding
 
 router = APIRouter(prefix="/configclaw", tags=["ConfigClaw"])
 
 CLAW_NAME = "configclaw"
+
+
+class ConfigTaskRequest(BaseModel):
+    swarm_job_id: str
+    task_type: str
+    input: dict[str, Any] = {}
+    classification: str = "internal"
+    model_profile: str | None = None
+    allowed_actions: list[str] = ["read", "analyze", "recommend"]
 PROVIDER_MAP = [
     {"provider": "aws_config",       "label": "AWS Config",            "connector_type": "aws_config"},
     {"provider": "azure_policy",     "label": "Azure Policy",          "connector_type": "azure_policy"},
@@ -269,4 +284,46 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         "high": summary["high"],
     }
 
+
+@router.post("/task", summary="Execute focused ConfigClaw swarm task")
+async def run_config_task(payload: ConfigTaskRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.utcnow()
+    result = await db.execute(
+        select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
+    )
+    findings = result.scalars().all()
+    fallback = _FINDINGS[:3] if not findings else []
+    max_risk = max(
+        [float(f.risk_score or 0.0) for f in findings],
+        default=max([float(f.get("risk_score") or 0.0) for f in fallback], default=0.0),
+    )
+    severity = "critical" if max_risk >= 0.85 else "high" if max_risk >= 0.70 else "medium" if max_risk >= 0.40 else "low"
+    confidence = 0.86 if findings else 0.73
+    elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+    rows = [
+        {"title": f.title, "detail": f"{f.provider or 'config'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}"}
+        for f in findings[:3]
+    ] or [
+        {"title": f.get("title", "Config finding"), "detail": (f.get("description", "")[:220] or "Simulation finding")}
+        for f in fallback
+    ]
+    return {
+        "task_id": f"config-task-{int(started.timestamp())}",
+        "swarm_job_id": payload.swarm_job_id,
+        "claw": "configclaw",
+        "status": "completed",
+        "severity": severity,
+        "confidence": confidence,
+        "risk_score": max_risk,
+        "findings": rows or [{"title": "No config findings", "detail": "Run /configclaw/scan first."}],
+        "evidence": [],
+        "recommended_actions": [
+            "Enforce baseline CIS configuration controls across cloud accounts",
+            "Prioritize misconfigurations with direct exposure or privilege impact",
+        ],
+        "blocked_actions": [],
+        "policy_decisions": [],
+        "compliance_mappings": ["CIS Benchmarks", "NIST CM-2"],
+        "execution_time_ms": elapsed_ms,
+    }
 
