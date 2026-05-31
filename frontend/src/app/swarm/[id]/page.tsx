@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity, Copy } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks } from '@/lib/api';
 
@@ -98,6 +98,108 @@ function isDuplicateEvent(
   return false;
 }
 
+function parseParticipants(value?: string): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function collectComplianceRollup(summary: any, tasks: any[]): Array<{ key: string; count: number }> {
+  const counts = new Map<string, number>();
+  const add = (v?: string) => {
+    if (!v) return;
+    const key = String(v).trim();
+    if (!key) return;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  };
+
+  const summaryImpact = Array.isArray(summary?.compliance_impact) ? summary.compliance_impact : [];
+  for (const item of summaryImpact) {
+    if (typeof item === 'string') add(item);
+    if (item && typeof item === 'object') {
+      add(item.control);
+      add(item.framework);
+      add(item.mapping);
+      add(item.reference);
+    }
+  }
+
+  for (const task of tasks) {
+    try {
+      const parsed = task?.output_json ? JSON.parse(task.output_json) : null;
+      const mappings = Array.isArray(parsed?.compliance_mappings) ? parsed.compliance_mappings : [];
+      for (const m of mappings) {
+        if (typeof m === 'string') add(m);
+        if (m && typeof m === 'object') {
+          add(m.control);
+          add(m.framework);
+          add(m.mapping);
+          add(m.reference);
+        }
+      }
+    } catch {
+      // ignore malformed task output payloads
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+}
+
+function buildTicketDraft(job: any, summary: any, tasks: any[]): string {
+  const participants = parseParticipants(job?.participants_json);
+  const topFindings = Array.isArray(summary?.top_findings) ? summary.top_findings : [];
+  const recs = Array.isArray(summary?.recommended_actions) ? summary.recommended_actions : [];
+  const compliance = collectComplianceRollup(summary, tasks);
+  const now = new Date().toISOString();
+  const findingLines = topFindings.slice(0, 5).map((f: any, i: number) => {
+    if (typeof f === 'string') return `${i + 1}. ${f}`;
+    return `${i + 1}. ${f?.title || f?.detail || 'finding'}`;
+  });
+  const actionLines = recs.slice(0, 6).map((r: any, i: number) => {
+    if (typeof r === 'string') return `${i + 1}. ${r}`;
+    return `${i + 1}. ${r?.action || r?.title || JSON.stringify(r)}`;
+  });
+  const complianceLines = compliance.slice(0, 8).map((c, i) => `${i + 1}. ${c.key} (${c.count})`);
+
+  return [
+    `Title: [RegentClaw] Suspicious Identity Investigation - ${job?.name || 'Swarm Job'}`,
+    `Generated: ${now}`,
+    `Job ID: ${job?.id || ''}`,
+    `Profile: ${job?.profile || ''}`,
+    `Status: ${job?.status || ''}`,
+    `Severity: ${job?.overall_severity || 'info'}`,
+    `Confidence: ${job?.confidence ?? 'n/a'}`,
+    `Participants: ${participants.length ? participants.join(', ') : 'n/a'}`,
+    '',
+    'Executive Summary:',
+    `${summary?.executive_summary || 'No summary available.'}`,
+    '',
+    `Root Cause: ${summary?.root_cause || 'n/a'}`,
+    `Blast Radius: ${summary?.blast_radius || 'n/a'}`,
+    '',
+    'Top Findings:',
+    ...(findingLines.length ? findingLines : ['1. n/a']),
+    '',
+    'Recommended Actions:',
+    ...(actionLines.length ? actionLines : ['1. n/a']),
+    '',
+    'Compliance Impact Rollup:',
+    ...(complianceLines.length ? complianceLines : ['1. none reported']),
+    '',
+    'Next Steps:',
+    ...(Array.isArray(summary?.next_steps) && summary.next_steps.length
+      ? summary.next_steps.map((s: string, i: number) => `${i + 1}. ${s}`)
+      : ['1. Validate findings and action plan with incident owner.']),
+  ].join('\n');
+}
+
 export default function SwarmJobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
@@ -116,6 +218,8 @@ export default function SwarmJobDetailPage() {
   const [lastEventAt, setLastEventAt] = useState<string | null>(null);
   const [eventSearch, setEventSearch] = useState('');
   const [eventSort, setEventSort] = useState<'newest' | 'oldest'>('newest');
+  const [ticketCopied, setTicketCopied] = useState(false);
+  const [complianceCopied, setComplianceCopied] = useState(false);
   const lastIngestedEventRef = useRef<{ type: string; data: any } | null>(null);
   const [newEventCutoffMs, setNewEventCutoffMs] = useState<number>(Date.now());
 
@@ -298,6 +402,8 @@ export default function SwarmJobDetailPage() {
     if (taskFilter === 'failed') return task.status === 'failed' || task.status === 'blocked' || task.status === 'cancelled';
     return true;
   });
+  const complianceRollup = collectComplianceRollup(summary, tasks);
+  const ticketDraft = buildTicketDraft(job, summary, tasks);
 
   const copyEvent = async (evt: { type: string; data: any; ts: string }, idx: number) => {
     const payload = `[${new Date(evt.ts).toISOString()}] ${evt.type}: ${eventText(evt.type, evt.data)} | ${JSON.stringify(evt.data)}`;
@@ -339,6 +445,25 @@ export default function SwarmJobDetailPage() {
       .join('\n');
     try {
       await navigator.clipboard.writeText(text);
+    } catch {
+      // no-op
+    }
+  };
+  const copyTicketDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(ticketDraft);
+      setTicketCopied(true);
+      setTimeout(() => setTicketCopied(false), 1200);
+    } catch {
+      // no-op
+    }
+  };
+  const copyComplianceRollup = async () => {
+    try {
+      const body = complianceRollup.map((c) => `${c.key}: ${c.count}`).join('\n');
+      await navigator.clipboard.writeText(body || 'No compliance impact reported.');
+      setComplianceCopied(true);
+      setTimeout(() => setComplianceCopied(false), 1200);
     } catch {
       // no-op
     }
@@ -419,6 +544,51 @@ export default function SwarmJobDetailPage() {
           )}
         </div>
       )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-white font-semibold">Ticket Draft</h2>
+              <p className="text-xs text-gray-500 mt-1">Live draft from current swarm judgment and task evidence.</p>
+            </div>
+            <button
+              onClick={copyTicketDraft}
+              className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1"
+            >
+              <Copy className="w-3 h-3" /> {ticketCopied ? 'copied' : 'copy'}
+            </button>
+          </div>
+          <pre className="mt-3 text-xs text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-3 whitespace-pre-wrap max-h-72 overflow-auto">{ticketDraft}</pre>
+        </div>
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-white font-semibold">Compliance Impact Rollup</h2>
+              <p className="text-xs text-gray-500 mt-1">Aggregated from judge summary and task-level compliance mappings.</p>
+            </div>
+            <button
+              onClick={copyComplianceRollup}
+              className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1"
+            >
+              <Copy className="w-3 h-3" /> {complianceCopied ? 'copied' : 'copy'}
+            </button>
+          </div>
+          {complianceRollup.length === 0 ? (
+            <p className="text-sm text-gray-500 mt-4">No compliance impact reported yet.</p>
+          ) : (
+            <div className="mt-3 space-y-2 max-h-72 overflow-auto pr-1">
+              {complianceRollup.map((item) => (
+                <div key={item.key} className="flex items-center justify-between text-xs border border-gray-800 bg-gray-950 rounded px-2 py-1.5">
+                  <span className="text-gray-300 truncate mr-2">{item.key}</span>
+                  <span className="text-cyan-300">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
         <div className="sticky top-0 z-10 -mx-5 px-5 py-2 bg-gray-900/95 backdrop-blur supports-[backdrop-filter]:bg-gray-900/80 border-b border-gray-800">
