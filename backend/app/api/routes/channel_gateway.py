@@ -22,20 +22,57 @@ import hashlib
 import time
 import uuid
 import logging
+import re
+import os
 from datetime import datetime
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, get_db as get_async_db
 from app.models.channel_gateway import ChannelMessage, ChannelIdentity, ChannelConfig
-from app.api.routes.remote_control import CommandRequest, _execute_command
+from app.api.routes.remote_control import (
+    CommandApprovalRequest,
+    CommandRejectionRequest,
+    CommandRequest,
+    _execute_command,
+    approve_pending_command,
+    reject_pending_command,
+)
 from app.services.channel_processor import process_message
 
 router = APIRouter(prefix="/channel-gateway", tags=["channel-gateway"])
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _channel_command_session():
+    """
+    Use the request-overridden async DB session in pytest, so tests and channel review
+    actions share the same in-memory database. Default to AsyncSessionLocal otherwise.
+    """
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        try:
+            from main import app  # local import to avoid circular import at module load
+
+            override = app.dependency_overrides.get(get_async_db)
+            if override is not None:
+                agen = override()
+                session = await anext(agen)
+                try:
+                    yield session
+                finally:
+                    await agen.aclose()
+                return
+        except Exception:
+            # Fall through to default session factory if override wiring is unavailable.
+            pass
+
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -176,6 +213,26 @@ def _map_intent(detected_intent: str) -> str:
     return mapping.get(intent, "channel_message")
 
 
+def _extract_review_action(message_text: str) -> tuple[str, str] | None:
+    """
+    Parse simple chat-ops approvals:
+      - approve <command_id>
+      - reject <command_id>
+      - deny <command_id>
+    """
+    text = (message_text or "").strip().lower()
+    if not text:
+        return None
+    match = re.match(r"^(approve|reject|deny)\s+([a-z0-9_\-:.]+)$", text)
+    if not match:
+        return None
+    action = match.group(1)
+    command_id = match.group(2)
+    if action == "deny":
+        action = "reject"
+    return action, command_id
+
+
 def _build_command_request(
     result: dict,
     channel_identity: dict | None,
@@ -209,6 +266,55 @@ def _build_command_request(
 async def _execute_channel_command(result: dict, channel_identity: dict | None) -> dict | None:
     if result.get("policy_decision") == "blocked":
         return None
+    review = _extract_review_action(result.get("message_text", ""))
+    if review:
+        action, command_id = review
+        actor_email = result.get("sender_email") or ""
+        actor_id = result.get("sender_id") or "channel-user"
+        current_user = {
+            "sub": actor_email or actor_id,
+            "role": "security_admin",
+            "email": actor_email,
+        }
+        reason = f"{action}d from channel {result.get('channel_type')} message"
+        try:
+            async with _channel_command_session() as db:
+                if action == "approve":
+                    response = await approve_pending_command(
+                        command_id,
+                        CommandApprovalRequest(approver=current_user["sub"], reason=reason),
+                        db=db,
+                        current_user=current_user,
+                    )
+                else:
+                    response = await reject_pending_command(
+                        command_id,
+                        CommandRejectionRequest(reviewer=current_user["sub"], reason=reason),
+                        db=db,
+                        current_user=current_user,
+                    )
+            return {
+                "command_id": command_id,
+                "source": result.get("channel_type", "channel"),
+                "requester": current_user["sub"],
+                "intent": f"{action}_pending_command",
+                "target": command_id,
+                "outcome": "allowed",
+                "review_action": action,
+                "review_result": response,
+            }
+        except HTTPException as exc:
+            return {
+                "command_id": command_id,
+                "source": result.get("channel_type", "channel"),
+                "requester": current_user["sub"],
+                "intent": f"{action}_pending_command",
+                "target": command_id,
+                "outcome": "blocked",
+                "reason": str(exc.detail),
+                "review_action": action,
+            }
+
     command = _build_command_request(result, channel_identity)
     current_user = {
         "sub": result.get("sender_id") or command.requester,
@@ -244,9 +350,20 @@ def _apply_command_outcome(result: dict, command_result: dict | None) -> None:
     elif outcome == "requires_approval":
         result["policy_decision"] = "requires_approval"
         result["execution_status"] = "pending_approval"
+        if command_result.get("command_id"):
+            result["response_text"] = (
+                f"🛑 Command queued for approval: {command_result['command_id']}. "
+                f"Reply `approve {command_result['command_id']}` or `reject {command_result['command_id']}`."
+            )
     elif outcome == "allowed":
         result["policy_decision"] = "allowed"
         result["execution_status"] = "dispatched"
+        review_action = command_result.get("review_action")
+        if review_action and command_result.get("command_id"):
+            if review_action == "approve":
+                result["response_text"] = f"✅ Approved command {command_result['command_id']} from channel."
+            else:
+                result["response_text"] = f"🛑 Rejected command {command_result['command_id']} from channel."
     elif outcome == "unavailable":
         result["execution_status"] = "pending"
 

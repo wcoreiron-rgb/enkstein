@@ -1,4 +1,7 @@
 import pytest
+import json
+
+from app.models.event import Event, EventOutcome, EventSeverity
 
 
 @pytest.mark.asyncio
@@ -202,3 +205,123 @@ async def test_channel_gateway_cli_command_with_tenant_identity(client):
             assert cr["source"] == "cli"
         if "tenant_id" in cr:
             assert cr["tenant_id"] == "tenant_cli"
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_message_can_approve_pending_command(client, db_session):
+    cmd_id = "cmd_chan_approve_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner@company.com",
+        actor_name="owner@company.com",
+        actor_type="human",
+        action="run_swarm",
+        target="identity_risk",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=81.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded for channel approve flow test",
+        description="[commandclaw] owner@company.com -> run_swarm",
+        metadata_json=json.dumps(
+            {"context": {"command_id": cmd_id, "requester": "owner@company.com", "mode": "approval"}}
+        ),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "teams",
+            "platform_user_id": "secops-approver",
+            "platform_email": "secops@company.com",
+            "platform_name": "SecOps Approver",
+            "regentclaw_role": "security_admin",
+            "is_trusted": True,
+            "trust_score": 92,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/message",
+        json={
+            "channel_type": "teams",
+            "channel_id": "soc-room",
+            "sender_id": "secops-approver",
+            "sender_email": "secops@company.com",
+            "sender_name": "SecOps Approver",
+            "message_text": f"approve {cmd_id}",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    cr = body["command_result"]
+    assert cr["review_action"] == "approve"
+    assert cr["outcome"] == "allowed"
+    assert body["execution_status"] == "dispatched"
+    assert body["response_text"].startswith("✅ Approved command")
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_message_can_reject_pending_command(client, db_session):
+    cmd_id = "cmd_chan_reject_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner2@company.com",
+        actor_name="owner2@company.com",
+        actor_type="human",
+        action="run_workflow",
+        target="incident_response",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=69.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded for channel reject flow test",
+        description="[commandclaw] owner2@company.com -> run_workflow",
+        metadata_json=json.dumps(
+            {"context": {"command_id": cmd_id, "requester": "owner2@company.com", "mode": "approval"}}
+        ),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "slack",
+            "platform_user_id": "secops-reviewer",
+            "platform_email": "reviewer@company.com",
+            "platform_name": "SecOps Reviewer",
+            "regentclaw_role": "security_admin",
+            "is_trusted": True,
+            "trust_score": 90,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/message",
+        json={
+            "channel_type": "slack",
+            "channel_id": "soc-room",
+            "sender_id": "secops-reviewer",
+            "sender_email": "reviewer@company.com",
+            "sender_name": "SecOps Reviewer",
+            "message_text": f"reject {cmd_id}",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    cr = body["command_result"]
+    assert cr["review_action"] == "reject"
+    assert cr["outcome"] == "allowed"
+    assert body["execution_status"] == "dispatched"
+    assert body["response_text"].startswith("🛑 Rejected command")
