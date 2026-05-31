@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity, Copy } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
-import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks, triggerRemediationAction } from '@/lib/api';
+import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks, triggerRemediationAction, type SwarmTask } from '@/lib/api';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -216,7 +216,7 @@ function buildTicketDraft(job: any, summary: any, tasks: any[]): string {
 export default function SwarmJobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [job, setJob] = useState<any>(null);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<SwarmTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

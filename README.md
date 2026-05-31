@@ -244,6 +244,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.
+  - Task outputs now include execution provenance metadata (`execution_mode`, `fallback_reason`) for operator/audit visibility.
   - Added live SSE stream endpoint: `GET /api/v1/swarm/jobs/{id}/stream` with `job_snapshot`, `task_started`, `task_completed`, and `job_completed` events.
 - Core claw task contract:
   - Added `POST /task` for:

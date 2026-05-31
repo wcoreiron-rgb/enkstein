@@ -1091,6 +1091,40 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.7 — Swarm Execution Provenance UX                             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--cyan);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Detail: Real vs Fallback Execution Visibility</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-fix">UX</span>
+          <span class="tag tag-new">Typing</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.7</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release exposes Swarm task execution provenance in the operator UI so fallback execution is explicit.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Swarm task table execution column</strong> now shows <code>real handler</code> vs <code>simulated fallback</code> badges.</li>
+          <li><strong>Fallback reason surfaced</strong> in task detail row when simulation path is used.</li>
+          <li><strong>Frontend API typing improved</strong> with a typed <code>SwarmTask</code> contract for <code>getSwarmTasks()</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.6 — CustomClaw Swarm Task Routing                             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -135,6 +135,18 @@ export const getRecentRuns = (limit = 20) =>
   apiFetch<any[]>(`/orchestrations/runs/recent?limit=${limit}`);
 
 // Swarm
+export interface SwarmTask {
+  id: string;
+  claw: string;
+  task_type: string;
+  status: string;
+  severity?: string | null;
+  confidence?: number | null;
+  risk_score?: number | null;
+  execution_time_ms?: number | null;
+  output_json?: string | null;
+}
+
 export const createSwarmJob = (body: object) =>
   apiFetch<any>('/swarm/jobs', { method: 'POST', body: JSON.stringify(body) });
 export const createSuspiciousIdentitySwarm = (body?: object) =>
@@ -144,7 +156,7 @@ export const getSwarmJobs = (params?: Record<string, string>) => {
   return apiFetch<any[]>(`/swarm/jobs${qs}`);
 };
 export const getSwarmJob = (id: string) => apiFetch<any>(`/swarm/jobs/${id}`);
-export const getSwarmTasks = (id: string) => apiFetch<any[]>(`/swarm/jobs/${id}/tasks`);
+export const getSwarmTasks = (id: string) => apiFetch<SwarmTask[]>(`/swarm/jobs/${id}/tasks`);
 export const cancelSwarmJob = (id: string) =>
   apiFetch<any>(`/swarm/jobs/${id}/cancel`, { method: 'POST' });
 export const approveSwarmJob = (id: string) =>
