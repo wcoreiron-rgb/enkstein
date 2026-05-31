@@ -242,7 +242,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
     - minimum summary/description length checks before queueing remediation action
   - External-agent and orchestration APIs now return sanitized error details (no raw internal exception bodies).
-  - AGT dependency and module scan paths are repository-scoped to prevent path traversal via untrusted scan inputs.
+  - AGT dependency and module scan paths are repository-scoped (including empty-path rejection) to prevent path traversal via untrusted scan inputs.
   - CI workflow jobs define explicit least-privilege `permissions` for code-scanning workflow hardening.
   - Added Playwright E2E coverage for Channel Gateway bulk pending-command approve flow.
 - Swarm runtime:
@@ -278,7 +278,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/exposureclaw/task`
     - `/api/v1/customclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
-  - AccessClaw focused task responses now include connector provenance metadata (`data_source`, `connector_state`).
+  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/AttackPath/App/Compliance/Recovery/Automation task handlers.
 - ModelClaw scaffold:
   - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
   - New endpoints:

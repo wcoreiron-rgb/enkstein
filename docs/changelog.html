@@ -335,6 +335,37 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.3 — Scan Path Hardening + Provenance Coverage Expansion       -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">MCP Scan Path Guardrails + Expanded Swarm Task Provenance Metadata</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Hardening</span>
+          <span class="tag tag-feat">Swarm</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice hardens MCP/AGT scan path handling and standardizes connector provenance metadata across additional focused swarm task handlers.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>MCP scan hardening:</strong> AGT adapter now resolves relative paths from repo root, rejects empty paths, and blocks traversal/absolute outside-repo inputs.</li>
+          <li><strong>Regression coverage:</strong> trust-fabric tests added for traversal block, absolute-path block, empty-path rejection, and valid repo-relative path handling.</li>
+          <li><strong>Provenance expansion:</strong> <code>data_source</code>/<code>connector_state</code> now surfaced for Data/Net/Log/Config/AttackPath/App/Compliance/Recovery/Automation focused task responses.</li>
+          <li><strong>Error-surface hardening:</strong> additional API routes now return sanitized validation errors without raw exception payloads.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.2 — Remote Agent Dispatch Health/Trust Gates                  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
