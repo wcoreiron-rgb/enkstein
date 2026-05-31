@@ -50,6 +50,20 @@ def _task_status_events(
             "severity": task.severity,
             "risk_score": task.risk_score,
         }
+        parsed_output: dict | None = None
+        if task.output_json:
+            try:
+                maybe = json.loads(task.output_json)
+                if isinstance(maybe, dict):
+                    parsed_output = maybe
+            except Exception:
+                parsed_output = None
+
+        if parsed_output:
+            if parsed_output.get("execution_mode"):
+                payload["execution_mode"] = parsed_output.get("execution_mode")
+            if parsed_output.get("fallback_reason"):
+                payload["fallback_reason"] = parsed_output.get("fallback_reason")
         if status == SwarmTaskStatus.RUNNING.value:
             events.append(("task_started", payload))
         elif status == SwarmTaskStatus.COMPLETED.value:
