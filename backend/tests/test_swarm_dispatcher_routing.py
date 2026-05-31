@@ -77,7 +77,18 @@ async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "claw",
-    ["cloudclaw", "endpointclaw", "devclaw", "identityclaw", "threatclaw", "exposureclaw"],
+    [
+        "cloudclaw",
+        "endpointclaw",
+        "devclaw",
+        "identityclaw",
+        "threatclaw",
+        "exposureclaw",
+        "accessclaw",
+        "dataclaw",
+        "netclaw",
+        "logclaw",
+    ],
 )
 async def test_dispatcher_task_provenance_fields_present(db_session, claw):
     task = _mk_task(claw)

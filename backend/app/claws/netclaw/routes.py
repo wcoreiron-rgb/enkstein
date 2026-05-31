@@ -460,6 +460,10 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused NetClaw swarm task")
 async def run_net_task(payload: NetTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
     )
@@ -494,4 +498,6 @@ async def run_net_task(payload: NetTaskRequest, db: AsyncSession = Depends(get_d
         "policy_decisions": [],
         "compliance_mappings": ["NIST SC-7", "CIS Network Controls"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }

@@ -430,6 +430,10 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused DataClaw swarm task")
 async def run_data_task(payload: DataTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     stmt = (
         select(Finding)
         .where(Finding.claw == CLAW_NAME)
@@ -469,4 +473,6 @@ async def run_data_task(payload: DataTaskRequest, db: AsyncSession = Depends(get
         "policy_decisions": [],
         "compliance_mappings": ["GDPR Art. 32", "NIST SC-28"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }
