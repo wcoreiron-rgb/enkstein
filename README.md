@@ -197,6 +197,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Channel responses now include `command_result` metadata with command id, intent, target, and policy outcome.
   - Added fallback behavior for unavailable command backend (`outcome: unavailable`) so channel ingestion remains non-breaking.
   - `/channel-gateway/simulate` now mirrors the same command normalization path and returns `command_result` for parity testing.
+  - Added channel ingress adapters for generic webhook and email:
+    - `POST /api/v1/channel-gateway/webhook`
+    - `POST /api/v1/channel-gateway/email/inbound`
+    Both routes now normalize to the same CommandClaw contract and return `command_result`.
   - Remote-agent dispatch now enforces tenant match, kill-switch state, and per-agent allowed command intents.
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.

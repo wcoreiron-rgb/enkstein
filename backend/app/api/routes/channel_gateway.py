@@ -3,6 +3,8 @@ RegentClaw — Messaging Channel Gateway API
 
 POST /channel-gateway/slack/events          — Slack Events API webhook
 POST /channel-gateway/teams/webhook         — Microsoft Teams outgoing webhook
+POST /channel-gateway/webhook               — Generic webhook ingestion
+POST /channel-gateway/email/inbound         — Email-to-command ingestion
 POST /channel-gateway/message               — Generic message ingestion (internal/test)
 GET  /channel-gateway/messages              — Browse processed messages
 GET  /channel-gateway/messages/{id}         — Message detail
@@ -121,6 +123,35 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
     db.commit()
     db.refresh(msg)
     return msg
+
+
+async def _ingest_normalized_message(
+    db: Session,
+    *,
+    message_id: str,
+    message_text: str,
+    sender_id: str,
+    sender_email: str,
+    sender_name: str,
+    channel_type: str,
+    channel_id: str,
+    channel_name: str,
+) -> dict:
+    ci = _get_channel_identity(db, channel_type, sender_id, sender_email)
+    result = process_message(
+        message_id=message_id,
+        message_text=message_text,
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        channel_type=channel_type,
+        channel_id=channel_id,
+        channel_identity=ci,
+    )
+    command_result = await _execute_channel_command(result, ci)
+    _apply_command_outcome(result, command_result)
+    msg = _persist_message(db, result, channel_name)
+    return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
 
 
 def _map_intent(detected_intent: str) -> str:
@@ -265,21 +296,18 @@ async def slack_events(
         return {"ok": True}
 
     channel_name = config.channel_name if config else channel_id
-    ci = _get_channel_identity(db, "slack", sender_id, "")
-    result = process_message(
-        message_id   = str(uuid.uuid4()),
-        message_text = message_text,
-        sender_id    = sender_id,
-        sender_email = "",
-        sender_name  = event.get("username", sender_id),
-        channel_type = "slack",
-        channel_id   = channel_id,
-        channel_identity = ci,
+    out = await _ingest_normalized_message(
+        db,
+        message_id=str(uuid.uuid4()),
+        message_text=message_text,
+        sender_id=sender_id,
+        sender_email="",
+        sender_name=event.get("username", sender_id),
+        channel_type="slack",
+        channel_id=channel_id,
+        channel_name=channel_name,
     )
-    command_result = await _execute_channel_command(result, ci)
-    _apply_command_outcome(result, command_result)
-    _persist_message(db, result, channel_name)
-    return {"ok": True, "response": result["response_text"]}
+    return {"ok": True, "response": out["response"]}
 
 
 # ─── Microsoft Teams Webhook ─────────────────────────────────────────────────
@@ -303,27 +331,78 @@ async def teams_webhook(
     if not message_text:
         return {"type": "message", "text": "No message content received."}
 
-    ci = _get_channel_identity(db, "teams", sender_id, sender_email)
-    result = process_message(
-        message_id   = str(uuid.uuid4()),
-        message_text = message_text,
-        sender_id    = sender_id,
-        sender_email = sender_email,
-        sender_name  = sender_name,
-        channel_type = "teams",
-        channel_id   = channel_id,
-        channel_identity = ci,
+    out = await _ingest_normalized_message(
+        db,
+        message_id=str(uuid.uuid4()),
+        message_text=message_text,
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        channel_type="teams",
+        channel_id=channel_id,
+        channel_name=channel_name,
     )
-    command_result = await _execute_channel_command(result, ci)
-    _apply_command_outcome(result, command_result)
-    _persist_message(db, result, channel_name)
 
     # Teams expects an Activity response
     return {
         "type":    "message",
-        "text":    result["response_text"],
-        "summary": f"RegentClaw: {result['policy_decision']} ({result['execution_status']})",
+        "text":    out["response"],
+        "summary": f"RegentClaw: {out['policy_decision']} ({out['execution_status']})",
     }
+
+
+@router.post("/webhook")
+async def webhook_ingest(body: dict, db: Session = Depends(get_db)):
+    """
+    Generic webhook ingestion endpoint.
+    Body: { channel_id, sender_id?, sender_email?, sender_name?, message_text, channel_name? }
+    """
+    required = ("channel_id", "message_text")
+    for field in required:
+        if field not in body:
+            raise HTTPException(400, f"Missing field: {field}")
+    sender_id = body.get("sender_id") or body.get("sender_email") or "webhook-user"
+    sender_email = body.get("sender_email", "")
+    sender_name = body.get("sender_name", sender_id)
+    return await _ingest_normalized_message(
+        db,
+        message_id=f"webhook-{uuid.uuid4()}",
+        message_text=body["message_text"],
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        channel_type="webhook",
+        channel_id=body["channel_id"],
+        channel_name=body.get("channel_name", body["channel_id"]),
+    )
+
+
+@router.post("/email/inbound")
+async def email_inbound(body: dict, db: Session = Depends(get_db)):
+    """
+    Email ingress endpoint.
+    Body: { inbox, from_email, from_name?, subject?, body_text }
+    """
+    required = ("inbox", "from_email", "body_text")
+    for field in required:
+        if field not in body:
+            raise HTTPException(400, f"Missing field: {field}")
+    subject = body.get("subject", "").strip()
+    composed = body["body_text"] if not subject else f"{subject}\n\n{body['body_text']}"
+    sender_email = body["from_email"]
+    sender_id = sender_email
+    sender_name = body.get("from_name", sender_email)
+    return await _ingest_normalized_message(
+        db,
+        message_id=f"email-{uuid.uuid4()}",
+        message_text=composed,
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        channel_type="email",
+        channel_id=body["inbox"],
+        channel_name=body.get("inbox_name", body["inbox"]),
+    )
 
 
 # ─── Generic / internal message endpoint ─────────────────────────────────────
@@ -339,23 +418,17 @@ async def ingest_message(body: dict, db: Session = Depends(get_db)):
         if f not in body:
             raise HTTPException(400, f"Missing field: {f}")
 
-    ci = _get_channel_identity(
-        db, body["channel_type"], body["sender_id"], body.get("sender_email", "")
+    return await _ingest_normalized_message(
+        db,
+        message_id=str(uuid.uuid4()),
+        message_text=body["message_text"],
+        sender_id=body["sender_id"],
+        sender_email=body.get("sender_email", ""),
+        sender_name=body.get("sender_name", body["sender_id"]),
+        channel_type=body["channel_type"],
+        channel_id=body["channel_id"],
+        channel_name=body.get("channel_name", body["channel_id"]),
     )
-    result = process_message(
-        message_id   = str(uuid.uuid4()),
-        message_text = body["message_text"],
-        sender_id    = body["sender_id"],
-        sender_email = body.get("sender_email", ""),
-        sender_name  = body.get("sender_name", body["sender_id"]),
-        channel_type = body["channel_type"],
-        channel_id   = body["channel_id"],
-        channel_identity = ci,
-    )
-    command_result = await _execute_channel_command(result, ci)
-    _apply_command_outcome(result, command_result)
-    msg = _persist_message(db, result, body.get("channel_name", body["channel_id"]))
-    return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
 
 
 # ─── Simulate endpoint (test without a real bot token) ───────────────────────

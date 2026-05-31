@@ -881,6 +881,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       <p>Inbound channel messages are now normalized into a unified command payload and evaluated through the same governance path as direct CommandClaw requests.</p>
       <ul>
         <li><strong>Ingress routes:</strong> <code>POST /api/v1/channel-gateway/slack/events</code>, <code>POST /api/v1/channel-gateway/teams/webhook</code>, <code>POST /api/v1/channel-gateway/message</code>.</li>
+        <li><strong>Additional adapters:</strong> <code>POST /api/v1/channel-gateway/webhook</code> and <code>POST /api/v1/channel-gateway/email/inbound</code> now route external webhook/email requests into the same command contract.</li>
         <li><strong>Normalization target:</strong> CommandClaw contract shape used by <code>POST /api/v1/commands</code> (<code>command_id</code>, <code>source</code>, <code>requester</code>, <code>tenant_id</code>, <code>intent</code>, <code>target</code>, <code>scope</code>, <code>mode</code>).</li>
         <li><strong>Response metadata:</strong> channel message responses now include <code>command_result</code> with policy outcome and command identifiers for traceability.</li>
         <li><strong>Simulation parity:</strong> <code>POST /api/v1/channel-gateway/simulate</code> now runs the same normalization and returns <code>command_result</code> for dry-run validation.</li>

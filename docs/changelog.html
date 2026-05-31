@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.6 — Webhook/Email Channel Adapters                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Webhook + Email Ingress Adapters for CommandClaw</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="tag tag-sec">Governance</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.6</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This slice expands command ingress coverage so webhook and email traffic can drive governed commands through the same CommandClaw flow as portal, Slack, and Teams inputs.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New ingress endpoint:</strong> <code>POST /api/v1/channel-gateway/webhook</code> for generic webhook command messages.</li>
+          <li><strong>New ingress endpoint:</strong> <code>POST /api/v1/channel-gateway/email/inbound</code> for email-triggered command messages.</li>
+          <li><strong>Shared processing path</strong> now handles Slack, Teams, generic message, webhook, and email consistently via normalized command execution and response metadata.</li>
+          <li><strong>Live/simulate parity</strong> preserved: both persistent and simulated channel flows return <code>command_result</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Channel tests</strong> now include webhook and email ingress command-contract coverage.</li>
+          <li><strong>Combined regression run</strong>:
+            <code>pytest -q tests/test_channel_gateway_commands.py tests/test_remote_control.py</code> → <strong>11 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.5 — Remote Dispatch + Simulation Hardening                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
