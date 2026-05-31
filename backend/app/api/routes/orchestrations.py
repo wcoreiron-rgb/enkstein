@@ -107,8 +107,8 @@ async def trigger_workflow(
 
     try:
         run = await execute_workflow(UUID(workflow_id), triggered_by or "manual", db)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Workflow validation failed")
     except Exception:
         raise HTTPException(status_code=500, detail="Workflow execution failed")
 
