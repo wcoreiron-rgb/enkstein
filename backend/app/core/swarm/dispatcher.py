@@ -19,6 +19,7 @@ from app.claws.automationclaw.routes import AutomationTaskRequest, run_automatio
 from app.claws.cloudclaw.routes import CloudTaskRequest, run_cloud_task
 from app.claws.complianceclaw.routes import ComplianceTaskRequest, run_compliance_task
 from app.claws.configclaw.routes import ConfigTaskRequest, run_config_task
+from app.claws.customclaw.routes import CustomTaskRequest, run_custom_task
 from app.claws.dataclaw.routes import DataTaskRequest, run_data_task
 from app.claws.devclaw.routes import DevTaskRequest, run_dev_task
 from app.claws.endpointclaw.routes import EndpointTaskRequest, run_endpoint_task
@@ -205,6 +206,8 @@ async def _execute_real_task_if_supported(
         output = await run_config_task(ConfigTaskRequest(**payload), db)
     elif claw == "exposureclaw":
         output = await run_exposure_task(ExposureTaskRequest(**payload), db)
+    elif claw == "customclaw":
+        output = await run_custom_task(CustomTaskRequest(**payload), db)
     else:
         return None
 
