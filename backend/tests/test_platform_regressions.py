@@ -271,7 +271,7 @@ async def test_trust_fabric_ring_policy_requires_approval(client):
 
 
 @pytest.mark.asyncio
-async def test_exec_shell_request_uses_trust_fabric_ring_policy(client):
+async def test_exec_shell_request_fails_closed_when_trust_fabric_unavailable_by_default(client):
     resp = await client.post(
         "/api/v1/exec/shell",
         json={
@@ -282,12 +282,84 @@ async def test_exec_shell_request_uses_trust_fabric_ring_policy(client):
             "caller_role": "admin",
         },
     )
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    # shell channel is ring1 => requires approval from Trust Fabric ring policy.
-    assert body["status"] == "pending_approval"
-    assert body["requires_approval"] is True
-    assert any(str(flag).startswith("trust_fabric:") for flag in (body.get("policy_flags") or []))
+    assert resp.status_code == 503, resp.text
+    detail = resp.json().get("detail", {})
+    assert detail.get("policy_name") == "trust_fabric_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_exec_shell_request_fails_closed_when_trust_fabric_unavailable(client, monkeypatch):
+    import app.api.routes.exec_channels as exec_routes
+
+    async def _raise_enforce(*args, **kwargs):
+        raise RuntimeError("tf down")
+
+    monkeypatch.setattr(exec_routes, "enforce", _raise_enforce)
+
+    resp = await client.post(
+        "/api/v1/exec/shell",
+        json={
+            "command": "ls -la",
+            "requested_by": "tester",
+            "environment": "dev",
+            "agent_id": "agent-1",
+            "caller_role": "admin",
+        },
+    )
+    assert resp.status_code == 503, resp.text
+    detail = resp.json().get("detail", {})
+    assert detail.get("policy_name") == "trust_fabric_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_exec_execute_fails_closed_when_trust_fabric_unavailable(client, monkeypatch):
+    import app.api.routes.exec_channels as exec_routes
+    monkeypatch.setattr(exec_routes, "PRODUCTION_APPROVALS_REQUIRED", 1)
+    
+    class _Val:
+        def __init__(self, value):
+            self.value = value
+    
+    class _Decision:
+        allowed = True
+        outcome = _Val("requires_approval")
+        severity = _Val("medium")
+        policy_name = "execution_ring_policy"
+        reason = "approval required"
+
+    async def _allow_enforce(*args, **kwargs):
+        return _Decision()
+
+    # Allow create path so request can be persisted, then fail closed on execute.
+    monkeypatch.setattr(exec_routes, "enforce", _allow_enforce)
+
+    create = await client.post(
+        "/api/v1/exec/shell",
+        json={
+            "command": "echo hello",
+            "requested_by": "tester",
+            "environment": "dev",
+            "agent_id": "agent-1",
+            "caller_role": "admin",
+        },
+    )
+    assert create.status_code == 200, create.text
+    req_id = create.json()["id"]
+
+    # single approval after test-local override above
+    a1 = await client.post(f"/api/v1/exec/requests/{req_id}/approve", json={"note": "ok1"})
+    assert a1.status_code == 200, a1.text
+    assert a1.json()["status"] == "approved"
+
+    async def _raise_enforce(*args, **kwargs):
+        raise RuntimeError("tf down")
+
+    monkeypatch.setattr(exec_routes, "enforce", _raise_enforce)
+
+    run = await client.post(f"/api/v1/exec/requests/{req_id}/execute")
+    assert run.status_code == 503, run.text
+    detail = run.json().get("detail", {})
+    assert detail.get("policy_name") == "trust_fabric_unavailable"
 
 
 @pytest.mark.asyncio
@@ -319,6 +391,43 @@ async def test_remediation_approve_blocked_by_ring0_trust_fabric(client):
     assert approve.status_code == 403, approve.text
     detail = approve.json().get("detail", {})
     assert detail.get("policy_name") == "execution_ring_violation"
+
+
+@pytest.mark.asyncio
+async def test_remediation_approve_fails_closed_when_trust_fabric_unavailable(client, monkeypatch):
+    trig = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "disable_user",
+                "target_id": "user-1",
+                "target_type": "identity",
+                "target_label": "user-1",
+                "parameters": {},
+            },
+            "triggered_by": "manual",
+        },
+    )
+    assert trig.status_code == 200, trig.text
+    actions = trig.json().get("actions") or []
+    assert actions
+    action_id = actions[0]["id"]
+
+    import app.api.routes.remediation as remediation_routes
+
+    async def _raise_enforce(*args, **kwargs):
+        raise RuntimeError("tf down")
+
+    monkeypatch.setattr(remediation_routes, "enforce", _raise_enforce)
+
+    approve = await client.post(
+        f"/api/v1/remediation/actions/{action_id}/approve",
+        json={"approved_by": "admin"},
+    )
+    assert approve.status_code == 503, approve.text
+    detail = approve.json().get("detail", {})
+    assert detail.get("policy_name") == "trust_fabric_unavailable"
 
 
 @pytest.mark.asyncio

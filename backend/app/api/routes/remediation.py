@@ -209,24 +209,33 @@ async def approve_action(
     pre_result = await db.execute(select(RemediationAction).where(RemediationAction.id == action_id))
     pre_action = pre_result.scalar_one_or_none()
     if pre_action is not None:
-        tf_decision = await enforce(
-            db,
-            ActionRequest(
-                module="remediation",
-                actor_id=current_user.get("sub", "unknown"),
-                actor_name=current_user.get("sub", "unknown"),
-                actor_type="human",
-                action=pre_action.action_type or "remediation_action",
-                target=pre_action.target_id,
-                target_type=pre_action.target_type,
-                context={
-                    "channel": "remediation",
-                    "enforce_ring_policy": True,
-                    "caller_role": current_user.get("role", "viewer"),
-                    "trust_score": 50.0,
+        try:
+            tf_decision = await enforce(
+                db,
+                ActionRequest(
+                    module="remediation",
+                    actor_id=current_user.get("sub", "unknown"),
+                    actor_name=current_user.get("sub", "unknown"),
+                    actor_type="human",
+                    action=pre_action.action_type or "remediation_action",
+                    target=pre_action.target_id,
+                    target_type=pre_action.target_type,
+                    context={
+                        "channel": "remediation",
+                        "enforce_ring_policy": True,
+                        "caller_role": current_user.get("role", "viewer"),
+                        "trust_score": 50.0,
+                    },
+                ),
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "policy_name": "trust_fabric_unavailable",
+                    "deny_reason": "Trust Fabric evaluation failed for remediation approval",
                 },
-            ),
-        )
+            ) from exc
         if not tf_decision.allowed and tf_decision.outcome.value == "blocked":
             raise HTTPException(403, detail={
                 "policy_name": tf_decision.policy_name,
@@ -245,7 +254,7 @@ async def approve_action(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("Error approving action %s", action_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal error approving remediation action")
 
 
 @router.post("/actions/{action_id}/reject")
@@ -265,7 +274,7 @@ async def reject_action(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("Error rejecting action %s", action_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal error rejecting remediation action")
 
 
 @router.post("/actions/{action_id}/rollback")
@@ -281,7 +290,7 @@ async def rollback_action(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("Error rolling back action %s", action_id)
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail="Internal error rolling back remediation action")
 
 
 # ─── Playbook endpoints ───────────────────────────────────────────────────────
