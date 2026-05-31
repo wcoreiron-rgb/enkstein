@@ -176,6 +176,42 @@ async def test_trust_fabric_mcp_scan_accepts_repo_relative_path(client):
 
 
 @pytest.mark.asyncio
+async def test_external_agent_verify_persists_sanitized_error(client, monkeypatch):
+    from app.services.external_agent_dispatcher import ExternalAgentError
+    import app.api.routes.external_agents as external_agents_routes
+
+    monkeypatch.setattr(external_agents_routes, "validate_endpoint_url", lambda *args, **kwargs: True)
+
+    register = await client.post(
+        "/api/v1/external-agents/register",
+        json={
+            "name": "Verify Sanitization Agent",
+            "description": "Regression coverage",
+            "endpoint_url": "http://127.0.0.1:9900/agent",
+            "allowed_scopes": ["*.read"],
+            "execution_mode": "monitor",
+            "risk_level": "low",
+            "owner_name": "tester",
+        },
+    )
+    assert register.status_code == 200, register.text
+    agent_id = register.json()["agent_id"]
+
+    async def _raise_dispatch_error(*args, **kwargs):
+        raise ExternalAgentError("sensitive internal upstream payload")
+
+    monkeypatch.setattr(external_agents_routes, "dispatch", _raise_dispatch_error)
+
+    verify = await client.post(f"/api/v1/external-agents/{agent_id}/verify")
+    assert verify.status_code == 502, verify.text
+    assert verify.json().get("detail") == "Endpoint verification failed"
+
+    detail = await client.get(f"/api/v1/external-agents/{agent_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json().get("endpoint_last_error") == "endpoint_verification_failed"
+
+
+@pytest.mark.asyncio
 async def test_trust_fabric_multi_agent_verify_route(client):
     from app.core.config import settings
     from app.fabric.providers.agt import adapter as agt_adapter_module
@@ -592,6 +628,51 @@ async def test_remediation_approve_fails_closed_when_trust_fabric_unavailable(cl
     assert approve.status_code == 503, approve.text
     detail = approve.json().get("detail", {})
     assert detail.get("policy_name") == "trust_fabric_unavailable"
+
+
+@pytest.mark.asyncio
+async def test_remediation_approve_value_error_is_sanitized(client, monkeypatch):
+    import app.api.routes.remediation as remediation_routes
+
+    async def _raise_value_error(*args, **kwargs):
+        raise ValueError("sensitive-internal-state")
+
+    monkeypatch.setattr(remediation_routes, "approve_remediation", _raise_value_error)
+    resp = await client.post(
+        "/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/approve",
+        json={"approved_by": "admin"},
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json().get("detail") == "Invalid remediation approval request"
+
+
+@pytest.mark.asyncio
+async def test_remediation_reject_value_error_is_sanitized(client, monkeypatch):
+    import app.api.routes.remediation as remediation_routes
+
+    async def _raise_value_error(*args, **kwargs):
+        raise ValueError("sensitive-internal-state")
+
+    monkeypatch.setattr(remediation_routes, "reject_remediation", _raise_value_error)
+    resp = await client.post(
+        "/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/reject",
+        json={"rejected_by": "admin", "reason": "test"},
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json().get("detail") == "Invalid remediation rejection request"
+
+
+@pytest.mark.asyncio
+async def test_remediation_rollback_value_error_is_sanitized(client, monkeypatch):
+    import app.api.routes.remediation as remediation_routes
+
+    async def _raise_value_error(*args, **kwargs):
+        raise ValueError("sensitive-internal-state")
+
+    monkeypatch.setattr(remediation_routes, "rollback_remediation", _raise_value_error)
+    resp = await client.post("/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/rollback")
+    assert resp.status_code == 400, resp.text
+    assert resp.json().get("detail") == "Invalid remediation rollback request"
 
 
 @pytest.mark.asyncio
