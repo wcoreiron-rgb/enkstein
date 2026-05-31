@@ -217,6 +217,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - approval progress (`approvals_received` / `required_approvals`) exposed in pending API
     - self-approval blocked
     - duplicate approver blocked
+    - approver principal is now JWT-bound (display name is informational only)
     - final command allow only after required approvals are met
     - explicit rejection path that marks pending command as blocked with reviewer reason
     - command timeline endpoint for full approval/rejection audit trail

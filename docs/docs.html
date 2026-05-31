@@ -938,6 +938,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       <ul>
         <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
         <li><strong>Duplicate guard:</strong> same approver cannot approve the same command twice.</li>
+        <li><strong>Principal binding:</strong> approvals/rejections are bound to authenticated JWT identity; request-body display names are non-authoritative.</li>
         <li><strong>Multi-operator finalization:</strong> command is marked allowed only after required approvals are satisfied; intermediate approvals remain pending.</li>
         <li><strong>Explicit rejection path:</strong> pending commands can be terminated as blocked with reviewer attribution and reason persisted.</li>
         <li><strong>Timeline trail:</strong> command lifecycle events are queryable for operator review and exposed in Channel Gateway command rows.</li>

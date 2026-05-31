@@ -1,5 +1,6 @@
 import pytest
 import json
+from sqlalchemy import select
 from app.models.event import Event, EventOutcome, EventSeverity
 
 
@@ -244,13 +245,6 @@ async def test_commands_pending_and_approve_flow(client, db_session):
     assert match["required_approvals"] == 2
     assert match["approvals_received"] == 0
 
-    # self-approval blocked
-    self_approve = await client.post(
-        f"/api/v1/commands/{cmd_id}/approve",
-        json={"approver": "owner@company.com", "reason": "self approve"},
-    )
-    assert self_approve.status_code == 403, self_approve.text
-
     # first distinct approval records step but keeps pending
     first = await client.post(
         f"/api/v1/commands/{cmd_id}/approve",
@@ -269,16 +263,52 @@ async def test_commands_pending_and_approve_flow(client, db_session):
     )
     assert dup.status_code == 409, dup.text
 
-    # second distinct approval finalizes
+    # duplicate principal remains blocked even if display name changes
+    dup_spoof = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "different-display-name", "reason": "attempt display spoof"},
+    )
+    assert dup_spoof.status_code == 409, dup_spoof.text
+
+    # Same JWT principal cannot add a second approval even with a different display value.
     second = await client.post(
         f"/api/v1/commands/{cmd_id}/approve",
         json={"approver": "secops-lead", "reason": "second approval"},
     )
-    assert second.status_code == 200, second.text
-    second_body = second.json()
-    assert second_body["status"] == "approved"
-    assert second_body["approvals_received"] == 2
-    assert second_body["approvals_required"] == 2
+    assert second.status_code == 409, second.text
+
+
+@pytest.mark.asyncio
+async def test_commands_self_approval_blocked_by_jwt_principal(client, db_session):
+    cmd_id = "cmd_self_block_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="test-user",
+        actor_name="test-user",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=80.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded self approval principal test",
+        description="[commandclaw] test-user -> run_scan",
+        metadata_json=json.dumps(
+            {"context": {"command_id": cmd_id, "requester": "test-user", "mode": "approval"}}
+        ),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    self_approve = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "spoofed-display", "reason": "self approve attempt"},
+    )
+    assert self_approve.status_code == 403, self_approve.text
 
 
 @pytest.mark.asyncio
@@ -504,7 +534,33 @@ async def test_update_command_approval_policy_rejects_below_recorded_approvals(c
         f"/api/v1/commands/{cmd_id}/approve",
         json={"approver": "secops-b", "reason": "step two"},
     )
-    assert second.status_code == 200, second.text
+    assert second.status_code == 409, second.text
+
+    # Simulate a second distinct operator approval for guardrail coverage.
+    result = await db_session.execute(
+        select(Event).where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
+    )
+    pending_events = result.scalars().all()
+    pending = next((e for e in pending_events if cmd_id in (e.metadata_json or "")), None)
+    assert pending is not None
+    metadata = json.loads(pending.metadata_json or "{}")
+    approval_state = metadata.get("approval_state") or {}
+    approvals = approval_state.get("approvals") or []
+    approvals.append(
+        {
+            "approved_at": "2026-05-31T00:00:00Z",
+            "approved_by": "secops-other-user",
+            "approver_display": "secops-other-user",
+            "reason": "seeded second principal",
+        }
+    )
+    approval_state["approvals"] = approvals
+    approval_state["required_approvals"] = 3
+    approval_state["status"] = "pending"
+    metadata["approval_state"] = approval_state
+    pending.metadata_json = json.dumps(metadata)
+    db_session.add(pending)
+    await db_session.commit()
 
     deny_lower = await client.post(
         f"/api/v1/commands/{cmd_id}/approval-policy",
@@ -659,3 +715,57 @@ async def test_bulk_review_pending_commands_partial_errors_reported(client, db_s
     assert body["rejected"] == 0
     assert len(body["errors"]) == 1
     assert body["errors"][0]["command_id"] == "cmd_missing_partial"
+
+
+@pytest.mark.asyncio
+async def test_bulk_review_pending_commands_duplicate_principal_blocked_even_with_display_change(client, db_session):
+    cmd_id = "cmd_bulk_principal_dup_1"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner-principal@company.com",
+        actor_name="owner-principal@company.com",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=60.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded principal duplication test",
+        description="[commandclaw] owner-principal@company.com -> run_scan",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner-principal@company.com", "mode": "approval"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    first = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": [cmd_id],
+            "decision": "approve",
+            "actor": "display-one",
+            "reason": "first principal approval",
+        },
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert first_body["processed"] == 1
+    assert first_body["errors"] == []
+
+    second = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": [cmd_id],
+            "decision": "approve",
+            "actor": "display-two",
+            "reason": "same principal, different display",
+        },
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["processed"] == 0
+    assert len(second_body["errors"]) == 1
+    assert "Approver already recorded" in second_body["errors"][0]["detail"]

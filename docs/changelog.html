@@ -335,6 +335,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.7 — JWT-Bound Command Approval Principals                     -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">JWT-Bound Command Approval Principals</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Security</span>
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.7</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice hardens command approval identity semantics so approvals/rejections are tied to authenticated user principal, preventing display-name spoof bypass patterns.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Single-command approve:</strong> <code>approved_by</code> now always records JWT principal; request-body <code>approver</code> is display-only.</li>
+          <li><strong>Bulk approve:</strong> duplicate-approver checks now key off JWT principal instead of user-supplied display value.</li>
+          <li><strong>Reject metadata:</strong> rejection principal stored as authenticated id, with separate display field for UI.</li>
+          <li><strong>New tests:</strong> spoofed display-name duplicate attempts are blocked for both single and bulk approval flows.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend regression:</strong> <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → passing.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.6 — Bulk Review Guardrails + Partial Failure Surfacing        -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

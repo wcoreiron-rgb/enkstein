@@ -136,6 +136,10 @@ def _write_approval_state(event: Event, state: dict) -> None:
     event.metadata_json = json.dumps(metadata)
 
 
+def _normalize_principal(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
 class RemoteAgentRegisterRequest(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     tenant_id: str = Field(..., min_length=2, max_length=128)
@@ -521,10 +525,10 @@ async def approve_pending_command(
     requester = str(approval_state.get("requester") or "unknown")
     approver_id = str(current_user.get("sub", "unknown"))
     approver_display = body.approver or approver_id
-    approval_principal = approver_display if body.approver else approver_id
-    if approver_id == requester or approver_display == requester:
+    approval_principal = approver_id
+    if _normalize_principal(approver_id) == _normalize_principal(requester):
         raise HTTPException(status_code=403, detail="Self-approval is not allowed")
-    if any(str(a.get("approved_by")) == str(approval_principal) for a in approval_state["approvals"]):
+    if any(_normalize_principal(a.get("approved_by")) == _normalize_principal(approval_principal) for a in approval_state["approvals"]):
         raise HTTPException(status_code=409, detail="Approver already recorded for this command")
 
     approval_state["approvals"].append(
@@ -612,7 +616,8 @@ async def reject_pending_command(
     approval_state = _approval_state(event)
     approval_state["status"] = "rejected"
     approval_state["rejected_at"] = datetime.now(timezone.utc).isoformat()
-    approval_state["rejected_by"] = reviewer_display
+    approval_state["rejected_by"] = reviewer_id
+    approval_state["rejected_by_display"] = reviewer_display
     approval_state["reject_reason"] = body.reason or "rejected"
     _write_approval_state(event, approval_state)
 
@@ -730,17 +735,17 @@ async def bulk_review_pending_commands(
         if body.decision == "approve":
             approval_state = _approval_state(event)
             requester = str(approval_state.get("requester") or "unknown")
-            if actor_id == requester or actor_display == requester:
+            if _normalize_principal(actor_id) == _normalize_principal(requester):
                 summary["errors"].append({"command_id": command_id, "detail": "Self-approval is not allowed"})
                 continue
-            if any(str(a.get("approved_by")) == str(actor_display) for a in approval_state["approvals"]):
+            if any(_normalize_principal(a.get("approved_by")) == _normalize_principal(actor_id) for a in approval_state["approvals"]):
                 summary["errors"].append({"command_id": command_id, "detail": "Approver already recorded"})
                 continue
 
             approval_state["approvals"].append(
                 {
                     "approved_at": datetime.now(timezone.utc).isoformat(),
-                    "approved_by": actor_display,
+                    "approved_by": actor_id,
                     "approver_display": actor_display,
                     "reason": body.reason or "bulk approved",
                 }
@@ -796,7 +801,8 @@ async def bulk_review_pending_commands(
             approval_state = _approval_state(event)
             approval_state["status"] = "rejected"
             approval_state["rejected_at"] = datetime.now(timezone.utc).isoformat()
-            approval_state["rejected_by"] = actor_display
+            approval_state["rejected_by"] = actor_id
+            approval_state["rejected_by_display"] = actor_display
             approval_state["reject_reason"] = body.reason or "bulk rejected"
             _write_approval_state(event, approval_state)
 
