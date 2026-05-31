@@ -36,6 +36,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 
 // Dashboard
 export const getDashboard = () => apiFetch<any>('/dashboard');
+export const getControlCenterSummary = () => apiFetch<any>('/dashboard/control-center-summary');
 
 // ArcClaw
 export const getArcStats = () => apiFetch<any>('/arcclaw/stats');

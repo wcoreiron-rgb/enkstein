@@ -9,6 +9,10 @@ from app.models.identity import Identity
 from app.models.module import Module, ModuleStatus
 from app.models.connector import Connector, ConnectorStatus
 from app.models.event import Event, EventOutcome, EventSeverity
+from app.models.agent import Agent, AgentStatus, Schedule, ScheduleStatus
+from app.models.swarm import SwarmJob, SwarmJobStatus
+from app.models.channel_gateway import ChannelMessage
+from app.models.exec_channels import ExecRequest
 from app.models.audit import AuditLog
 from app.claws.arcclaw.models import AIEvent
 from app.claws.identityclaw.models import PrivilegedAction
@@ -28,6 +32,21 @@ class DashboardStats(BaseModel):
     pending_approvals: int
     platform_risk_score: float
     recent_events: list[dict]
+
+
+class ControlCenterSummary(BaseModel):
+    pending_commands: int
+    running_swarms: int
+    blocked_swarms: int
+    remote_agents_total: int
+    remote_agents_online: int
+    schedules_active: int
+    schedules_total: int
+    channel_messages_24h: int
+    channel_blocked_24h: int
+    execution_pending_approval: int
+    execution_blocked_24h: int
+    blocked_actions_24h: int
 
 
 @router.get("", response_model=DashboardStats, summary="Platform-wide dashboard stats")
@@ -119,3 +138,97 @@ async def run_supply_chain_scan():
         "outdated_packages": result.outdated_packages,
         "agt_used": result.agt_used,
     }
+
+
+@router.get("/control-center-summary", response_model=ControlCenterSummary, summary="Control Center unified summary")
+async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
+    from datetime import datetime, timedelta, timezone
+
+    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    pending_commands = (
+        await db.execute(
+            select(func.count(Event.id))
+            .where(Event.source_module == "commandclaw")
+            .where(Event.outcome == EventOutcome.REQUIRES_APPROVAL)
+            .where(Event.timestamp >= since_24h)
+        )
+    ).scalar() or 0
+
+    running_swarms = (
+        await db.execute(
+            select(func.count(SwarmJob.id)).where(
+                SwarmJob.status.in_([SwarmJobStatus.PENDING, SwarmJobStatus.RUNNING])
+            )
+        )
+    ).scalar() or 0
+    blocked_swarms = (
+        await db.execute(
+            select(func.count(SwarmJob.id)).where(
+                SwarmJob.status.in_([SwarmJobStatus.BLOCKED, SwarmJobStatus.FAILED, SwarmJobStatus.CANCELLED])
+            )
+        )
+    ).scalar() or 0
+
+    remote_agents_total = (
+        await db.execute(select(func.count(Agent.id)).where(Agent.claw == "remoteagent"))
+    ).scalar() or 0
+    remote_agents_online = (
+        await db.execute(
+            select(func.count(Agent.id))
+            .where(Agent.claw == "remoteagent")
+            .where(Agent.status == AgentStatus.ACTIVE)
+        )
+    ).scalar() or 0
+
+    schedules_total = (await db.execute(select(func.count(Schedule.id)))).scalar() or 0
+    schedules_active = (
+        await db.execute(select(func.count(Schedule.id)).where(Schedule.status == ScheduleStatus.ACTIVE))
+    ).scalar() or 0
+
+    channel_messages_24h = (
+        await db.execute(
+            select(func.count(ChannelMessage.id)).where(ChannelMessage.created_at >= since_24h)
+        )
+    ).scalar() or 0
+    channel_blocked_24h = (
+        await db.execute(
+            select(func.count(ChannelMessage.id))
+            .where(ChannelMessage.created_at >= since_24h)
+            .where(ChannelMessage.policy_decision == "blocked")
+        )
+    ).scalar() or 0
+
+    execution_pending_approval = (
+        await db.execute(select(func.count(ExecRequest.id)).where(ExecRequest.status == "pending"))
+    ).scalar() or 0
+    execution_blocked_24h = (
+        await db.execute(
+            select(func.count(ExecRequest.id))
+            .where(ExecRequest.created_at >= since_24h)
+            .where(ExecRequest.status == "blocked")
+        )
+    ).scalar() or 0
+
+    blocked_actions_24h = (
+        await db.execute(
+            select(func.count(Event.id))
+            .where(Event.outcome == EventOutcome.BLOCKED)
+            .where(Event.timestamp >= since_24h)
+        )
+    ).scalar() or 0
+
+    return ControlCenterSummary(
+        pending_commands=pending_commands,
+        running_swarms=running_swarms,
+        blocked_swarms=blocked_swarms,
+        remote_agents_total=remote_agents_total,
+        remote_agents_online=remote_agents_online,
+        schedules_active=schedules_active,
+        schedules_total=schedules_total,
+        channel_messages_24h=channel_messages_24h,
+        channel_blocked_24h=channel_blocked_24h,
+        execution_pending_approval=execution_pending_approval,
+        execution_blocked_24h=execution_blocked_24h,
+        blocked_actions_24h=blocked_actions_24h,
+    )

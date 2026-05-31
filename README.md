@@ -356,6 +356,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 |--------|-------------|
 | 🧩 ModelClaw | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, ModelClaw Judge synthesis |
 | ⚡ CommandClaw | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
+| 🎛️ Control Center | Unified operator cockpit — commands, approvals, swarms, remote agents, channel pressure, execution gates |
 
 ### Platform Engines (always-on)
 
