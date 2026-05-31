@@ -14,6 +14,8 @@ jobs:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
     timeout-minutes: 15  # Hard cap — prevents 6h kills from hanging tests
+    permissions:
+      contents: read
 
     defaults:
       run:
@@ -48,6 +50,8 @@ jobs:
   lint-backend:
     name: Backend Lint (ruff)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     defaults:
       run:
@@ -71,6 +75,8 @@ jobs:
   test-frontend:
     name: Frontend Build (Node 20)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     defaults:
       run:
@@ -100,6 +106,8 @@ jobs:
   docker-build:
     name: Docker Compose Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4

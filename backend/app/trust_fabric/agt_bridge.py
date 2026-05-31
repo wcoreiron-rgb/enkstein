@@ -29,6 +29,20 @@ from typing import Any
 logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
+
+def _resolve_repo_scoped_path(untrusted_path: str) -> Path:
+    """
+    Resolve and constrain an untrusted file path to the repository root.
+    Rejects absolute paths and traversal patterns.
+    """
+    raw = Path(untrusted_path)
+    candidate = raw.resolve(strict=False) if raw.is_absolute() else (_REPO_ROOT / raw).resolve(strict=False)
+    try:
+        candidate.relative_to(_REPO_ROOT)
+    except ValueError as exc:
+        raise ValueError("path escapes repository root") from exc
+    return candidate
+
 # ── AGT availability check ───────────────────────────────────────────────────
 
 try:
@@ -185,7 +199,7 @@ def scan_requirements(requirements_path: str) -> SupplyChainResult:
     try:
         config = SupplyChainConfig()
         guard = SupplyChainGuard(config)
-        path = Path(requirements_path)
+        path = _resolve_repo_scoped_path(requirements_path)
         if not path.exists():
             return SupplyChainResult(is_safe=True, risk_score=0.0, agt_used=True)
 
@@ -221,8 +235,8 @@ def scan_requirements(requirements_path: str) -> SupplyChainResult:
             agt_used=True,
         )
 
-    except Exception as e:
-        logger.warning(f"AGT supply chain scan failed: {e}")
+    except Exception:
+        logger.warning("AGT supply chain scan failed")
         return SupplyChainResult(is_safe=True, risk_score=0.0, agt_used=False)
 
 
@@ -234,7 +248,10 @@ def scan_package_json(package_json_path: str) -> SupplyChainResult:
     try:
         config = SupplyChainConfig()
         guard = SupplyChainGuard(config)
-        result = guard.check_package_json(package_json_path)
+        path = _resolve_repo_scoped_path(package_json_path)
+        if not path.exists():
+            return SupplyChainResult(is_safe=True, risk_score=0.0, agt_used=True)
+        result = guard.check_package_json(str(path))
 
         issues = []
         risk_score = 0.0
@@ -254,8 +271,8 @@ def scan_package_json(package_json_path: str) -> SupplyChainResult:
             issues=issues,
             agt_used=True,
         )
-    except Exception as e:
-        logger.warning(f"AGT package.json scan failed: {e}")
+    except Exception:
+        logger.warning("AGT package.json scan failed")
         return SupplyChainResult(is_safe=True, risk_score=0.0, agt_used=False)
 
 
@@ -285,7 +302,7 @@ def scan_module_directory(directory_path: str) -> ModuleScanResult:
         try:
             path = Path(directory_path).resolve(strict=False)
             path.relative_to(_REPO_ROOT)
-        except Exception:
+        except ValueError:
             logger.warning("Rejected AGT module scan path outside repository root")
             return ModuleScanResult(is_safe=False, risk_score=100.0, agt_used=True)
 
@@ -326,8 +343,8 @@ def scan_module_directory(directory_path: str) -> ModuleScanResult:
             agt_used=True,
         )
 
-    except Exception as e:
-        logger.warning(f"AGT module directory scan failed: {e}")
+    except Exception:
+        logger.warning("AGT module directory scan failed")
         return ModuleScanResult(is_safe=True, risk_score=0.0, agt_used=False)
 
 

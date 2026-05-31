@@ -75,7 +75,7 @@ class AGTAdapter:
         repo_root = Path(__file__).resolve().parents[4]
         try:
             resolved.relative_to(repo_root)
-        except Exception:
+        except ValueError:
             return {
                 "is_safe": False,
                 "risk_score": 100.0,

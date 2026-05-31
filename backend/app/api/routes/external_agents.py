@@ -109,8 +109,8 @@ async def register_external_agent(
     # SSRF validation before we even save to DB
     try:
         validate_endpoint_url(body.endpoint_url, allow_http_localhost=True)
-    except SSRFError as e:
-        raise HTTPException(status_code=400, detail=f"Endpoint URL rejected: {e}")
+    except SSRFError:
+        raise HTTPException(status_code=400, detail="Endpoint URL rejected by SSRF policy")
 
     # Validate execution mode
     valid_modes = [m.value for m in ExecutionMode]
@@ -261,7 +261,7 @@ async def verify_endpoint(
     except ExternalAgentError as e:
         agent.endpoint_last_error = str(e)
         await db.commit()
-        raise HTTPException(status_code=502, detail=f"Endpoint verification failed: {e}")
+        raise HTTPException(status_code=502, detail="Endpoint verification failed")
 
 
 @router.get("", summary="List all registered external agents")
