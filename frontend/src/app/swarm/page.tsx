@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Users2, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
-import { approveSwarmJob, cancelSwarmJob, createSwarmJob, getSwarmJobs } from '@/lib/api';
+import { approveSwarmJob, cancelSwarmJob, createSuspiciousIdentitySwarm, createSwarmJob, getSwarmJobs } from '@/lib/api';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -63,6 +63,7 @@ export default function SwarmPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [launchingPreset, setLaunchingPreset] = useState(false);
   const [form, setForm] = useState({
     name: 'Incident Response Swarm',
     profile: 'INCIDENT_RESPONSE',
@@ -72,6 +73,8 @@ export default function SwarmPage() {
     parallelism: 3,
     requested_by: 'portal-user',
   });
+  const [presetIdentity, setPresetIdentity] = useState('user@company.com');
+  const [presetTimeRange, setPresetTimeRange] = useState('24h');
 
   const load = async () => {
     setLoading(true);
@@ -127,6 +130,24 @@ export default function SwarmPage() {
     } finally { setBusyId(null); }
   };
 
+  const launchIdentityPreset = async () => {
+    setLaunchingPreset(true);
+    setError(null);
+    try {
+      await createSuspiciousIdentitySwarm({
+        identity: presetIdentity,
+        time_range: presetTimeRange,
+        requested_by: form.requested_by || 'portal-user',
+        requires_approval_for_actions: true,
+      });
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to launch suspicious identity preset.');
+    } finally {
+      setLaunchingPreset(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -157,6 +178,36 @@ export default function SwarmPage() {
         <Stat label="Running" value={String(jobs.filter(j => j.status === 'running').length)} />
         <Stat label="Needs Approval" value={String(jobs.filter(j => j.status === 'requires_approval').length)} />
         <Stat label="Completed" value={String(jobs.filter(j => j.status === 'completed').length)} />
+      </div>
+
+      <div className="bg-gray-900 border border-cyan-900/60 rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-cyan-300 font-semibold">Sprint 6 Preset · Suspicious Identity Investigation</h3>
+            <p className="text-xs text-gray-400 mt-1">Launches Identity + Threat + Cloud + Data + Compliance + Automation with approval gate.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              value={presetIdentity}
+              onChange={(e) => setPresetIdentity(e.target.value)}
+              placeholder="identity"
+              className="px-2 py-1.5 rounded bg-gray-950 border border-gray-800 text-sm text-gray-200"
+            />
+            <input
+              value={presetTimeRange}
+              onChange={(e) => setPresetTimeRange(e.target.value)}
+              placeholder="time range"
+              className="w-24 px-2 py-1.5 rounded bg-gray-950 border border-gray-800 text-sm text-gray-200"
+            />
+            <button
+              onClick={launchIdentityPreset}
+              disabled={launchingPreset || !presetIdentity.trim()}
+              className="px-3 py-1.5 rounded bg-cyan-700 hover:bg-cyan-600 text-white text-sm disabled:opacity-60"
+            >
+              {launchingPreset ? 'Launching...' : 'Launch Preset'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">

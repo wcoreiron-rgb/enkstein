@@ -230,6 +230,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - pre-execution approval now starts/runs the job
     - post-judge approval now finalizes the job
   - Added shared swarm profile defaults (`FAST_TRIAGE`, `DEEP_INVESTIGATION`, `INCIDENT_RESPONSE`, `AUTONOMOUS_LOW_RISK`, `EMERGENCY_CONTAINMENT`) applied to trigger/schedule launches.
+- Sprint 6 operator workflow:
+  - Added one-click preset endpoint for **Suspicious Identity Investigation Swarm**:
+    - `POST /api/v1/swarm/jobs/presets/suspicious-identity`
+  - Preset launches Identity/Threat/Cloud/Data/Compliance/Automation participants with incident-response defaults and approval gate.
+  - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
 
 ## Claw Modules (24 total)
 

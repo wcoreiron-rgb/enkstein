@@ -59,6 +59,61 @@ def _task_status_events(
     return events, current
 
 
+@router.post("/presets/suspicious-identity", response_model=SwarmJobRead, status_code=201)
+async def create_suspicious_identity_preset(
+    body: dict | None = None,
+    background_tasks: BackgroundTasks = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Sprint 6 preset: Suspicious Identity Investigation Swarm.
+    Launches a cross-pillar investigation with governance-friendly defaults.
+    """
+    payload = body or {}
+    identity = payload.get("identity") or payload.get("user_id") or payload.get("principal") or "unknown_identity"
+    time_range = payload.get("time_range") or "24h"
+    source = payload.get("source") or "manual_preset"
+    classification = payload.get("classification") or "confidential"
+
+    swarm_payload = SwarmJobCreate(
+        name=payload.get("name") or f"Suspicious Identity Investigation — {identity}",
+        profile="INCIDENT_RESPONSE",
+        requested_by=payload.get("requested_by") or "portal-user",
+        trigger_type=payload.get("trigger_type") or "manual_preset",
+        classification=classification,
+        participants=[
+            "identityclaw",
+            "threatclaw",
+            "cloudclaw",
+            "dataclaw",
+            "complianceclaw",
+            "automationclaw",
+        ],
+        task_type="investigate_identity_risk",
+        input={
+            "identity": identity,
+            "time_range": time_range,
+            "source": source,
+            "scenario": "suspicious_identity_investigation",
+            "requested_outcome": "risk_timeline_blast_radius_and_actions",
+        },
+        parallelism=6,
+        model_profile=payload.get("model_profile") or "swarm_judge_profile",
+    )
+    job = await create_swarm_job(db, swarm_payload)
+    if payload.get("requires_approval_for_actions", True):
+        job.status = SwarmJobStatus.REQUIRES_APPROVAL
+        job.final_summary = "Awaiting approval before suspicious identity swarm execution"
+        await db.commit()
+        await db.refresh(job)
+    elif os.getenv("PYTEST_CURRENT_TEST") or background_tasks is None:
+        await run_swarm_job_in_session(db, job.id)
+        await db.refresh(job)
+    else:
+        background_tasks.add_task(run_swarm_job, job.id)
+    return job
+
+
 @router.post("", response_model=SwarmJobRead, status_code=201)
 async def create_job(
     payload: SwarmJobCreate,

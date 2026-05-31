@@ -335,6 +335,51 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.2 — Sprint 6 Preset Investigation Workflow                    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Sprint 6: Suspicious Identity Investigation Preset</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">New Feature</span>
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-sec">Operations</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.2</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release adds a demo-grade, operator-focused swarm workflow that can be launched in one click
+        and produces a governed investigation summary with action context.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Preset endpoint</strong> added: <code>POST /api/v1/swarm/jobs/presets/suspicious-identity</code>.</li>
+          <li><strong>Preset participants</strong> include IdentityClaw, ThreatClaw, CloudClaw, DataClaw, ComplianceClaw, and AutomationClaw.</li>
+          <li><strong>Approval-gated launch</strong> is enabled by default for this preset.</li>
+          <li><strong>Swarm list UI</strong> adds a quick-launch card for the preset workflow.</li>
+          <li><strong>Swarm detail UI</strong> now shows judge <code>root_cause</code>, <code>blast_radius</code>, and <code>next_steps</code> when available.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Swarm tests</strong> validate preset creation, participant set, approval gate, and approve path.</li>
+          <li><strong>Frontend lint</strong> passes for updated Swarm pages and API client.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.1 — Sprint 5 Trigger/Schedule Swarm Support                   -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

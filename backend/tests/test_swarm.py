@@ -133,3 +133,37 @@ async def test_swarm_job_stream_emits_events(client):
 
     assert "job_snapshot" in seen_event_headers
     assert "job_completed" in seen_event_headers
+
+
+@pytest.mark.asyncio
+async def test_sprint6_suspicious_identity_preset_creates_approval_gated_job(client):
+    response = await client.post(
+        f"{BASE}/presets/suspicious-identity",
+        json={
+            "identity": "user@company.com",
+            "time_range": "24h",
+            "requested_by": "sprint6-test",
+            "requires_approval_for_actions": True,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "requires_approval"
+    assert "Suspicious Identity Investigation" in body["name"]
+
+    job_id = body["id"]
+    tasks_res = await client.get(f"{BASE}/{job_id}/tasks")
+    assert tasks_res.status_code == 200, tasks_res.text
+    claws = {t["claw"] for t in tasks_res.json()}
+    assert claws == {
+        "identityclaw",
+        "threatclaw",
+        "cloudclaw",
+        "dataclaw",
+        "complianceclaw",
+        "automationclaw",
+    }
+
+    approve_res = await client.post(f"{BASE}/{job_id}/approve")
+    assert approve_res.status_code == 200, approve_res.text
+    assert approve_res.json()["status"] in {"completed", "requires_approval"}

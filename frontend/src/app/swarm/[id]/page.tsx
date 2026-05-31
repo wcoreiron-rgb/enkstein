@@ -401,6 +401,22 @@ export default function SwarmJobDetailPage() {
           </div>
           {judgeMeta.detail && <p className="text-xs text-gray-500 mt-1">{judgeMeta.detail}</p>}
           <p className="text-sm text-gray-300 mt-2 leading-relaxed">{summary.executive_summary}</p>
+          {summary?.root_cause && (
+            <p className="text-xs text-gray-400 mt-3"><span className="text-gray-500">root cause:</span> {summary.root_cause}</p>
+          )}
+          {summary?.blast_radius && (
+            <p className="text-xs text-gray-400 mt-1"><span className="text-gray-500">blast radius:</span> {summary.blast_radius}</p>
+          )}
+          {!!summary?.next_steps?.length && (
+            <div className="mt-3">
+              <p className="text-xs text-gray-500 mb-1">next steps</p>
+              <ul className="list-disc list-inside text-xs text-gray-300 space-y-0.5">
+                {summary.next_steps.map((s: string, i: number) => (
+                  <li key={`${s}-${i}`}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
