@@ -153,6 +153,20 @@ export const approveSwarmJob = (id: string) =>
 // Policy Packs
 export const getPolicyPacks = () => apiFetch<any[]>('/policy-packs');
 
+// Remediation
+export const triggerRemediationAction = (body: {
+  action_spec: {
+    provider: string;
+    action_type: string;
+    target_type: string;
+    target_id: string;
+    target_label?: string;
+    parameters?: Record<string, unknown>;
+  };
+  triggered_by?: string;
+}) =>
+  apiFetch<any>('/remediation/trigger', { method: 'POST', body: JSON.stringify(body) });
+
 // Event Triggers
 export const getTriggers = (params?: Record<string, string>) => {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';

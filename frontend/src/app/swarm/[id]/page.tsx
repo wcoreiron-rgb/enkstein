@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity, Copy } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
-import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks } from '@/lib/api';
+import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks, triggerRemediationAction } from '@/lib/api';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -220,6 +220,9 @@ export default function SwarmJobDetailPage() {
   const [eventSort, setEventSort] = useState<'newest' | 'oldest'>('newest');
   const [ticketCopied, setTicketCopied] = useState(false);
   const [complianceCopied, setComplianceCopied] = useState(false);
+  const [ticketProjectKey, setTicketProjectKey] = useState('SEC');
+  const [creatingTicket, setCreatingTicket] = useState(false);
+  const [ticketHandoffMsg, setTicketHandoffMsg] = useState<string | null>(null);
   const lastIngestedEventRef = useRef<{ type: string; data: any } | null>(null);
   const [newEventCutoffMs, setNewEventCutoffMs] = useState<number>(Date.now());
 
@@ -468,6 +471,44 @@ export default function SwarmJobDetailPage() {
       // no-op
     }
   };
+  const handoffTicket = async () => {
+    setCreatingTicket(true);
+    setTicketHandoffMsg(null);
+    try {
+      const complianceSummary = complianceRollup.map((c) => ({ control: c.key, count: c.count }));
+      const title = `[RegentClaw] ${job?.name || 'Swarm Incident'} (${(job?.overall_severity || 'info').toUpperCase()})`;
+      const response = await triggerRemediationAction({
+        triggered_by: `swarm:${id}`,
+        action_spec: {
+          provider: 'generic',
+          action_type: 'create_jira_ticket',
+          target_type: 'ticket',
+          target_id: String(job?.id || id),
+          target_label: job?.name || 'Swarm Investigation',
+          parameters: {
+            project_key: ticketProjectKey || 'SEC',
+            summary: title,
+            description: ticketDraft,
+            priority: String(job?.overall_severity || 'medium').toUpperCase(),
+            labels: ['regentclaw', 'swarm', 'incident-response'],
+            compliance_impact: complianceSummary,
+            metadata: {
+              swarm_job_id: job?.id,
+              profile: job?.profile,
+              confidence: job?.confidence,
+              classification: job?.classification,
+            },
+          },
+        },
+      });
+      const actionId = response?.actions?.[0]?.id;
+      setTicketHandoffMsg(actionId ? `Ticket action queued: ${actionId}` : 'Ticket handoff submitted.');
+    } catch (e: any) {
+      setTicketHandoffMsg(e?.message || 'Ticket handoff failed.');
+    } finally {
+      setCreatingTicket(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -552,12 +593,30 @@ export default function SwarmJobDetailPage() {
               <h2 className="text-white font-semibold">Ticket Draft</h2>
               <p className="text-xs text-gray-500 mt-1">Live draft from current swarm judgment and task evidence.</p>
             </div>
-            <button
-              onClick={copyTicketDraft}
-              className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1"
-            >
-              <Copy className="w-3 h-3" /> {ticketCopied ? 'copied' : 'copy'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={copyTicketDraft}
+                className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-300 hover:text-white inline-flex items-center gap-1"
+              >
+                <Copy className="w-3 h-3" /> {ticketCopied ? 'copied' : 'copy'}
+              </button>
+              <button
+                onClick={handoffTicket}
+                disabled={creatingTicket}
+                className="text-xs px-2 py-1 rounded border border-cyan-700 text-cyan-300 hover:bg-cyan-900/30 disabled:opacity-60"
+              >
+                {creatingTicket ? 'Creating...' : 'Create Ticket'}
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <label className="text-xs text-gray-500">Project</label>
+            <input
+              value={ticketProjectKey}
+              onChange={(e) => setTicketProjectKey(e.target.value)}
+              className="w-20 px-2 py-1 rounded border border-gray-700 bg-gray-950 text-xs text-gray-200"
+            />
+            {ticketHandoffMsg && <span className="text-xs text-cyan-300">{ticketHandoffMsg}</span>}
           </div>
           <pre className="mt-3 text-xs text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-3 whitespace-pre-wrap max-h-72 overflow-auto">{ticketDraft}</pre>
         </div>
