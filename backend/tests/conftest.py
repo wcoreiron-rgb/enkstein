@@ -3,9 +3,13 @@ import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Use the app's core Base so all models are registered
 from app.core.database import Base, get_db
+from app.database import get_db as get_db_sync
 from main import app
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -53,8 +57,30 @@ async def db_session():
     await engine.dispose()
 
 
+@pytest.fixture
+def db_session_sync():
+    """
+    Provide a shared in-memory SQLite sync session for sync routes that depend on
+    app.database.get_db.
+    """
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(bind=engine)
+    SyncTestSession = sessionmaker(bind=engine, autocommit=False, autoflush=False, expire_on_commit=False)
+    session = SyncTestSession()
+    try:
+        yield session
+    finally:
+        session.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
 @pytest_asyncio.fixture
-async def client(db_session):
+async def client(db_session, db_session_sync):
     """
     Provide an httpx AsyncClient wired to the FastAPI app with:
       - DB dependency overridden to the in-memory test session.
@@ -63,7 +89,11 @@ async def client(db_session):
     async def override_get_db():
         yield db_session
 
+    def override_get_db_sync():
+        yield db_session_sync
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_db_sync] = override_get_db_sync
 
     # Bypass JWT authentication for tests
     try:
