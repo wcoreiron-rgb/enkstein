@@ -396,61 +396,61 @@
           <td><span class="cat-num">LLM01</span></td>
           <td>Prompt Injection</td>
           <td><span class="badge badge-shipped">Shipped</span></td>
-          <td>No automated test</td>
+          <td><code>test_asi01_prompt_injection_flagged_by_audit</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM02</span></td>
           <td>Insecure Output Handling</td>
           <td><span class="badge badge-partial">Partially Shipped</span></td>
-          <td>No automated test</td>
+          <td>No automated test (gap documented)</td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM03</span></td>
           <td>Training Data Poisoning</td>
           <td><span class="badge badge-na">N/A</span></td>
-          <td>N/A</td>
+          <td>N/A — uses provider APIs, no training pipeline</td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM04</span></td>
           <td>Model Denial of Service</td>
           <td><span class="badge badge-progress">In Progress</span></td>
-          <td>No automated test</td>
+          <td>Auth rate-limiting shipped; AI endpoint limits not yet tested</td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM05</span></td>
           <td>Supply-Chain Vulnerabilities</td>
           <td><span class="badge badge-progress">In Progress</span></td>
-          <td>No automated test</td>
+          <td><code>test_asi04_supply_chain_scan_returns_result</code>, <code>test_provenance.py</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM06</span></td>
           <td>Sensitive Information Disclosure</td>
           <td><span class="badge badge-shipped">Shipped</span></td>
-          <td>No automated test</td>
+          <td>No isolated unit test (gap documented)</td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM07</span></td>
           <td>Insecure Plugin Design</td>
           <td><span class="badge badge-partial">Partially Shipped</span></td>
-          <td><code>test_ring_policy.py</code></td>
+          <td><code>test_ring_policy.py</code>, <code>test_asi05_ring0_always_blocked</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM08</span></td>
           <td>Excessive Agency</td>
           <td><span class="badge badge-shipped">Shipped</span></td>
-          <td><code>test_ring_policy.py</code></td>
+          <td><code>test_ring1_requires_two_approvals</code>, <code>test_asi09_self_approval_is_blocked</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM09</span></td>
           <td>Overreliance</td>
           <td><span class="badge badge-partial">Partially Shipped</span></td>
-          <td>No automated test</td>
+          <td>No automated test (gap documented)</td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM10</span></td>
           <td>Model Theft</td>
           <td><span class="badge badge-na">N/A / Partial</span></td>
-          <td>N/A</td>
+          <td>N/A — API-only, no model weights stored</td>
         </tr>
       </tbody>
     </table>
@@ -570,8 +570,9 @@
       <div class="ev-section">
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
-          <li><code>backend/main.py</code>: <code>slowapi</code> rate limiter applied to authentication endpoints — provides baseline request throttling.</li>
-          <li>The platform tracks per-request risk scores which could be used to gate expensive operations in future.</li>
+          <li><code>backend/app/api/routes/auth.py</code>: 10 req/min per-IP rate limiter on <code>/auth/token</code> — brute-force protection.</li>
+          <li><code>backend/app/services/sre_policy.py</code>: <code>SREPolicyEngine</code> circuit breaker + error budget for governed modules. Tested via <code>test_asi08_circuit_breaker_trips_after_error_budget_exceeded</code>.</li>
+          <li>The platform tracks per-request risk scores which could be used to gate expensive operations.</li>
         </ul>
       </div>
       <div class="ev-section">
@@ -580,7 +581,7 @@
           <li>No per-user rate limiting on AI endpoints (<code>/arcclaw/events</code>, <code>/arcclaw/chat</code>). Only auth routes are rate-limited currently.</li>
           <li>Prompt length is not capped before being forwarded to the model provider.</li>
           <li>No token budget or cost-cap enforcement at the API layer.</li>
-          <li>No circuit-breaker or backpressure when a provider returns 429 or 503.</li>
+          <li>SRE circuit breaker exists for governed modules but is not yet wired to LLM provider 429/503 backpressure.</li>
           <li>Planned: per-endpoint rate limiting via slowapi on ArcClaw routes.</li>
         </ul>
       </div>
