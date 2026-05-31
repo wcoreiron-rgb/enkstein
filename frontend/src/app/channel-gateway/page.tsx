@@ -8,7 +8,7 @@ import {
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
-  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline, getCommandStatus, updateCommandApprovalPolicy,
+  getPendingCommands, approvePendingCommand, rejectPendingCommand, bulkReviewPendingCommands, getCommandTimeline, getCommandStatus, updateCommandApprovalPolicy,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
@@ -621,6 +621,8 @@ export default function ChannelGatewayPage() {
   const [commandMinRisk, setCommandMinRisk] = useState(0);
   const [commandStatus, setCommandStatus] = useState<Record<string, any>>({});
   const [updatingPolicyFor, setUpdatingPolicyFor] = useState<string | null>(null);
+  const [selectedCommandIds, setSelectedCommandIds] = useState<string[]>([]);
+  const [bulkReviewing, setBulkReviewing] = useState<'approve' | 'reject' | null>(null);
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -724,6 +726,48 @@ export default function ChannelGatewayPage() {
       (cmd.target || '').toLowerCase().includes(q)
     );
   });
+
+  const visiblePendingIds = visiblePendingCommands.map((cmd) => cmd.command_id);
+  const selectedVisibleCount = selectedCommandIds.filter((id) => visiblePendingIds.includes(id)).length;
+  const allVisibleSelected = visiblePendingIds.length > 0 && selectedVisibleCount === visiblePendingIds.length;
+
+  const toggleCommandSelection = (commandId: string) => {
+    setSelectedCommandIds((prev) =>
+      prev.includes(commandId) ? prev.filter((id) => id !== commandId) : [...prev, commandId],
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedCommandIds((prev) => {
+      if (allVisibleSelected) {
+        return prev.filter((id) => !visiblePendingIds.includes(id));
+      }
+      const next = new Set(prev);
+      visiblePendingIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  };
+
+  const runBulkReview = async (decision: 'approve' | 'reject') => {
+    const commandIds = selectedCommandIds.filter((id) => visiblePendingIds.includes(id));
+    if (!commandIds.length) return;
+    setBulkReviewing(decision);
+    try {
+      await bulkReviewPendingCommands({
+        command_ids: commandIds,
+        decision,
+        actor: 'channel_gateway_ui',
+        reason:
+          decision === 'approve'
+            ? 'Bulk approved from Channel Gateway command panel'
+            : 'Bulk rejected from Channel Gateway command panel',
+      });
+      setSelectedCommandIds([]);
+      await load();
+    } finally {
+      setBulkReviewing(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -929,10 +973,31 @@ export default function ChannelGatewayPage() {
               className="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 w-28"
               placeholder="Min risk"
             />
+            <button
+              onClick={toggleSelectAllVisible}
+              className="px-2.5 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-xs text-gray-200"
+            >
+              {allVisibleSelected ? 'Unselect visible' : 'Select visible'}
+            </button>
+            <button
+              onClick={() => runBulkReview('approve')}
+              disabled={selectedVisibleCount === 0 || bulkReviewing !== null}
+              className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs disabled:opacity-60"
+            >
+              {bulkReviewing === 'approve' ? 'Approving…' : `Bulk Approve (${selectedVisibleCount})`}
+            </button>
+            <button
+              onClick={() => runBulkReview('reject')}
+              disabled={selectedVisibleCount === 0 || bulkReviewing !== null}
+              className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs disabled:opacity-60"
+            >
+              {bulkReviewing === 'reject' ? 'Rejecting…' : `Bulk Reject (${selectedVisibleCount})`}
+            </button>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                <th className="px-4 py-3 text-left">Sel</th>
                 <th className="px-4 py-3 text-left">Command ID</th>
                 <th className="px-4 py-3 text-left">Actor</th>
                 <th className="px-4 py-3 text-left">Actions</th>
@@ -947,6 +1012,14 @@ export default function ChannelGatewayPage() {
               {visiblePendingCommands.map(cmd => (
                 <div key={cmd.command_id} className="contents">
                   <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedCommandIds.includes(cmd.command_id)}
+                        onChange={() => toggleCommandSelection(cmd.command_id)}
+                        className="h-3.5 w-3.5 accent-cyan-500"
+                      />
+                    </td>
                     <td className="px-4 py-3 text-xs font-mono text-cyan-300">{cmd.command_id}</td>
                     <td className="px-4 py-3 text-xs text-gray-300">{cmd.actor || '—'}</td>
                     <td className="px-4 py-3 text-xs text-gray-300">{cmd.action}</td>
@@ -1006,7 +1079,7 @@ export default function ChannelGatewayPage() {
                   </tr>
                   {timelineOpenFor === cmd.command_id && (
                     <tr className="border-b border-gray-800 bg-gray-950">
-                      <td colSpan={8} className="px-4 py-3">
+                      <td colSpan={9} className="px-4 py-3">
                         <p className="text-xs text-gray-400 mb-2">Command Timeline</p>
                         <div className="space-y-1.5">
                           {(timelines[cmd.command_id] || []).map((ev, idx) => (

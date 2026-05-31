@@ -929,7 +929,12 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-path">/api/v1/commands/{command_id}/approval-policy</span>
         <span class="endpoint-desc">Update required approvals for a pending command (1-4) with guardrails against dropping below recorded approvals</span>
       </div>
-      <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval action.</p>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/commands/bulk-review</span>
+        <span class="endpoint-desc">Apply bulk approve/reject actions to multiple pending commands with per-command guardrails</span>
+      </div>
+      <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval actions.</p>
       <ul>
         <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
         <li><strong>Duplicate guard:</strong> same approver cannot approve the same command twice.</li>
@@ -938,6 +943,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>Timeline trail:</strong> command lifecycle events are queryable for operator review and exposed in Channel Gateway command rows.</li>
         <li><strong>Pending filters:</strong> pending list supports source/requester/min-risk filtering for operational triage.</li>
         <li><strong>Delegated approval thresholds:</strong> operators can adjust required approvals per pending command with audit events recorded.</li>
+        <li><strong>Bulk operator actions:</strong> command rows now support multi-select + bulk approve/reject for faster queue handling.</li>
       </ul>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>

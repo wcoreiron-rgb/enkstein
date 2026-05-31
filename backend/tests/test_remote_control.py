@@ -511,3 +511,93 @@ async def test_update_command_approval_policy_rejects_below_recorded_approvals(c
         json={"required_approvals": 1, "reason": "now below recorded approvals"},
     )
     assert deny_lower.status_code == 400, deny_lower.text
+
+
+@pytest.mark.asyncio
+async def test_bulk_review_pending_commands_approve_flow(client, db_session):
+    cmd_ids = ["cmd_bulk_approve_1", "cmd_bulk_approve_2"]
+    seeded_events = []
+    for cmd_id in cmd_ids:
+        seeded_events.append(
+            Event(
+                source_module="commandclaw",
+                actor_id="owner-bulk@company.com",
+                actor_name="owner-bulk@company.com",
+                actor_type="human",
+                action="run_swarm",
+                target="cloud_exposure",
+                target_type="command_target",
+                outcome=EventOutcome.REQUIRES_APPROVAL,
+                severity=EventSeverity.HIGH,
+                risk_score=81.0,
+                policy_name="seeded_requires_approval",
+                policy_reason="seeded bulk approve test",
+                description="[commandclaw] owner-bulk@company.com -> run_swarm",
+                metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner-bulk@company.com", "mode": "approval"}}),
+                is_anomaly=False,
+                requires_review=True,
+            )
+        )
+    db_session.add_all(seeded_events)
+    await db_session.commit()
+
+    bulk = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": cmd_ids,
+            "decision": "approve",
+            "actor": "secops-bulk",
+            "reason": "bulk approval step one",
+        },
+    )
+    assert bulk.status_code == 200, bulk.text
+    body = bulk.json()
+    assert body["processed"] == 2
+    assert body["approved"] == 0
+    assert body["rejected"] == 0
+    assert body["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_review_pending_commands_reject_flow(client, db_session):
+    cmd_ids = ["cmd_bulk_reject_1", "cmd_bulk_reject_2"]
+    seeded_events = []
+    for cmd_id in cmd_ids:
+        seeded_events.append(
+            Event(
+                source_module="commandclaw",
+                actor_id="owner-reject@company.com",
+                actor_name="owner-reject@company.com",
+                actor_type="human",
+                action="run_workflow",
+                target="incident_response",
+                target_type="command_target",
+                outcome=EventOutcome.REQUIRES_APPROVAL,
+                severity=EventSeverity.MEDIUM,
+                risk_score=66.0,
+                policy_name="seeded_requires_approval",
+                policy_reason="seeded bulk reject test",
+                description="[commandclaw] owner-reject@company.com -> run_workflow",
+                metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner-reject@company.com", "mode": "approval"}}),
+                is_anomaly=False,
+                requires_review=True,
+            )
+        )
+    db_session.add_all(seeded_events)
+    await db_session.commit()
+
+    bulk = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": cmd_ids,
+            "decision": "reject",
+            "actor": "secops-bulk",
+            "reason": "bulk rejection",
+        },
+    )
+    assert bulk.status_code == 200, bulk.text
+    body = bulk.json()
+    assert body["processed"] == 2
+    assert body["approved"] == 0
+    assert body["rejected"] == 2
+    assert body["errors"] == []

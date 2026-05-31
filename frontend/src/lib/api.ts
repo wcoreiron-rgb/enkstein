@@ -384,6 +384,16 @@ export const rejectPendingCommand = (commandId: string, body?: { reviewer?: stri
     method: 'POST',
     body: JSON.stringify(body || {}),
   });
+export const bulkReviewPendingCommands = (body: {
+  command_ids: string[];
+  decision: 'approve' | 'reject';
+  reason?: string;
+  actor?: string;
+}) =>
+  apiFetch<any>('/commands/bulk-review', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 export const getCommandTimeline = (commandId: string, limit = 100) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?limit=${limit}`);
 export const getCommandStatus = (commandId: string) =>

@@ -209,6 +209,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `GET /api/v1/commands/pending`
     - `POST /api/v1/commands/{command_id}/approve`
     - `POST /api/v1/commands/{command_id}/reject`
+    - `POST /api/v1/commands/bulk-review`
     - `GET /api/v1/commands/{command_id}/timeline`
     - `GET /api/v1/commands/{command_id}/status`
     - `POST /api/v1/commands/{command_id}/approval-policy`
@@ -223,6 +224,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - approval delegation control to raise/lower required approvals (within guardrails)
   - Channel Gateway UI now includes:
     - `Pending Commands` approval tab wired to CommandClaw approval APIs
+    - multi-select + bulk approve/reject controls for pending command batches
     - per-command timeline view for operator audit context
     - pending command search + source/min-risk filters + consolidated status preview
     - inline required-approvals selector for pending command delegation

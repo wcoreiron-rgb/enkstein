@@ -186,6 +186,25 @@ class CommandApprovalPolicyUpdateRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 
 
+class BulkCommandReviewRequest(BaseModel):
+    command_ids: list[str] = Field(..., min_length=1, max_length=100)
+    decision: str = Field(..., pattern="^(approve|reject)$")
+    reason: str | None = Field(default=None, max_length=1024)
+    actor: str | None = Field(default=None, max_length=255)
+
+
+async def _find_pending_command_event(db: AsyncSession, command_id: str) -> Event | None:
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
+        .order_by(desc(Event.timestamp))
+    )
+    for candidate in result.scalars().all():
+        if _event_command_id(candidate) == command_id:
+            return candidate
+    return None
+
+
 async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -> dict:
     decision = await enforce(
         db,
@@ -494,16 +513,7 @@ async def approve_pending_command(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Event)
-        .where(Event.source_module == "commandclaw", Event.outcome == "requires_approval")
-        .order_by(desc(Event.timestamp))
-    )
-    event = None
-    for candidate in result.scalars().all():
-        if _event_command_id(candidate) == command_id:
-            event = candidate
-            break
+    event = await _find_pending_command_event(db, command_id)
     if not event:
         raise HTTPException(status_code=404, detail="Pending command not found")
 
@@ -592,16 +602,7 @@ async def reject_pending_command(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Event)
-        .where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
-        .order_by(desc(Event.timestamp))
-    )
-    event = None
-    for candidate in result.scalars().all():
-        if _event_command_id(candidate) == command_id:
-            event = candidate
-            break
+    event = await _find_pending_command_event(db, command_id)
     if not event:
         raise HTTPException(status_code=404, detail="Pending command not found")
 
@@ -652,16 +653,7 @@ async def update_command_approval_policy(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Event)
-        .where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
-        .order_by(desc(Event.timestamp))
-    )
-    event = None
-    for candidate in result.scalars().all():
-        if _event_command_id(candidate) == command_id:
-            event = candidate
-            break
+    event = await _find_pending_command_event(db, command_id)
     if not event:
         raise HTTPException(status_code=404, detail="Pending command not found")
 
@@ -713,6 +705,128 @@ async def update_command_approval_policy(
         "approvals_received": approvals_received,
         "approval_status": approval_state["status"],
     }
+
+
+@router.post("/commands/bulk-review")
+async def bulk_review_pending_commands(
+    body: BulkCommandReviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    actor_id = str(current_user.get("sub", "unknown"))
+    actor_display = body.actor or actor_id
+    summary = {"processed": 0, "approved": 0, "rejected": 0, "errors": []}
+
+    for command_id in body.command_ids:
+        event = await _find_pending_command_event(db, command_id)
+        if not event:
+            summary["errors"].append({"command_id": command_id, "detail": "Pending command not found"})
+            continue
+
+        if body.decision == "approve":
+            approval_state = _approval_state(event)
+            requester = str(approval_state.get("requester") or "unknown")
+            if actor_id == requester or actor_display == requester:
+                summary["errors"].append({"command_id": command_id, "detail": "Self-approval is not allowed"})
+                continue
+            if any(str(a.get("approved_by")) == str(actor_display) for a in approval_state["approvals"]):
+                summary["errors"].append({"command_id": command_id, "detail": "Approver already recorded"})
+                continue
+
+            approval_state["approvals"].append(
+                {
+                    "approved_at": datetime.now(timezone.utc).isoformat(),
+                    "approved_by": actor_display,
+                    "approver_display": actor_display,
+                    "reason": body.reason or "bulk approved",
+                }
+            )
+            approvals_received = len(approval_state["approvals"])
+            required = approval_state["required_approvals"]
+            final_approved = approvals_received >= required
+            approval_state["status"] = "approved" if final_approved else "pending"
+            _write_approval_state(event, approval_state)
+            event.requires_review = not final_approved
+            event.outcome = EventOutcome.ALLOWED if final_approved else EventOutcome.REQUIRES_APPROVAL
+            event.description = (
+                f"{event.description} [bulk-approved]"
+                if final_approved
+                else f"{event.description} [bulk-approval {approvals_received}/{required}]"
+            )
+            db.add(
+                Event(
+                    source_module="commandclaw",
+                    actor_id=actor_id,
+                    actor_name=actor_display,
+                    actor_type="human",
+                    action="bulk_approve_command" if final_approved else "bulk_approve_command_step",
+                    target=command_id,
+                    target_type="command",
+                    outcome=EventOutcome.ALLOWED if final_approved else EventOutcome.PENDING,
+                    severity=event.severity,
+                    risk_score=event.risk_score,
+                    policy_name="manual_command_bulk_approval",
+                    policy_reason=body.reason or "Bulk approval recorded",
+                    description=(
+                        f"Bulk approved pending command {command_id}"
+                        if final_approved
+                        else f"Bulk recorded approval {approvals_received}/{required} for {command_id}"
+                    ),
+                    metadata_json=json.dumps(
+                        {
+                            "approved_command_id": command_id,
+                            "approvals_received": approvals_received,
+                            "approvals_required": required,
+                            "final_approved": final_approved,
+                            "bulk_review": True,
+                        }
+                    ),
+                    is_anomaly=False,
+                    requires_review=not final_approved,
+                )
+            )
+            summary["processed"] += 1
+            if final_approved:
+                summary["approved"] += 1
+        else:
+            approval_state = _approval_state(event)
+            approval_state["status"] = "rejected"
+            approval_state["rejected_at"] = datetime.now(timezone.utc).isoformat()
+            approval_state["rejected_by"] = actor_display
+            approval_state["reject_reason"] = body.reason or "bulk rejected"
+            _write_approval_state(event, approval_state)
+
+            event.outcome = EventOutcome.BLOCKED
+            event.requires_review = False
+            event.policy_name = event.policy_name or "manual_command_bulk_rejection"
+            event.policy_reason = body.reason or "Rejected via bulk command review"
+            event.description = f"{event.description} [bulk-rejected]"
+
+            db.add(
+                Event(
+                    source_module="commandclaw",
+                    actor_id=actor_id,
+                    actor_name=actor_display,
+                    actor_type="human",
+                    action="bulk_reject_command",
+                    target=command_id,
+                    target_type="command",
+                    outcome=EventOutcome.BLOCKED,
+                    severity=event.severity,
+                    risk_score=event.risk_score,
+                    policy_name="manual_command_bulk_rejection",
+                    policy_reason=body.reason or "Bulk rejected pending command",
+                    description=f"Bulk rejected pending command {command_id}",
+                    metadata_json=json.dumps({"rejected_command_id": command_id, "bulk_review": True}),
+                    is_anomaly=False,
+                    requires_review=False,
+                )
+            )
+            summary["processed"] += 1
+            summary["rejected"] += 1
+
+    await db.commit()
+    return summary
 
 
 @router.post("/remote-agents/{agent_id}/dispatch")
