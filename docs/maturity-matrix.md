@@ -19,8 +19,8 @@ Status legend:
 | Multi-tenant hardening proof | In Progress | Tenant isolation suite + scaffold tests + boundary documentation | Enforced owner/tenant scoping across all list/get paths and secrets retrieval |
 | Connector trust/provenance verification | In Progress | Gateway scan/policy checks on installs | Signed provenance and checksum verification chain |
 | Operator-grade executive reporting | In Progress | Trust Fabric dashboard + probes + status panels + Swarm live event stream | Executive risk rollups linked to evidence/compliance controls |
-| Swarm runtime maturity | In Progress | Bounded parallel execution + real `/task` routing for Identity/Cloud/Threat/Arc/Access/Data/Dev/Endpoint + SSE stream + connector-backed task paths for Cloud/Endpoint/Dev | Expand real `/task` coverage to remaining claws and broaden connector-backed execution across additional claw providers |
-| Model routing maturity (ModelClaw) | In Progress | ModelClaw scaffold with governed route/profile/provider/call-audit endpoints | Persistent storage + provider adapters + per-tenant profile governance |
+| Swarm runtime maturity | In Progress | Bounded parallel execution + real `/task` routing for Identity/Cloud/Threat/Arc/Access/Data/Dev/Endpoint/App/Log/Net/Compliance + SSE stream + connector-backed task paths for Cloud/Endpoint/Dev | Expand real `/task` coverage to remaining claws and broaden connector-backed execution across additional claw providers |
+| Model routing maturity (ModelClaw) | In Progress | ModelClaw governed route/profile/provider/call-audit endpoints + tenant-scoped profile/call filtering + persisted runtime state file | DB-backed provider/profile storage + richer provider adapters + per-tenant policy packs |
 | Public maturity transparency | In Progress | This matrix + OWASP split docs | Keep matrix synced with code and tests each release |
 
 ---

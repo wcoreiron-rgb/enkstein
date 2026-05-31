@@ -20,7 +20,20 @@ def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("claw", ["identityclaw", "accessclaw", "dataclaw", "devclaw", "endpointclaw"])
+@pytest.mark.parametrize(
+    "claw",
+    [
+        "identityclaw",
+        "accessclaw",
+        "dataclaw",
+        "devclaw",
+        "endpointclaw",
+        "appclaw",
+        "logclaw",
+        "netclaw",
+        "complianceclaw",
+    ],
+)
 async def test_dispatcher_routes_to_real_task(db_session, claw):
     task = _mk_task(claw)
     db_session.add(task)

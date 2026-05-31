@@ -54,6 +54,7 @@ postgres_data/
 secrets.json
 credentials.json
 backend/.secrets/
+backend/.state/
 
 # Alembic
 backend/alembic/versions/__pycache__/

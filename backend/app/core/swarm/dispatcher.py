@@ -13,11 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import AsyncSessionLocal
 from app.claws.arcclaw.routes import ArcTaskRequest, run_arc_task
 from app.claws.accessclaw.routes import AccessTaskRequest, run_access_task
+from app.claws.appclaw.routes import AppTaskRequest, run_app_task
 from app.claws.cloudclaw.routes import CloudTaskRequest, run_cloud_task
+from app.claws.complianceclaw.routes import ComplianceTaskRequest, run_compliance_task
 from app.claws.dataclaw.routes import DataTaskRequest, run_data_task
 from app.claws.devclaw.routes import DevTaskRequest, run_dev_task
 from app.claws.endpointclaw.routes import EndpointTaskRequest, run_endpoint_task
 from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
+from app.claws.logclaw.routes import LogTaskRequest, run_log_task
+from app.claws.netclaw.routes import NetTaskRequest, run_net_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
@@ -160,6 +164,14 @@ async def _execute_real_task_if_supported(
         output = await run_dev_task(DevTaskRequest(**payload), db)
     elif claw == "endpointclaw":
         output = await run_endpoint_task(EndpointTaskRequest(**payload), db)
+    elif claw == "appclaw":
+        output = await run_app_task(AppTaskRequest(**payload), db)
+    elif claw == "logclaw":
+        output = await run_log_task(LogTaskRequest(**payload), db)
+    elif claw == "netclaw":
+        output = await run_net_task(NetTaskRequest(**payload), db)
+    elif claw == "complianceclaw":
+        output = await run_compliance_task(ComplianceTaskRequest(**payload), db)
     else:
         return None
 

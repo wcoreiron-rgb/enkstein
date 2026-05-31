@@ -189,7 +189,7 @@ RegentClaw now exposes AGT rollout through a provider boundary instead of direct
 
 Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 
-## Latest Updates (May 30, 2026)
+## Latest Updates (May 31, 2026)
 
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
@@ -201,6 +201,14 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/cloudclaw/task`
     - `/api/v1/threatclaw/task`
     - `/api/v1/arcclaw/task`
+    - `/api/v1/accessclaw/task`
+    - `/api/v1/dataclaw/task`
+    - `/api/v1/devclaw/task`
+    - `/api/v1/endpointclaw/task`
+    - `/api/v1/appclaw/task`
+    - `/api/v1/logclaw/task`
+    - `/api/v1/netclaw/task`
+    - `/api/v1/complianceclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
 - ModelClaw scaffold:
   - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
@@ -211,6 +219,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `POST /api/v1/modelclaw/route`
     - `GET /api/v1/modelclaw/calls`
   - Model routes are enforced through Trust Fabric decisions before response.
+  - Added tenant-scoped profile/call filtering (`tenant_id`) and persisted runtime state for profiles/call audit (`backend/.state/modelclaw_state.json`).
 - Swarm Judge synthesis:
   - Added dedicated `swarm_judge_profile`.
   - Swarm Judge now attempts ModelClaw-routed synthesis and falls back to deterministic summary when denied/unavailable.

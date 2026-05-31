@@ -31,8 +31,8 @@ async def get_model_providers():
 
 
 @router.get("/profiles", response_model=list[ModelProfileRead], summary="List model profiles")
-async def get_model_profiles():
-    return list_profiles()
+async def get_model_profiles(tenant_id: str = "global"):
+    return list_profiles(tenant_id=tenant_id)
 
 
 @router.post("/profiles", response_model=ModelProfileRead, summary="Create/update model profile")
@@ -41,13 +41,13 @@ async def put_model_profile(payload: ModelProfileCreate):
 
 
 @router.get("/calls", response_model=list[ModelCallRead], summary="Recent ModelClaw call audit")
-async def get_model_calls(limit: int = 50):
-    return list_model_calls(limit)
+async def get_model_calls(limit: int = 50, tenant_id: str = "global"):
+    return list_model_calls(limit, tenant_id=tenant_id)
 
 
 @router.post("/route", response_model=ModelRouteResponse, summary="Route a model call through Trust Fabric")
 async def route_model_call(payload: ModelRouteRequest, db: AsyncSession = Depends(get_db)):
-    profile = get_profile(payload.model_profile)
+    profile = get_profile(payload.model_profile, tenant_id=payload.tenant_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Model profile not found")
 
@@ -98,6 +98,7 @@ async def route_model_call(payload: ModelRouteRequest, db: AsyncSession = Depend
             "provider": profile["provider"],
             "model": profile["model"],
             "model_profile": profile["name"],
+            "tenant_id": payload.tenant_id,
             "data_classification": payload.data_classification,
             "outcome": decision.outcome.value,
             "policy_name": decision.policy_name,

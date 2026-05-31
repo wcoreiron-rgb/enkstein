@@ -24,6 +24,7 @@ class ModelProfileCreate(BaseModel):
     tool_calling: bool = True
     requires_redaction: bool = True
     fallback_profile: str | None = None
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
 
 
 class ModelProfileRead(ModelProfileCreate):
@@ -38,6 +39,7 @@ class ModelRouteRequest(BaseModel):
     data_classification: str = Field(default="internal", max_length=64)
     model_profile: str | None = Field(default=None, max_length=128)
     swarm_job_id: str | None = Field(default=None, max_length=128)
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
     context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -48,6 +50,7 @@ class ModelCallRead(BaseModel):
     provider: str
     model: str
     model_profile: str | None
+    tenant_id: str = "global"
     data_classification: str
     outcome: str
     policy_name: str

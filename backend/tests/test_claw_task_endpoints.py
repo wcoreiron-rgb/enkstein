@@ -16,6 +16,10 @@ from app.claws.devclaw import routes as dev_routes
         ("/api/v1/dataclaw/task", "dataclaw"),
         ("/api/v1/devclaw/task", "devclaw"),
         ("/api/v1/endpointclaw/task", "endpointclaw"),
+        ("/api/v1/appclaw/task", "appclaw"),
+        ("/api/v1/logclaw/task", "logclaw"),
+        ("/api/v1/netclaw/task", "netclaw"),
+        ("/api/v1/complianceclaw/task", "complianceclaw"),
     ],
 )
 async def test_claw_task_contract_shape(client, path, claw):
