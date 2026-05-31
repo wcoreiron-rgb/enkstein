@@ -335,6 +335,52 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.3 — Swarm Ticket Handoff Hardening                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Ticket Handoff + E2E Harness</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-sec">Hardening</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release hardens the Sprint 6 operator path by validating ticket handoff payloads,
+        wiring a direct Create Ticket action from Swarm detail, and adding a Playwright E2E spec
+        for the handoff flow.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Swarm detail ticket handoff</strong> posts the live ticket draft to <code>POST /api/v1/remediation/trigger</code> using a <code>create_jira_ticket</code> action spec.</li>
+          <li><strong>Ticket payload validation</strong> now enforces required ticket fields: <code>project_key</code>, <code>summary</code>, and <code>description</code>.</li>
+          <li><strong>Compliance rollup context</strong> is included in the remediation handoff payload.</li>
+          <li><strong>Playwright E2E harness</strong> added under <code>frontend/e2e/</code> with <code>npm run test:e2e</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend regression tests</strong> assert invalid ticket payloads fail and valid ticket handoffs remain low-risk/non-approval actions.</li>
+          <li><strong>Frontend lint</strong> passes for Swarm detail and API client changes.</li>
+          <li><strong>E2E note:</strong> local execution requires Playwright to start the Next.js server on <code>127.0.0.1:3100</code>; this sandbox blocks local port binding.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.2 — Sprint 6 Preset Investigation Workflow                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

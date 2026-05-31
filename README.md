@@ -235,6 +235,12 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `POST /api/v1/swarm/jobs/presets/suspicious-identity`
   - Preset launches Identity/Threat/Cloud/Data/Compliance/Automation participants with incident-response defaults and approval gate.
   - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
+  - Swarm job detail now generates a live ticket draft and compliance impact rollup from judge/task evidence.
+  - Added direct **Create Ticket** handoff from Swarm detail to `POST /api/v1/remediation/trigger` using `create_jira_ticket` action specs.
+  - Remediation trigger now validates ticket action payload shape (`project_key`, `summary`, `description`) before queuing/executing.
+  - Added Playwright E2E coverage for the Swarm Create Ticket flow:
+    - `cd frontend && npm run test:e2e -- e2e/swarm-create-ticket.spec.ts`
+    - Local sandbox note: E2E requires the dev server to bind to `127.0.0.1:3100`.
 
 ## Claw Modules (24 total)
 

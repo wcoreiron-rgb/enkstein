@@ -910,6 +910,31 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>Direct ticket handoff:</strong> <code>Create Ticket</code> posts a governed action spec to <code>POST /api/v1/remediation/trigger</code> with draft content and compliance context.</li>
       </ul>
 
+      <h2>Ticket Handoff Validation</h2>
+      <p>Swarm ticket handoff uses the existing remediation trigger route and validates required ticket parameters before the remediation engine queues or executes the action.</p>
+      <pre><span class="c-cmd">POST</span> /api/v1/remediation/trigger
+{
+  <span class="c-key">"triggered_by"</span>: <span class="c-str">"swarm:&lt;job_id&gt;"</span>,
+  <span class="c-key">"action_spec"</span>: {
+    <span class="c-key">"provider"</span>: <span class="c-str">"generic"</span>,
+    <span class="c-key">"action_type"</span>: <span class="c-str">"create_jira_ticket"</span>,
+    <span class="c-key">"target_type"</span>: <span class="c-str">"ticket"</span>,
+    <span class="c-key">"target_id"</span>: <span class="c-str">"&lt;swarm_job_id&gt;"</span>,
+    <span class="c-key">"parameters"</span>: {
+      <span class="c-key">"project_key"</span>: <span class="c-str">"SEC"</span>,
+      <span class="c-key">"summary"</span>: <span class="c-str">"[RegentClaw] Incident title"</span>,
+      <span class="c-key">"description"</span>: <span class="c-str">"Generated ticket draft"</span>,
+      <span class="c-key">"compliance_impact"</span>: []
+    }
+  }
+}</pre>
+
+      <h2>E2E Coverage</h2>
+      <p>The frontend includes a Playwright test for Swarm Create Ticket flow:</p>
+      <pre><span class="c-cmd">cd</span> frontend
+<span class="c-cmd">npm run</span> test:e2e -- e2e/swarm-create-ticket.spec.ts</pre>
+      <p>The Playwright config starts Next.js on <code>127.0.0.1:3100</code>. Environments that block local port binding need to run this test on a normal developer host or CI runner.</p>
+
       <h2>Operational Regression Fixes (Shipped)</h2>
       <ul>
         <li><strong>Policy pack stats route</strong> route ordering fixed so <code>GET /api/v1/policy-packs/stats</code> is no longer shadowed by dynamic pack-id routes.</li>
