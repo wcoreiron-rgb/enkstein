@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.3 — Per-Command Approval Policy Controls                      -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Per-Command Approval Policy Update Controls</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Delegation</span>
+          <span class="tag tag-fix">Ops UX</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.3</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This batch introduces per-command approval-threshold controls so operators can tune required approvals on pending commands without leaving the Channel Gateway workflow.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New endpoint:</strong> <code>POST /api/v1/commands/{command_id}/approval-policy</code> updates required approvals (1-4) for pending commands.</li>
+          <li><strong>Guardrail enforcement:</strong> required approvals cannot be set below approvals already recorded for that command.</li>
+          <li><strong>Channel Gateway command rows</strong> now include an inline approval-threshold selector for operator delegation.</li>
+          <li><strong>API client support</strong> adds <code>updateCommandApprovalPolicy()</code> helper.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests</strong> add approval-policy update and guardrail coverage in <code>test_remote_control.py</code>.</li>
+          <li><strong>Regression run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>18 passed</strong>.</li>
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.2 — Pending Command Filters + Status Summary                  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -420,3 +420,94 @@ async def test_commands_pending_filters_and_status_endpoint(client, db_session):
     assert status_body["command_id"] == "cmd_filter_b"
     assert status_body["source"] == "teams"
     assert status_body["requester"] == "req-b@company.com"
+
+
+@pytest.mark.asyncio
+async def test_update_command_approval_policy_flow(client, db_session):
+    cmd_id = "cmd_policy_update_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner4@company.com",
+        actor_name="owner4@company.com",
+        actor_type="human",
+        action="run_workflow",
+        target="incident-response",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=74.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded policy update test",
+        description="[commandclaw] owner4@company.com -> run_workflow",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner4@company.com", "mode": "approval"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    update = await client.post(
+        f"/api/v1/commands/{cmd_id}/approval-policy",
+        json={"required_approvals": 3, "reason": "high impact action"},
+    )
+    assert update.status_code == 200, update.text
+    body = update.json()
+    assert body["required_approvals"] == 3
+    assert body["approvals_received"] == 0
+    assert body["approval_status"] == "pending"
+
+
+@pytest.mark.asyncio
+async def test_update_command_approval_policy_rejects_below_recorded_approvals(client, db_session):
+    cmd_id = "cmd_policy_update_002"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner5@company.com",
+        actor_name="owner5@company.com",
+        actor_type="human",
+        action="run_workflow",
+        target="incident-response",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=74.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded policy update test",
+        description="[commandclaw] owner5@company.com -> run_workflow",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner5@company.com", "mode": "approval"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    set_three = await client.post(
+        f"/api/v1/commands/{cmd_id}/approval-policy",
+        json={"required_approvals": 3, "reason": "raise threshold"},
+    )
+    assert set_three.status_code == 200, set_three.text
+
+    first = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-a", "reason": "step one"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["approvals_received"] == 1
+
+    bad_update = await client.post(
+        f"/api/v1/commands/{cmd_id}/approval-policy",
+        json={"required_approvals": 0, "reason": "invalid lower bound"},
+    )
+    assert bad_update.status_code == 422, bad_update.text
+
+    second = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-b", "reason": "step two"},
+    )
+    assert second.status_code == 200, second.text
+
+    deny_lower = await client.post(
+        f"/api/v1/commands/{cmd_id}/approval-policy",
+        json={"required_approvals": 1, "reason": "now below recorded approvals"},
+    )
+    assert deny_lower.status_code == 400, deny_lower.text

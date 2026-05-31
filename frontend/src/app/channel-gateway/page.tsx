@@ -8,7 +8,7 @@ import {
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
-  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline, getCommandStatus,
+  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline, getCommandStatus, updateCommandApprovalPolicy,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
@@ -620,6 +620,7 @@ export default function ChannelGatewayPage() {
   const [commandSourceFilter, setCommandSourceFilter] = useState('all');
   const [commandMinRisk, setCommandMinRisk] = useState(0);
   const [commandStatus, setCommandStatus] = useState<Record<string, any>>({});
+  const [updatingPolicyFor, setUpdatingPolicyFor] = useState<string | null>(null);
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -693,6 +694,23 @@ export default function ChannelGatewayPage() {
       setTimelines(prev => ({ ...prev, [commandId]: [] }));
     } finally {
       setTimelineLoadingFor(null);
+    }
+  };
+
+  const setRequiredApprovals = async (commandId: string, required: number) => {
+    setUpdatingPolicyFor(commandId);
+    try {
+      await updateCommandApprovalPolicy(commandId, {
+        required_approvals: required,
+        reason: 'Updated from Channel Gateway command panel',
+      });
+      await load();
+      if (timelineOpenFor === commandId) {
+        const status = await getCommandStatus(commandId);
+        setCommandStatus(prev => ({ ...prev, [commandId]: status }));
+      }
+    } finally {
+      setUpdatingPolicyFor(null);
     }
   };
 
@@ -972,6 +990,17 @@ export default function ChannelGatewayPage() {
                             : <Clock className="w-3 h-3" />}
                           Timeline
                         </button>
+                        <select
+                          value={cmd.required_approvals ?? 1}
+                          onChange={(e) => setRequiredApprovals(cmd.command_id, parseInt(e.target.value, 10))}
+                          disabled={updatingPolicyFor === cmd.command_id}
+                          className="px-2 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-gray-200 text-xs disabled:opacity-60"
+                        >
+                          <option value={1}>1 approval</option>
+                          <option value={2}>2 approvals</option>
+                          <option value={3}>3 approvals</option>
+                          <option value={4}>4 approvals</option>
+                        </select>
                       </div>
                     </td>
                   </tr>

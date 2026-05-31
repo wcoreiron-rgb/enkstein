@@ -924,6 +924,11 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-path">/api/v1/commands/{command_id}/status</span>
         <span class="endpoint-desc">Fetch consolidated command status summary (latest outcome, source, requester, approval state)</span>
       </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/commands/{command_id}/approval-policy</span>
+        <span class="endpoint-desc">Update required approvals for a pending command (1-4) with guardrails against dropping below recorded approvals</span>
+      </div>
       <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval action.</p>
       <ul>
         <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
@@ -932,6 +937,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>Explicit rejection path:</strong> pending commands can be terminated as blocked with reviewer attribution and reason persisted.</li>
         <li><strong>Timeline trail:</strong> command lifecycle events are queryable for operator review and exposed in Channel Gateway command rows.</li>
         <li><strong>Pending filters:</strong> pending list supports source/requester/min-risk filtering for operational triage.</li>
+        <li><strong>Delegated approval thresholds:</strong> operators can adjust required approvals per pending command with audit events recorded.</li>
       </ul>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>

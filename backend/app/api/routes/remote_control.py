@@ -181,6 +181,11 @@ class CommandRejectionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 
 
+class CommandApprovalPolicyUpdateRequest(BaseModel):
+    required_approvals: int = Field(..., ge=1, le=4)
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -> dict:
     decision = await enforce(
         db,
@@ -638,6 +643,76 @@ async def reject_pending_command(
     )
     await db.commit()
     return {"command_id": command_id, "status": "rejected"}
+
+
+@router.post("/commands/{command_id}/approval-policy")
+async def update_command_approval_policy(
+    command_id: str,
+    body: CommandApprovalPolicyUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
+        .order_by(desc(Event.timestamp))
+    )
+    event = None
+    for candidate in result.scalars().all():
+        if _event_command_id(candidate) == command_id:
+            event = candidate
+            break
+    if not event:
+        raise HTTPException(status_code=404, detail="Pending command not found")
+
+    approval_state = _approval_state(event)
+    approvals_received = len(approval_state["approvals"])
+    if body.required_approvals < approvals_received:
+        raise HTTPException(
+            status_code=400,
+            detail="required_approvals cannot be lower than approvals already recorded",
+        )
+    old_required = approval_state["required_approvals"]
+    approval_state["required_approvals"] = body.required_approvals
+    approval_state["status"] = (
+        "approved" if approvals_received >= body.required_approvals else "pending"
+    )
+    _write_approval_state(event, approval_state)
+    event.description = f"{event.description} [approval-policy {old_required}->{body.required_approvals}]"
+
+    db.add(
+        Event(
+            source_module="commandclaw",
+            actor_id=str(current_user.get("sub", "unknown")),
+            actor_name=str(current_user.get("sub", "unknown")),
+            actor_type="human",
+            action="update_command_approval_policy",
+            target=command_id,
+            target_type="command",
+            outcome=EventOutcome.PENDING,
+            severity=event.severity,
+            risk_score=event.risk_score,
+            policy_name="manual_command_policy_update",
+            policy_reason=body.reason or f"Updated required approvals {old_required}->{body.required_approvals}",
+            description=f"Updated approval requirement for command {command_id}",
+            metadata_json=json.dumps(
+                {
+                    "command_id": command_id,
+                    "old_required_approvals": old_required,
+                    "new_required_approvals": body.required_approvals,
+                }
+            ),
+            is_anomaly=False,
+            requires_review=True,
+        )
+    )
+    await db.commit()
+    return {
+        "command_id": command_id,
+        "required_approvals": body.required_approvals,
+        "approvals_received": approvals_received,
+        "approval_status": approval_state["status"],
+    }
 
 
 @router.post("/remote-agents/{agent_id}/dispatch")

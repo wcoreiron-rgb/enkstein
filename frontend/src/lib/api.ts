@@ -388,6 +388,14 @@ export const getCommandTimeline = (commandId: string, limit = 100) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?limit=${limit}`);
 export const getCommandStatus = (commandId: string) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/status`);
+export const updateCommandApprovalPolicy = (
+  commandId: string,
+  body: { required_approvals: number; reason?: string },
+) =>
+  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/approval-policy`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 
 // Governed Execution Channels
 export const submitShellExec = (body: object) =>

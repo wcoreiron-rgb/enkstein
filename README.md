@@ -211,6 +211,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `POST /api/v1/commands/{command_id}/reject`
     - `GET /api/v1/commands/{command_id}/timeline`
     - `GET /api/v1/commands/{command_id}/status`
+    - `POST /api/v1/commands/{command_id}/approval-policy`
   - Command approval flow now supports persisted multi-operator state:
     - approval progress (`approvals_received` / `required_approvals`) exposed in pending API
     - self-approval blocked
@@ -219,10 +220,12 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - explicit rejection path that marks pending command as blocked with reviewer reason
     - command timeline endpoint for full approval/rejection audit trail
     - pending list filters (`source`, `requester`, `min_risk`) for tighter triage views
+    - approval delegation control to raise/lower required approvals (within guardrails)
   - Channel Gateway UI now includes:
     - `Pending Commands` approval tab wired to CommandClaw approval APIs
     - per-command timeline view for operator audit context
     - pending command search + source/min-risk filters + consolidated status preview
+    - inline required-approvals selector for pending command delegation
     - quick-ingest actions for CLI/Webhook/Email adapters
     - expanded message detail with normalized `command_result` metadata
 - Swarm runtime:
