@@ -160,8 +160,8 @@ async def add_timeline_entry(
             event_type=body.event_type,
         )
         return entry
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
 
 @router.post("/incidents/{incident_id}/close", summary="Close an incident")
@@ -171,8 +171,8 @@ async def close_incident_endpoint(
     try:
         incident = await close_incident(db, incident_id, body.root_cause, body.closed_by)
         return _incident_out(incident, full=True)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
 
 # ─── Asset Memory ─────────────────────────────────────────────────────────────
