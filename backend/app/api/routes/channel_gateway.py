@@ -18,6 +18,7 @@ import hmac
 import hashlib
 import time
 import uuid
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -25,10 +26,13 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.core.database import AsyncSessionLocal
 from app.models.channel_gateway import ChannelMessage, ChannelIdentity, ChannelConfig
+from app.api.routes.remote_control import CommandRequest, _execute_command
 from app.services.channel_processor import process_message
 
 router = APIRouter(prefix="/channel-gateway", tags=["channel-gateway"])
+logger = logging.getLogger(__name__)
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -119,6 +123,102 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
     return msg
 
 
+def _map_intent(detected_intent: str) -> str:
+    intents = [part.strip() for part in (detected_intent or "").split(",") if part.strip()]
+    if not intents:
+        return "channel_message"
+    intent = intents[0]
+    mapping = {
+        "scan": "run_scan",
+        "block": "contain",
+        "rotate": "rotate_secret",
+        "disable_account": "disable_account",
+        "remediate": "remediate",
+        "report": "status_report",
+        "investigate": "investigate",
+        "run_workflow": "run_workflow",
+        "run_agent": "run_agent",
+        "approve": "approve_action",
+        "deny_action": "deny_action",
+    }
+    return mapping.get(intent, "channel_message")
+
+
+def _build_command_request(
+    result: dict,
+    channel_identity: dict | None,
+) -> CommandRequest:
+    requester = result.get("sender_email") or result.get("sender_id", "channel-user")
+    target = (
+        (result.get("detected_claws") or [None])[0]
+        or result.get("channel_id")
+        or "regentclaw"
+    )
+    mode = "approval" if result.get("policy_decision") == "requires_approval" else "assist"
+    return CommandRequest(
+        command_id=f"chan_{result['id']}",
+        source=result.get("channel_type", "channel"),
+        requester=requester,
+        tenant_id=(channel_identity or {}).get("tenant_id", "default"),
+        intent=_map_intent(result.get("detected_intent", "")),
+        target=str(target).lower(),
+        scope=result.get("channel_id", "default"),
+        mode=mode,
+        classification="internal",
+        payload={
+            "message_id": result.get("id"),
+            "message_text": result.get("message_text"),
+            "policy_flags": result.get("policy_flags", []),
+            "detected_claws": result.get("detected_claws", []),
+        },
+    )
+
+
+async def _execute_channel_command(result: dict, channel_identity: dict | None) -> dict | None:
+    if result.get("policy_decision") == "blocked":
+        return None
+    command = _build_command_request(result, channel_identity)
+    current_user = {
+        "sub": result.get("sender_id") or command.requester,
+        "role": "analyst",
+        "email": result.get("sender_email", ""),
+    }
+    try:
+        async with AsyncSessionLocal() as db:
+            return await _execute_command(db, current_user, command)
+    except Exception as exc:
+        logger.warning("Channel command execution unavailable: %s", exc)
+        return {
+            "command_id": command.command_id,
+            "source": command.source,
+            "requester": command.requester,
+            "tenant_id": command.tenant_id,
+            "intent": command.intent,
+            "target": command.target,
+            "outcome": "unavailable",
+            "reason": "commandclaw_backend_unavailable",
+        }
+
+
+def _apply_command_outcome(result: dict, command_result: dict | None) -> None:
+    if not command_result:
+        return
+    result["command_result"] = command_result
+    outcome = command_result.get("outcome", "")
+    if outcome == "blocked":
+        result["policy_decision"] = "blocked"
+        result["execution_status"] = "blocked"
+        result["response_text"] = "🚫 Request blocked by Trust Fabric command policy."
+    elif outcome == "requires_approval":
+        result["policy_decision"] = "requires_approval"
+        result["execution_status"] = "pending_approval"
+    elif outcome == "allowed":
+        result["policy_decision"] = "allowed"
+        result["execution_status"] = "dispatched"
+    elif outcome == "unavailable":
+        result["execution_status"] = "pending"
+
+
 # ─── Slack Events API ────────────────────────────────────────────────────────
 
 @router.post("/slack/events")
@@ -176,6 +276,8 @@ async def slack_events(
         channel_id   = channel_id,
         channel_identity = ci,
     )
+    command_result = await _execute_channel_command(result, ci)
+    _apply_command_outcome(result, command_result)
     _persist_message(db, result, channel_name)
     return {"ok": True, "response": result["response_text"]}
 
@@ -212,6 +314,8 @@ async def teams_webhook(
         channel_id   = channel_id,
         channel_identity = ci,
     )
+    command_result = await _execute_channel_command(result, ci)
+    _apply_command_outcome(result, command_result)
     _persist_message(db, result, channel_name)
 
     # Teams expects an Activity response
@@ -225,7 +329,7 @@ async def teams_webhook(
 # ─── Generic / internal message endpoint ─────────────────────────────────────
 
 @router.post("/message")
-def ingest_message(body: dict, db: Session = Depends(get_db)):
+async def ingest_message(body: dict, db: Session = Depends(get_db)):
     """
     Internal / test endpoint. Body: { channel_type, channel_id, sender_id,
     sender_email, sender_name, message_text, channel_name? }
@@ -248,8 +352,10 @@ def ingest_message(body: dict, db: Session = Depends(get_db)):
         channel_id   = body["channel_id"],
         channel_identity = ci,
     )
+    command_result = await _execute_channel_command(result, ci)
+    _apply_command_outcome(result, command_result)
     msg = _persist_message(db, result, body.get("channel_name", body["channel_id"]))
-    return {**_msg_out(msg), "response": result["response_text"]}
+    return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
 
 
 # ─── Simulate endpoint (test without a real bot token) ───────────────────────
