@@ -1,7 +1,7 @@
 # OWASP Top 10 for Agentic Applications (ASI 2026) — RegentClaw Evidence Matrix
 
-**Date:** 2026-05-29  
-**Version:** 2.0  
+**Date:** 2026-05-31  
+**Version:** 2.1  
 **Scope:** RegentClaw Zero Trust Security Platform (self-hosted)
 
 > **Disclaimer:** This is a vendor self-assessment. Status values below are deliberately conservative and mapped to currently shipped code paths and automated tests. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
@@ -15,7 +15,7 @@
 | ASI-01 | Agent Goal Hijack | **Partially Shipped** | Trust Fabric policy + ArcClaw prompt audit | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` |
 | ASI-02 | Tool Misuse & Exploitation | **Partially Shipped** | Ring policy + Trust Fabric action mediation | `test_owasp_asi_evidence.py::test_asi02_viewer_role_denied_ring1_action` |
 | ASI-03 | Identity & Privilege Abuse | **In Progress** | JWT identity + role checks + ring gates | `test_owasp_asi_evidence.py::test_asi03_viewer_role_cannot_approve_via_self_approval` |
-| ASI-04 | Agentic Supply Chain Compromise | **In Progress** | AGT supply-chain scan routes + connector policy gates | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result` (xfail: install gate not yet wired) |
+| ASI-04 | Agentic Supply Chain Compromise | **In Progress** | AGT supply-chain scan routes + connector policy gates | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` (xfail: install gate not yet wired) |
 | ASI-05 | Unexpected Code Execution | **Partially Shipped** | Exec policy blocking + ring0 denial + approvals | `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | ASI-06 | Memory & Context Poisoning | **Partially Shipped** | Memory API field validation via Pydantic schemas | `test_owasp_asi_evidence.py::test_asi06_memory_write_rejects_oversized_title` |
 | ASI-07 | Insecure Inter-Agent Communication | **Partially Shipped** | Ed25519 signed inter-agent envelopes + verify endpoint | `test_owasp_asi_evidence.py::test_asi07_tampered_envelope_fails_verification` |
