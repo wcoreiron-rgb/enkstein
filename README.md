@@ -270,6 +270,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/automationclaw/task`
     - `/api/v1/configclaw/task`
     - `/api/v1/exposureclaw/task`
+    - `/api/v1/customclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
 - ModelClaw scaffold:
   - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.

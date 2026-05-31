@@ -1091,6 +1091,48 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.6 — CustomClaw Swarm Task Routing                             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Runtime: CustomClaw Real Task Path</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-new">CustomClaw</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.6</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release adds a real focused task endpoint for CustomClaw and routes Swarm dispatch directly through it.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>CustomClaw task endpoint:</strong> added <code>POST /api/v1/customclaw/task</code> returning standardized Swarm Task Contract fields.</li>
+          <li><strong>Dispatcher wiring:</strong> <code>customclaw</code> now executes through its real task handler instead of fallback simulation.</li>
+          <li><strong>Fallback regression updated:</strong> unsupported-module fallback now validates against <code>unknownclaw</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Swarm tests:</strong> <code>pytest -q tests/test_swarm_dispatcher_routing.py tests/test_swarm.py</code> passed.</li>
+          <li><strong>Control-plane regressions:</strong> <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> passed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.5 — Swarm Task Coverage Expansion                             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
