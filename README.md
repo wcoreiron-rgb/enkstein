@@ -191,6 +191,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 
 ## Latest Updates (May 31, 2026)
 
+- Command and channel control-plane convergence:
+  - Channel gateway ingress (`/channel-gateway/slack/events`, `/channel-gateway/teams/webhook`, `/channel-gateway/message`) now normalizes inbound requests into CommandClaw contract payloads.
+  - Normalized channel commands execute through the same policy-governed command path used by `POST /api/v1/commands`.
+  - Channel responses now include `command_result` metadata with command id, intent, target, and policy outcome.
+  - Added fallback behavior for unavailable command backend (`outcome: unavailable`) so channel ingestion remains non-breaking.
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.

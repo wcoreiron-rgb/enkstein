@@ -335,6 +335,52 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.4 — Channel Ingress CommandClaw Normalization                 -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Channel Ingress → CommandClaw Contract</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-sec">Governance</span>
+          <span class="tag tag-fix">Reliability</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.4</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release converges channel ingress with the unified command control plane.
+        Slack/Teams/internal channel messages are normalized into CommandClaw payloads,
+        evaluated through Trust Fabric policy flow, and returned with command outcome metadata.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Channel normalization</strong> added for <code>/channel-gateway/slack/events</code>, <code>/channel-gateway/teams/webhook</code>, and <code>/channel-gateway/message</code> into CommandClaw request shape.</li>
+          <li><strong>Unified policy path</strong> now executes normalized channel commands through the same guarded contract as <code>POST /api/v1/commands</code>.</li>
+          <li><strong>Response traceability</strong> now includes <code>command_result</code> in channel message responses.</li>
+          <li><strong>Graceful fallback</strong> returns <code>outcome: unavailable</code> when async command backend is unreachable, without breaking channel ingestion.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>New tests</strong> in <code>backend/tests/test_channel_gateway_commands.py</code> validate normalization and blocked-path behavior.</li>
+          <li><strong>Command route regressions</strong> continue to pass in <code>backend/tests/test_remote_control.py</code>.</li>
+          <li><strong>Test run</strong>: <code>pytest -q tests/test_channel_gateway_commands.py tests/test_remote_control.py</code> → <strong>5 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.3 — Swarm Ticket Handoff Hardening                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
