@@ -1,7 +1,10 @@
 import pytest
 import json
+import uuid
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from app.models.event import Event, EventOutcome, EventSeverity
+from app.models.agent import Agent
 
 
 @pytest.mark.asyncio
@@ -203,6 +206,102 @@ async def test_remote_agent_dispatch_remote_agent_id_must_match_path(client):
         },
     )
     assert dispatch.status_code == 400, dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_dispatch_blocks_stale_heartbeat(client, db_session):
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "edge-worker-stale",
+            "tenant_id": "tenant_stale",
+            "owner": "owner@company.com",
+            "allowed_actions": ["run_swarm"],
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    agent_id = reg.json()["id"]
+
+    result = await db_session.execute(select(Agent).where(Agent.id == uuid.UUID(agent_id)))
+    agent = result.scalar_one()
+    meta = json.loads(agent.scope_notes or "{}")
+    meta["last_seen"] = (datetime.now(timezone.utc) - timedelta(minutes=45)).isoformat()
+    agent.scope_notes = json.dumps(meta)
+    db_session.add(agent)
+    await db_session.commit()
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/dispatch",
+        json={
+            "command_id": "cmd_stale_dispatch",
+            "source": "portal",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_stale",
+            "intent": "run_swarm",
+            "target": "identity_risk",
+            "scope": "prod",
+            "mode": "approval",
+            "classification": "internal",
+            "payload": {},
+        },
+    )
+    assert dispatch.status_code == 409, dispatch.text
+    assert "heartbeat is stale" in dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_dispatch_blocks_low_trust_score(client):
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "edge-worker-low-trust",
+            "tenant_id": "tenant_trust",
+            "owner": "owner@company.com",
+            "allowed_actions": ["run_swarm"],
+            "trust_score": 20,
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    agent_id = reg.json()["id"]
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/dispatch",
+        json={
+            "command_id": "cmd_low_trust",
+            "source": "portal",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_trust",
+            "intent": "run_swarm",
+            "target": "identity_risk",
+            "scope": "prod",
+            "mode": "approval",
+            "classification": "internal",
+            "payload": {},
+        },
+    )
+    assert dispatch.status_code == 403, dispatch.text
+    assert "trust score below minimum dispatch threshold" in dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_health_endpoint(client):
+    reg_fresh = await client.post(
+        "/api/v1/remote-agents/register",
+        json={"name": "edge-worker-health-a", "tenant_id": "tenant_health", "owner": "owner@company.com"},
+    )
+    reg_stale = await client.post(
+        "/api/v1/remote-agents/register",
+        json={"name": "edge-worker-health-b", "tenant_id": "tenant_health", "owner": "owner@company.com"},
+    )
+    assert reg_fresh.status_code == 200 and reg_stale.status_code == 200
+
+    health = await client.get("/api/v1/remote-agents/health")
+    assert health.status_code == 200, health.text
+    body = health.json()
+    assert "heartbeat_ttl_minutes" in body
+    assert "min_trust_score" in body
+    assert body["total"] >= 2
+    assert isinstance(body["agents"], list)
 
 
 @pytest.mark.asyncio

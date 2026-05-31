@@ -16,7 +16,7 @@ GET  /commands/recent
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -35,6 +35,8 @@ router = APIRouter(tags=["CommandClaw / Remote Agents"])
 _REMOTE_CLAW = "remoteagent"
 _REMOTE_CATEGORY = "Remote Control Plane"
 _DEFAULT_COMMAND_APPROVALS_REQUIRED = 2
+_REMOTE_HEARTBEAT_TTL_MINUTES = 30
+_REMOTE_MIN_TRUST_SCORE = 35.0
 
 
 def _load_json_object(raw: str | None) -> dict:
@@ -77,6 +79,23 @@ def _agent_out(agent: Agent) -> dict:
 
 def _agent_status_value(agent: Agent) -> str:
     return agent.status.value if hasattr(agent.status, "value") else str(agent.status)
+
+
+def _parse_iso_utc(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _is_agent_heartbeat_stale(metadata: dict) -> bool:
+    last_seen = _parse_iso_utc(metadata.get("last_seen"))
+    if not last_seen:
+        return True
+    return (datetime.now(timezone.utc) - last_seen) > timedelta(minutes=_REMOTE_HEARTBEAT_TTL_MINUTES)
 
 
 def _event_command_id(event: Event) -> str | None:
@@ -333,6 +352,7 @@ async def remote_agent_heartbeat(
 @router.get("/remote-agents")
 async def list_remote_agents(
     tenant_id: str | None = Query(default=None),
+    health: str | None = Query(default=None, pattern="^(healthy|stale)$"),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(Agent).where(Agent.claw == _REMOTE_CLAW, Agent.status != AgentStatus.RETIRED).order_by(desc(Agent.created_at))
@@ -340,7 +360,48 @@ async def list_remote_agents(
     agents = result.scalars().all()
     if tenant_id:
         agents = [a for a in agents if _agent_metadata(a).get("tenant_id") == tenant_id]
+    if health:
+        want_stale = health == "stale"
+        agents = [a for a in agents if _is_agent_heartbeat_stale(_agent_metadata(a)) == want_stale]
     return {"count": len(agents), "agents": [_agent_out(a) for a in agents]}
+
+
+@router.get("/remote-agents/health")
+async def remote_agent_health(
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(Agent).where(Agent.claw == _REMOTE_CLAW, Agent.status != AgentStatus.RETIRED).order_by(desc(Agent.created_at))
+    result = await db.execute(q)
+    agents = result.scalars().all()
+    rows = []
+    stale = 0
+    for a in agents:
+        meta = _agent_metadata(a)
+        is_stale = _is_agent_heartbeat_stale(meta)
+        if is_stale:
+            stale += 1
+        rows.append(
+            {
+                "agent_id": str(a.id),
+                "name": a.name,
+                "tenant_id": meta.get("tenant_id"),
+                "trust_score": float(meta.get("trust_score") or 0.0),
+                "last_seen": meta.get("last_seen"),
+                "is_stale": is_stale,
+                "dispatchable": _agent_status_value(a) in {"active", "paused"}
+                and not is_stale
+                and float(meta.get("trust_score") or 0.0) >= _REMOTE_MIN_TRUST_SCORE
+                and meta.get("kill_switch_status") != "active",
+            }
+        )
+    return {
+        "total": len(rows),
+        "healthy": len(rows) - stale,
+        "stale": stale,
+        "heartbeat_ttl_minutes": _REMOTE_HEARTBEAT_TTL_MINUTES,
+        "min_trust_score": _REMOTE_MIN_TRUST_SCORE,
+        "agents": rows,
+    }
 
 
 @router.post("/commands")
@@ -363,6 +424,14 @@ async def execute_command(
         if _agent_status_value(agent) not in {"active", "paused"}:
             raise HTTPException(status_code=409, detail="Remote agent is not dispatchable")
         metadata = _agent_metadata(agent)
+        if _is_agent_heartbeat_stale(metadata):
+            raise HTTPException(status_code=409, detail="Remote agent heartbeat is stale")
+        trust_score = float(metadata.get("trust_score") or 0.0)
+        if trust_score < _REMOTE_MIN_TRUST_SCORE:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Remote agent trust score below minimum dispatch threshold ({_REMOTE_MIN_TRUST_SCORE})",
+            )
         if metadata.get("kill_switch_status") == "active":
             raise HTTPException(status_code=409, detail="Remote agent kill switch is active")
         if metadata.get("tenant_id") and metadata.get("tenant_id") != body.tenant_id:

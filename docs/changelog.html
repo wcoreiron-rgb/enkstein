@@ -335,6 +335,37 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.2 — Remote Agent Dispatch Health/Trust Gates                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--amber);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Remote Agent Dispatch Gates: Heartbeat Freshness + Trust Threshold</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Remote Control</span>
+          <span class="tag tag-fix">Hardening</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.2</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice strengthens remote dispatch safety by denying stale-heartbeat or low-trust agents and adds health visibility for control-plane operations.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Dispatch gate:</strong> remote dispatch now blocks when <code>last_seen</code> is stale beyond TTL.</li>
+          <li><strong>Dispatch gate:</strong> remote dispatch now blocks when trust score is below minimum threshold.</li>
+          <li><strong>New endpoint:</strong> <code>GET /api/v1/remote-agents/health</code> returns healthy/stale counts and per-agent dispatchability.</li>
+          <li><strong>Regression coverage:</strong> tests added for stale heartbeat, low trust score, and health endpoint response shape.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.1 — Swarm Real Task Coverage: Intel + Recovery                -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -892,10 +892,17 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       <h2>Remote Agent Dispatch Safeguards</h2>
       <ul>
         <li><strong>Tenant boundary:</strong> dispatch requests are denied when command <code>tenant_id</code> does not match agent tenant metadata.</li>
+        <li><strong>Heartbeat freshness gate:</strong> dispatch requests are denied when agent heartbeat is stale beyond the configured TTL.</li>
+        <li><strong>Trust gate:</strong> dispatch requires remote-agent trust score at or above configured minimum threshold.</li>
         <li><strong>Kill switch enforcement:</strong> dispatch is blocked when remote agent kill switch is active.</li>
         <li><strong>Intent allowlist:</strong> each remote agent can restrict allowed command intents via its metadata <code>allowed_actions</code>.</li>
         <li><strong>Path/body consistency:</strong> dispatch rejects mismatched <code>remote_agent_id</code> values between route and payload.</li>
       </ul>
+      <div class="endpoint-row">
+        <span class="method method-get">GET</span>
+        <span class="endpoint-path">/api/v1/remote-agents/health</span>
+        <span class="endpoint-desc">Returns stale/healthy heartbeat counts, trust threshold config, and per-agent dispatchability status.</span>
+      </div>
 
       <h2>Command Approval Workflow APIs</h2>
       <p>Commands that resolve to approval-required outcomes can now be tracked and approved via CommandClaw endpoints.</p>
