@@ -93,7 +93,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | LLM02 Insecure Output Handling | Shipped — prompt scanning + model-output re-scan/redaction metadata now applied in Model Router |
 | LLM03 Training Data Poisoning | N/A — uses provider APIs, no training pipeline |
 | LLM04 Model Denial of Service | Shipped (baseline) — auth and `/model-router/route` per-IP rate limiting enforced; deeper tenant quotas remain planned |
-| LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan test coverage; no SBOM yet |
+| LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan + exchange checksum gate, CI SBOM + dependency-audit artifacts |
 | LLM06 Sensitive Information Disclosure | Shipped — Fernet encryption, DLP scanner, masked credential hints |
 | LLM07 Insecure Plugin Design | Partially Shipped — ring policy + SSRF protection shipped; OS sandbox not yet |
 | LLM08 Excessive Agency | Shipped — 4-ring privilege isolation, dual-approval gates, self-approval blocked |

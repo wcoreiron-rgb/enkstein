@@ -342,8 +342,15 @@ export const getExchangePackages = (params?: Record<string, string>) => {
   return apiFetch<any>(`/exchange/packages${qs}`);
 };
 export const getExchangePackage = (id: string) => apiFetch<any>(`/exchange/packages/${id}`);
-export const installExchangePackage = (id: string, installedBy = 'platform_admin') =>
-  apiFetch<any>(`/exchange/packages/${id}/install?installed_by=${encodeURIComponent(installedBy)}`, { method: 'POST' });
+export const installExchangePackage = (
+  id: string,
+  installedBy = 'platform_admin',
+  checksumHeader?: string,
+) =>
+  apiFetch<any>(`/exchange/packages/${id}/install?installed_by=${encodeURIComponent(installedBy)}`, {
+    method: 'POST',
+    headers: checksumHeader ? { 'x-package-sha256': checksumHeader } : undefined,
+  });
 export const getFeaturedPackages = () => apiFetch<any[]>('/exchange/featured');
 export const searchExchangePackages = (q: string) =>
   apiFetch<any[]>(`/exchange/search?q=${encodeURIComponent(q)}`);

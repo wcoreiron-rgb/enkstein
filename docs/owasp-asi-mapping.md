@@ -15,7 +15,7 @@
 | ASI-01 | Agent Goal Hijack | **Partially Shipped** | Trust Fabric policy + ArcClaw prompt audit | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` |
 | ASI-02 | Tool Misuse & Exploitation | **Partially Shipped** | Ring policy + Trust Fabric action mediation | `test_owasp_asi_evidence.py::test_asi02_viewer_role_denied_ring1_action` |
 | ASI-03 | Identity & Privilege Abuse | **In Progress** | JWT identity + role checks + ring gates | `test_owasp_asi_evidence.py::test_asi03_viewer_role_cannot_approve_via_self_approval` |
-| ASI-04 | Agentic Supply Chain Compromise | **In Progress** | AGT supply-chain scan routes + connector policy gates | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` (xfail: install gate not yet wired) |
+| ASI-04 | Agentic Supply Chain Compromise | **In Progress** | AGT supply-chain scan routes + connector policy gates + exchange checksum gate | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` |
 | ASI-05 | Unexpected Code Execution | **Partially Shipped** | Exec policy blocking + ring0 denial + approvals | `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | ASI-06 | Memory & Context Poisoning | **Partially Shipped** | Memory API field validation via Pydantic schemas | `test_owasp_asi_evidence.py::test_asi06_memory_write_rejects_oversized_title` |
 | ASI-07 | Insecure Inter-Agent Communication | **Partially Shipped** | Ed25519 signed inter-agent envelopes + verify endpoint | `test_owasp_asi_evidence.py::test_asi07_tampered_envelope_fails_verification` |
@@ -115,7 +115,7 @@
 **Automated Test:**
 
 - `backend/tests/test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result` — calls `scan_requirements()` with a non-existent path and verifies the result has `is_safe` and `risk_score` fields with no crash.
-- `backend/tests/test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` — **xfail** (strict=False): documents the intent to block tampered-hash installs, but the install route does not yet gate on `scan.is_safe`.
+- `backend/tests/test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` — verifies forged checksum headers are rejected at exchange install time.
 
 **Known Limitations:**
 - The supply chain scan result is informational only — the skill pack/connector install path does not currently block on `is_safe=False`. This is the primary coverage gap.
@@ -286,7 +286,7 @@ The following controls have no fully wired automated test as of this version. Ea
 
 | Gap | Reason | Tracked In |
 |---|---|---|
-| ASI-04 hash-pinning install gate | `scan_requirements()` is called but the skill pack/exchange install route does not block on `is_safe=False`. The xfail test `test_asi04_tampered_hash_blocked_on_install` documents the intent. | `test_owasp_asi_evidence.py` (xfail) |
+| ASI-04 install integrity gate | AGT scan coverage exists and exchange install now enforces checksum integrity (`x-package-sha256` + manifest hash match). Skill-pack AGT `scan.is_safe` enforcement remains advisory-only outside exchange path. | `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` |
 | ASI-03 viewer-JWT ring1 remediation block | The HTTP path (viewer JWT → approve ring1 remediation) is asserted at the service layer via ring policy tests, but there is no end-to-end HTTP integration test for the remediation route. | Future work |
 | ASI-09 duplicate-approver check | The guard `if approver in (r.approved_by_1, r.approved_by_2)` has no automated test exercising the HTTP path. Partially exercised by manual testing only. | Future work |
 | ASI-07 replay prevention | No nonce/timestamp validation is implemented — a valid captured envelope could be replayed. No test exists because the control does not exist. | Known gap |

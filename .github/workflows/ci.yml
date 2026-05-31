@@ -217,3 +217,56 @@ jobs:
           # Dummy values so build-time ARGs don't fail
           DATABASE_URL: "postgresql+asyncpg://regent:regent@db:5432/regentclaw"
           SECRET_KEY: "ci-docker-build-key"
+
+  # ── Supply-chain: SBOM + dependency scan (LLM05 hardening) ───────────────
+  supply-chain-security:
+    name: Supply Chain Security (SBOM + Dependency Audit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install audit/SBOM tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit cyclonedx-bom
+
+      - name: Generate Python SBOM (CycloneDX)
+        run: |
+          mkdir -p security-artifacts
+          cyclonedx-py requirements backend/requirements.txt --of JSON -o security-artifacts/sbom-backend.cdx.json
+
+      - name: Generate Frontend lockfile SBOM (CycloneDX)
+        run: |
+          cd frontend
+          npx @cyclonedx/cyclonedx-npm --package-lock-only --output-file ../security-artifacts/sbom-frontend.cdx.json --output-format JSON
+
+      - name: Python dependency audit (non-blocking report)
+        run: |
+          pip-audit -r backend/requirements.txt --format json --output security-artifacts/pip-audit-backend.json || true
+          pip-audit -r backend/requirements-test.txt --format json --output security-artifacts/pip-audit-backend-test.json || true
+
+      - name: Frontend dependency audit (non-blocking report)
+        run: |
+          cd frontend
+          npm audit --json > ../security-artifacts/npm-audit-frontend.json || true
+
+      - name: Upload supply-chain artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-security-artifacts
+          path: security-artifacts/

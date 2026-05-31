@@ -22,6 +22,8 @@ import sys
 import os
 import json
 import base64
+import hashlib
+import uuid
 
 import pytest
 
@@ -173,8 +175,7 @@ def test_asi03_viewer_role_cannot_approve_via_self_approval():
 # Control: AGT SupplyChainGuard scan (scan_requirements in agt_bridge.py).
 # What we verify: scan_requirements() returns a SupplyChainResult with is_safe
 #                 field present and a valid risk_score.
-# NOTE: Full provenance-pinning enforcement (reject install if hash tampered)
-#       is not yet wired into the install path — marked xfail for that part.
+# NOTE: Exchange install now enforces manifest checksum + header integrity.
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_asi04_supply_chain_scan_returns_result():
@@ -212,29 +213,47 @@ def test_asi04_supply_chain_scan_blocks_outside_repo_path_when_agt_enabled():
     assert result.risk_score >= 90.0
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "ASI-04 hash-pinning enforcement: tampered skill pack hash rejection is not yet "
-        "wired into the skill pack install path. The scan returns a result but the install "
-        "route does not gate on scan.is_safe. Tracked as a coverage gap."
-    ),
-)
-def test_asi04_tampered_hash_blocked_on_install():
+@pytest.mark.asyncio
+async def test_asi04_tampered_hash_blocked_on_install(client, db_session_sync):
     """
     ASI-04 Agentic Supply Chain Compromise (stub) — a skill pack install with a
     tampered/mismatched hash should be blocked before the pack is loaded.
 
-    Until the install route calls scan_requirements() and enforces is_safe=True
-    as a hard gate, this test is expected to fail.
+    Verifies exchange install rejects forged checksum headers before package
+    materialization.
     """
-    # This test documents intent, not current behavior.
-    # When the control is wired, replace this body with an actual HTTP call:
-    #   POST /api/v1/exchange/install with a forged hash header
-    # and assert HTTP 422 / 400.
-    raise AssertionError(
-        "Tampered-hash install blocking not yet enforced in the install route"
+    from app.models.exchange import ExchangePackage
+
+    manifest = {"skills": [{"id": "skill-a", "name": "Skill A"}], "scope_permissions": ["read:findings"]}
+    checksum = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    pkg = ExchangePackage(
+        id=str(uuid.uuid4()),
+        publisher_id="pub-1",
+        publisher_name="Regent",
+        name="Test Skill Pack",
+        slug=f"test-skill-pack-{uuid.uuid4().hex[:8]}",
+        package_type="skill_pack",
+        category="Security",
+        description="test",
+        version="1.0.0",
+        manifest_json=manifest,
+        sha256_checksum=checksum,
+        is_signed=True,
+        signature_verified=True,
+        is_official=True,
+        is_deprecated=False,
     )
+    db_session_sync.add(pkg)
+    db_session_sync.commit()
+
+    resp = await client.post(
+        f"/api/v1/exchange/packages/{pkg.id}/install?installed_by=test-user",
+        headers={"x-package-sha256": "forged-checksum-value"},
+    )
+    assert resp.status_code == 400, resp.text
+    body = resp.json()
+    detail = body.get("detail", {})
+    assert detail.get("error") == "package_checksum_header_mismatch"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

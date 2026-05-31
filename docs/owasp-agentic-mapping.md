@@ -32,7 +32,7 @@
 | LLM02 | Insecure Output Handling | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` |
 | LLM03 | Training Data Poisoning | **N/A** | N/A |
 | LLM04 | Model Denial of Service | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold` |
-| LLM05 | Supply-Chain Vulnerabilities | **In Progress** | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` (xfail) |
+| LLM05 | Supply-Chain Vulnerabilities | **In Progress** | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` |
 | LLM06 | Sensitive Information Disclosure | **Shipped** | No automated test (see gap note below) |
 | LLM07 | Insecure Plugin Design | **Partially Shipped** | `test_ring_policy.py::test_ring0_always_blocked`, `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | LLM08 | Excessive Agency | **Shipped** (strengthened) | `test_ring_policy.py::test_ring1_requires_two_approvals`, `test_owasp_asi_evidence.py::test_asi09_self_approval_is_blocked` |
@@ -142,14 +142,14 @@
 - `backend/app/services/secrets_manager.py`: Connector credentials encrypted with Fernet (AES-128-CBC + HMAC). Keys never stored in plaintext.
 - `requirements.txt`: PyJWT pinned to 2.9.0 (patched version). `python-multipart` pinned to 0.0.12 (patched for CVE-2024-53498).
 - Connector field validation in `backend/app/api/routes/connectors.py` prevents SSRF via URL validation.
-- No automated dependency vulnerability scanning (Trivy, Snyk, pip-audit) is integrated into CI.
-- No Software Bill of Materials (SBOM) is generated.
+- `.github/workflows/ci.yml` (`supply-chain-security` job): generates CycloneDX SBOM artifacts for backend/frontend and publishes Python + npm dependency audit reports each run.
+- `backend/app/api/routes/exchange.py::install_package()`: exchange package installation now enforces manifest checksum integrity and rejects forged `x-package-sha256` headers.
 
-**Test Coverage:** No automated test.
+**Test Coverage:**
+- `backend/tests/test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` — verifies forged checksum headers are rejected during exchange install.
 
 **Known Limitations:**
-- No automated supply-chain scanning — transitive dependency vulnerabilities would not be caught automatically.
-- No SBOM generation in the build pipeline.
+- Supply-chain reports are currently non-blocking CI artifacts; policy gating thresholds are not yet enforced as required checks.
 - Model provider API keys are encrypted at rest but transmitted via HTTPS to third-party endpoints — provider compromise is out of scope for RegentClaw's threat model.
 - Plugin/connector installs require approval via policy (ZT — Block Connector Install Without Approval) but connector code is not sandboxed at the OS level.
 

@@ -34,6 +34,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Platform',
     defaultOpen: true,
     items: [
+      { label: 'Control Center',   href: '/control-center',   icon: Shield,           tag: 'Command' },
       { label: 'Dashboard',        href: '/dashboard',        icon: LayoutDashboard },
       { label: 'Findings',         href: '/findings',         icon: AlertTriangle,    tag: 'All Claws' },
       { label: 'Trust Fabric',     href: '/trust-fabric',     icon: Shield },

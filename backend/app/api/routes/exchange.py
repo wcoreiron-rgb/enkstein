@@ -12,8 +12,10 @@ GET  /exchange/search            — full-text search
 from datetime import datetime
 from typing import Optional
 import uuid
+import hashlib
+import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -75,6 +77,10 @@ def _pub_out(p: ExchangePublisher) -> dict:
     }
 
 
+def _canonical_manifest_bytes(manifest: dict) -> bytes:
+    return json.dumps(manifest or {}, sort_keys=True, separators=(",", ":")).encode()
+
+
 # ─── packages ───────────────────────────────────────────────────────────────
 
 @router.get("/packages")
@@ -125,6 +131,7 @@ def get_package(package_id: str, db: Session = Depends(get_db)):
 def install_package(
     package_id:   str,
     installed_by: str = "platform_admin",
+    x_package_sha256: str | None = Header(default=None, alias="x-package-sha256"),
     db: Session = Depends(get_db),
 ):
     pkg = db.query(ExchangePackage).filter(ExchangePackage.id == package_id).first()
@@ -137,6 +144,35 @@ def install_package(
     if pkg.is_official and not pkg.signature_verified:
         raise HTTPException(400, "Official package signature could not be verified")
 
+    manifest = pkg.manifest_json if isinstance(pkg.manifest_json, dict) else {}
+    actual_checksum = hashlib.sha256(_canonical_manifest_bytes(manifest)).hexdigest()
+    expected_checksum = (pkg.sha256_checksum or "").strip().lower()
+    provided_checksum = (x_package_sha256 or "").strip().lower()
+
+    # Hard gate 1: package metadata checksum must match content hash
+    if expected_checksum and expected_checksum != actual_checksum:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "package_checksum_mismatch",
+                "message": "Package checksum does not match manifest payload.",
+                "expected": expected_checksum,
+                "actual": actual_checksum,
+            },
+        )
+
+    # Hard gate 2: caller-provided checksum (e.g. installer lock) must match metadata
+    if provided_checksum and expected_checksum and provided_checksum != expected_checksum:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "package_checksum_header_mismatch",
+                "message": "Provided package checksum does not match exchange metadata.",
+                "expected": expected_checksum,
+                "provided": provided_checksum,
+            },
+        )
+
     # Materialise into a SkillPack if type = skill_pack
     if pkg.package_type == "skill_pack":
         existing = db.query(SkillPack).filter(SkillPack.slug == pkg.slug).first()
@@ -148,8 +184,8 @@ def install_package(
                 description   = pkg.description,
                 category      = pkg.category,
                 version       = pkg.version,
-                author        = pkg.publisher_name,
-                manifest_json = pkg.manifest_json or {},
+                publisher     = pkg.publisher_name,
+                manifest_json = json.dumps(manifest),
                 signature     = pkg.sha256_checksum[:32] if pkg.sha256_checksum else "",
                 is_builtin    = False,
                 is_installed  = True,
