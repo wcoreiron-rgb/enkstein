@@ -71,8 +71,21 @@ class AGTAdapter:
         return asdict(result)
 
     def scan_path(self, path: str) -> dict[str, Any]:
-        resolved = Path(path).resolve(strict=False)
         repo_root = Path(__file__).resolve().parents[4]
+        raw_text = path.strip() if isinstance(path, str) else ""
+        if not raw_text:
+            return {
+                "is_safe": False,
+                "risk_score": 100.0,
+                "findings": [],
+                "critical_count": 0,
+                "high_count": 0,
+                "agt_used": True,
+                "path": str(repo_root),
+                "error": "Path is required",
+            }
+        raw = Path(raw_text)
+        resolved = raw.resolve(strict=False) if raw.is_absolute() else (repo_root / raw).resolve(strict=False)
         try:
             resolved.relative_to(repo_root)
         except ValueError:

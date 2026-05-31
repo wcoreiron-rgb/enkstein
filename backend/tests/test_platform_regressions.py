@@ -150,6 +150,32 @@ async def test_trust_fabric_mcp_scan_blocks_absolute_outside_repo_path(client):
 
 
 @pytest.mark.asyncio
+async def test_trust_fabric_mcp_scan_rejects_empty_path(client):
+    resp = await client.post(
+        "/api/v1/trust-fabric/mcp/scan",
+        json={"target_type": "skill", "path": "   "},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["is_safe"] is False
+    assert body["risk_score"] >= 90
+    assert body.get("error") == "Path is required"
+
+
+@pytest.mark.asyncio
+async def test_trust_fabric_mcp_scan_accepts_repo_relative_path(client):
+    resp = await client.post(
+        "/api/v1/trust-fabric/mcp/scan",
+        json={"target_type": "skill", "path": "backend/app"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["target_type"] == "skill"
+    assert body["path"].endswith("/backend/app")
+    assert "risk_score" in body
+
+
+@pytest.mark.asyncio
 async def test_trust_fabric_multi_agent_verify_route(client):
     from app.core.config import settings
     from app.fabric.providers.agt import adapter as agt_adapter_module
