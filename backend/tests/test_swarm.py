@@ -136,6 +136,28 @@ async def test_swarm_job_stream_emits_events(client):
 
 
 @pytest.mark.asyncio
+async def test_swarm_job_stream_includes_execution_mode_for_real_task(client):
+    create = await client.post(BASE, json=_payload(name="Swarm Stream Execution Mode"))
+    assert create.status_code == 201, create.text
+    job_id = create.json()["id"]
+
+    current_event = None
+    task_completed_payload = None
+    async with client.stream("GET", f"{BASE}/{job_id}/stream?timeout_seconds=3&poll_interval_ms=200") as response:
+        assert response.status_code == 200
+        async for line in response.aiter_lines():
+            if line.startswith("event: "):
+                current_event = line.replace("event: ", "").strip()
+                continue
+            if line.startswith("data: ") and current_event == "task_completed":
+                task_completed_payload = json.loads(line.replace("data: ", "").strip())
+                break
+
+    assert task_completed_payload is not None
+    assert task_completed_payload.get("execution_mode") == "real_task_handler"
+
+
+@pytest.mark.asyncio
 async def test_swarm_job_stream_includes_execution_provenance_for_fallback_task(client):
     create = await client.post(
         BASE,

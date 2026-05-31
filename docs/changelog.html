@@ -1091,6 +1091,49 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.8 — Swarm Provenance Stream + E2E Hardening                   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Hardening: Provenance in Stream Events + E2E Coverage</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Hardening</span>
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.8</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release closes an operator visibility gap by carrying execution provenance through live stream events and validating UI rendering via Playwright.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>SSE provenance payload:</strong> <code>task_completed</code> stream events now include <code>execution_mode</code> and <code>fallback_reason</code> when available.</li>
+          <li><strong>Backend stream regression:</strong> new Swarm tests assert provenance is present for both real-handler and simulated fallback task completions.</li>
+          <li><strong>E2E UI coverage:</strong> added <code>frontend/e2e/swarm-execution-provenance.spec.ts</code> to validate task execution badges and fallback reason rendering in Swarm detail.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><code>pytest -q tests/test_swarm.py tests/test_swarm_dispatcher_routing.py</code> passed.</li>
+          <li><code>npx playwright test e2e/swarm-execution-provenance.spec.ts</code> passed.</li>
+          <li><code>npm run lint</code> passed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.7 — Swarm Execution Provenance UX                             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
