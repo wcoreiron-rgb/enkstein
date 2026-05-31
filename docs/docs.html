@@ -919,6 +919,11 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-path">/api/v1/commands/{command_id}/timeline</span>
         <span class="endpoint-desc">Fetch command lifecycle events (requested/approval steps/reject/final outcome) for audit review</span>
       </div>
+      <div class="endpoint-row">
+        <span class="method method-get">GET</span>
+        <span class="endpoint-path">/api/v1/commands/{command_id}/status</span>
+        <span class="endpoint-desc">Fetch consolidated command status summary (latest outcome, source, requester, approval state)</span>
+      </div>
       <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval action.</p>
       <ul>
         <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
@@ -926,6 +931,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>Multi-operator finalization:</strong> command is marked allowed only after required approvals are satisfied; intermediate approvals remain pending.</li>
         <li><strong>Explicit rejection path:</strong> pending commands can be terminated as blocked with reviewer attribution and reason persisted.</li>
         <li><strong>Timeline trail:</strong> command lifecycle events are queryable for operator review and exposed in Channel Gateway command rows.</li>
+        <li><strong>Pending filters:</strong> pending list supports source/requester/min-risk filtering for operational triage.</li>
       </ul>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>

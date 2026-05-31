@@ -401,6 +401,9 @@ async def command_timeline(
 @router.get("/commands/pending")
 async def list_pending_commands(
     limit: int = Query(default=50, ge=1, le=200),
+    source: str | None = Query(default=None),
+    requester: str | None = Query(default=None),
+    min_risk: float | None = Query(default=None, ge=0, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -412,6 +415,13 @@ async def list_pending_commands(
     events = result.scalars().all()
     rows = []
     for e in events:
+        context = _event_context(e)
+        if source and str(context.get("source", "")).lower() != source.lower():
+            continue
+        if requester and str(context.get("requester", "")).lower() != requester.lower():
+            continue
+        if min_risk is not None and float(e.risk_score or 0) < float(min_risk):
+            continue
         approval_state = _approval_state(e)
         rows.append(
             {
@@ -431,6 +441,45 @@ async def list_pending_commands(
         )
     rows = [r for r in rows if r.get("command_id")]
     return {"count": len(rows), "commands": rows}
+
+
+@router.get("/commands/{command_id}/status")
+async def command_status(
+    command_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw")
+        .order_by(desc(Event.timestamp))
+        .limit(300)
+    )
+    events = result.scalars().all()
+    matched = []
+    for e in events:
+        event_cmd_id = _event_command_id(e)
+        if event_cmd_id == command_id or (e.target or "") == command_id:
+            matched.append(e)
+    if not matched:
+        raise HTTPException(status_code=404, detail="Command not found")
+
+    # Events are desc by timestamp: first item is latest.
+    latest = matched[0]
+    root = next((e for e in reversed(matched) if _event_command_id(e) == command_id), matched[-1])
+    approval_state = _approval_state(root) if latest.outcome in {EventOutcome.REQUIRES_APPROVAL, EventOutcome.ALLOWED, EventOutcome.BLOCKED} else {}
+    return {
+        "command_id": command_id,
+        "latest_outcome": latest.outcome.value if hasattr(latest.outcome, "value") else str(latest.outcome),
+        "latest_action": latest.action,
+        "latest_policy_name": latest.policy_name,
+        "latest_reason": latest.policy_reason,
+        "latest_risk_score": latest.risk_score,
+        "created_at": root.timestamp.isoformat() if root.timestamp else None,
+        "updated_at": latest.timestamp.isoformat() if latest.timestamp else None,
+        "requester": (_event_context(root).get("requester") if _event_context(root) else root.actor_name),
+        "source": (_event_context(root).get("source") if _event_context(root) else None),
+        "approval_state": approval_state,
+    }
 
 
 @router.post("/commands/{command_id}/approve")

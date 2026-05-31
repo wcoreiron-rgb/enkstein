@@ -364,8 +364,16 @@ export const getChannelConfigs = () => apiFetch<any[]>('/channel-gateway/configs
 export const createChannelConfig = (body: object) =>
   apiFetch<any>('/channel-gateway/configs', { method: 'POST', body: JSON.stringify(body) });
 export const getChannelGatewayStats = () => apiFetch<any>('/channel-gateway/stats');
-export const getPendingCommands = (limit = 50) =>
-  apiFetch<any>(`/commands/pending?limit=${limit}`);
+export const getPendingCommands = (
+  limit = 50,
+  filters?: { source?: string; requester?: string; min_risk?: number },
+) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (filters?.source) params.set('source', filters.source);
+  if (filters?.requester) params.set('requester', filters.requester);
+  if (typeof filters?.min_risk === 'number') params.set('min_risk', String(filters.min_risk));
+  return apiFetch<any>(`/commands/pending?${params.toString()}`);
+};
 export const approvePendingCommand = (commandId: string, body?: { approver?: string; reason?: string }) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/approve`, {
     method: 'POST',
@@ -378,6 +386,8 @@ export const rejectPendingCommand = (commandId: string, body?: { reviewer?: stri
   });
 export const getCommandTimeline = (commandId: string, limit = 100) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?limit=${limit}`);
+export const getCommandStatus = (commandId: string) =>
+  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/status`);
 
 // Governed Execution Channels
 export const submitShellExec = (body: object) =>

@@ -364,3 +364,59 @@ async def test_command_timeline_endpoint(client, db_session):
     actions = {item["action"] for item in body["timeline"]}
     assert "run_scan" in actions
     assert "approve_command_step" in actions or "approve_command" in actions
+
+
+@pytest.mark.asyncio
+async def test_commands_pending_filters_and_status_endpoint(client, db_session):
+    seeded_a = Event(
+        source_module="commandclaw",
+        actor_id="req-a@company.com",
+        actor_name="req-a@company.com",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=42.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded A",
+        description="[commandclaw] req-a@company.com -> run_scan",
+        metadata_json=json.dumps({"context": {"command_id": "cmd_filter_a", "requester": "req-a@company.com", "source": "cli"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    seeded_b = Event(
+        source_module="commandclaw",
+        actor_id="req-b@company.com",
+        actor_name="req-b@company.com",
+        actor_type="human",
+        action="run_swarm",
+        target="identity",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=86.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded B",
+        description="[commandclaw] req-b@company.com -> run_swarm",
+        metadata_json=json.dumps({"context": {"command_id": "cmd_filter_b", "requester": "req-b@company.com", "source": "teams"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add_all([seeded_a, seeded_b])
+    await db_session.commit()
+
+    filtered = await client.get("/api/v1/commands/pending?source=teams&min_risk=80")
+    assert filtered.status_code == 200, filtered.text
+    body = filtered.json()
+    ids = {c["command_id"] for c in body["commands"]}
+    assert "cmd_filter_b" in ids
+    assert "cmd_filter_a" not in ids
+
+    status = await client.get("/api/v1/commands/cmd_filter_b/status")
+    assert status.status_code == 200, status.text
+    status_body = status.json()
+    assert status_body["command_id"] == "cmd_filter_b"
+    assert status_body["source"] == "teams"
+    assert status_body["requester"] == "req-b@company.com"

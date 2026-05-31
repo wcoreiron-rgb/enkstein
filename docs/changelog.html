@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.2 — Pending Command Filters + Status Summary                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--teal);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Pending Command Filters + Consolidated Status Endpoint</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="tag tag-fix">Ops UX</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.2</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This slice improves operator triage quality by adding server-side pending-command filters and a consolidated command status endpoint, then exposing both capabilities in Channel Gateway.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Pending filters</strong> added to <code>GET /api/v1/commands/pending</code>: <code>source</code>, <code>requester</code>, and <code>min_risk</code>.</li>
+          <li><strong>New endpoint:</strong> <code>GET /api/v1/commands/{command_id}/status</code> returns latest outcome, source/requester context, and approval-state summary.</li>
+          <li><strong>Channel Gateway Commands tab</strong> now includes search, source filter, min-risk filter, and inline status preview for timeline-expanded rows.</li>
+          <li><strong>API client updates</strong> add <code>getCommandStatus()</code> and filterable pending-command calls.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests</strong> add pending-filter and status-endpoint coverage.</li>
+          <li><strong>Regression run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>16 passed</strong>.</li>
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.1 — Command Timeline Audit Trail                              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

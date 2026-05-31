@@ -8,7 +8,7 @@ import {
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
-  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline,
+  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline, getCommandStatus,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
@@ -616,6 +616,10 @@ export default function ChannelGatewayPage() {
   const [timelineOpenFor, setTimelineOpenFor] = useState<string | null>(null);
   const [timelineLoadingFor, setTimelineLoadingFor] = useState<string | null>(null);
   const [timelines, setTimelines] = useState<Record<string, TimelineEvent[]>>({});
+  const [commandSearch, setCommandSearch] = useState('');
+  const [commandSourceFilter, setCommandSourceFilter] = useState('all');
+  const [commandMinRisk, setCommandMinRisk] = useState(0);
+  const [commandStatus, setCommandStatus] = useState<Record<string, any>>({});
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -631,7 +635,10 @@ export default function ChannelGatewayPage() {
         getChannelMessages(params),
         getChannelGatewayStats(),
         getChannelIdentities(),
-        getPendingCommands(50),
+        getPendingCommands(50, {
+          source: commandSourceFilter === 'all' ? undefined : commandSourceFilter,
+          min_risk: commandMinRisk > 0 ? commandMinRisk : undefined,
+        }),
       ]);
       setMessages((msgData as any).messages || []);
       setTotal((msgData as any).total || 0);
@@ -639,7 +646,7 @@ export default function ChannelGatewayPage() {
       setIdentities(idData as Identity[]);
       setPendingCommands((pendingData as any).commands || []);
     } finally { setLoading(false); }
-  }, [typeFilter, decisionFilter]);
+  }, [typeFilter, decisionFilter, commandSourceFilter, commandMinRisk]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -680,12 +687,25 @@ export default function ChannelGatewayPage() {
     try {
       const res = await getCommandTimeline(commandId, 100);
       setTimelines(prev => ({ ...prev, [commandId]: (res?.timeline || []) as TimelineEvent[] }));
+      const status = await getCommandStatus(commandId);
+      setCommandStatus(prev => ({ ...prev, [commandId]: status }));
     } catch {
       setTimelines(prev => ({ ...prev, [commandId]: [] }));
     } finally {
       setTimelineLoadingFor(null);
     }
   };
+
+  const visiblePendingCommands = pendingCommands.filter((cmd) => {
+    if (!commandSearch.trim()) return true;
+    const q = commandSearch.toLowerCase();
+    return (
+      (cmd.command_id || '').toLowerCase().includes(q) ||
+      (cmd.actor || '').toLowerCase().includes(q) ||
+      (cmd.action || '').toLowerCase().includes(q) ||
+      (cmd.target || '').toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -863,6 +883,35 @@ export default function ChannelGatewayPage() {
               {pendingCommands.length} pending
             </span>
           </div>
+          <div className="px-5 py-3 border-b border-gray-800 bg-gray-950/60 flex flex-wrap gap-2">
+            <input
+              value={commandSearch}
+              onChange={(e) => setCommandSearch(e.target.value)}
+              placeholder="Search command id/actor/action/target"
+              className="px-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 min-w-[240px]"
+            />
+            <select
+              value={commandSourceFilter}
+              onChange={(e) => setCommandSourceFilter(e.target.value)}
+              className="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200"
+            >
+              <option value="all">All Sources</option>
+              <option value="cli">CLI</option>
+              <option value="teams">Teams</option>
+              <option value="slack">Slack</option>
+              <option value="webhook">Webhook</option>
+              <option value="email">Email</option>
+            </select>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={commandMinRisk}
+              onChange={(e) => setCommandMinRisk(Math.max(0, Math.min(100, parseInt(e.target.value || '0', 10))))}
+              className="px-2.5 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-xs text-gray-200 w-28"
+              placeholder="Min risk"
+            />
+          </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-gray-500 text-xs">
@@ -877,7 +926,7 @@ export default function ChannelGatewayPage() {
               </tr>
             </thead>
             <tbody>
-              {pendingCommands.map(cmd => (
+              {visiblePendingCommands.map(cmd => (
                 <div key={cmd.command_id} className="contents">
                   <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
                     <td className="px-4 py-3 text-xs font-mono text-cyan-300">{cmd.command_id}</td>
@@ -943,6 +992,15 @@ export default function ChannelGatewayPage() {
                           {(timelines[cmd.command_id] || []).length === 0 && (
                             <p className="text-xs text-gray-500">No timeline events available.</p>
                           )}
+                          {commandStatus[cmd.command_id] && (
+                            <div className="mt-2 text-xs text-gray-400 bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5">
+                              Latest outcome: <span className="text-cyan-300">{commandStatus[cmd.command_id].latest_outcome}</span>
+                              {' · '}
+                              Source: <span className="text-gray-200">{commandStatus[cmd.command_id].source || '—'}</span>
+                              {' · '}
+                              Requester: <span className="text-gray-200">{commandStatus[cmd.command_id].requester || '—'}</span>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -951,7 +1009,7 @@ export default function ChannelGatewayPage() {
               ))}
             </tbody>
           </table>
-          {pendingCommands.length === 0 && (
+          {visiblePendingCommands.length === 0 && (
             <p className="text-center py-10 text-gray-500 text-sm">No pending commands right now.</p>
           )}
         </div>
