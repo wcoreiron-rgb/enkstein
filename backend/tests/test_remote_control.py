@@ -395,6 +395,11 @@ async def test_command_timeline_endpoint(client, db_session):
     assert "run_scan" in actions
     assert "approve_command_step" in actions or "approve_command" in actions
 
+    approvals_only = await client.get(f"/api/v1/commands/{cmd_id}/timeline?action_contains=approve")
+    assert approvals_only.status_code == 200, approvals_only.text
+    approvals_actions = {item["action"] for item in approvals_only.json()["timeline"]}
+    assert all("approve" in a for a in approvals_actions)
+
 
 @pytest.mark.asyncio
 async def test_commands_pending_filters_and_status_endpoint(client, db_session):

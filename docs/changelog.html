@@ -335,6 +335,36 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.9 — Command Timeline Focus Filters                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Command Timeline Focus Filters (All/Approvals/Rejections)</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.9</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This batch adds backend timeline filtering and UI focus controls so command review flows can isolate approval or rejection events quickly.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Timeline API filters:</strong> <code>GET /api/v1/commands/{command_id}/timeline</code> now accepts <code>action_contains</code> and <code>outcome</code>.</li>
+          <li><strong>Channel Gateway controls:</strong> timeline panel includes quick filters for All, Approvals, and Rejections.</li>
+          <li><strong>Regression coverage:</strong> backend test validates approval-only timeline filtering behavior.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.8 — Command Approval Audit Summary                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

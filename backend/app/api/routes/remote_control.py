@@ -408,6 +408,8 @@ async def list_recent_commands(
 async def command_timeline(
     command_id: str,
     limit: int = Query(default=100, ge=1, le=500),
+    action_contains: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -422,6 +424,11 @@ async def command_timeline(
         event_cmd_id = _event_command_id(e)
         if event_cmd_id != command_id and (e.target or "") != command_id:
             continue
+        if action_contains and action_contains.lower() not in str(e.action or "").lower():
+            continue
+        event_outcome = e.outcome.value if hasattr(e.outcome, "value") else str(e.outcome)
+        if outcome and str(event_outcome).lower() != outcome.lower():
+            continue
         timeline.append(
             {
                 "timestamp": e.timestamp.isoformat() if e.timestamp else None,
@@ -429,7 +436,7 @@ async def command_timeline(
                 "actor_id": e.actor_id,
                 "action": e.action,
                 "target": e.target,
-                "outcome": e.outcome.value if hasattr(e.outcome, "value") else str(e.outcome),
+                "outcome": event_outcome,
                 "severity": e.severity.value if hasattr(e.severity, "value") else str(e.severity),
                 "risk_score": e.risk_score,
                 "policy_name": e.policy_name,

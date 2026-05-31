@@ -228,6 +228,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - multi-select + bulk approve/reject controls for pending command batches
     - bulk review outcome summary with per-command error visibility for partial-failure cases
     - per-command timeline view for operator audit context
+    - timeline focus filters (All/Approvals/Rejections) for faster approval audit review
     - pending command search + source/min-risk filters + consolidated status preview
     - inline required-approvals selector for pending command delegation
     - quick-ingest actions for CLI/Webhook/Email adapters

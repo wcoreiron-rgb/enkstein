@@ -92,6 +92,8 @@ type TimelineEvent = {
   reason: string;
 };
 
+type TimelineFilter = 'all' | 'approvals' | 'rejections';
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const DECISION_META: Record<string, { color: string; bg: string; icon: React.ElementType; label: string }> = {
@@ -616,6 +618,7 @@ export default function ChannelGatewayPage() {
   const [timelineOpenFor, setTimelineOpenFor] = useState<string | null>(null);
   const [timelineLoadingFor, setTimelineLoadingFor] = useState<string | null>(null);
   const [timelines, setTimelines] = useState<Record<string, TimelineEvent[]>>({});
+  const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>('all');
   const [commandSearch, setCommandSearch] = useState('');
   const [commandSourceFilter, setCommandSourceFilter] = useState('all');
   const [commandMinRisk, setCommandMinRisk] = useState(0);
@@ -689,7 +692,13 @@ export default function ChannelGatewayPage() {
     if (timelines[commandId]) return;
     setTimelineLoadingFor(commandId);
     try {
-      const res = await getCommandTimeline(commandId, 100);
+      const timelineFilters =
+        timelineFilter === 'approvals'
+          ? { action_contains: 'approve' }
+          : timelineFilter === 'rejections'
+          ? { action_contains: 'reject' }
+          : undefined;
+      const res = await getCommandTimeline(commandId, 100, timelineFilters);
       setTimelines(prev => ({ ...prev, [commandId]: (res?.timeline || []) as TimelineEvent[] }));
       const status = await getCommandStatus(commandId);
       setCommandStatus(prev => ({ ...prev, [commandId]: status }));
@@ -699,6 +708,26 @@ export default function ChannelGatewayPage() {
       setTimelineLoadingFor(null);
     }
   };
+
+  useEffect(() => {
+    if (!timelineOpenFor) return;
+    const loadTimelineFiltered = async () => {
+      setTimelineLoadingFor(timelineOpenFor);
+      try {
+        const timelineFilters =
+          timelineFilter === 'approvals'
+            ? { action_contains: 'approve' }
+            : timelineFilter === 'rejections'
+            ? { action_contains: 'reject' }
+            : undefined;
+        const res = await getCommandTimeline(timelineOpenFor, 100, timelineFilters);
+        setTimelines(prev => ({ ...prev, [timelineOpenFor]: (res?.timeline || []) as TimelineEvent[] }));
+      } finally {
+        setTimelineLoadingFor(null);
+      }
+    };
+    loadTimelineFiltered();
+  }, [timelineFilter, timelineOpenFor]);
 
   const setRequiredApprovals = async (commandId: string, required: number) => {
     setUpdatingPolicyFor(commandId);
@@ -1101,7 +1130,24 @@ export default function ChannelGatewayPage() {
                   {timelineOpenFor === cmd.command_id && (
                     <tr className="border-b border-gray-800 bg-gray-950">
                       <td colSpan={9} className="px-4 py-3">
-                        <p className="text-xs text-gray-400 mb-2">Command Timeline</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-gray-400">Command Timeline</p>
+                          <div className="flex gap-1">
+                            {(['all', 'approvals', 'rejections'] as TimelineFilter[]).map((f) => (
+                              <button
+                                key={f}
+                                onClick={() => setTimelineFilter(f)}
+                                className={`text-xs px-2 py-1 rounded border ${
+                                  timelineFilter === f
+                                    ? 'bg-gray-700 border-gray-600 text-white'
+                                    : 'bg-gray-900 border-gray-700 text-gray-400'
+                                }`}
+                              >
+                                {f === 'all' ? 'All' : f === 'approvals' ? 'Approvals' : 'Rejections'}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <div className="space-y-1.5">
                           {(timelines[cmd.command_id] || []).map((ev, idx) => (
                             <div key={`${cmd.command_id}-${idx}`} className="text-xs bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-gray-300 flex flex-wrap gap-3">

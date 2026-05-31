@@ -394,8 +394,16 @@ export const bulkReviewPendingCommands = (body: {
     method: 'POST',
     body: JSON.stringify(body),
   });
-export const getCommandTimeline = (commandId: string, limit = 100) =>
-  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?limit=${limit}`);
+export const getCommandTimeline = (
+  commandId: string,
+  limit = 100,
+  filters?: { action_contains?: string; outcome?: string },
+) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (filters?.action_contains) params.set('action_contains', filters.action_contains);
+  if (filters?.outcome) params.set('outcome', filters.outcome);
+  return apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?${params.toString()}`);
+};
 export const getCommandStatus = (commandId: string) =>
   apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/status`);
 export const updateCommandApprovalPolicy = (
