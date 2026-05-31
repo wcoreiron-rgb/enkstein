@@ -335,6 +335,49 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.5 — Ticket Handoff Hardening + Bulk Review E2E               -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--amber);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Ticket Handoff Guardrails + Channel Bulk Review E2E</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Validation</span>
+          <span class="tag tag-feat">E2E</span>
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This hardening slice tightens remediation ticket payload checks and adds browser-level regression coverage for bulk pending-command operations.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Remediation validation hardening</strong> for <code>create_jira_ticket</code>: uppercase/alphanumeric project key guardrail plus minimum summary/description length checks.</li>
+          <li><strong>Policy outcome assertions</strong> expanded in regression tests for low-risk ticket handoff behavior and output metadata.</li>
+          <li><strong>New Playwright E2E</strong>: <code>frontend/e2e/channel-gateway-bulk-review.spec.ts</code> verifies select-visible + bulk approve flow on Channel Gateway.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend regression:</strong> targeted platform + command suite run → <strong>23 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+          <li><strong>Playwright E2E:</strong> <code>npx playwright test e2e/channel-gateway-bulk-review.spec.ts</code> → <strong>1 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.4 — Bulk Pending Command Review                               -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

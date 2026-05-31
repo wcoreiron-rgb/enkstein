@@ -71,6 +71,24 @@ def _validate_action_spec_shape(action_spec: dict[str, Any]) -> None:
                 status_code=400,
                 detail=f"create_jira_ticket missing required parameters: {', '.join(missing_ticket)}",
             )
+        project_key = str(params.get("project_key", "")).strip()
+        summary = str(params.get("summary", "")).strip()
+        description = str(params.get("description", "")).strip()
+        if not project_key or not project_key.replace("_", "").replace("-", "").isalnum() or project_key.upper() != project_key:
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket project_key must be uppercase alphanumeric (dashes/underscores allowed)",
+            )
+        if len(summary) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket summary must be at least 8 characters",
+            )
+        if len(description) < 16:
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket description must be at least 16 characters",
+            )
 
 
 def _action_to_dict(action: RemediationAction) -> dict:

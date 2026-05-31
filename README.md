@@ -230,6 +230,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - inline required-approvals selector for pending command delegation
     - quick-ingest actions for CLI/Webhook/Email adapters
     - expanded message detail with normalized `command_result` metadata
+  - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
+    - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
+    - minimum summary/description length checks before queueing remediation action
+  - Added Playwright E2E coverage for Channel Gateway bulk pending-command approve flow.
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.

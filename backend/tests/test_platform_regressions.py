@@ -365,10 +365,41 @@ async def test_swarm_ticket_handoff_policy_outcome_low_risk_auto_approved(client
     assert body["triggered"] == 1
     action = body["actions"][0]
     assert action["action_type"] == "create_jira_ticket"
+    assert action["provider"] == "generic"
+    assert action["target_type"] == "ticket"
+    assert action["target_id"] == "swarm_job_123"
     assert action["risk_level"] == "low"
     assert action["requires_approval"] is False
+    assert action["status"] == "completed"
+    assert action["triggered_by"] == "swarm:test"
+    assert isinstance(action.get("parameters"), dict)
+    assert action["parameters"]["project_key"] == "SEC"
     # Low-risk ticket handoff should never queue for approval.
     assert action["status"] != "pending_approval"
+
+
+@pytest.mark.asyncio
+async def test_swarm_ticket_handoff_rejects_invalid_project_key(client):
+    invalid = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "create_jira_ticket",
+                "target_type": "ticket",
+                "target_id": "swarm_job_123",
+                "target_label": "Swarm Job 123",
+                "parameters": {
+                    "project_key": "sec",
+                    "summary": "[RegentClaw] Incident",
+                    "description": "ticket draft body with enough characters",
+                },
+            },
+            "triggered_by": "swarm:test",
+        },
+    )
+    assert invalid.status_code == 400, invalid.text
+    assert "project_key must be uppercase" in invalid.json().get("detail", "")
 
 
 @pytest.mark.asyncio
