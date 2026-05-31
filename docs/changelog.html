@@ -335,6 +335,53 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.1 — Sprint 5 Trigger/Schedule Swarm Support                   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--teal);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Sprint 5: Trigger + Schedule Swarm Support</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">New Feature</span>
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-sec">Governance</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release completes Sprint 5 execution wiring by allowing Swarm jobs to launch from
+        triggers and schedules with profile defaults and approval-aware behavior.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Trigger actions</strong> now support <code>start_swarm</code> / <code>fire_swarm</code> execution paths with optional pre-execution approval gating.</li>
+          <li><strong>Schedule swarm execution</strong> now supports notes <code>type</code> values of <code>SWARM_JOB</code>, <code>START_SWARM</code>, and <code>FIRE_SWARM</code>.</li>
+          <li><strong>Swarm approval flow</strong> now supports both modes:
+            pre-execution approve-to-run and post-judge approve-to-complete.</li>
+          <li><strong>Profile defaults</strong> now apply automatically for trigger/schedule swarm launches
+            (<code>FAST_TRIAGE</code>, <code>DEEP_INVESTIGATION</code>, <code>INCIDENT_RESPONSE</code>, <code>AUTONOMOUS_LOW_RISK</code>, <code>EMERGENCY_CONTAINMENT</code>).</li>
+          <li><strong>UI wiring</strong> added so Triggers can configure swarm actions directly and Schedules can route run actions to <code>/run-swarm</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Platform regression tests</strong> cover trigger->swarm launch, schedule->swarm launch, approval-gated pre-execution launches, and profile-default behavior.</li>
+          <li><strong>Frontend lint</strong> passes for updated Triggers/Schedules/API client files.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.0 — Swarm + ModelClaw Foundation                              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

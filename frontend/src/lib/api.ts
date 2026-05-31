@@ -106,6 +106,8 @@ export const deleteSchedule = (id: string) =>
   apiFetch<void>(`/schedules/${id}`, { method: 'DELETE' });
 export const triggerSchedule = (id: string) =>
   apiFetch<any>(`/schedules/${id}/run`, { method: 'POST' });
+export const triggerScheduleSwarm = (id: string) =>
+  apiFetch<any>(`/schedules/${id}/run-swarm`, { method: 'POST' });
 export const getScheduleRuns = (id: string, limit = 20) =>
   apiFetch<any[]>(`/schedules/${id}/runs?limit=${limit}`);
 

@@ -22,6 +22,8 @@ const ACTION_TYPE_META: Record<string, { label: string; color: string }> = {
   fire_workflow: { label: 'Launch Workflow', color: 'text-purple-400' },
   fire_scan:     { label: 'Trigger Scan',   color: 'text-green-400'  },
   fire_alert:    { label: 'Send Alert',     color: 'text-yellow-400' },
+  start_swarm:   { label: 'Start Swarm',    color: 'text-cyan-400'   },
+  fire_swarm:    { label: 'Fire Swarm',     color: 'text-cyan-400'   },
 };
 
 const OPERATOR_LABELS: Record<string, string> = {
@@ -43,6 +45,15 @@ const BLANK_FORM = {
   cooldown_seconds: 300,
   category: 'detection',
   conditions: [{ field: 'severity', op: 'gte', value: 'high' }],
+  swarm_profile: 'INCIDENT_RESPONSE',
+  swarm_task_type: 'investigate',
+  swarm_parallelism: 3,
+  swarm_classification: 'internal',
+  swarm_model_profile: '',
+  swarm_requires_approval: true,
+  alert_title: '',
+  alert_description: '',
+  alert_severity: 'medium',
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -145,6 +156,28 @@ export default function TriggersPage() {
         category:         form.category || undefined,
         conditions_json:  JSON.stringify(form.conditions),
       };
+      if (form.action_type === 'fire_alert') {
+        payload.alert_config_json = JSON.stringify({
+          title: form.alert_title || undefined,
+          description: form.alert_description || undefined,
+          severity: form.alert_severity || 'medium',
+        });
+      }
+      if (form.action_type === 'start_swarm' || form.action_type === 'fire_swarm') {
+        const participants = form.target_claw
+          .split(',')
+          .map((v: string) => v.trim())
+          .filter(Boolean);
+        payload.alert_config_json = JSON.stringify({
+          profile: form.swarm_profile,
+          task_type: form.swarm_task_type,
+          parallelism: form.swarm_parallelism,
+          classification: form.swarm_classification,
+          model_profile: form.swarm_model_profile || undefined,
+          requires_approval_for_actions: form.swarm_requires_approval,
+          ...(participants.length ? { participants } : {}),
+        });
+      }
       await createTrigger(payload);
       setShowForm(false);
       setForm({ ...BLANK_FORM, conditions: [{ field: 'severity', op: 'gte', value: 'high' }] });
@@ -512,6 +545,113 @@ export default function TriggersPage() {
                     placeholder="e.g. cloudclaw, exposureclaw"
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
                   />
+                </div>
+              )}
+
+              {(form.action_type === 'start_swarm' || form.action_type === 'fire_swarm') && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Swarm Profile</label>
+                    <select
+                      value={form.swarm_profile}
+                      onChange={e => setForm(f => ({ ...f, swarm_profile: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500"
+                    >
+                      <option value="FAST_TRIAGE">FAST_TRIAGE</option>
+                      <option value="DEEP_INVESTIGATION">DEEP_INVESTIGATION</option>
+                      <option value="INCIDENT_RESPONSE">INCIDENT_RESPONSE</option>
+                      <option value="AUTONOMOUS_LOW_RISK">AUTONOMOUS_LOW_RISK</option>
+                      <option value="EMERGENCY_CONTAINMENT">EMERGENCY_CONTAINMENT</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Task Type</label>
+                    <input
+                      value={form.swarm_task_type}
+                      onChange={e => setForm(f => ({ ...f, swarm_task_type: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Participants (comma-separated claws)</label>
+                    <input
+                      value={form.target_claw}
+                      onChange={e => setForm(f => ({ ...f, target_claw: e.target.value }))}
+                      placeholder="identityclaw,threatclaw,cloudclaw"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Parallelism</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={form.swarm_parallelism}
+                      onChange={e => setForm(f => ({ ...f, swarm_parallelism: parseInt(e.target.value, 10) || 3 }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Classification</label>
+                    <input
+                      value={form.swarm_classification}
+                      onChange={e => setForm(f => ({ ...f, swarm_classification: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Model Profile (optional)</label>
+                    <input
+                      value={form.swarm_model_profile}
+                      onChange={e => setForm(f => ({ ...f, swarm_model_profile: e.target.value }))}
+                      placeholder="swarm_judge_incident"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <label className="col-span-2 flex items-center gap-2 text-xs text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={form.swarm_requires_approval}
+                      onChange={e => setForm(f => ({ ...f, swarm_requires_approval: e.target.checked }))}
+                      className="rounded border-gray-600 bg-gray-800 text-yellow-500 focus:ring-yellow-500"
+                    />
+                    Require approval before swarm execution
+                  </label>
+                </div>
+              )}
+
+              {form.action_type === 'fire_alert' && (
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Alert Title</label>
+                    <input
+                      value={form.alert_title}
+                      onChange={e => setForm(f => ({ ...f, alert_title: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5">Severity</label>
+                    <select
+                      value={form.alert_severity}
+                      onChange={e => setForm(f => ({ ...f, alert_severity: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-500"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                  <div className="col-span-3">
+                    <label className="block text-xs text-gray-400 mb-1.5">Alert Description</label>
+                    <input
+                      value={form.alert_description}
+                      onChange={e => setForm(f => ({ ...f, alert_description: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                    />
+                  </div>
                 </div>
               )}
 

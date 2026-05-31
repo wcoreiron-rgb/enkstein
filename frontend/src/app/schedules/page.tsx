@@ -9,7 +9,7 @@ import {
   Lock, Handshake, GitBranch, Settings, RefreshCcw, Shield,
 } from 'lucide-react';
 
-import { getSchedules, getAgents, updateSchedule, triggerSchedule } from '@/lib/api';
+import { getSchedules, getAgents, updateSchedule, triggerSchedule, triggerScheduleSwarm } from '@/lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -117,6 +117,17 @@ function fmtDate(s: string | null): string {
   return new Date(s).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function isSwarmSchedule(notes: string | null): boolean {
+  if (!notes) return false;
+  try {
+    const parsed = JSON.parse(notes);
+    const actionType = String(parsed?.type || '').toUpperCase();
+    return actionType === 'SWARM_JOB' || actionType === 'START_SWARM' || actionType === 'FIRE_SWARM';
+  } catch {
+    return false;
+  }
+}
+
 // ─── Schedule Row ─────────────────────────────────────────────────────────────
 
 function ScheduleRow({ sched, agent, onToggle, onRun }: {
@@ -126,6 +137,7 @@ function ScheduleRow({ sched, agent, onToggle, onRun }: {
   onRun: (id: string, name: string) => void;
 }) {
   const [running, setRunning] = useState(false);
+  const swarmMode = isSwarmSchedule(sched.notes);
   const freq   = FREQ_META[sched.frequency];
   const status = STATUS_META[sched.status];
   const ModeIcon  = agent ? MODE_ICON[agent.execution_mode] : Bot;
@@ -197,7 +209,9 @@ function ScheduleRow({ sched, agent, onToggle, onRun }: {
 
       {/* Approval */}
       <td className="px-4 py-3">
-        {sched.approval_required
+        {swarmMode ? (
+          <span className="text-xs" style={{ color: '#22d3ee' }}>Swarm</span>
+        ) : sched.approval_required
           ? <span className="text-xs" style={{ color: '#a78bfa' }}>Required</span>
           : <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>None</span>
         }
@@ -209,7 +223,7 @@ function ScheduleRow({ sched, agent, onToggle, onRun }: {
           <button
             onClick={() => { setRunning(true); onRun(sched.id, sched.name); setTimeout(() => setRunning(false), 2000); }}
             disabled={sched.status === 'disabled' || running}
-            title="Run now"
+            title={swarmMode ? "Run Swarm Job" : "Run now"}
             className="p-1.5 rounded-lg transition-all hover:opacity-80"
             style={{ background: 'rgba(34,197,94,0.12)', color: '#4ade80' }}
           >
@@ -271,8 +285,11 @@ export default function SchedulesPage() {
 
   const handleRun = async (id: string, name: string) => {
     try {
-      const data = await triggerSchedule(id);
-      showToast(`▶ ${name} — ${data.message}`);
+      const schedule = schedules.find(s => s.id === id);
+      const data = schedule && isSwarmSchedule(schedule.notes)
+        ? await triggerScheduleSwarm(id)
+        : await triggerSchedule(id);
+      showToast(`▶ ${name} — ${data.message || 'Triggered'}`);
       setTimeout(load, 2000);
     } catch {
       showToast(`✕ Failed to trigger ${name}`);

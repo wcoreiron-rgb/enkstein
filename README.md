@@ -223,6 +223,13 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 - Swarm Judge synthesis:
   - Added dedicated `swarm_judge_profile`.
   - Swarm Judge now attempts ModelClaw-routed synthesis and falls back to deterministic summary when denied/unavailable.
+- Sprint 5 trigger/schedule swarm support:
+  - Added `start_swarm` / `fire_swarm` trigger execution path with profile-aware defaults and optional pre-execution approval gating.
+  - Added schedule swarm execution support for `SWARM_JOB`, `START_SWARM`, and `FIRE_SWARM` notes types.
+  - Added `/swarm/jobs/{id}/approve` behavior for both approval phases:
+    - pre-execution approval now starts/runs the job
+    - post-judge approval now finalizes the job
+  - Added shared swarm profile defaults (`FAST_TRIAGE`, `DEEP_INVESTIGATION`, `INCIDENT_RESPONSE`, `AUTONOMOUS_LOW_RISK`, `EMERGENCY_CONTAINMENT`) applied to trigger/schedule launches.
 
 ## Claw Modules (24 total)
 
