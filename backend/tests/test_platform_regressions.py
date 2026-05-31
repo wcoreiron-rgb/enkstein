@@ -428,6 +428,53 @@ async def test_production_gate_execute_fails_closed_when_trust_fabric_unavailabl
 
 
 @pytest.mark.asyncio
+async def test_production_gate_self_approval_blocked(client):
+    created = await client.post(
+        "/api/v1/exec/production",
+        json={
+            "title": "Apply prod change",
+            "requested_by": "test-user",
+            "change_type": "config_update",
+            "target_system": "prod-api",
+        },
+    )
+    assert created.status_code == 200, created.text
+    gate_id = created.json()["id"]
+
+    approve = await client.post(
+        f"/api/v1/exec/production-gates/{gate_id}/approve",
+        json={"approved_by": "spoofed-user"},
+    )
+    assert approve.status_code == 403, approve.text
+    assert "Self-approval not permitted" in approve.text
+
+
+@pytest.mark.asyncio
+async def test_production_gate_reject_uses_authenticated_identity(client):
+    created = await client.post(
+        "/api/v1/exec/production",
+        json={
+            "title": "Apply prod change",
+            "requested_by": "operator-a",
+            "change_type": "config_update",
+            "target_system": "prod-api",
+        },
+    )
+    assert created.status_code == 200, created.text
+    gate_id = created.json()["id"]
+
+    reject = await client.post(
+        f"/api/v1/exec/production-gates/{gate_id}/reject",
+        json={"rejected_by": "spoofed-user", "reason": "not safe"},
+    )
+    assert reject.status_code == 200, reject.text
+
+    detail = await client.get(f"/api/v1/exec/production-gates/{gate_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["rejected_by"] == "test-user"
+
+
+@pytest.mark.asyncio
 async def test_remediation_approve_blocked_by_ring0_trust_fabric(client):
     # Create a manual remediation action with ring0 action_type.
     trig = await client.post(
