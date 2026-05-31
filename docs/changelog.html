@@ -335,6 +335,52 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.9 — Multi-Operator Command Approval Hardening                 -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Multi-Operator Command Approval Semantics</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Hardening</span>
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">Governance</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.9</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This batch upgrades command approval behavior from single-step toggles to a persisted multi-operator workflow with explicit progress tracking and guardrails.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Approval progress state</strong> persists in command event metadata with required approvals and step history.</li>
+          <li><strong>Pending command API enrichment</strong> now returns <code>approvals_received</code>, <code>required_approvals</code>, and <code>approval_status</code>.</li>
+          <li><strong>Self-approval prevention</strong> blocks requesters from approving their own command.</li>
+          <li><strong>Duplicate-approver prevention</strong> blocks repeated approvals from the same operator.</li>
+          <li><strong>Two-step finalization behavior</strong> keeps outcome pending until required approvals are met, then marks final allow.</li>
+          <li><strong>Channel Gateway commands table</strong> now displays approval progress counters for pending items.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests</strong> validate pending listing, self-approval rejection, duplicate rejection, partial approval state, and final approval transition.</li>
+          <li><strong>Regression run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>13 passed</strong>.</li>
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.8 — Channel Gateway Approval UX                                -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

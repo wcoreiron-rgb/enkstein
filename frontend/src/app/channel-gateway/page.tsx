@@ -78,6 +78,9 @@ type PendingCommand = {
   risk_score: number;
   policy_name: string;
   reason: string;
+  required_approvals?: number;
+  approvals_received?: number;
+  approval_status?: string;
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -824,6 +827,7 @@ export default function ChannelGatewayPage() {
                 <th className="px-4 py-3 text-left">Action</th>
                 <th className="px-4 py-3 text-left">Target</th>
                 <th className="px-4 py-3 text-left">Risk</th>
+                <th className="px-4 py-3 text-left">Approvals</th>
                 <th className="px-4 py-3 text-left">Time</th>
                 <th className="px-4 py-3 text-left">Action</th>
               </tr>
@@ -836,6 +840,9 @@ export default function ChannelGatewayPage() {
                   <td className="px-4 py-3 text-xs text-gray-300">{cmd.action}</td>
                   <td className="px-4 py-3 text-xs text-gray-400">{cmd.target || '—'}</td>
                   <td className="px-4 py-3 text-xs text-yellow-300">{Math.round(cmd.risk_score || 0)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-300">
+                    {(cmd.approvals_received ?? 0)}/{(cmd.required_approvals ?? 1)}
+                  </td>
                   <td className="px-4 py-3 text-xs text-gray-500">
                     {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : '—'}
                   </td>

@@ -902,7 +902,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       <div class="endpoint-row">
         <span class="method method-get">GET</span>
         <span class="endpoint-path">/api/v1/commands/pending</span>
-        <span class="endpoint-desc">List recent pending CommandClaw actions awaiting approval</span>
+        <span class="endpoint-desc">List recent pending CommandClaw actions awaiting approval (includes approvals received/required)</span>
       </div>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>
@@ -910,6 +910,11 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-desc">Approve a pending command and write approval audit metadata</span>
       </div>
       <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval action.</p>
+      <ul>
+        <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
+        <li><strong>Duplicate guard:</strong> same approver cannot approve the same command twice.</li>
+        <li><strong>Multi-operator finalization:</strong> command is marked allowed only after required approvals are satisfied; intermediate approvals remain pending.</li>
+      </ul>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>
         <span class="endpoint-path">/api/v1/trust-fabric/mcp/scan</span>

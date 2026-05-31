@@ -1,4 +1,6 @@
 import pytest
+import json
+from app.models.event import Event, EventOutcome, EventSeverity
 
 
 @pytest.mark.asyncio
@@ -203,45 +205,77 @@ async def test_remote_agent_dispatch_remote_agent_id_must_match_path(client):
 
 
 @pytest.mark.asyncio
-async def test_commands_pending_and_approve_flow(client):
-    reg = await client.post(
-        "/api/v1/remote-agents/register",
-        json={
-            "name": "edge-worker-approval",
-            "tenant_id": "tenant_approval",
-            "owner": "owner@company.com",
-            "allowed_actions": ["run_swarm"],
-        },
+async def test_commands_pending_and_approve_flow(client, db_session):
+    cmd_id = "cmd_pending_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner@company.com",
+        actor_name="owner@company.com",
+        actor_type="human",
+        action="run_swarm",
+        target="cloud_exposure",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.HIGH,
+        risk_score=82.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded for approval workflow test",
+        description="[commandclaw] owner@company.com -> run_swarm",
+        metadata_json=json.dumps(
+            {
+                "context": {
+                    "command_id": cmd_id,
+                    "requester": "owner@company.com",
+                    "mode": "approval",
+                }
+            }
+        ),
+        is_anomaly=False,
+        requires_review=True,
     )
-    assert reg.status_code == 200, reg.text
-    agent_id = reg.json()["id"]
-
-    dispatch = await client.post(
-        f"/api/v1/remote-agents/{agent_id}/dispatch",
-        json={
-            "command_id": "cmd_pending_001",
-            "source": "teams",
-            "requester": "owner@company.com",
-            "tenant_id": "tenant_approval",
-            "intent": "run_swarm",
-            "target": "cloud_exposure",
-            "scope": "prod",
-            "mode": "approval",
-            "classification": "confidential",
-            "payload": {"profile": "INCIDENT_RESPONSE"},
-        },
-    )
-    assert dispatch.status_code == 200, dispatch.text
+    db_session.add(seeded)
+    await db_session.commit()
 
     pending = await client.get("/api/v1/commands/pending")
     assert pending.status_code == 200, pending.text
     commands = pending.json()["commands"]
-    match = next((c for c in commands if c["command_id"] == "cmd_pending_001"), None)
-    # Command may be auto-allowed by policy depending on active rules; only assert approval path when pending exists.
-    if match:
-        approve = await client.post(
-            "/api/v1/commands/cmd_pending_001/approve",
-            json={"approver": "secops-admin", "reason": "approved for incident response"},
-        )
-        assert approve.status_code == 200, approve.text
-        assert approve.json()["status"] == "approved"
+    match = next((c for c in commands if c["command_id"] == cmd_id), None)
+    assert match is not None
+    assert match["required_approvals"] == 2
+    assert match["approvals_received"] == 0
+
+    # self-approval blocked
+    self_approve = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "owner@company.com", "reason": "self approve"},
+    )
+    assert self_approve.status_code == 403, self_approve.text
+
+    # first distinct approval records step but keeps pending
+    first = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-admin", "reason": "first approval"},
+    )
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    assert first_body["status"] == "pending_more_approvals"
+    assert first_body["approvals_received"] == 1
+    assert first_body["approvals_required"] == 2
+
+    # duplicate approver blocked
+    dup = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-admin", "reason": "duplicate approval"},
+    )
+    assert dup.status_code == 409, dup.text
+
+    # second distinct approval finalizes
+    second = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-lead", "reason": "second approval"},
+    )
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert second_body["status"] == "approved"
+    assert second_body["approvals_received"] == 2
+    assert second_body["approvals_required"] == 2

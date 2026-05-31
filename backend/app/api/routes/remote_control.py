@@ -27,13 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.agent import Agent, AgentStatus, ExecutionMode, RiskLevel
-from app.models.event import Event
+from app.models.event import Event, EventOutcome
 from app.trust_fabric import ActionRequest, enforce
 
 router = APIRouter(tags=["CommandClaw / Remote Agents"])
 
 _REMOTE_CLAW = "remoteagent"
 _REMOTE_CATEGORY = "Remote Control Plane"
+_DEFAULT_COMMAND_APPROVALS_REQUIRED = 2
 
 
 def _load_json_object(raw: str | None) -> dict:
@@ -85,6 +86,54 @@ def _event_command_id(event: Event) -> str | None:
         command_id = context.get("command_id")
         return str(command_id) if command_id else None
     return None
+
+
+def _event_metadata(event: Event) -> dict:
+    return _load_json_object(event.metadata_json)
+
+
+def _event_context(event: Event) -> dict:
+    metadata = _event_metadata(event)
+    context = metadata.get("context") if isinstance(metadata, dict) else {}
+    return context if isinstance(context, dict) else {}
+
+
+def _required_command_approvals(event: Event, context: dict) -> int:
+    requested = context.get("required_approvals")
+    if isinstance(requested, int):
+        return max(1, min(requested, 4))
+    if context.get("mode") == "approval":
+        return _DEFAULT_COMMAND_APPROVALS_REQUIRED
+    if event.risk_score >= 70:
+        return _DEFAULT_COMMAND_APPROVALS_REQUIRED
+    return 1
+
+
+def _approval_state(event: Event) -> dict:
+    metadata = _event_metadata(event)
+    context = _event_context(event)
+    state = metadata.get("approval_state") if isinstance(metadata, dict) else None
+    if not isinstance(state, dict):
+        state = {}
+    approvals = state.get("approvals")
+    if not isinstance(approvals, list):
+        approvals = []
+    required = state.get("required_approvals")
+    if not isinstance(required, int):
+        required = _required_command_approvals(event, context)
+    status = state.get("status") or ("approved" if len(approvals) >= required else "pending")
+    return {
+        "required_approvals": max(1, required),
+        "approvals": approvals,
+        "status": status,
+        "requester": context.get("requester") or event.actor_id or event.actor_name or "unknown",
+    }
+
+
+def _write_approval_state(event: Event, state: dict) -> None:
+    metadata = _event_metadata(event)
+    metadata["approval_state"] = state
+    event.metadata_json = json.dumps(metadata)
 
 
 class RemoteAgentRegisterRequest(BaseModel):
@@ -142,6 +191,7 @@ async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -
                 "channel": "command",
                 "tenant_id": body.tenant_id,
                 "command_id": body.command_id,
+                "requester": body.requester,
                 "source": body.source,
                 "scope": body.scope,
                 "classification": body.classification,
@@ -318,6 +368,7 @@ async def list_pending_commands(
     events = result.scalars().all()
     rows = []
     for e in events:
+        approval_state = _approval_state(e)
         rows.append(
             {
                 "command_id": _event_command_id(e),
@@ -329,6 +380,9 @@ async def list_pending_commands(
                 "risk_score": e.risk_score,
                 "policy_name": e.policy_name,
                 "reason": e.policy_reason,
+                "required_approvals": approval_state["required_approvals"],
+                "approvals_received": len(approval_state["approvals"]),
+                "approval_status": approval_state["status"],
             }
         )
     rows = [r for r in rows if r.get("command_id")]
@@ -355,40 +409,82 @@ async def approve_pending_command(
     if not event:
         raise HTTPException(status_code=404, detail="Pending command not found")
 
-    event.outcome = "allowed"
-    event.requires_review = False
-    event.description = f"{event.description} [approved]"
-    metadata = _load_json_object(event.metadata_json)
-    metadata["approval"] = {
-        "approved_at": datetime.now(timezone.utc).isoformat(),
-        "approved_by": current_user.get("sub", "unknown"),
-        "approver_display": body.approver or current_user.get("sub", "unknown"),
-        "reason": body.reason or "approved",
-    }
-    event.metadata_json = json.dumps(metadata)
+    approval_state = _approval_state(event)
+    requester = str(approval_state.get("requester") or "unknown")
+    approver_id = str(current_user.get("sub", "unknown"))
+    approver_display = body.approver or approver_id
+    approval_principal = approver_display if body.approver else approver_id
+    if approver_id == requester or approver_display == requester:
+        raise HTTPException(status_code=403, detail="Self-approval is not allowed")
+    if any(str(a.get("approved_by")) == str(approval_principal) for a in approval_state["approvals"]):
+        raise HTTPException(status_code=409, detail="Approver already recorded for this command")
+
+    approval_state["approvals"].append(
+        {
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+            "approved_by": approval_principal,
+            "approver_display": approver_display,
+            "reason": body.reason or "approved",
+        }
+    )
+    approvals_received = len(approval_state["approvals"])
+    required = approval_state["required_approvals"]
+    final_approved = approvals_received >= required
+    approval_state["status"] = "approved" if final_approved else "pending"
+    _write_approval_state(event, approval_state)
+    event.requires_review = not final_approved
+    if final_approved:
+        event.outcome = EventOutcome.ALLOWED
+        event.description = f"{event.description} [approved]"
+    else:
+        event.outcome = EventOutcome.REQUIRES_APPROVAL
+        event.description = f"{event.description} [approval {approvals_received}/{required}]"
 
     db.add(
         Event(
             source_module="commandclaw",
-            actor_id=current_user.get("sub", "unknown"),
-            actor_name=body.approver or current_user.get("sub", "unknown"),
+            actor_id=approver_id,
+            actor_name=approver_display,
             actor_type="human",
-            action="approve_command",
+            action="approve_command" if final_approved else "approve_command_step",
             target=command_id,
             target_type="command",
-            outcome="allowed",
+            outcome=EventOutcome.ALLOWED if final_approved else EventOutcome.PENDING,
             severity=event.severity,
             risk_score=event.risk_score,
             policy_name="manual_command_approval",
-            policy_reason=body.reason or "Approved via CommandClaw approval endpoint",
-            description=f"Approved pending command {command_id}",
-            metadata_json=json.dumps({"approved_command_id": command_id}),
+            policy_reason=(
+                body.reason
+                or (
+                    f"Approval step {approvals_received}/{required} recorded"
+                    if not final_approved
+                    else "Approved via CommandClaw approval endpoint"
+                )
+            ),
+            description=(
+                f"Approved pending command {command_id}"
+                if final_approved
+                else f"Recorded approval {approvals_received}/{required} for pending command {command_id}"
+            ),
+            metadata_json=json.dumps(
+                {
+                    "approved_command_id": command_id,
+                    "approvals_received": approvals_received,
+                    "approvals_required": required,
+                    "final_approved": final_approved,
+                }
+            ),
             is_anomaly=False,
-            requires_review=False,
+            requires_review=not final_approved,
         )
     )
     await db.commit()
-    return {"command_id": command_id, "status": "approved"}
+    return {
+        "command_id": command_id,
+        "status": "approved" if final_approved else "pending_more_approvals",
+        "approvals_received": approvals_received,
+        "approvals_required": required,
+    }
 
 
 @router.post("/remote-agents/{agent_id}/dispatch")
