@@ -400,6 +400,15 @@ async def test_command_timeline_endpoint(client, db_session):
     approvals_actions = {item["action"] for item in approvals_only.json()["timeline"]}
     assert all("approve" in a for a in approvals_actions)
 
+    allowed_approvals = await client.get(
+        f"/api/v1/commands/{cmd_id}/timeline?action_contains=approve&outcome=allowed"
+    )
+    assert allowed_approvals.status_code == 200, allowed_approvals.text
+    rows = allowed_approvals.json()["timeline"]
+    assert rows
+    assert all("approve" in (item.get("action") or "") for item in rows)
+    assert all((item.get("outcome") or "").lower() == "allowed" for item in rows)
+
 
 @pytest.mark.asyncio
 async def test_commands_pending_filters_and_status_endpoint(client, db_session):

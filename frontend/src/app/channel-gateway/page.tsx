@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import {
-  MessageSquare, Shield, CheckCircle, XCircle, Clock,
+  MessageSquare, Shield, CheckCircle, XCircle, Clock, Download, Copy,
   RefreshCw, Send, User, Zap, Filter,
   Slack, Building2, Terminal, Activity, Check, Mail, Webhook, Command,
 } from 'lucide-react';
@@ -619,6 +619,7 @@ export default function ChannelGatewayPage() {
   const [timelineLoadingFor, setTimelineLoadingFor] = useState<string | null>(null);
   const [timelines, setTimelines] = useState<Record<string, TimelineEvent[]>>({});
   const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>('all');
+  const [copiedTimelineFor, setCopiedTimelineFor] = useState<string | null>(null);
   const [commandSearch, setCommandSearch] = useState('');
   const [commandSourceFilter, setCommandSourceFilter] = useState('all');
   const [commandMinRisk, setCommandMinRisk] = useState(0);
@@ -728,6 +729,26 @@ export default function ChannelGatewayPage() {
     };
     loadTimelineFiltered();
   }, [timelineFilter, timelineOpenFor]);
+
+  const copyTimelineJson = async (commandId: string) => {
+    const payload = timelines[commandId] || [];
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    setCopiedTimelineFor(commandId);
+    setTimeout(() => setCopiedTimelineFor((current) => (current === commandId ? null : current)), 1200);
+  };
+
+  const downloadTimelineJson = (commandId: string) => {
+    const payload = timelines[commandId] || [];
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${commandId}-timeline.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const setRequiredApprovals = async (commandId: string, required: number) => {
     setUpdatingPolicyFor(commandId);
@@ -1132,7 +1153,7 @@ export default function ChannelGatewayPage() {
                       <td colSpan={9} className="px-4 py-3">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-xs text-gray-400">Command Timeline</p>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 items-center">
                             {(['all', 'approvals', 'rejections'] as TimelineFilter[]).map((f) => (
                               <button
                                 key={f}
@@ -1146,6 +1167,20 @@ export default function ChannelGatewayPage() {
                                 {f === 'all' ? 'All' : f === 'approvals' ? 'Approvals' : 'Rejections'}
                               </button>
                             ))}
+                            <button
+                              onClick={() => copyTimelineJson(cmd.command_id)}
+                              className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 flex items-center gap-1"
+                            >
+                              <Copy className="w-3 h-3" />
+                              {copiedTimelineFor === cmd.command_id ? 'Copied' : 'Copy'}
+                            </button>
+                            <button
+                              onClick={() => downloadTimelineJson(cmd.command_id)}
+                              className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 flex items-center gap-1"
+                            >
+                              <Download className="w-3 h-3" />
+                              JSON
+                            </button>
                           </div>
                         </div>
                         <div className="space-y-1.5">
