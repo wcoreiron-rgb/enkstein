@@ -25,6 +25,7 @@ from app.models.finding import Finding, FindingSeverity
 from app.models.event import Event, EventSeverity
 from app.core.swarm.schemas import SwarmJobCreate
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
+from app.core.swarm.profiles import apply_swarm_profile_defaults
 from app.models.swarm import SwarmJobStatus
 
 logger = logging.getLogger("trigger_engine")
@@ -184,7 +185,7 @@ async def _fire_trigger(
 
     elif action in {"start_swarm", "fire_swarm"}:
         try:
-            cfg = json.loads(trigger.alert_config_json or "{}")
+            cfg = apply_swarm_profile_defaults(json.loads(trigger.alert_config_json or "{}"))
             participants = cfg.get("participants") or []
             if not participants and trigger.target_claw:
                 participants = [c.strip() for c in trigger.target_claw.split(",") if c.strip()]

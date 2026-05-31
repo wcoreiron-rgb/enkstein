@@ -16,6 +16,7 @@ from app.schemas.agent import (
 )
 from app.core.swarm.schemas import SwarmJobCreate
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
+from app.core.swarm.profiles import apply_swarm_profile_defaults
 from app.models.swarm import SwarmJobStatus
 
 router = APIRouter(prefix="/schedules", tags=["Schedules"])
@@ -186,10 +187,10 @@ async def trigger_schedule_swarm(
         raise HTTPException(status_code=400, detail="Schedule notes must be valid JSON for swarm execution")
 
     action_type = str(cfg.get("type", "SWARM_JOB")).upper()
-    if action_type != "SWARM_JOB":
-        raise HTTPException(status_code=400, detail="Schedule notes type must be SWARM_JOB")
+    if action_type not in {"SWARM_JOB", "START_SWARM", "FIRE_SWARM"}:
+        raise HTTPException(status_code=400, detail="Schedule notes type must be SWARM_JOB/START_SWARM/FIRE_SWARM")
 
-    action = cfg.get("action", cfg)
+    action = apply_swarm_profile_defaults(cfg.get("action", cfg))
     payload = SwarmJobCreate(
         name=action.get("name") or f"Scheduled Swarm: {sched.name}",
         profile=action.get("profile", "DEEP_INVESTIGATION"),

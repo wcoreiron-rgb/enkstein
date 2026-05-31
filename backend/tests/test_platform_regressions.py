@@ -503,3 +503,55 @@ async def test_trigger_start_swarm_can_require_pre_execution_approval(client):
     assert jobs[0]["name"] == "Webhook Approval Swarm"
     assert jobs[0]["status"] == "requires_approval"
     assert jobs[0]["started_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_schedule_run_swarm_applies_profile_defaults(client):
+    agent_resp = await client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Schedule Swarm Profile Agent",
+            "description": "profile defaults",
+            "claw": "identityclaw",
+            "execution_mode": "monitor",
+            "risk_level": "low",
+            "status": "active",
+        },
+    )
+    assert agent_resp.status_code == 201, agent_resp.text
+    agent_id = agent_resp.json()["id"]
+
+    sched_resp = await client.post(
+        "/api/v1/schedules",
+        json={
+            "name": "Profile Default Swarm Schedule",
+            "agent_id": agent_id,
+            "frequency": "hourly",
+            "status": "active",
+            "approval_required": False,
+            "notes": json.dumps(
+                {
+                    "type": "START_SWARM",
+                    "action": {
+                        "name": "Profile Defaults Swarm",
+                        "profile": "INCIDENT_RESPONSE",
+                        "participants": ["identityclaw", "cloudclaw"],
+                    },
+                }
+            ),
+        },
+    )
+    assert sched_resp.status_code == 201, sched_resp.text
+    schedule_id = sched_resp.json()["id"]
+
+    run_resp = await client.post(f"/api/v1/schedules/{schedule_id}/run-swarm")
+    assert run_resp.status_code == 202, run_resp.text
+    body = run_resp.json()
+    # INCIDENT_RESPONSE defaults to approval-gated launch.
+    assert body["status"] == "requires_approval"
+    job_id = body["job_id"]
+
+    job_resp = await client.get(f"/api/v1/swarm/jobs/{job_id}")
+    assert job_resp.status_code == 200, job_resp.text
+    job = job_resp.json()
+    assert job["parallelism"] == 8
