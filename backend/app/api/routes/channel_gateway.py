@@ -361,7 +361,7 @@ async def ingest_message(body: dict, db: Session = Depends(get_db)):
 # ─── Simulate endpoint (test without a real bot token) ───────────────────────
 
 @router.post("/simulate")
-def simulate_message(body: dict, db: Session = Depends(get_db)):
+async def simulate_message(body: dict, db: Session = Depends(get_db)):
     """
     Simulate a channel message without writing to DB. Returns the full processing result.
     Body: { channel_type, channel_id, sender_id, sender_email?, sender_name?, message_text }
@@ -384,6 +384,9 @@ def simulate_message(body: dict, db: Session = Depends(get_db)):
         channel_id   = body["channel_id"],
         channel_identity = ci,
     )
+    command_result = await _execute_channel_command(result, ci)
+    _apply_command_outcome(result, command_result)
+    result["command_result"] = command_result
     return result
 
 

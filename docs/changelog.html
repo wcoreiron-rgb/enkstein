@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.5 — Remote Dispatch + Simulation Hardening                    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--teal);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Remote Dispatch Guardrails + Channel Simulation Parity</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Hardening</span>
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This batch tightens remote agent dispatch constraints and aligns channel simulation with live command normalization.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Remote dispatch enforcement</strong> now blocks tenant mismatch, kill-switch active agents, and intents outside agent <code>allowed_actions</code>.</li>
+          <li><strong>Dispatch payload guard</strong> now rejects mismatched <code>remote_agent_id</code> between path and request body.</li>
+          <li><strong>Command ID validation</strong> now returns explicit <code>422</code> for invalid remote agent IDs.</li>
+          <li><strong>Simulation parity</strong> adds command normalization + policy outcome metadata to <code>POST /api/v1/channel-gateway/simulate</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Remote control tests</strong> expanded with tenant mismatch, disallowed intent, and path/body mismatch coverage.</li>
+          <li><strong>Channel tests</strong> expanded to validate <code>/simulate</code> command result behavior.</li>
+          <li><strong>Test run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>9 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.4 — Channel Ingress CommandClaw Normalization                 -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

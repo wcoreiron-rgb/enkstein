@@ -69,3 +69,36 @@ async def test_channel_gateway_blocked_message_skips_command_execution(client):
     body = resp.json()
     assert body["policy_decision"] == "blocked"
     assert body["command_result"] is None
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_simulate_includes_command_result(client):
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "teams",
+            "platform_user_id": "sim-u1",
+            "platform_email": "sim@company.com",
+            "platform_name": "Sim User",
+            "regentclaw_role": "engineer",
+            "is_trusted": True,
+            "trust_score": 88,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/simulate",
+        json={
+            "channel_type": "teams",
+            "channel_id": "sim-room",
+            "sender_id": "sim-u1",
+            "sender_email": "sim@company.com",
+            "sender_name": "Sim User",
+            "message_text": "run cloud scan now",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "command_result" in body
+    assert body["command_result"]["command_id"].startswith("chan_sim-")

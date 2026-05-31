@@ -196,6 +196,8 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Normalized channel commands execute through the same policy-governed command path used by `POST /api/v1/commands`.
   - Channel responses now include `command_result` metadata with command id, intent, target, and policy outcome.
   - Added fallback behavior for unavailable command backend (`outcome: unavailable`) so channel ingestion remains non-breaking.
+  - `/channel-gateway/simulate` now mirrors the same command normalization path and returns `command_result` for parity testing.
+  - Remote-agent dispatch now enforces tenant match, kill-switch state, and per-agent allowed command intents.
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.

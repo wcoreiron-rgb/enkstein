@@ -74,6 +74,10 @@ def _agent_out(agent: Agent) -> dict:
     }
 
 
+def _agent_status_value(agent: Agent) -> str:
+    return agent.status.value if hasattr(agent.status, "value") else str(agent.status)
+
+
 class RemoteAgentRegisterRequest(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     tenant_id: str = Field(..., min_length=2, max_length=128)
@@ -232,14 +236,29 @@ async def execute_command(
     current_user: dict = Depends(get_current_user),
 ):
     if body.remote_agent_id:
+        try:
+            remote_agent_uuid = UUID(body.remote_agent_id)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Invalid remote_agent_id")
         result = await db.execute(
-            select(Agent).where(Agent.id == UUID(body.remote_agent_id), Agent.claw == _REMOTE_CLAW)
+            select(Agent).where(Agent.id == remote_agent_uuid, Agent.claw == _REMOTE_CLAW)
         )
         agent = result.scalar_one_or_none()
         if not agent:
             raise HTTPException(status_code=404, detail="Remote agent not found")
-        if (agent.status.value if hasattr(agent.status, "value") else str(agent.status)) not in {"active", "paused"}:
+        if _agent_status_value(agent) not in {"active", "paused"}:
             raise HTTPException(status_code=409, detail="Remote agent is not dispatchable")
+        metadata = _agent_metadata(agent)
+        if metadata.get("kill_switch_status") == "active":
+            raise HTTPException(status_code=409, detail="Remote agent kill switch is active")
+        if metadata.get("tenant_id") and metadata.get("tenant_id") != body.tenant_id:
+            raise HTTPException(status_code=403, detail="Tenant mismatch for remote agent dispatch")
+        allowed_intents = metadata.get("allowed_actions") or []
+        if allowed_intents and body.intent not in allowed_intents:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Intent '{body.intent}' is not allowed for this remote agent",
+            )
     return await _execute_command(db, current_user, body)
 
 
@@ -278,6 +297,8 @@ async def dispatch_to_remote_agent(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    if body.remote_agent_id and body.remote_agent_id != str(agent_id):
+        raise HTTPException(status_code=400, detail="remote_agent_id must match path agent_id")
     body.remote_agent_id = str(agent_id)
     return await execute_command(body=body, db=db, current_user=current_user)
 
@@ -317,4 +338,3 @@ async def kill_remote_agent(
     await db.commit()
     await db.refresh(agent)
     return _agent_out(agent)
-

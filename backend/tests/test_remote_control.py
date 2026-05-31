@@ -102,3 +102,101 @@ async def test_remote_agent_revoke_and_kill(client):
     assert killed["status"] == "retired"
     assert killed["kill_switch_status"] == "active"
 
+
+@pytest.mark.asyncio
+async def test_remote_agent_dispatch_blocks_tenant_mismatch(client):
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "edge-worker-tenant-1",
+            "tenant_id": "tenant_1",
+            "owner": "owner@company.com",
+            "allowed_actions": ["run_swarm"],
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    agent_id = reg.json()["id"]
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/dispatch",
+        json={
+            "command_id": "cmd_tenant_mismatch",
+            "source": "portal",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_2",
+            "intent": "run_swarm",
+            "target": "identity_risk",
+            "scope": "prod",
+            "mode": "approval",
+            "classification": "internal",
+            "payload": {},
+        },
+    )
+    assert dispatch.status_code == 403, dispatch.text
+    assert "Tenant mismatch" in dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_dispatch_blocks_disallowed_intent(client):
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "edge-worker-limited",
+            "tenant_id": "tenant_limit",
+            "owner": "owner@company.com",
+            "allowed_actions": ["run_scan"],
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    agent_id = reg.json()["id"]
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/dispatch",
+        json={
+            "command_id": "cmd_disallowed_intent",
+            "source": "portal",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_limit",
+            "intent": "run_swarm",
+            "target": "identity_risk",
+            "scope": "prod",
+            "mode": "approval",
+            "classification": "internal",
+            "payload": {},
+        },
+    )
+    assert dispatch.status_code == 403, dispatch.text
+    assert "not allowed" in dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_dispatch_remote_agent_id_must_match_path(client):
+    reg_a = await client.post(
+        "/api/v1/remote-agents/register",
+        json={"name": "edge-worker-a", "tenant_id": "tenant_a1", "owner": "owner@company.com"},
+    )
+    reg_b = await client.post(
+        "/api/v1/remote-agents/register",
+        json={"name": "edge-worker-b", "tenant_id": "tenant_a1", "owner": "owner@company.com"},
+    )
+    assert reg_a.status_code == 200 and reg_b.status_code == 200
+    agent_a = reg_a.json()["id"]
+    agent_b = reg_b.json()["id"]
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_a}/dispatch",
+        json={
+            "command_id": "cmd_id_mismatch",
+            "source": "portal",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_a1",
+            "intent": "run_scan",
+            "target": "cloud",
+            "scope": "prod",
+            "mode": "assist",
+            "classification": "internal",
+            "remote_agent_id": agent_b,
+            "payload": {},
+        },
+    )
+    assert dispatch.status_code == 400, dispatch.text
