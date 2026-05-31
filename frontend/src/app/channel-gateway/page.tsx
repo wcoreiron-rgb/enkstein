@@ -623,6 +623,7 @@ export default function ChannelGatewayPage() {
   const [updatingPolicyFor, setUpdatingPolicyFor] = useState<string | null>(null);
   const [selectedCommandIds, setSelectedCommandIds] = useState<string[]>([]);
   const [bulkReviewing, setBulkReviewing] = useState<'approve' | 'reject' | null>(null);
+  const [bulkReviewResult, setBulkReviewResult] = useState<any | null>(null);
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -753,7 +754,7 @@ export default function ChannelGatewayPage() {
     if (!commandIds.length) return;
     setBulkReviewing(decision);
     try {
-      await bulkReviewPendingCommands({
+      const result = await bulkReviewPendingCommands({
         command_ids: commandIds,
         decision,
         actor: 'channel_gateway_ui',
@@ -762,6 +763,7 @@ export default function ChannelGatewayPage() {
             ? 'Bulk approved from Channel Gateway command panel'
             : 'Bulk rejected from Channel Gateway command panel',
       });
+      setBulkReviewResult(result);
       setSelectedCommandIds([]);
       await load();
     } finally {
@@ -994,6 +996,25 @@ export default function ChannelGatewayPage() {
               {bulkReviewing === 'reject' ? 'Rejecting…' : `Bulk Reject (${selectedVisibleCount})`}
             </button>
           </div>
+          {bulkReviewResult && (
+            <div className="px-5 py-3 border-b border-gray-800 bg-gray-950/60">
+              <p className="text-xs text-gray-300">
+                Bulk result: processed {bulkReviewResult.processed ?? 0} of {bulkReviewResult.requested ?? 0}
+                {' · '}approved {bulkReviewResult.approved ?? 0}
+                {' · '}rejected {bulkReviewResult.rejected ?? 0}
+                {' · '}errors {(bulkReviewResult.errors || []).length}
+              </p>
+              {(bulkReviewResult.errors || []).length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {(bulkReviewResult.errors as Array<{ command_id: string; detail: string }>).slice(0, 3).map((e) => (
+                    <p key={`${e.command_id}-${e.detail}`} className="text-xs text-red-300">
+                      {e.command_id}: {e.detail}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800 text-gray-500 text-xs">

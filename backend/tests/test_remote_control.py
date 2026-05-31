@@ -601,3 +601,61 @@ async def test_bulk_review_pending_commands_reject_flow(client, db_session):
     assert body["approved"] == 0
     assert body["rejected"] == 2
     assert body["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_bulk_review_pending_commands_rejects_duplicate_ids(client):
+    dup = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": ["cmd_dup_1", "cmd_dup_1"],
+            "decision": "approve",
+            "actor": "secops-bulk",
+            "reason": "duplicate payload test",
+        },
+    )
+    assert dup.status_code == 400, dup.text
+    assert "must not contain duplicates" in dup.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_bulk_review_pending_commands_partial_errors_reported(client, db_session):
+    cmd_id = "cmd_bulk_partial_1"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner-partial@company.com",
+        actor_name="owner-partial@company.com",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=60.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded partial error test",
+        description="[commandclaw] owner-partial@company.com -> run_scan",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner-partial@company.com", "mode": "approval"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    bulk = await client.post(
+        "/api/v1/commands/bulk-review",
+        json={
+            "command_ids": [cmd_id, "cmd_missing_partial"],
+            "decision": "approve",
+            "actor": "secops-bulk",
+            "reason": "partial bulk approve",
+        },
+    )
+    assert bulk.status_code == 200, bulk.text
+    body = bulk.json()
+    assert body["requested"] == 2
+    assert body["processed"] == 1
+    assert body["approved"] == 0
+    assert body["rejected"] == 0
+    assert len(body["errors"]) == 1
+    assert body["errors"][0]["command_id"] == "cmd_missing_partial"

@@ -93,4 +93,3 @@ test('channel gateway supports bulk approve for pending commands', async ({ page
   await expect(page.getByText('No pending commands right now.')).toBeVisible();
   expect(bulkSeen).toBeTruthy();
 });
-

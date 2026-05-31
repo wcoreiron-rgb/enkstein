@@ -335,6 +335,46 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.6 — Bulk Review Guardrails + Partial Failure Surfacing        -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--cyan);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Bulk Review Guardrails + Partial Failure Surfacing</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">Validation</span>
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.6</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice hardens bulk pending-command review payload rules and improves operator visibility into partial-failure outcomes.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Bulk payload guardrail:</strong> <code>POST /api/v1/commands/bulk-review</code> now rejects duplicate <code>command_ids</code>.</li>
+          <li><strong>Bulk response shape:</strong> response now includes <code>requested</code> count in addition to processed/approved/rejected/errors.</li>
+          <li><strong>Partial-failure visibility:</strong> Channel Gateway now surfaces bulk-review result summary and top per-command errors.</li>
+          <li><strong>Regression coverage:</strong> added duplicate-id rejection and partial-error-path tests for bulk review.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>22 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+          <li><strong>Playwright:</strong> <code>npx playwright test e2e/channel-gateway-bulk-review.spec.ts</code> → <strong>1 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.5 — Ticket Handoff Hardening + Bulk Review E2E               -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

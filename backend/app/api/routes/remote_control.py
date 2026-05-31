@@ -713,11 +713,15 @@ async def bulk_review_pending_commands(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    unique_command_ids = list(dict.fromkeys(body.command_ids))
+    if len(unique_command_ids) != len(body.command_ids):
+        raise HTTPException(status_code=400, detail="command_ids must not contain duplicates")
+
     actor_id = str(current_user.get("sub", "unknown"))
     actor_display = body.actor or actor_id
-    summary = {"processed": 0, "approved": 0, "rejected": 0, "errors": []}
+    summary = {"requested": len(unique_command_ids), "processed": 0, "approved": 0, "rejected": 0, "errors": []}
 
-    for command_id in body.command_ids:
+    for command_id in unique_command_ids:
         event = await _find_pending_command_event(db, command_id)
         if not event:
             summary["errors"].append({"command_id": command_id, "detail": "Pending command not found"})

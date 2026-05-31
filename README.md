@@ -225,6 +225,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Channel Gateway UI now includes:
     - `Pending Commands` approval tab wired to CommandClaw approval APIs
     - multi-select + bulk approve/reject controls for pending command batches
+    - bulk review outcome summary with per-command error visibility for partial-failure cases
     - per-command timeline view for operator audit context
     - pending command search + source/min-risk filters + consolidated status preview
     - inline required-approvals selector for pending command delegation
