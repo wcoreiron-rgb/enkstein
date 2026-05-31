@@ -255,15 +255,42 @@ jobs:
           cd frontend
           npx @cyclonedx/cyclonedx-npm --package-lock-only --output-file ../security-artifacts/sbom-frontend.cdx.json --output-format JSON
 
-      - name: Python dependency audit (non-blocking report)
+      - name: Python dependency audit (report)
         run: |
-          pip-audit -r backend/requirements.txt --format json --output security-artifacts/pip-audit-backend.json || true
-          pip-audit -r backend/requirements-test.txt --format json --output security-artifacts/pip-audit-backend-test.json || true
+          set +e
+          pip-audit -r backend/requirements.txt --format json --output security-artifacts/pip-audit-backend.json
+          rc1=$?
+          pip-audit -r backend/requirements-test.txt --format json --output security-artifacts/pip-audit-backend-test.json
+          rc2=$?
+          # pip-audit returns 1 when vulnerabilities are found; preserve report generation.
+          if [ "$rc1" -gt 1 ] || [ "$rc2" -gt 1 ]; then
+            echo "pip-audit execution error"
+            exit 2
+          fi
+          exit 0
 
-      - name: Frontend dependency audit (non-blocking report)
+      - name: Frontend dependency audit (report)
         run: |
+          set +e
           cd frontend
-          npm audit --json > ../security-artifacts/npm-audit-frontend.json || true
+          npm audit --json > ../security-artifacts/npm-audit-frontend.json
+          rc=$?
+          # npm audit returns 1 when vulnerabilities are found; preserve report generation.
+          if [ "$rc" -gt 1 ]; then
+            echo "npm audit execution error"
+            exit 2
+          fi
+          exit 0
+
+      - name: Enforce supply-chain policy thresholds (blocking)
+        run: |
+          python backend/scripts/enforce_supply_chain_policy.py \
+            --pip-report security-artifacts/pip-audit-backend.json \
+            --pip-test-report security-artifacts/pip-audit-backend-test.json \
+            --npm-report security-artifacts/npm-audit-frontend.json \
+            --max-critical 0 \
+            --max-high 0 \
+            --max-moderate 10
 
       - name: Upload supply-chain artifacts
         uses: actions/upload-artifact@v4
