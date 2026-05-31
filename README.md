@@ -278,7 +278,8 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/exposureclaw/task`
     - `/api/v1/customclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
-  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/AttackPath/App/Compliance/Recovery/Automation task handlers.
+  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed claw task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
+  - CloudClaw/EndpointClaw provider-scan failures now log sanitized provider context without raw exception payloads.
 - ModelClaw scaffold:
   - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
   - New endpoints:

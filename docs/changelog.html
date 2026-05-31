@@ -335,6 +335,36 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.4 — Provenance Completion + Provider-Error Log Sanitization   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Task Provenance Completed Across Remaining Claws + Scan Log Hardening</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-fix">Hardening</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice completes connector provenance metadata across remaining focused claw task handlers and tightens provider-scan error logging to avoid raw exception leakage.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Provenance completion:</strong> added <code>data_source</code>/<code>connector_state</code> to remaining focused task handlers (Intel, Privacy, Vendor, Insider, User, SaaS, Custom).</li>
+          <li><strong>Regression expansion:</strong> dispatcher routing provenance tests now cover all currently swarm-routed claws.</li>
+          <li><strong>Log hardening:</strong> CloudClaw and EndpointClaw provider scan failures now log sanitized provider context without embedding raw exception payloads.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.3 — Scan Path Hardening + Provenance Coverage Expansion       -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
