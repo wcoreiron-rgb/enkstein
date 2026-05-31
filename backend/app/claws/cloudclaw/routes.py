@@ -257,11 +257,13 @@ async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(g
     findings = result.scalars().all()
     live_rows = []
     live_risks = []
+    connector_configured = False
     if not findings:
         for cfg in PROVIDER_CONFIG:
             creds = await _get_provider_credentials(db, cfg["connector_type"])
             if not creds:
                 continue
+            connector_configured = True
             try:
                 raw_findings = await cfg["adapter"].get_findings(credentials=creds)
             except Exception:
@@ -292,6 +294,8 @@ async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(g
         for f in findings[:3]
     ]
     finding_rows = live_rows or persisted_rows or [{"title": "No cloud findings persisted yet", "detail": "Run /cloudclaw/scan or configure providers."}]
+    data_source = "live_connector" if live_rows else ("persisted_db" if persisted_rows else "seeded_fallback")
+    connector_state = "configured" if (connector_configured or bool(live_rows)) else "unconfigured"
 
     return {
         "task_id": f"cloud-task-{int(started.timestamp())}",
@@ -311,4 +315,6 @@ async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(g
         "policy_decisions": [],
         "compliance_mappings": ["CIS Cloud Controls", "NIST AC-6"],
         "execution_time_ms": elapsed_ms,
+        "data_source": data_source,
+        "connector_state": connector_state,
     }

@@ -457,7 +457,8 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
     findings = result.scalars().all()
     live_rows = []
     live_risks = []
-    if not findings and await is_connector_configured(db, "github"):
+    github_configured = await is_connector_configured(db, "github")
+    if not findings and github_configured:
         try:
             raw = await fetch_github_findings(db)
         except Exception:
@@ -486,6 +487,8 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         for f in findings[:3]
     ]
     finding_rows = live_rows or persisted_rows or [{"title": "No dev findings persisted yet", "detail": "Run /devclaw/scan or configure providers."}]
+    data_source = "live_connector" if live_rows else ("persisted_db" if persisted_rows else "seeded_fallback")
+    connector_state = "configured" if github_configured else "unconfigured"
 
     return {
         "task_id": f"dev-task-{int(started.timestamp())}",
@@ -505,4 +508,6 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         "policy_decisions": [],
         "compliance_mappings": ["SLSA", "NIST SA-11"],
         "execution_time_ms": elapsed_ms,
+        "data_source": data_source,
+        "connector_state": connector_state,
     }

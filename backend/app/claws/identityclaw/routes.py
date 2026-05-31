@@ -287,6 +287,12 @@ async def get_identity_providers(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused IdentityClaw swarm task")
 async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    connector_result = await db.execute(
+        select(Connector).where(
+            Connector.connector_type.in_(["okta", "entra_id", "cyberark"])
+        )
+    )
+    connector_state = "configured" if connector_result.scalars().first() else "unconfigured"
     identities = await db.execute(select(Identity).order_by(desc(Identity.risk_score)).limit(5))
     top = identities.scalars().all()
     high = [i for i in top if (i.risk_score or 0) >= 70]
@@ -323,4 +329,6 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
         "policy_decisions": [],
         "compliance_mappings": ["NIST AC-2", "ISO27001 A.5.16"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db",
+        "connector_state": connector_state,
     }

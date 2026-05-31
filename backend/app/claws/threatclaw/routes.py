@@ -360,7 +360,13 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 
 @router.post("/task", summary="Execute focused ThreatClaw swarm task")
 async def run_task(payload: ThreatTaskRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.connector_check import is_connector_configured
+
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     findings = await get_findings(db)
     top = findings[:3] if isinstance(findings, list) else []
     max_risk = max([float(f.get("risk_score", 0.0) or 0.0) for f in top], default=0.0)
@@ -389,4 +395,6 @@ async def run_task(payload: ThreatTaskRequest, db: AsyncSession = Depends(get_db
         "policy_decisions": [],
         "compliance_mappings": ["MITRE ATT&CK", "NIST IR-4"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if top else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }

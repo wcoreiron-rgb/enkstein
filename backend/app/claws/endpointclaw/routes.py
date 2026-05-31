@@ -184,11 +184,13 @@ async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Dep
     findings = result.scalars().all()
     live_rows = []
     live_risks = []
+    connector_configured = False
     if not findings:
         for cfg in PROVIDER_CONFIG:
             creds = await _get_credentials(db, cfg["connector_type"])
             if not creds:
                 continue
+            connector_configured = True
             try:
                 raw_findings = await cfg["adapter"].get_findings(credentials=creds)
             except Exception:
@@ -219,6 +221,8 @@ async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Dep
         for f in findings[:3]
     ]
     finding_rows = live_rows or persisted_rows or [{"title": "No endpoint findings persisted yet", "detail": "Run /endpointclaw/scan or configure providers."}]
+    data_source = "live_connector" if live_rows else ("persisted_db" if persisted_rows else "seeded_fallback")
+    connector_state = "configured" if (connector_configured or bool(live_rows)) else "unconfigured"
 
     return {
         "task_id": f"endpoint-task-{int(started.timestamp())}",
@@ -238,4 +242,6 @@ async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Dep
         "policy_decisions": [],
         "compliance_mappings": ["NIST SI-3", "CIS Control 10"],
         "execution_time_ms": elapsed_ms,
+        "data_source": data_source,
+        "connector_state": connector_state,
     }

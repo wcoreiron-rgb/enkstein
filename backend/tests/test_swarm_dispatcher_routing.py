@@ -72,3 +72,20 @@ async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
     assert out["execution_mode"] == "simulated_fallback"
     assert "Unsupported claw" in out["fallback_reason"]
     assert out["findings"][0]["title"] == "unknownclaw simulated analysis"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "claw",
+    ["cloudclaw", "endpointclaw", "devclaw", "identityclaw", "threatclaw", "exposureclaw"],
+)
+async def test_dispatcher_task_provenance_fields_present(db_session, claw):
+    task = _mk_task(claw)
+    db_session.add(task)
+    await db_session.commit()
+
+    out = await execute_task(db_session, task)
+    assert out["claw"] == claw
+    assert out.get("execution_mode") == "real_task_handler"
+    assert out.get("data_source") in {"live_connector", "persisted_db", "seeded_fallback"}
+    assert out.get("connector_state") in {"configured", "unconfigured"}

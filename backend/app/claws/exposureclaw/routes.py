@@ -386,7 +386,13 @@ async def get_attack_surface(db: AsyncSession = Depends(get_db)):
 
 @router.post("/task", summary="Execute focused ExposureClaw swarm task")
 async def run_exposure_task(payload: ExposureTaskRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.connector_check import is_connector_configured
+
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
     )
@@ -424,4 +430,6 @@ async def run_exposure_task(payload: ExposureTaskRequest, db: AsyncSession = Dep
         "policy_decisions": [],
         "compliance_mappings": ["NIST RA-5", "CIS 1.1"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }
