@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "owner": "security-team",
+  "created_on": "2026-05-31",
+  "notes": "Temporary waiver baseline for known dependency debt. Expires automatically.",
+  "waivers": {
+    "pip_audit": {
+      "expires_on": "2026-07-31",
+      "allowed_existing": {
+        "critical": 1,
+        "high": 20,
+        "moderate": 20,
+        "low": 20
+      }
+    },
+    "npm_audit": {
+      "expires_on": "2026-07-31",
+      "allowed_existing": {
+        "critical": 1,
+        "high": 20,
+        "moderate": 20,
+        "low": 20
+      }
+    }
+  }
+}

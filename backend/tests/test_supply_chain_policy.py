@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from datetime import date, timedelta
 
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "enforce_supply_chain_policy.py"
@@ -38,3 +39,32 @@ def test_pip_audit_vulnerability_counts_defaults_unknown_to_high():
     assert counts["high"] == 1
     assert counts["moderate"] == 1
     assert counts["low"] == 1
+
+
+def test_apply_waiver_reduces_effective_counts():
+    current = {"critical": 1, "high": 5, "moderate": 3, "low": 1}
+    waiver = {"critical": 0, "high": 2, "moderate": 10, "low": 0}
+    assert policy.apply_waiver(current, waiver) == {
+        "critical": 1,
+        "high": 3,
+        "moderate": 0,
+        "low": 1,
+    }
+
+
+def test_active_waiver_counts_expire_automatically():
+    expired = (date.today() - timedelta(days=1)).isoformat()
+    baseline = {
+        "waivers": {
+            "pip_audit": {
+                "expires_on": expired,
+                "allowed_existing": {"critical": 9, "high": 9, "moderate": 9, "low": 9},
+            }
+        }
+    }
+    assert policy._active_waiver_counts(baseline, "pip_audit") == {
+        "critical": 0,
+        "high": 0,
+        "moderate": 0,
+        "low": 0,
+    }

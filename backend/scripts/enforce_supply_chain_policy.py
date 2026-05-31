@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import date
 import sys
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,45 @@ def merge_counts(*items: dict[str, int]) -> dict[str, int]:
     return out
 
 
+def _parse_iso_date(raw: str | None) -> date | None:
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw.strip())
+    except Exception:
+        return None
+
+
+def _active_waiver_counts(baseline: Any, source_key: str) -> dict[str, int]:
+    if not isinstance(baseline, dict):
+        return {"critical": 0, "high": 0, "moderate": 0, "low": 0}
+    waivers = baseline.get("waivers", {})
+    source = waivers.get(source_key, {}) if isinstance(waivers, dict) else {}
+    if not isinstance(source, dict):
+        return {"critical": 0, "high": 0, "moderate": 0, "low": 0}
+
+    expires_on = _parse_iso_date(source.get("expires_on"))
+    if expires_on and date.today() > expires_on:
+        return {"critical": 0, "high": 0, "moderate": 0, "low": 0}
+
+    allowed = source.get("allowed_existing", {})
+    if not isinstance(allowed, dict):
+        return {"critical": 0, "high": 0, "moderate": 0, "low": 0}
+    return {
+        "critical": int(allowed.get("critical", 0) or 0),
+        "high": int(allowed.get("high", 0) or 0),
+        "moderate": int(allowed.get("moderate", 0) or 0),
+        "low": int(allowed.get("low", 0) or 0),
+    }
+
+
+def apply_waiver(current: dict[str, int], waiver: dict[str, int]) -> dict[str, int]:
+    return {
+        k: max(0, int(current.get(k, 0) or 0) - int(waiver.get(k, 0) or 0))
+        for k in ("critical", "high", "moderate", "low")
+    }
+
+
 def _check_threshold(name: str, counts: dict[str, int], args: argparse.Namespace) -> list[str]:
     failures: list[str] = []
     if counts["critical"] > args.max_critical:
@@ -109,21 +149,34 @@ def main() -> int:
     parser.add_argument("--max-critical", type=int, default=0)
     parser.add_argument("--max-high", type=int, default=0)
     parser.add_argument("--max-moderate", type=int, default=5)
+    parser.add_argument("--baseline", type=Path, default=None)
     args = parser.parse_args()
+
+    baseline = _read_json(args.baseline) if args.baseline else {}
 
     pip_counts = merge_counts(
         pip_audit_vulnerability_counts(_read_json(args.pip_report)),
         pip_audit_vulnerability_counts(_read_json(args.pip_test_report)),
     )
     npm_counts = npm_vulnerability_counts(_read_json(args.npm_report))
+    pip_waiver = _active_waiver_counts(baseline, "pip_audit")
+    npm_waiver = _active_waiver_counts(baseline, "npm_audit")
+    pip_effective = apply_waiver(pip_counts, pip_waiver)
+    npm_effective = apply_waiver(npm_counts, npm_waiver)
 
     failures: list[str] = []
-    failures.extend(_check_threshold("pip-audit", pip_counts, args))
-    failures.extend(_check_threshold("npm-audit", npm_counts, args))
+    failures.extend(_check_threshold("pip-audit", pip_effective, args))
+    failures.extend(_check_threshold("npm-audit", npm_effective, args))
 
     print("Supply-chain policy evaluation")
     print(f"  pip-audit: {pip_counts}")
     print(f"  npm-audit: {npm_counts}")
+    if args.baseline:
+        print(f"  baseline: {args.baseline}")
+        print(f"  pip waiver: {pip_waiver}")
+        print(f"  npm waiver: {npm_waiver}")
+        print(f"  pip effective: {pip_effective}")
+        print(f"  npm effective: {npm_effective}")
 
     if failures:
         print("Policy violations:")

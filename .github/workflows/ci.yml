@@ -288,6 +288,7 @@ jobs:
             --pip-report security-artifacts/pip-audit-backend.json \
             --pip-test-report security-artifacts/pip-audit-backend-test.json \
             --npm-report security-artifacts/npm-audit-frontend.json \
+            --baseline security/supply_chain_baseline.json \
             --max-critical 0 \
             --max-high 0 \
             --max-moderate 10

@@ -102,6 +102,8 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 
 > This is a vendor self-assessment. Independent audit recommended before compliance reliance.
 
+Supply-chain policy gating supports a temporary time-boxed waiver baseline at `security/supply_chain_baseline.json` so CI blocks on net-new risk while legacy debt is being burned down.
+
 ## Quick Start
 
 ### Prerequisites
