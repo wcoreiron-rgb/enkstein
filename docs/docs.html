@@ -909,11 +909,17 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-path">/api/v1/commands/{command_id}/approve</span>
         <span class="endpoint-desc">Approve a pending command and write approval audit metadata</span>
       </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/commands/{command_id}/reject</span>
+        <span class="endpoint-desc">Reject a pending command and mark outcome blocked with reviewer rationale</span>
+      </div>
       <p>Frontend support is now available on <code>/channel-gateway</code> with a dedicated <strong>Pending Commands</strong> tab and in-page approval action.</p>
       <ul>
         <li><strong>Self-approval guard:</strong> requester identity cannot approve its own pending command.</li>
         <li><strong>Duplicate guard:</strong> same approver cannot approve the same command twice.</li>
         <li><strong>Multi-operator finalization:</strong> command is marked allowed only after required approvals are satisfied; intermediate approvals remain pending.</li>
+        <li><strong>Explicit rejection path:</strong> pending commands can be terminated as blocked with reviewer attribution and reason persisted.</li>
       </ul>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>

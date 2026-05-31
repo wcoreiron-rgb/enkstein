@@ -8,7 +8,7 @@ import {
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
-  getPendingCommands, approvePendingCommand,
+  getPendingCommands, approvePendingCommand, rejectPendingCommand,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
@@ -603,6 +603,7 @@ export default function ChannelGatewayPage() {
   const [loading,    setLoading]    = useState(true);
   const [simResult,  setSimResult]  = useState<any>(null);
   const [approving, setApproving] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -640,6 +641,19 @@ export default function ChannelGatewayPage() {
       await load();
     } finally {
       setApproving(null);
+    }
+  };
+
+  const rejectCommand = async (commandId: string) => {
+    setRejecting(commandId);
+    try {
+      await rejectPendingCommand(commandId, {
+        reviewer: 'channel_gateway_ui',
+        reason: 'Rejected from Channel Gateway command panel',
+      });
+      await load();
+    } finally {
+      setRejecting(null);
     }
   };
 
@@ -824,7 +838,7 @@ export default function ChannelGatewayPage() {
               <tr className="border-b border-gray-800 text-gray-500 text-xs">
                 <th className="px-4 py-3 text-left">Command ID</th>
                 <th className="px-4 py-3 text-left">Actor</th>
-                <th className="px-4 py-3 text-left">Action</th>
+                <th className="px-4 py-3 text-left">Actions</th>
                 <th className="px-4 py-3 text-left">Target</th>
                 <th className="px-4 py-3 text-left">Risk</th>
                 <th className="px-4 py-3 text-left">Approvals</th>
@@ -847,16 +861,28 @@ export default function ChannelGatewayPage() {
                     {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => approveCommand(cmd.command_id)}
-                      disabled={approving === cmd.command_id}
-                      className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
-                    >
-                      {approving === cmd.command_id
-                        ? <RefreshCw className="w-3 h-3 animate-spin" />
-                        : <Check className="w-3 h-3" />}
-                      Approve
-                    </button>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => approveCommand(cmd.command_id)}
+                        disabled={approving === cmd.command_id || rejecting === cmd.command_id}
+                        className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
+                      >
+                        {approving === cmd.command_id
+                          ? <RefreshCw className="w-3 h-3 animate-spin" />
+                          : <Check className="w-3 h-3" />}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => rejectCommand(cmd.command_id)}
+                        disabled={rejecting === cmd.command_id || approving === cmd.command_id}
+                        className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
+                      >
+                        {rejecting === cmd.command_id
+                          ? <RefreshCw className="w-3 h-3 animate-spin" />
+                          : <XCircle className="w-3 h-3" />}
+                        Reject
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

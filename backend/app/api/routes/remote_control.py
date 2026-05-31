@@ -176,6 +176,11 @@ class CommandApprovalRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=1024)
 
 
+class CommandRejectionRequest(BaseModel):
+    reviewer: str | None = Field(default=None, max_length=255)
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -> dict:
     decision = await enforce(
         db,
@@ -485,6 +490,66 @@ async def approve_pending_command(
         "approvals_received": approvals_received,
         "approvals_required": required,
     }
+
+
+@router.post("/commands/{command_id}/reject")
+async def reject_pending_command(
+    command_id: str,
+    body: CommandRejectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw", Event.outcome == EventOutcome.REQUIRES_APPROVAL)
+        .order_by(desc(Event.timestamp))
+    )
+    event = None
+    for candidate in result.scalars().all():
+        if _event_command_id(candidate) == command_id:
+            event = candidate
+            break
+    if not event:
+        raise HTTPException(status_code=404, detail="Pending command not found")
+
+    reviewer_id = str(current_user.get("sub", "unknown"))
+    reviewer_display = body.reviewer or reviewer_id
+
+    approval_state = _approval_state(event)
+    approval_state["status"] = "rejected"
+    approval_state["rejected_at"] = datetime.now(timezone.utc).isoformat()
+    approval_state["rejected_by"] = reviewer_display
+    approval_state["reject_reason"] = body.reason or "rejected"
+    _write_approval_state(event, approval_state)
+
+    event.outcome = EventOutcome.BLOCKED
+    event.requires_review = False
+    event.policy_name = event.policy_name or "manual_command_rejection"
+    event.policy_reason = body.reason or "Rejected via CommandClaw rejection endpoint"
+    event.description = f"{event.description} [rejected]"
+
+    db.add(
+        Event(
+            source_module="commandclaw",
+            actor_id=reviewer_id,
+            actor_name=reviewer_display,
+            actor_type="human",
+            action="reject_command",
+            target=command_id,
+            target_type="command",
+            outcome=EventOutcome.BLOCKED,
+            severity=event.severity,
+            risk_score=event.risk_score,
+            policy_name="manual_command_rejection",
+            policy_reason=body.reason or "Rejected pending command",
+            description=f"Rejected pending command {command_id}",
+            metadata_json=json.dumps({"rejected_command_id": command_id}),
+            is_anomaly=False,
+            requires_review=False,
+        )
+    )
+    await db.commit()
+    return {"command_id": command_id, "status": "rejected"}
 
 
 @router.post("/remote-agents/{agent_id}/dispatch")

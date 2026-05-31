@@ -208,11 +208,13 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added approval workflow APIs for command outcomes:
     - `GET /api/v1/commands/pending`
     - `POST /api/v1/commands/{command_id}/approve`
+    - `POST /api/v1/commands/{command_id}/reject`
   - Command approval flow now supports persisted multi-operator state:
     - approval progress (`approvals_received` / `required_approvals`) exposed in pending API
     - self-approval blocked
     - duplicate approver blocked
     - final command allow only after required approvals are met
+    - explicit rejection path that marks pending command as blocked with reviewer reason
   - Channel Gateway UI now includes:
     - `Pending Commands` approval tab wired to CommandClaw approval APIs
     - quick-ingest actions for CLI/Webhook/Email adapters

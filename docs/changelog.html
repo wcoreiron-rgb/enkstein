@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.0 — Pending Command Rejection Flow                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Pending Command Rejection Path + UI Action</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-sec">Governance</span>
+          <span class="tag tag-fix">Ops UX</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.0</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This batch completes pending-command lifecycle controls by adding an explicit rejection route and UI action so operators can terminate unsafe requests directly from Channel Gateway.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New endpoint:</strong> <code>POST /api/v1/commands/{command_id}/reject</code> marks pending commands as blocked and records rejection reason.</li>
+          <li><strong>Approval-state persistence</strong> now records rejection metadata (<code>rejected_by</code>, <code>rejected_at</code>, <code>reject_reason</code>).</li>
+          <li><strong>Channel Gateway UX</strong> now includes both <code>Approve</code> and <code>Reject</code> actions for pending command rows.</li>
+          <li><strong>API client surface</strong> adds <code>rejectPendingCommand()</code> helper for frontend integration.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests</strong> now include deterministic reject flow coverage in <code>test_remote_control.py</code>.</li>
+          <li><strong>Regression run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>14 passed</strong>.</li>
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.9 — Multi-Operator Command Approval Hardening                 -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

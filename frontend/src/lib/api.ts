@@ -371,6 +371,11 @@ export const approvePendingCommand = (commandId: string, body?: { approver?: str
     method: 'POST',
     body: JSON.stringify(body || {}),
   });
+export const rejectPendingCommand = (commandId: string, body?: { reviewer?: string; reason?: string }) =>
+  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
 
 // Governed Execution Channels
 export const submitShellExec = (body: object) =>

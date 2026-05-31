@@ -279,3 +279,48 @@ async def test_commands_pending_and_approve_flow(client, db_session):
     assert second_body["status"] == "approved"
     assert second_body["approvals_received"] == 2
     assert second_body["approvals_required"] == 2
+
+
+@pytest.mark.asyncio
+async def test_commands_pending_reject_flow(client, db_session):
+    cmd_id = "cmd_pending_reject_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner2@company.com",
+        actor_name="owner2@company.com",
+        actor_type="human",
+        action="run_workflow",
+        target="incident_response",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=68.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded for rejection workflow test",
+        description="[commandclaw] owner2@company.com -> run_workflow",
+        metadata_json=json.dumps(
+            {
+                "context": {
+                    "command_id": cmd_id,
+                    "requester": "owner2@company.com",
+                    "mode": "approval",
+                }
+            }
+        ),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    reject = await client.post(
+        f"/api/v1/commands/{cmd_id}/reject",
+        json={"reviewer": "secops-manager", "reason": "insufficient evidence"},
+    )
+    assert reject.status_code == 200, reject.text
+    assert reject.json()["status"] == "rejected"
+
+    pending_after = await client.get("/api/v1/commands/pending")
+    assert pending_after.status_code == 200, pending_after.text
+    commands = pending_after.json()["commands"]
+    assert not any(c["command_id"] == cmd_id for c in commands)
