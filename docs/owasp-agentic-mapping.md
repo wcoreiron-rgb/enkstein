@@ -1,7 +1,7 @@
 # OWASP Top 10 for LLM Applications (2025) — RegentClaw Evidence Matrix
 
-**Date:** 2026-05-30  
-**Version:** 1.0  
+**Date:** 2026-05-31  
+**Version:** 1.1  
 **Scope:** RegentClaw Zero Trust Security Platform (self-hosted)
 
 > **Disclaimer:** This is a vendor self-assessment. Claims have been matched against source code in this repository but have not been independently audited. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
@@ -31,8 +31,8 @@
 | LLM01 | Prompt Injection | **Shipped** | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` (same prompt injection control as ASI-01) |
 | LLM02 | Insecure Output Handling | **Partially Shipped** | No automated test |
 | LLM03 | Training Data Poisoning | **N/A** | N/A |
-| LLM04 | Model Denial of Service | **In Progress** | No automated test |
-| LLM05 | Supply-Chain Vulnerabilities | **In Progress** | No automated test |
+| LLM04 | Model Denial of Service | **In Progress** | No automated test on ArcClaw endpoint limits yet |
+| LLM05 | Supply-Chain Vulnerabilities | **In Progress** | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` (xfail) |
 | LLM06 | Sensitive Information Disclosure | **Shipped** | No automated test (see gap note below) |
 | LLM07 | Insecure Plugin Design | **Partially Shipped** | `test_ring_policy.py::test_ring0_always_blocked`, `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | LLM08 | Excessive Agency | **Shipped** (strengthened) | `test_ring_policy.py::test_ring1_requires_two_approvals`, `test_owasp_asi_evidence.py::test_asi09_self_approval_is_blocked` |
@@ -122,7 +122,9 @@
 - Prompt length is not capped before being sent to the model provider.
 - No token budget or cost-cap enforcement is implemented at the API layer.
 
-**Test Coverage:** No automated test.
+**Test Coverage:**
+- `backend/tests/test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result` validates AGT supply-chain scan returns structured risk output without runtime failure.
+- `backend/tests/test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` is currently `xfail` and documents the expected enforcement behavior that still needs full route-level gating.
 
 **Known Limitations:**
 - LLM-specific DoS protection (prompt length limits, per-user quota, token counting, backpressure) is not yet implemented on AI endpoints.

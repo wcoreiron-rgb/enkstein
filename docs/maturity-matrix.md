@@ -1,6 +1,6 @@
 # RegentClaw Maturity Matrix (2026)
 
-**Date:** 2026-05-30  
+**Date:** 2026-05-31  
 **Purpose:** Public, conservative status tracking for platform security/runtime maturity.
 
 Status legend:
@@ -19,7 +19,7 @@ Status legend:
 | Multi-tenant hardening proof | In Progress | Tenant isolation suite + scaffold tests + boundary documentation | Enforced owner/tenant scoping across all list/get paths and secrets retrieval |
 | Connector trust/provenance verification | In Progress | Gateway scan/policy checks on installs | Signed provenance and checksum verification chain |
 | Operator-grade executive reporting | In Progress | Trust Fabric dashboard + probes + status panels + Swarm live event stream | Executive risk rollups linked to evidence/compliance controls |
-| Swarm runtime maturity | In Progress | Bounded parallel execution + real `/task` routing for Identity/Cloud/Threat/Arc + SSE stream | Expand real `/task` coverage to remaining claws and connector-backed execution |
+| Swarm runtime maturity | In Progress | Bounded parallel execution + real `/task` routing for Identity/Cloud/Threat/Arc/Access/Data/Dev/Endpoint + SSE stream + connector-backed task paths for Cloud/Endpoint/Dev | Expand real `/task` coverage to remaining claws and broaden connector-backed execution across additional claw providers |
 | Model routing maturity (ModelClaw) | In Progress | ModelClaw scaffold with governed route/profile/provider/call-audit endpoints | Persistent storage + provider adapters + per-tenant profile governance |
 | Public maturity transparency | In Progress | This matrix + OWASP split docs | Keep matrix synced with code and tests each release |
 

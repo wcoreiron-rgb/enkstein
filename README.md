@@ -85,7 +85,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | [Agentic ASI Top 10 Mapping (Markdown)](docs/owasp-asi-mapping.md) | Markdown |
 | [Platform Maturity Matrix (Markdown)](docs/maturity-matrix.md) | Markdown |
 
-**Current posture (2026-05-30):**
+**Current posture (2026-05-31):**
 
 | Category | Status |
 |---|---|
@@ -93,7 +93,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | LLM02 Insecure Output Handling | Partially Shipped — input scanning only; output re-scan not yet applied |
 | LLM03 Training Data Poisoning | N/A — uses provider APIs, no training pipeline |
 | LLM04 Model Denial of Service | In Progress — auth rate limiting exists; AI endpoint limits planned |
-| LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps; no SBOM yet |
+| LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan test coverage; no SBOM yet |
 | LLM06 Sensitive Information Disclosure | Shipped — Fernet encryption, DLP scanner, masked credential hints |
 | LLM07 Insecure Plugin Design | Partially Shipped — ring policy + SSRF protection shipped; OS sandbox not yet |
 | LLM08 Excessive Agency | Shipped — 4-ring privilege isolation, dual-approval gates, self-approval blocked |
