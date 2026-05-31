@@ -238,6 +238,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - quick-ingest actions for CLI/Webhook/Email adapters
     - expanded message detail with normalized `command_result` metadata
   - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
+    - `provider` must be `jira` and `target_type` must be `ticket`
     - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
     - minimum summary/description length checks before queueing remediation action
   - Added Playwright E2E coverage for Channel Gateway bulk pending-command approve flow.
@@ -301,7 +302,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
   - Swarm job detail now generates a live ticket draft and compliance impact rollup from judge/task evidence.
   - Added direct **Create Ticket** handoff from Swarm detail to `POST /api/v1/remediation/trigger` using `create_jira_ticket` action specs.
-  - Remediation trigger now validates ticket action payload shape (`project_key`, `summary`, `description`) before queuing/executing.
+  - Remediation trigger now validates ticket action payload shape (`provider=jira`, `target_type=ticket`, `project_key`, `summary`, `description`) before queuing/executing.
   - Added Playwright E2E coverage for the Swarm Create Ticket flow:
     - `cd frontend && npm run test:e2e -- e2e/swarm-create-ticket.spec.ts`
     - Local sandbox note: E2E requires the dev server to bind to `127.0.0.1:3100`.

@@ -587,7 +587,7 @@
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>Remediation validation hardening</strong> for <code>create_jira_ticket</code>: uppercase/alphanumeric project key guardrail plus minimum summary/description length checks.</li>
+          <li><strong>Remediation validation hardening</strong> for <code>create_jira_ticket</code>: require <code>provider=jira</code>, require <code>target_type=ticket</code>, uppercase/alphanumeric project key guardrail, plus minimum summary/description length checks.</li>
           <li><strong>Policy outcome assertions</strong> expanded in regression tests for low-risk ticket handoff behavior and output metadata.</li>
           <li><strong>New Playwright E2E</strong>: <code>frontend/e2e/channel-gateway-bulk-review.spec.ts</code> verifies select-visible + bulk approve flow on Channel Gateway.</li>
         </ul>

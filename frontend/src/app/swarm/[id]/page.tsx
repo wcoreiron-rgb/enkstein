@@ -493,7 +493,7 @@ export default function SwarmJobDetailPage() {
       const response = await triggerRemediationAction({
         triggered_by: `swarm:${id}`,
         action_spec: {
-          provider: 'generic',
+          provider: 'jira',
           action_type: 'create_jira_ticket',
           target_type: 'ticket',
           target_id: String(job?.id || id),

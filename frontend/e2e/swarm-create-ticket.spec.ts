@@ -67,6 +67,8 @@ test('swarm detail can hand off ticket draft to remediation route', async ({ pag
     remediationCallSeen = true;
     const req = route.request();
     const payload = req.postDataJSON() as any;
+    expect(payload.action_spec.provider).toBe('jira');
+    expect(payload.action_spec.target_type).toBe('ticket');
     expect(payload.action_spec.action_type).toBe('create_jira_ticket');
     expect(payload.action_spec.parameters.project_key).toBe('SEC');
     expect(payload.action_spec.parameters.description).toContain('Executive Summary:');
@@ -87,4 +89,3 @@ test('swarm detail can hand off ticket draft to remediation route', async ({ pag
   await expect(page.getByText('Ticket action queued: action-123')).toBeVisible();
   expect(remediationCallSeen).toBeTruthy();
 });
-

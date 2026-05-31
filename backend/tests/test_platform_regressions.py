@@ -548,7 +548,7 @@ async def test_swarm_ticket_handoff_payload_shape_validation(client):
         "/api/v1/remediation/trigger",
         json={
             "action_spec": {
-                "provider": "generic",
+                "provider": "jira",
                 "action_type": "create_jira_ticket",
                 "target_type": "ticket",
                 "target_id": "swarm_job_123",
@@ -567,7 +567,7 @@ async def test_swarm_ticket_handoff_policy_outcome_low_risk_auto_approved(client
         "/api/v1/remediation/trigger",
         json={
             "action_spec": {
-                "provider": "generic",
+                "provider": "jira",
                 "action_type": "create_jira_ticket",
                 "target_type": "ticket",
                 "target_id": "swarm_job_123",
@@ -586,7 +586,7 @@ async def test_swarm_ticket_handoff_policy_outcome_low_risk_auto_approved(client
     assert body["triggered"] == 1
     action = body["actions"][0]
     assert action["action_type"] == "create_jira_ticket"
-    assert action["provider"] == "generic"
+    assert action["provider"] == "jira"
     assert action["target_type"] == "ticket"
     assert action["target_id"] == "swarm_job_123"
     assert action["risk_level"] == "low"
@@ -605,7 +605,7 @@ async def test_swarm_ticket_handoff_rejects_invalid_project_key(client):
         "/api/v1/remediation/trigger",
         json={
             "action_spec": {
-                "provider": "generic",
+                "provider": "jira",
                 "action_type": "create_jira_ticket",
                 "target_type": "ticket",
                 "target_id": "swarm_job_123",
@@ -621,6 +621,52 @@ async def test_swarm_ticket_handoff_rejects_invalid_project_key(client):
     )
     assert invalid.status_code == 400, invalid.text
     assert "project_key must be uppercase" in invalid.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_swarm_ticket_handoff_rejects_non_jira_provider(client):
+    invalid = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "create_jira_ticket",
+                "target_type": "ticket",
+                "target_id": "swarm_job_123",
+                "parameters": {
+                    "project_key": "SEC",
+                    "summary": "[RegentClaw] Incident",
+                    "description": "ticket draft body with enough characters",
+                },
+            },
+            "triggered_by": "swarm:test",
+        },
+    )
+    assert invalid.status_code == 400, invalid.text
+    assert "requires provider='jira'" in invalid.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_swarm_ticket_handoff_rejects_non_ticket_target_type(client):
+    invalid = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "jira",
+                "action_type": "create_jira_ticket",
+                "target_type": "incident",
+                "target_id": "swarm_job_123",
+                "parameters": {
+                    "project_key": "SEC",
+                    "summary": "[RegentClaw] Incident",
+                    "description": "ticket draft body with enough characters",
+                },
+            },
+            "triggered_by": "swarm:test",
+        },
+    )
+    assert invalid.status_code == 400, invalid.text
+    assert "requires target_type='ticket'" in invalid.json().get("detail", "")
 
 
 @pytest.mark.asyncio

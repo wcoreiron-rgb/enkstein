@@ -58,6 +58,18 @@ def _validate_action_spec_shape(action_spec: dict[str, Any]) -> None:
         )
 
     if action_spec.get("action_type") == "create_jira_ticket":
+        provider = str(action_spec.get("provider", "")).strip().lower()
+        target_type = str(action_spec.get("target_type", "")).strip().lower()
+        if provider != "jira":
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket requires provider='jira'",
+            )
+        if target_type != "ticket":
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket requires target_type='ticket'",
+            )
         params = action_spec.get("parameters")
         if not isinstance(params, dict):
             raise HTTPException(
