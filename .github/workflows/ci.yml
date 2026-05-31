@@ -13,7 +13,7 @@ jobs:
   test-backend:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
-    timeout-minutes: 15  # Hard cap — prevents 6h kills from hanging tests
+    timeout-minutes: 30  # CI backend suite exceeds 15m on GitHub runners
     permissions:
       contents: read
 
