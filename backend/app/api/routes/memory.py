@@ -237,7 +237,7 @@ async def update_tenant_notes(notes: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/trends", summary="Get risk trend data for charts")
 async def get_trends(
-    granularity: str = Query("daily", regex="^(hourly|daily|weekly)$"),
+    granularity: str = Query("daily", pattern="^(hourly|daily|weekly)$"),
     days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
 ):

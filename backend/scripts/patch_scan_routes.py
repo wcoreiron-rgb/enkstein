@@ -9,8 +9,6 @@ Strategy:
 Run: cd backend && python scripts/patch_scan_routes.py
 """
 import os
-import re
-import ast
 
 BASE = os.path.join(os.path.dirname(__file__), "..", "app", "claws")
 SKIP = {"cloudclaw", "exposureclaw", "threatclaw", "endpointclaw", "arcclaw", "identityclaw"}
@@ -18,12 +16,21 @@ SKIP = {"cloudclaw", "exposureclaw", "threatclaw", "endpointclaw", "arcclaw", "i
 
 def get_claw_name(content: str) -> str:
     """Extract CLAW_NAME or claw name from routes.py content."""
-    m = re.search(r'CLAW_NAME\s*=\s*["\'](\w+)["\']', content)
-    if m:
-        return m.group(1)
-    m = re.search(r'prefix="/(\w+)"', content)
-    if m:
-        return m.group(1)
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("CLAW_NAME") and "=" in stripped:
+            rhs = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+            if rhs:
+                return rhs
+        if 'prefix="/' in stripped:
+            start = stripped.find('prefix="/')
+            if start != -1:
+                prefix_part = stripped[start + len('prefix="/'):]
+                end = prefix_part.find('"')
+                if end != -1:
+                    candidate = prefix_part[:end]
+                    if candidate:
+                        return candidate
     return "unknown"
 
 
@@ -37,13 +44,9 @@ def patch_scan_endpoint(content: str, claw_name: str) -> str:
     if "ingest_findings" in content:
         return content  # Already patched
 
-    # Find the scan endpoint function
-    scan_match = re.search(
-        r'@router\.post\("/scan"[^)]*\)\s*\n(?:async )?def .*?\n(.*?)(?=\n@router|\Z)',
-        content,
-        re.DOTALL
-    )
-    if not scan_match:
+    # Find the scan endpoint marker.
+    scan_marker = '@router.post("/scan"'
+    if scan_marker not in content:
         return content
 
     # Add the pipeline import before the router definition
@@ -60,11 +63,11 @@ def patch_scan_endpoint(content: str, claw_name: str) -> str:
     # Strategy: inject pipeline wiring at the end of scan functions
     # by replacing the known return patterns
 
-    patterns_to_replace = [
-        # Pattern 1: for loop with db.add, then commit, then return
-        (
-            r'(    for f in findings:\s*\n        db\.add\(f\)\s*\n    await db\.commit\(\)\s*\n    return \{"status": "ok", "findings_created": len\(findings\)\})',
-            '''    from app.services.finding_pipeline import ingest_findings
+    old_block = '''    for f in findings:
+        db.add(f)
+    await db.commit()
+    return {"status": "ok", "findings_created": len(findings)}'''
+    replacement = '''    from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in findings:
         pipeline_findings.append({
@@ -90,14 +93,9 @@ def patch_scan_endpoint(content: str, claw_name: str) -> str:
         })
     summary = await ingest_findings(db, CLAW_NAME, pipeline_findings)
     return {"status": "completed", "findings_created": summary["created"], "findings_updated": summary["updated"]}'''
-        ),
-    ]
-
-    for pattern, replacement in patterns_to_replace:
-        new_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-        if new_content != content:
-            print(f"    Patched using pattern 1")
-            return new_content
+    if old_block in content:
+        print("    Patched using marker replacement")
+        return content.replace(old_block, replacement)
 
     return content
 

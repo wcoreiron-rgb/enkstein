@@ -262,8 +262,8 @@ async def approve_action(
     try:
         action = await approve_remediation(action_id, approver, db)
         return _action_to_dict(action)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid remediation approval request")
     except Exception as exc:
         logger.exception("Error approving action %s", action_id)
         raise HTTPException(status_code=500, detail="Internal error approving remediation action")
@@ -282,8 +282,8 @@ async def reject_action(
     try:
         action = await reject_remediation(action_id, rejecter, body.reason, db)
         return _action_to_dict(action)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid remediation rejection request")
     except Exception as exc:
         logger.exception("Error rejecting action %s", action_id)
         raise HTTPException(status_code=500, detail="Internal error rejecting remediation action")
@@ -298,8 +298,8 @@ async def rollback_action(
     try:
         action = await rollback_remediation(action_id, db)
         return _action_to_dict(action)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid remediation rollback request")
     except Exception as exc:
         logger.exception("Error rolling back action %s", action_id)
         raise HTTPException(status_code=500, detail="Internal error rolling back remediation action")
