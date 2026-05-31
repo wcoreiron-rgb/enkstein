@@ -3,11 +3,13 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   MessageSquare, Shield, CheckCircle, XCircle, Clock,
   RefreshCw, Send, User, Zap, Filter,
-  Slack, Building2, Terminal, Activity,
+  Slack, Building2, Terminal, Activity, Check, Mail, Webhook, Command,
 } from 'lucide-react';
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
+  getPendingCommands, approvePendingCommand,
+  ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -29,6 +31,15 @@ type Message = {
   workflow_run_id:  string;
   response_text:    string;
   created_at:       string;
+  command_result?: {
+    command_id: string;
+    source: string;
+    intent: string;
+    target: string;
+    outcome: string;
+    reason?: string;
+    tenant_id?: string;
+  } | null;
 };
 
 type Stats = {
@@ -55,6 +66,18 @@ type Identity = {
   is_trusted:       boolean;
   trust_score:      number;
   max_autonomy:     string;
+};
+
+type PendingCommand = {
+  command_id: string;
+  timestamp: string | null;
+  actor: string;
+  action: string;
+  target: string;
+  outcome: string;
+  risk_score: number;
+  policy_name: string;
+  reason: string;
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -178,6 +201,17 @@ function MessageRow({ msg }: { msg: Message }) {
                 <pre className="text-xs text-gray-300 bg-gray-900 rounded-lg p-3 whitespace-pre-wrap">
                   {msg.response_text}
                 </pre>
+                {msg.command_result && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Command Result</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-gray-900 rounded-lg p-3">
+                      <p className="text-gray-500">ID <span className="text-gray-300 font-mono ml-1">{msg.command_result.command_id}</span></p>
+                      <p className="text-gray-500">Outcome <span className="text-gray-300 ml-1">{msg.command_result.outcome}</span></p>
+                      <p className="text-gray-500">Intent <span className="text-gray-300 ml-1">{msg.command_result.intent}</span></p>
+                      <p className="text-gray-500">Target <span className="text-gray-300 ml-1">{msg.command_result.target}</span></p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </td>
@@ -298,6 +332,90 @@ function SimulatePanel({ onResult }: { onResult: (r: any) => void }) {
           : <><Send className="w-3.5 h-3.5" /> Simulate</>
         }
       </button>
+    </div>
+  );
+}
+
+// ─── ingress quick tests ─────────────────────────────────────────────────────
+
+function IngressQuickTests({ onResult }: { onResult: (r: any) => void }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const sendCli = async () => {
+    setLoading('cli');
+    try {
+      const result = await ingestChannelCli({
+        terminal_id: 'soc-terminal',
+        terminal_name: 'SOC CLI',
+        user: 'analyst@company.com',
+        tenant_id: 'tenant_cli_demo',
+        message_text: 'run cloud scan now',
+      });
+      onResult(result);
+    } finally { setLoading(null); }
+  };
+
+  const sendWebhook = async () => {
+    setLoading('webhook');
+    try {
+      const result = await ingestChannelWebhook({
+        channel_id: 'webhook-alerts',
+        channel_name: 'Webhook Alerts',
+        sender_email: 'webhook@company.com',
+        sender_name: 'Webhook Bot',
+        message_text: 'investigate threat indicator in prod',
+      });
+      onResult(result);
+    } finally { setLoading(null); }
+  };
+
+  const sendEmail = async () => {
+    setLoading('email');
+    try {
+      const result = await ingestChannelEmail({
+        inbox: 'soc-inbox',
+        inbox_name: 'SOC Inbox',
+        from_email: 'analyst@company.com',
+        from_name: 'SOC Analyst',
+        subject: 'Cloud alert',
+        body_text: 'run cloud scan for tenant prod',
+      });
+      onResult(result);
+    } finally { setLoading(null); }
+  };
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
+      <h3 className="text-white font-semibold text-sm flex items-center gap-2">
+        <Command className="w-4 h-4 text-cyan-400" /> Channel Ingress Quick Tests
+      </h3>
+      <p className="text-xs text-gray-500">Send a real ingest request through each adapter to verify normalized command flow.</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <button
+          onClick={sendCli}
+          disabled={loading !== null}
+          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs text-gray-200 flex items-center justify-center gap-1.5 disabled:opacity-60"
+        >
+          {loading === 'cli' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Terminal className="w-3.5 h-3.5 text-cyan-400" />}
+          CLI Ingest
+        </button>
+        <button
+          onClick={sendWebhook}
+          disabled={loading !== null}
+          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs text-gray-200 flex items-center justify-center gap-1.5 disabled:opacity-60"
+        >
+          {loading === 'webhook' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Webhook className="w-3.5 h-3.5 text-purple-400" />}
+          Webhook Ingest
+        </button>
+        <button
+          onClick={sendEmail}
+          disabled={loading !== null}
+          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs text-gray-200 flex items-center justify-center gap-1.5 disabled:opacity-60"
+        >
+          {loading === 'email' ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5 text-yellow-400" />}
+          Email Ingest
+        </button>
+      </div>
     </div>
   );
 }
@@ -469,17 +587,19 @@ function IdentityEditor({ identities, onSaved }: { identities: Identity[]; onSav
 
 // ─── main page ────────────────────────────────────────────────────────────────
 
-const TABS = ['Messages', 'Simulate', 'Identities'] as const;
+const TABS = ['Messages', 'Simulate', 'Commands', 'Identities'] as const;
 type Tab = typeof TABS[number];
 
 export default function ChannelGatewayPage() {
   const [tab,        setTab]        = useState<Tab>('Messages');
   const [messages,   setMessages]   = useState<Message[]>([]);
   const [identities, setIdentities] = useState<Identity[]>([]);
+  const [pendingCommands, setPendingCommands] = useState<PendingCommand[]>([]);
   const [stats,      setStats]      = useState<Stats | null>(null);
   const [total,      setTotal]      = useState(0);
   const [loading,    setLoading]    = useState(true);
   const [simResult,  setSimResult]  = useState<any>(null);
+  const [approving, setApproving] = useState<string | null>(null);
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -491,19 +611,34 @@ export default function ChannelGatewayPage() {
       const params: Record<string, string> = { limit: '50' };
       if (typeFilter !== 'all')     params.channel_type    = typeFilter;
       if (decisionFilter !== 'all') params.policy_decision = decisionFilter;
-      const [msgData, statsData, idData] = await Promise.all([
+      const [msgData, statsData, idData, pendingData] = await Promise.all([
         getChannelMessages(params),
         getChannelGatewayStats(),
         getChannelIdentities(),
+        getPendingCommands(50),
       ]);
       setMessages((msgData as any).messages || []);
       setTotal((msgData as any).total || 0);
       setStats(statsData as Stats);
       setIdentities(idData as Identity[]);
+      setPendingCommands((pendingData as any).commands || []);
     } finally { setLoading(false); }
   }, [typeFilter, decisionFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  const approveCommand = async (commandId: string) => {
+    setApproving(commandId);
+    try {
+      await approvePendingCommand(commandId, {
+        approver: 'channel_gateway_ui',
+        reason: 'Approved from Channel Gateway command panel',
+      });
+      await load();
+    } finally {
+      setApproving(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -570,7 +705,7 @@ export default function ChannelGatewayPage() {
           )}
         </div>
         <p className="text-xs text-gray-600 mt-3">
-          Webhook endpoints: <code className="text-gray-400">POST /api/v1/channel-gateway/slack/events</code>  ·  <code className="text-gray-400">POST /api/v1/channel-gateway/teams/webhook</code>
+          Webhook endpoints: <code className="text-gray-400">POST /api/v1/channel-gateway/slack/events</code>  ·  <code className="text-gray-400">POST /api/v1/channel-gateway/teams/webhook</code>  ·  <code className="text-gray-400">POST /api/v1/channel-gateway/webhook</code>  ·  <code className="text-gray-400">POST /api/v1/channel-gateway/email/inbound</code>  ·  <code className="text-gray-400">POST /api/v1/channel-gateway/cli/command</code>
         </p>
       </div>
 
@@ -653,7 +788,10 @@ export default function ChannelGatewayPage() {
       {/* ── Simulate ── */}
       {tab === 'Simulate' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <SimulatePanel onResult={setSimResult} />
+          <div className="space-y-4">
+            <SimulatePanel onResult={setSimResult} />
+            <IngressQuickTests onResult={setSimResult} />
+          </div>
           <div className="space-y-4">
             <h3 className="text-white font-semibold text-sm">Processing Result</h3>
             {simResult
@@ -661,6 +799,65 @@ export default function ChannelGatewayPage() {
               : <p className="text-gray-500 text-sm">Simulate a message to see the full processing pipeline output here.</p>
             }
           </div>
+        </div>
+      )}
+
+      {/* ── Commands ── */}
+      {tab === 'Commands' && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+            <div>
+              <h3 className="text-white font-semibold text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-yellow-400" /> Pending Command Approvals
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">Commands requiring approval from CommandClaw policy outcomes.</p>
+            </div>
+            <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
+              {pendingCommands.length} pending
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-gray-500 text-xs">
+                <th className="px-4 py-3 text-left">Command ID</th>
+                <th className="px-4 py-3 text-left">Actor</th>
+                <th className="px-4 py-3 text-left">Action</th>
+                <th className="px-4 py-3 text-left">Target</th>
+                <th className="px-4 py-3 text-left">Risk</th>
+                <th className="px-4 py-3 text-left">Time</th>
+                <th className="px-4 py-3 text-left">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingCommands.map(cmd => (
+                <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                  <td className="px-4 py-3 text-xs font-mono text-cyan-300">{cmd.command_id}</td>
+                  <td className="px-4 py-3 text-xs text-gray-300">{cmd.actor || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-gray-300">{cmd.action}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400">{cmd.target || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-yellow-300">{Math.round(cmd.risk_score || 0)}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => approveCommand(cmd.command_id)}
+                      disabled={approving === cmd.command_id}
+                      className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      {approving === cmd.command_id
+                        ? <RefreshCw className="w-3 h-3 animate-spin" />
+                        : <Check className="w-3 h-3" />}
+                      Approve
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {pendingCommands.length === 0 && (
+            <p className="text-center py-10 text-gray-500 text-sm">No pending commands right now.</p>
+          )}
         </div>
       )}
 

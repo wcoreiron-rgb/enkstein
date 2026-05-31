@@ -335,6 +335,49 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.8 — Channel Gateway Approval UX                                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Channel Gateway Pending-Command Approval UX</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Frontend</span>
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">UX</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.8</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release exposes new command approval and channel ingress capabilities directly in the Channel Gateway UI for faster operator workflows.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Pending Commands tab</strong> on <code>/channel-gateway</code> lists <code>GET /api/v1/commands/pending</code> output and supports one-click approval via <code>POST /api/v1/commands/{command_id}/approve</code>.</li>
+          <li><strong>Quick ingress test controls</strong> added for CLI, Webhook, and Email adapters using the new channel ingress endpoints.</li>
+          <li><strong>Message detail panel</strong> now includes normalized <code>command_result</code> metadata for traceability.</li>
+          <li><strong>API client updates</strong> include typed helpers for webhook/email/CLI ingest and command pending/approve operations.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+          <li><strong>Backend regression set</strong> for these APIs remains green (<code>13 passed</code> in remote control + channel gateway tests).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.7 — CLI Ingress + Command Approval APIs                       -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

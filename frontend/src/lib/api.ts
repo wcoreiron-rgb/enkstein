@@ -348,6 +348,12 @@ export const simulateChannelMessage = (body: object) =>
   apiFetch<any>('/channel-gateway/simulate', { method: 'POST', body: JSON.stringify(body) });
 export const ingestChannelMessage = (body: object) =>
   apiFetch<any>('/channel-gateway/message', { method: 'POST', body: JSON.stringify(body) });
+export const ingestChannelWebhook = (body: object) =>
+  apiFetch<any>('/channel-gateway/webhook', { method: 'POST', body: JSON.stringify(body) });
+export const ingestChannelEmail = (body: object) =>
+  apiFetch<any>('/channel-gateway/email/inbound', { method: 'POST', body: JSON.stringify(body) });
+export const ingestChannelCli = (body: object) =>
+  apiFetch<any>('/channel-gateway/cli/command', { method: 'POST', body: JSON.stringify(body) });
 export const getChannelIdentities = (params?: Record<string, string>) => {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
   return apiFetch<any[]>(`/channel-gateway/identities${qs}`);
@@ -358,6 +364,13 @@ export const getChannelConfigs = () => apiFetch<any[]>('/channel-gateway/configs
 export const createChannelConfig = (body: object) =>
   apiFetch<any>('/channel-gateway/configs', { method: 'POST', body: JSON.stringify(body) });
 export const getChannelGatewayStats = () => apiFetch<any>('/channel-gateway/stats');
+export const getPendingCommands = (limit = 50) =>
+  apiFetch<any>(`/commands/pending?limit=${limit}`);
+export const approvePendingCommand = (commandId: string, body?: { approver?: string; reason?: string }) =>
+  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
 
 // Governed Execution Channels
 export const submitShellExec = (body: object) =>

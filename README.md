@@ -208,6 +208,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added approval workflow APIs for command outcomes:
     - `GET /api/v1/commands/pending`
     - `POST /api/v1/commands/{command_id}/approve`
+  - Channel Gateway UI now includes:
+    - `Pending Commands` approval tab wired to CommandClaw approval APIs
+    - quick-ingest actions for CLI/Webhook/Email adapters
+    - expanded message detail with normalized `command_result` metadata
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.
