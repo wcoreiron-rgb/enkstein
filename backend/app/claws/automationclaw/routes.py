@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 
 from app.core.database import get_db
 from app.models.finding import Finding
+from app.services.connector_check import is_connector_configured
 
 router = APIRouter(prefix="/automationclaw", tags=["AutomationClaw"])
 CLAW_NAME = "automationclaw"
@@ -361,6 +362,10 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused AutomationClaw swarm task")
 async def run_automation_task(payload: AutomationTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
     )
@@ -398,4 +403,6 @@ async def run_automation_task(payload: AutomationTaskRequest, db: AsyncSession =
         "policy_decisions": [],
         "compliance_mappings": ["SLSA", "NIST CM-5"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }

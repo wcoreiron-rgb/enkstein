@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
+from app.services.connector_check import is_connector_configured
 
 router = APIRouter(prefix="/appclaw", tags=["AppClaw"])
 
@@ -420,6 +421,10 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused AppClaw swarm task")
 async def run_app_task(payload: AppTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
     )
@@ -454,4 +459,6 @@ async def run_app_task(payload: AppTaskRequest, db: AsyncSession = Depends(get_d
         "policy_decisions": [],
         "compliance_mappings": ["OWASP ASVS", "NIST SA-11"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }
