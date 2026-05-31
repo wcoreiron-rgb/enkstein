@@ -201,7 +201,13 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `POST /api/v1/channel-gateway/webhook`
     - `POST /api/v1/channel-gateway/email/inbound`
     Both routes now normalize to the same CommandClaw contract and return `command_result`.
+  - Added CLI ingress adapter:
+    - `POST /api/v1/channel-gateway/cli/command`
+    with optional `tenant_id` for tenant-scoped command normalization.
   - Remote-agent dispatch now enforces tenant match, kill-switch state, and per-agent allowed command intents.
+  - Added approval workflow APIs for command outcomes:
+    - `GET /api/v1/commands/pending`
+    - `POST /api/v1/commands/{command_id}/approve`
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
   - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.

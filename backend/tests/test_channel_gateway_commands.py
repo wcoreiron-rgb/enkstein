@@ -167,3 +167,23 @@ async def test_channel_gateway_email_inbound_routes_to_command_contract(client):
     assert body["channel_type"] == "email"
     assert body["command_result"]["source"] == "email"
     assert body["command_result"]["command_id"].startswith("chan_email-")
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_cli_command_with_tenant_identity(client):
+    resp = await client.post(
+        "/api/v1/channel-gateway/cli/command",
+        json={
+            "terminal_id": "term-01",
+            "terminal_name": "SOC CLI",
+            "user": "analyst@company.com",
+            "tenant_id": "tenant_cli",
+            "message_text": "run cloud scan now",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["channel_type"] == "cli"
+    assert body["command_result"] is not None
+    assert body["command_result"]["source"] == "cli"
+    assert body["command_result"]["tenant_id"] == "tenant_cli"

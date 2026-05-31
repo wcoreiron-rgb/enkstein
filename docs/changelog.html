@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.7 — CLI Ingress + Command Approval APIs                       -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">CLI Ingress Adapter + Pending Command Approval APIs</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-sec">Control Plane</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.7</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This slice extends governed command ingress to CLI-originated requests and adds explicit pending-command approval APIs for operational workflows.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>CLI ingress endpoint</strong> added: <code>POST /api/v1/channel-gateway/cli/command</code>, routing terminal commands into the same normalized command path.</li>
+          <li><strong>Pending command listing</strong> added: <code>GET /api/v1/commands/pending</code>.</li>
+          <li><strong>Manual approval action</strong> added: <code>POST /api/v1/commands/{command_id}/approve</code>, including approval metadata persistence.</li>
+          <li><strong>Shared ingestion refactor</strong> now unifies Slack/Teams/message/webhook/email/CLI normalization behavior.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Remote control tests</strong> expanded with pending/approve coverage.</li>
+          <li><strong>Channel gateway tests</strong> expanded with CLI ingress coverage.</li>
+          <li><strong>Test run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>13 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.6 — Webhook/Email Channel Adapters                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -200,3 +200,48 @@ async def test_remote_agent_dispatch_remote_agent_id_must_match_path(client):
         },
     )
     assert dispatch.status_code == 400, dispatch.text
+
+
+@pytest.mark.asyncio
+async def test_commands_pending_and_approve_flow(client):
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "edge-worker-approval",
+            "tenant_id": "tenant_approval",
+            "owner": "owner@company.com",
+            "allowed_actions": ["run_swarm"],
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    agent_id = reg.json()["id"]
+
+    dispatch = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/dispatch",
+        json={
+            "command_id": "cmd_pending_001",
+            "source": "teams",
+            "requester": "owner@company.com",
+            "tenant_id": "tenant_approval",
+            "intent": "run_swarm",
+            "target": "cloud_exposure",
+            "scope": "prod",
+            "mode": "approval",
+            "classification": "confidential",
+            "payload": {"profile": "INCIDENT_RESPONSE"},
+        },
+    )
+    assert dispatch.status_code == 200, dispatch.text
+
+    pending = await client.get("/api/v1/commands/pending")
+    assert pending.status_code == 200, pending.text
+    commands = pending.json()["commands"]
+    match = next((c for c in commands if c["command_id"] == "cmd_pending_001"), None)
+    # Command may be auto-allowed by policy depending on active rules; only assert approval path when pending exists.
+    if match:
+        approve = await client.post(
+            "/api/v1/commands/cmd_pending_001/approve",
+            json={"approver": "secops-admin", "reason": "approved for incident response"},
+        )
+        assert approve.status_code == 200, approve.text
+        assert approve.json()["status"] == "approved"

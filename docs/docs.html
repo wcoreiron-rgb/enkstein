@@ -882,6 +882,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       <ul>
         <li><strong>Ingress routes:</strong> <code>POST /api/v1/channel-gateway/slack/events</code>, <code>POST /api/v1/channel-gateway/teams/webhook</code>, <code>POST /api/v1/channel-gateway/message</code>.</li>
         <li><strong>Additional adapters:</strong> <code>POST /api/v1/channel-gateway/webhook</code> and <code>POST /api/v1/channel-gateway/email/inbound</code> now route external webhook/email requests into the same command contract.</li>
+        <li><strong>CLI adapter:</strong> <code>POST /api/v1/channel-gateway/cli/command</code> routes terminal-originated commands through the same path, with optional inline tenant metadata.</li>
         <li><strong>Normalization target:</strong> CommandClaw contract shape used by <code>POST /api/v1/commands</code> (<code>command_id</code>, <code>source</code>, <code>requester</code>, <code>tenant_id</code>, <code>intent</code>, <code>target</code>, <code>scope</code>, <code>mode</code>).</li>
         <li><strong>Response metadata:</strong> channel message responses now include <code>command_result</code> with policy outcome and command identifiers for traceability.</li>
         <li><strong>Simulation parity:</strong> <code>POST /api/v1/channel-gateway/simulate</code> now runs the same normalization and returns <code>command_result</code> for dry-run validation.</li>
@@ -895,6 +896,19 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>Intent allowlist:</strong> each remote agent can restrict allowed command intents via its metadata <code>allowed_actions</code>.</li>
         <li><strong>Path/body consistency:</strong> dispatch rejects mismatched <code>remote_agent_id</code> values between route and payload.</li>
       </ul>
+
+      <h2>Command Approval Workflow APIs</h2>
+      <p>Commands that resolve to approval-required outcomes can now be tracked and approved via CommandClaw endpoints.</p>
+      <div class="endpoint-row">
+        <span class="method method-get">GET</span>
+        <span class="endpoint-path">/api/v1/commands/pending</span>
+        <span class="endpoint-desc">List recent pending CommandClaw actions awaiting approval</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/commands/{command_id}/approve</span>
+        <span class="endpoint-desc">Approve a pending command and write approval audit metadata</span>
+      </div>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>
         <span class="endpoint-path">/api/v1/trust-fabric/mcp/scan</span>

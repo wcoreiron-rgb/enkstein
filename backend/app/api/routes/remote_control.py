@@ -78,6 +78,15 @@ def _agent_status_value(agent: Agent) -> str:
     return agent.status.value if hasattr(agent.status, "value") else str(agent.status)
 
 
+def _event_command_id(event: Event) -> str | None:
+    payload = _load_json_object(event.metadata_json)
+    context = payload.get("context") if isinstance(payload, dict) else {}
+    if isinstance(context, dict):
+        command_id = context.get("command_id")
+        return str(command_id) if command_id else None
+    return None
+
+
 class RemoteAgentRegisterRequest(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     tenant_id: str = Field(..., min_length=2, max_length=128)
@@ -111,6 +120,11 @@ class CommandRequest(BaseModel):
     classification: str = Field(default="internal", max_length=64)
     remote_agent_id: str | None = Field(default=None)
     payload: dict = Field(default_factory=dict)
+
+
+class CommandApprovalRequest(BaseModel):
+    approver: str | None = Field(default=None, max_length=255)
+    reason: str | None = Field(default=None, max_length=1024)
 
 
 async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -> dict:
@@ -288,6 +302,93 @@ async def list_recent_commands(
             }
         )
     return {"count": len(rows), "commands": rows}
+
+
+@router.get("/commands/pending")
+async def list_pending_commands(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw", Event.outcome == "requires_approval")
+        .order_by(desc(Event.timestamp))
+        .limit(limit)
+    )
+    events = result.scalars().all()
+    rows = []
+    for e in events:
+        rows.append(
+            {
+                "command_id": _event_command_id(e),
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                "actor": e.actor_name,
+                "action": e.action,
+                "target": e.target,
+                "outcome": e.outcome.value if hasattr(e.outcome, "value") else str(e.outcome),
+                "risk_score": e.risk_score,
+                "policy_name": e.policy_name,
+                "reason": e.policy_reason,
+            }
+        )
+    rows = [r for r in rows if r.get("command_id")]
+    return {"count": len(rows), "commands": rows}
+
+
+@router.post("/commands/{command_id}/approve")
+async def approve_pending_command(
+    command_id: str,
+    body: CommandApprovalRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw", Event.outcome == "requires_approval")
+        .order_by(desc(Event.timestamp))
+    )
+    event = None
+    for candidate in result.scalars().all():
+        if _event_command_id(candidate) == command_id:
+            event = candidate
+            break
+    if not event:
+        raise HTTPException(status_code=404, detail="Pending command not found")
+
+    event.outcome = "allowed"
+    event.requires_review = False
+    event.description = f"{event.description} [approved]"
+    metadata = _load_json_object(event.metadata_json)
+    metadata["approval"] = {
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "approved_by": current_user.get("sub", "unknown"),
+        "approver_display": body.approver or current_user.get("sub", "unknown"),
+        "reason": body.reason or "approved",
+    }
+    event.metadata_json = json.dumps(metadata)
+
+    db.add(
+        Event(
+            source_module="commandclaw",
+            actor_id=current_user.get("sub", "unknown"),
+            actor_name=body.approver or current_user.get("sub", "unknown"),
+            actor_type="human",
+            action="approve_command",
+            target=command_id,
+            target_type="command",
+            outcome="allowed",
+            severity=event.severity,
+            risk_score=event.risk_score,
+            policy_name="manual_command_approval",
+            policy_reason=body.reason or "Approved via CommandClaw approval endpoint",
+            description=f"Approved pending command {command_id}",
+            metadata_json=json.dumps({"approved_command_id": command_id}),
+            is_anomaly=False,
+            requires_review=False,
+        )
+    )
+    await db.commit()
+    return {"command_id": command_id, "status": "approved"}
 
 
 @router.post("/remote-agents/{agent_id}/dispatch")

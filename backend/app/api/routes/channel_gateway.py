@@ -5,6 +5,7 @@ POST /channel-gateway/slack/events          — Slack Events API webhook
 POST /channel-gateway/teams/webhook         — Microsoft Teams outgoing webhook
 POST /channel-gateway/webhook               — Generic webhook ingestion
 POST /channel-gateway/email/inbound         — Email-to-command ingestion
+POST /channel-gateway/cli/command           — CLI command ingestion
 POST /channel-gateway/message               — Generic message ingestion (internal/test)
 GET  /channel-gateway/messages              — Browse processed messages
 GET  /channel-gateway/messages/{id}         — Message detail
@@ -402,6 +403,60 @@ async def email_inbound(body: dict, db: Session = Depends(get_db)):
         channel_type="email",
         channel_id=body["inbox"],
         channel_name=body.get("inbox_name", body["inbox"]),
+    )
+
+
+@router.post("/cli/command")
+async def cli_command(body: dict, db: Session = Depends(get_db)):
+    """
+    CLI ingress endpoint.
+    Body: { terminal_id, user, message_text, tenant_id? }
+    """
+    required = ("terminal_id", "user", "message_text")
+    for field in required:
+        if field not in body:
+            raise HTTPException(400, f"Missing field: {field}")
+    user = str(body["user"])
+    tenant_id = body.get("tenant_id")
+    sender_id = user
+    sender_email = user if "@" in user else ""
+    sender_name = body.get("display_name", user)
+    channel_identity = None
+    if tenant_id:
+        # Optional identity bootstrap metadata in CLI-mode requests.
+        channel_identity = {
+            "tenant_id": tenant_id,
+            "is_trusted": True,
+            "regentclaw_role": "engineer",
+            "trust_score": 75,
+        }
+    # Reuse existing path while injecting optional tenant identity when provided.
+    if channel_identity:
+        result = process_message(
+            message_id=f"cli-{uuid.uuid4()}",
+            message_text=body["message_text"],
+            sender_id=sender_id,
+            sender_email=sender_email,
+            sender_name=sender_name,
+            channel_type="cli",
+            channel_id=body["terminal_id"],
+            channel_identity=channel_identity,
+        )
+        command_result = await _execute_channel_command(result, channel_identity)
+        _apply_command_outcome(result, command_result)
+        msg = _persist_message(db, result, body.get("terminal_name", body["terminal_id"]))
+        return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
+
+    return await _ingest_normalized_message(
+        db,
+        message_id=f"cli-{uuid.uuid4()}",
+        message_text=body["message_text"],
+        sender_id=sender_id,
+        sender_email=sender_email,
+        sender_name=sender_name,
+        channel_type="cli",
+        channel_id=body["terminal_id"],
+        channel_name=body.get("terminal_name", body["terminal_id"]),
     )
 
 
