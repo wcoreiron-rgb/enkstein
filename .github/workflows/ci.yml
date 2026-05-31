@@ -13,6 +13,7 @@ jobs:
   test-backend:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # Hard cap — prevents 6h kills from hanging tests
 
     defaults:
       run:
@@ -41,7 +42,7 @@ jobs:
           DATABASE_URL: "sqlite+aiosqlite:///:memory:"
           SECRET_KEY: "ci-test-secret-key-not-for-production"
           DEBUG: "true"
-        run: pytest tests/ -v --tb=short
+        run: pytest tests/ -v --tb=short --timeout=30
 
   # ── Backend: Linting ───────────────────────────────────────────────────────
   lint-backend:
