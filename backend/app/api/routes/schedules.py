@@ -14,6 +14,8 @@ from app.schemas.agent import (
     ScheduleCreate, ScheduleUpdate, ScheduleRead,
     AgentRunRead, AgentTriggerResponse,
 )
+from app.core.swarm.schemas import SwarmJobCreate
+from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
 
 router = APIRouter(prefix="/schedules", tags=["Schedules"])
 
@@ -158,6 +160,54 @@ async def trigger_schedule(
         status=RunStatus.PENDING,
         message=f"Schedule run triggered for agent '{agent.name}' in {agent.execution_mode} mode",
     )
+
+
+@router.post("/{schedule_id}/run-swarm", status_code=202)
+async def trigger_schedule_swarm(
+    schedule_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Manual schedule trigger for SWARM_JOB actions.
+    Reads swarm config from schedule.notes JSON.
+    """
+    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+    sched = result.scalar_one_or_none()
+    if not sched:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if sched.status == "disabled":
+        raise HTTPException(status_code=400, detail="Schedule is disabled")
+
+    import json
+    try:
+        cfg = json.loads(sched.notes or "{}")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Schedule notes must be valid JSON for swarm execution")
+
+    action_type = str(cfg.get("type", "SWARM_JOB")).upper()
+    if action_type != "SWARM_JOB":
+        raise HTTPException(status_code=400, detail="Schedule notes type must be SWARM_JOB")
+
+    action = cfg.get("action", cfg)
+    payload = SwarmJobCreate(
+        name=action.get("name") or f"Scheduled Swarm: {sched.name}",
+        profile=action.get("profile", "DEEP_INVESTIGATION"),
+        requested_by=sched.owner_id or "manual_schedule",
+        trigger_type="schedule",
+        classification=action.get("classification", "internal"),
+        participants=action.get("participants", []),
+        task_type=action.get("task_type", "analyze"),
+        input=action.get("input", {}),
+        parallelism=int(action.get("parallelism", 3)),
+        model_profile=action.get("model_profile"),
+    )
+    job = await create_swarm_job(db, payload)
+    await run_swarm_job_in_session(db, job.id)
+    return {
+        "job_id": str(job.id),
+        "status": job.status.value,
+        "message": f"Schedule '{sched.name}' triggered swarm job '{job.name}'",
+    }
 
 
 # ─── Schedule Run History ─────────────────────

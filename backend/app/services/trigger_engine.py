@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.trigger import EventTrigger
 from app.models.finding import Finding, FindingSeverity
 from app.models.event import Event, EventSeverity
+from app.core.swarm.schemas import SwarmJobCreate
+from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
 
 logger = logging.getLogger("trigger_engine")
 
@@ -178,6 +180,33 @@ async def _fire_trigger(
             logger.info("Trigger '%s' fired alert → %d channels", trigger.name, sent)
         except Exception as exc:
             logger.error("Trigger '%s' alert fire failed: %s", trigger.name, exc)
+
+    elif action in {"start_swarm", "fire_swarm"}:
+        try:
+            cfg = json.loads(trigger.alert_config_json or "{}")
+            participants = cfg.get("participants") or []
+            if not participants and trigger.target_claw:
+                participants = [c.strip() for c in trigger.target_claw.split(",") if c.strip()]
+            swarm_input = cfg.get("input") or {}
+            if isinstance(context, dict):
+                swarm_input = {**swarm_input, "trigger_context": context}
+            payload = SwarmJobCreate(
+                name=cfg.get("name") or f"Trigger Swarm: {trigger.name}",
+                profile=cfg.get("profile", "INCIDENT_RESPONSE"),
+                requested_by=trigger.created_by or "trigger_engine",
+                trigger_type=f"trigger:{trigger.trigger_type}",
+                classification=cfg.get("classification", "internal"),
+                participants=participants,
+                task_type=cfg.get("task_type", "analyze"),
+                input=swarm_input,
+                parallelism=int(cfg.get("parallelism", 3)),
+                model_profile=cfg.get("model_profile"),
+            )
+            job = await create_swarm_job(db, payload)
+            await run_swarm_job_in_session(db, job.id)
+            logger.info("Trigger '%s' started swarm job %s", trigger.name, job.id)
+        except Exception as exc:
+            logger.error("Trigger '%s' swarm fire failed: %s", trigger.name, exc)
 
     else:
         logger.warning("Trigger '%s' has unknown action_type '%s'", trigger.name, action)

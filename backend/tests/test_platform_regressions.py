@@ -319,3 +319,90 @@ async def test_remediation_approve_blocked_by_ring0_trust_fabric(client):
     assert approve.status_code == 403, approve.text
     detail = approve.json().get("detail", {})
     assert detail.get("policy_name") == "execution_ring_violation"
+
+
+@pytest.mark.asyncio
+async def test_trigger_start_swarm_action_creates_swarm_job(client):
+    create = await client.post(
+        "/api/v1/triggers",
+        json={
+            "name": "Trigger -> Swarm",
+            "trigger_type": "webhook_inbound",
+            "action_type": "start_swarm",
+            "target_claw": "identityclaw,threatclaw",
+            "alert_config_json": json.dumps(
+                {
+                    "name": "Webhook Incident Swarm",
+                    "profile": "INCIDENT_RESPONSE",
+                    "task_type": "investigate",
+                    "parallelism": 2,
+                    "classification": "internal",
+                }
+            ),
+            "is_active": True,
+        },
+    )
+    assert create.status_code == 201, create.text
+    trigger_id = create.json()["id"]
+
+    fired = await client.post(f"/api/v1/triggers/webhook/{trigger_id}", json={"severity": "high", "source": "test"})
+    assert fired.status_code == 200, fired.text
+    body = fired.json()
+    assert body["status"] == "fired"
+    assert body["action_type"] == "start_swarm"
+
+    jobs = await client.get("/api/v1/swarm/jobs")
+    assert jobs.status_code == 200, jobs.text
+    assert any(j["name"] == "Webhook Incident Swarm" for j in jobs.json())
+
+
+@pytest.mark.asyncio
+async def test_schedule_run_swarm_uses_notes_config(client):
+    agent_resp = await client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Schedule Swarm Agent",
+            "description": "Regression schedule swarm",
+            "claw": "identityclaw",
+            "execution_mode": "monitor",
+            "risk_level": "low",
+            "status": "active",
+        },
+    )
+    assert agent_resp.status_code == 201, agent_resp.text
+    agent_id = agent_resp.json()["id"]
+
+    sched_resp = await client.post(
+        "/api/v1/schedules",
+        json={
+            "name": "Swarm Schedule",
+            "agent_id": agent_id,
+            "frequency": "hourly",
+            "status": "active",
+            "approval_required": False,
+            "notes": json.dumps(
+                {
+                    "type": "SWARM_JOB",
+                    "action": {
+                        "name": "Hourly Swarm Check",
+                        "profile": "FAST_TRIAGE",
+                        "participants": ["identityclaw", "cloudclaw"],
+                        "task_type": "analyze",
+                        "parallelism": 2,
+                        "input": {"scenario": "scheduled_check"},
+                    },
+                }
+            ),
+        },
+    )
+    assert sched_resp.status_code == 201, sched_resp.text
+    schedule_id = sched_resp.json()["id"]
+
+    run_resp = await client.post(f"/api/v1/schedules/{schedule_id}/run-swarm")
+    assert run_resp.status_code == 202, run_resp.text
+    body = run_resp.json()
+    assert body["message"].startswith("Schedule 'Swarm Schedule' triggered swarm job")
+
+    jobs = await client.get("/api/v1/swarm/jobs")
+    assert jobs.status_code == 200, jobs.text
+    assert any(j["name"] == "Hourly Swarm Check" for j in jobs.json())
