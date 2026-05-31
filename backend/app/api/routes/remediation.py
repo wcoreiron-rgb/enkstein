@@ -48,6 +48,31 @@ class TriggerRequest(BaseModel):
     triggered_by: str = "manual"
 
 
+def _validate_action_spec_shape(action_spec: dict[str, Any]) -> None:
+    required = ["provider", "action_type", "target_type", "target_id"]
+    missing = [k for k in required if not action_spec.get(k)]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"action_spec missing required fields: {', '.join(missing)}",
+        )
+
+    if action_spec.get("action_type") == "create_jira_ticket":
+        params = action_spec.get("parameters")
+        if not isinstance(params, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="create_jira_ticket requires parameters object",
+            )
+        required_ticket_params = ["project_key", "summary", "description"]
+        missing_ticket = [k for k in required_ticket_params if not params.get(k)]
+        if missing_ticket:
+            raise HTTPException(
+                status_code=400,
+                detail=f"create_jira_ticket missing required parameters: {', '.join(missing_ticket)}",
+            )
+
+
 def _action_to_dict(action: RemediationAction) -> dict:
     return {
         "id":                str(action.id),
@@ -336,6 +361,7 @@ async def manual_trigger(body: TriggerRequest, db: AsyncSession = Depends(get_db
             actions_created.append(_action_to_dict(action))
 
     elif body.action_spec:
+        _validate_action_spec_shape(body.action_spec)
         action = await execute_remediation(
             action_spec=body.action_spec,
             db=db,

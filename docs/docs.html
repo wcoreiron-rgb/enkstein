@@ -851,7 +851,7 @@ Content-Type: application/json
       <p class="lead">RegentClaw integrates AGT through a provider adapter boundary and feature flags. This allows staged rollout without coupling every claw directly to AGT internals.</p>
 
       <div class="callout tip">
-        <strong>Latest operator updates (May 2026):</strong> Left-blade module route coverage was validated across all sidebar modules, Trigger UI now supports direct <code>/triggers/{id}/test</code> execution, and Swarm task detail surfaces E2E secure-channel status when enabled.
+        <strong>Latest operator updates (May 2026):</strong> Left-blade module route coverage was validated across all sidebar modules, Trigger UI now supports direct <code>/triggers/{id}/test</code> execution and <code>start_swarm/fire_swarm</code> action configuration, and Swarm detail now includes live ticket draft + compliance rollup with direct <code>Create Ticket</code> handoff to <code>/api/v1/remediation/trigger</code>.
       </div>
 
       <h2>Adapter Boundary</h2>
@@ -901,6 +901,13 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li>Task output includes a <code>secure_channel</code> envelope and digest.</li>
         <li><code>policy_decisions</code> includes <code>E2E_MESSAGE</code> outcome metadata.</li>
         <li>When AGT is unavailable, the path remains deterministic with simulated encrypted envelope status.</li>
+      </ul>
+
+      <h2>Sprint 6 Operator Flow</h2>
+      <ul>
+        <li><strong>Preset endpoint:</strong> <code>POST /api/v1/swarm/jobs/presets/suspicious-identity</code> launches Identity/Threat/Cloud/Data/Compliance/Automation participants with incident-response defaults.</li>
+        <li><strong>Live investigation artifacts:</strong> Swarm detail shows ticket draft text and compliance impact rollup from task/judge evidence.</li>
+        <li><strong>Direct ticket handoff:</strong> <code>Create Ticket</code> posts a governed action spec to <code>POST /api/v1/remediation/trigger</code> with draft content and compliance context.</li>
       </ul>
 
       <h2>Operational Regression Fixes (Shipped)</h2>

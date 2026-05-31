@@ -322,6 +322,56 @@ async def test_remediation_approve_blocked_by_ring0_trust_fabric(client):
 
 
 @pytest.mark.asyncio
+async def test_swarm_ticket_handoff_payload_shape_validation(client):
+    missing_required = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "create_jira_ticket",
+                "target_type": "ticket",
+                "target_id": "swarm_job_123",
+                "parameters": {"project_key": "SEC", "summary": "x"},
+            },
+            "triggered_by": "swarm:test",
+        },
+    )
+    assert missing_required.status_code == 400, missing_required.text
+    assert "missing required parameters" in missing_required.json().get("detail", "")
+
+
+@pytest.mark.asyncio
+async def test_swarm_ticket_handoff_policy_outcome_low_risk_auto_approved(client):
+    resp = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "create_jira_ticket",
+                "target_type": "ticket",
+                "target_id": "swarm_job_123",
+                "target_label": "Swarm Job 123",
+                "parameters": {
+                    "project_key": "SEC",
+                    "summary": "[RegentClaw] Incident",
+                    "description": "ticket draft body",
+                },
+            },
+            "triggered_by": "swarm:test",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["triggered"] == 1
+    action = body["actions"][0]
+    assert action["action_type"] == "create_jira_ticket"
+    assert action["risk_level"] == "low"
+    assert action["requires_approval"] is False
+    # Low-risk ticket handoff should never queue for approval.
+    assert action["status"] != "pending_approval"
+
+
+@pytest.mark.asyncio
 async def test_trigger_start_swarm_action_creates_swarm_job(client):
     create = await client.post(
         "/api/v1/triggers",
