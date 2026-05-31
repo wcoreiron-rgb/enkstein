@@ -1294,6 +1294,88 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.2.5 — Security Hardening Sprint (17 Findings)                   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security Hardening Sprint — 17 Findings Fixed</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Security</span>
+          <span class="tag tag-fix">Fixes</span>
+          <span class="tag tag-feat">Ring Policy</span>
+          <span class="release-date">May 29, 2026 &nbsp;·&nbsp; v0.2.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        Full security audit completed — 17 findings fixed across 3 critical, 5 high, 7 medium, and 2 low severity categories.
+        The platform now ships with <strong>DEBUG=false</strong> by default, all ports bound to loopback, and every approval
+        action identity-verified from JWT. Separately, a 4-tier <strong>Execution Ring Policy</strong> was added with 32 dedicated tests,
+        and an honest <strong>OWASP LLM/ASI Top 10 evidence matrix</strong> was published with test anchors for every control.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">🔴 Critical</div>
+        <ul class="change-list">
+          <li><strong>Auth deadlock resolved</strong> — login endpoint no longer requires a JWT to issue a JWT. Public paths exempt from global dependency.</li>
+          <li><strong>DEBUG=false default</strong> — <code>docker-compose.yml</code> now uses <code>${DEBUG:-false}</code>. Auth bypass no longer ships on.</li>
+          <li><strong>Port isolation</strong> — backend, PostgreSQL, Redis all bind to <code>127.0.0.1</code>. Not reachable from host network.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">🟠 High</div>
+        <ul class="change-list">
+          <li><strong>Dual-approval enforced</strong> — shell/browser exec channels require 2 different approvers. Self-approval blocked.</li>
+          <li><strong>approved_by from JWT</strong> — approval identity pulled from token sub, never from client-supplied body field.</li>
+          <li><strong>SSRF blocklist</strong> — connector tester blocks RFC1918, loopback, and cloud metadata IPs (<code>169.254.169.254</code>).</li>
+          <li><strong>ArcClaw chat auth</strong> — Next.js proxy route now forwards <code>Authorization</code> header to backend.</li>
+          <li><strong>SECRET_KEY guard</strong> — startup rejects known insecure default keys when <code>DEBUG=false</code>.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">🟡 Medium</div>
+        <ul class="change-list">
+          <li><strong>PyJWT 2.9.0</strong> — replaced unmaintained <code>python-jose</code>. Mandatory claim enforcement on decode.</li>
+          <li><strong>bcrypt SHA-256 prehash</strong> — eliminates silent 72-char truncation. <code>python-multipart</code> → 0.0.12 (ReDoS fix).</li>
+          <li><strong>.secrets/ permissions</strong> — chmod 600/700 enforced on every write. Key and ciphertext now restricted.</li>
+          <li><strong>Rate limiting</strong> — 10 req/min per IP on <code>/auth/token</code>. Brute-force protected.</li>
+          <li><strong>Security headers</strong> — <code>X-Content-Type-Options</code>, <code>X-Frame-Options</code>, <code>Referrer-Policy</code>, HSTS (prod only).</li>
+          <li><strong>Env var credentials</strong> — all docker-compose secrets use <code>${VAR:-default}</code> substitution.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">New Features — Same Sprint</div>
+        <ul class="change-list">
+          <li><strong>Execution Ring Policy</strong> — ring0 (blocked) → ring3 (auto-allow). 32/32 tests. Wired into exec channels + remediation.</li>
+          <li><strong>Connector Provenance</strong> — SHA-256 + Ed25519 signature verification at skill pack install. 10 provenance tests.</li>
+          <li><strong>OWASP LLM + ASI Top 10</strong> — honest self-assessment, one automated test per ASI category, test anchors in docs.</li>
+          <li><strong>Tenant isolation audit</strong> — 13 tests documenting isolation model with honest xfail markers for known gaps.</li>
+          <li><strong>SRE Engine</strong> — circuit breaker, error budget, SLO primitives for all governed modules.</li>
+        </ul>
+      </div>
+
+      <div class="release-footer">
+        <a href="https://github.com/wcoreiron-rgb/regentclaw/commit/c722a69" target="_blank" rel="noopener">
+          &#9655; Security commit c722a69
+        </a>
+        <span style="color:var(--border);">|</span>
+        <a href="owasp-agentic.html">
+          &#9655; OWASP Evidence Matrix
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.2.0 — NVIDIA NIM Integration                                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

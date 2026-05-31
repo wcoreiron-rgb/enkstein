@@ -291,34 +291,56 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `cd frontend && npm run test:e2e -- e2e/swarm-create-ticket.spec.ts`
     - Local sandbox note: E2E requires the dev server to bind to `127.0.0.1:3100`.
 
-## Claw Modules (24 total)
+## Platform Modules (26 Security Claws + Core Engines)
+
+### Security Domain Claws (24)
 
 | Module | Description |
 |--------|-------------|
-| 🤖 ArcClaw | AI & LLM Security — prompt injection detection, AGT integration |
-| 🪪 IdentityClaw | Identity Governance — human & non-human identity risk scoring |
-| ☁️ CloudClaw | Cloud Security Posture — AWS, Azure, GCP |
-| 🌐 ExposureClaw | External Attack Surface Management |
-| 🛡️ EndpointClaw | EDR — CrowdStrike, Defender, SentinelOne |
-| 🔍 ThreatClaw | Threat Intelligence & Detection |
+| 🤖 ArcClaw | AI & LLM Security — prompt injection detection (12-vector AGT audit), NVIDIA NIM, Claude, OpenAI, Ollama |
+| 🪪 IdentityClaw | Identity Governance — human & non-human identity risk scoring, Okta, Entra ID |
+| ☁️ CloudClaw | Cloud Security Posture — AWS, Azure, GCP, real-time findings |
+| 🌐 ExposureClaw | External Attack Surface Management — CVE lookup, CISA KEV, MITRE ATT&CK |
+| 🛡️ EndpointClaw | EDR — CrowdStrike, Defender, SentinelOne, quarantine/unquarantine |
+| 🔍 ThreatClaw | Threat Intelligence & Detection — MITRE ATT&CK mapping, automated triage |
 | 📋 LogClaw | Log Management & SIEM coverage |
-| 🌐 NetClaw | Network Security & segmentation |
-| 🔑 AccessClaw | Access Control & IAM governance |
-| 🗂️ DataClaw | Data Loss Prevention |
-| 📱 AppClaw | Application Security — SAST, SCA |
-| ☁️ SaasClaw | SaaS Security Posture Management |
-| ⚙️ ConfigClaw | Configuration Compliance |
-| ✅ ComplianceClaw | SOC2, PCI DSS, ISO 27001, HIPAA, GDPR, CIS |
-| 🔒 PrivacyClaw | Privacy & GDPR enforcement |
-| 🏢 VendorClaw | Third-Party & Supply Chain Risk |
-| 👤 UserClaw | User Behavior Analytics |
-| 🔎 InsiderClaw | Insider Threat Detection |
-| ⚡ AutomationClaw | Automation & CI/CD Security |
-| 🗺️ AttackPathClaw | Attack Path Analysis |
-| 💻 DevClaw | DevSecOps & Secret Scanning |
-| 🧠 IntelClaw | Threat Intelligence Feeds |
-| 🔄 RecoveryClaw | Incident Recovery & Runbooks |
-| 🔌 CustomClaw | User-defined REST API integrations |
+| 🌉 NetClaw | Network Security & segmentation — Palo Alto, Fortinet, Cisco |
+| 🔑 AccessClaw | Access Control & IAM governance — Okta, Entra ID, CyberArk |
+| 🗂️ DataClaw | Data Loss Prevention — Varonis, Purview, Macie |
+| 📱 AppClaw | Application Security — SAST, SCA, Snyk, Veracode |
+| ☁️ SaasClaw | SaaS Security Posture Management — Netskope, Zscaler |
+| ⚙️ ConfigClaw | Configuration Compliance — AWS Config, Azure Policy |
+| ✅ ComplianceClaw | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
+| 🔒 PrivacyClaw | Privacy & GDPR enforcement — OneTrust, TrustArc |
+| 🏢 VendorClaw | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |
+| 👤 UserClaw | User Behavior Analytics — UEBA, anomaly detection |
+| 🔎 InsiderClaw | Insider Threat Detection — Proofpoint, Purview |
+| ⚡ AutomationClaw | Automation & CI/CD Security — ServiceNow, Jira, SOAR |
+| 🗺️ AttackPathClaw | Attack Path Analysis — XM Cyber, Orca, Tenable |
+| 💻 DevClaw | DevSecOps & Secret Scanning — GitHub Advanced Security, Snyk |
+| 🧠 IntelClaw | Threat Intelligence Feeds — Recorded Future, MISP |
+| 🔄 RecoveryClaw | Incident Recovery & Runbooks — Veeam, Rubrik |
+| 🔌 CustomClaw | User-defined REST API integrations — no-code builder |
+
+### New Core Platform Modules (2)
+
+| Module | Description |
+|--------|-------------|
+| 🧩 ModelClaw | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, ModelClaw Judge synthesis |
+| ⚡ CommandClaw | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
+
+### Platform Engines (always-on)
+
+| Engine | Description |
+|--------|-------------|
+| 🛡️ Trust Fabric | Central zero-trust enforcement — policy eval, risk scoring, audit for every action |
+| 🔄 Swarm Orchestration | Multi-agent parallel investigation — planner, dispatcher, judge, SSE stream, ticket handoff |
+| 🚨 Autonomous Remediation | Finding → playbook → action → approval gate → rollback. 5 built-in playbooks, 4 provider integrations |
+| 💍 Ring Policy | 4-tier execution isolation (ring0 blocked → ring3 auto-allow). Deterministic `execution_ring_violation` deny |
+| 📡 Channel Gateway | Multi-channel ingress normalization with approval workflow, bulk review, timeline audit |
+| 🔐 External Agent Control | Remote agent registration, heartbeat, dispatch, tenant enforcement, kill-switch |
+| 📦 Skill Pack Exchange | Signed marketplace for skills, policies, playbooks — provenance-verified at install |
+| 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
 
 ## Tech Stack
 

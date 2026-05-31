@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RegentClaw — Zero Trust Security Ecosystem</title>
-  <meta name="description" content="24 specialized security modules. One enforcement layer. Every action authorized, monitored, and attributable." />
+  <meta name="description" content="26 security claws + core platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -536,7 +536,7 @@
     Zero Trust Security Platform
   </div>
   <h1>Zero Trust Security.<br><span class="accent">Governed by Default.</span></h1>
-  <p>24 specialized security modules. One enforcement layer. Every action authorized, monitored, and attributable.</p>
+  <p>26 security claws + core platform engines. One enforcement layer. Every action authorized, monitored, and attributable.</p>
   <div class="hero-ctas">
     <a href="docs.html" class="btn-primary">View Documentation →</a>
     <a href="https://github.com/wcoreiron-rgb/regentclaw" target="_blank" rel="noopener" class="btn-ghost">
@@ -550,37 +550,31 @@
 <div class="stats-bar">
   <div class="stats-inner">
     <div class="stat">
-      <div class="stat-number">24</div>
+      <div class="stat-number">26</div>
       <div class="stat-label">Security Claws</div>
     </div>
     <div class="stat">
-      <div class="stat-number">6</div>
-      <div class="stat-label">Swarm Endpoints</div>
+      <div class="stat-number">8</div>
+      <div class="stat-label">Platform Engines</div>
     </div>
     <div class="stat">
       <div class="stat-number">Zero Trust</div>
       <div class="stat-label">by Design</div>
     </div>
     <div class="stat">
-      <div class="stat-number">Sprint 6</div>
-      <div class="stat-label">Shipped</div>
+      <div class="stat-number">193</div>
+      <div class="stat-label">Tests Passing</div>
     </div>
   </div>
   <div class="ship-note">
-    <strong>Latest shipped:</strong> Sprint 5 trigger/schedule swarm launches with approval gates and profile defaults,
-    Sprint 6 suspicious-identity preset workflow, live swarm ticket draft + compliance impact rollup,
-    direct <code>Create Ticket</code> API handoff from swarm detail to <code>/api/v1/remediation/trigger</code>,
-    backend ticket payload validation, Playwright E2E coverage for the handoff flow,
-    channel gateway ingress normalized into the CommandClaw contract path,
-    Channel Gateway pending-command approval UI for command governance operations,
-    persisted multi-operator command approval semantics with self/duplicate approver guards,
-    explicit pending-command rejection controls (API + UI),
-    command lifecycle timeline visibility for pending review decisions,
-    pending-command triage filters + consolidated status summaries,
-    per-command approval-threshold delegation controls,
-    bulk pending-command approve/reject controls for queue operations,
-    stricter remediation ticket payload validation guardrails,
-    and Playwright E2E coverage for Channel Gateway bulk approval operations.
+    <strong>Latest shipped:</strong>
+    <strong>CommandClaw</strong> — multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, self-approval guards, timeline audit, bulk review, and delegation controls.
+    <strong>ModelClaw</strong> — policy-governed AI model routing with tenant-scoped profiles, call audit, and Swarm Judge synthesis.
+    <strong>Swarm Orchestration</strong> — parallel multi-agent investigation with SSE live stream, suspicious-identity preset, ticket handoff, and compliance rollup.
+    <strong>Execution Ring Policy</strong> — 4-tier privilege isolation (ring0 blocked → ring3 auto-allow) across exec channels and remediation.
+    <strong>17 Security Fixes</strong> — auth deadlock, DEBUG=false default, port binding, SSRF blocklist, JWT identity enforcement, bcrypt prehash, rate limiting, security headers.
+    <strong>OWASP ASI Evidence Matrix</strong> — honest LLM01–LLM10 + ASI-01–ASI-10 mapping with 193 automated test anchors.
+    <strong>Connector Provenance</strong> — SHA-256 + Ed25519 signature verification at skill pack install time.
   </div>
 </div>
 
