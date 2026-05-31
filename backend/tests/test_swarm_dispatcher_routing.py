@@ -55,6 +55,7 @@ async def test_dispatcher_routes_to_real_task(db_session, claw):
     assert out["claw"] == claw
     assert out["status"] == "completed"
     assert isinstance(out["recommended_actions"], list)
+    assert out["execution_mode"] == "real_task_handler"
     # Real /task path has specific recommendations, not simulated fallback title.
     assert not out["findings"][0]["title"].endswith("simulated analysis")
 
@@ -68,4 +69,6 @@ async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
     out = await execute_task(db_session, task)
     assert out["claw"] == "unknownclaw"
     assert out["status"] == "completed"
+    assert out["execution_mode"] == "simulated_fallback"
+    assert "Unsupported claw" in out["fallback_reason"]
     assert out["findings"][0]["title"] == "unknownclaw simulated analysis"

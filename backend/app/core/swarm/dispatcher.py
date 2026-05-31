@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from datetime import datetime
 from typing import Any
@@ -37,6 +38,8 @@ from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
 from app.claws.vendorclaw.routes import VendorTaskRequest, run_vendor_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
+
+logger = logging.getLogger("swarm_dispatcher")
 
 
 def _severity_from_risk(risk_score: float) -> str:
@@ -78,8 +81,10 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
     )
     if real_output is not None:
         output = real_output
+        output.setdefault("execution_mode", "real_task_handler")
     else:
         # Fallback simulation for claws that have not shipped /task yet.
+        logger.warning("Swarm task %s using simulated fallback for unsupported claw '%s'", task.id, task.claw)
         base = (sum(ord(c) for c in task.claw) % 30) + 40
         simulated_ms = base * 10
         await asyncio.sleep(min(simulated_ms / 1000.0, 0.45))
@@ -107,6 +112,8 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
             "policy_decisions": [],
             "compliance_mappings": [],
             "execution_time_ms": simulated_ms,
+            "execution_mode": "simulated_fallback",
+            "fallback_reason": f"Unsupported claw '{task.claw}' does not provide /task handler",
         }
 
     adapter = get_agt_adapter()
