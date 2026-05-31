@@ -62,6 +62,7 @@ from app.api.routes.channel_gateway import router as channel_gateway_router
 from app.api.routes.exec_channels import router as exec_channels_router
 from app.api.routes.profiles import router as profiles_router
 from app.api.routes.external_agents import router as external_agents_router
+from app.api.routes.remote_control import router as remote_control_router
 from app.api.routes.ws import router as ws_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.trust_fabric import router as trust_fabric_router
@@ -184,6 +185,7 @@ app.include_router(channel_gateway_router, prefix=PREFIX)
 app.include_router(exec_channels_router, prefix=PREFIX)
 app.include_router(profiles_router, prefix=PREFIX)
 app.include_router(external_agents_router, prefix=PREFIX)
+app.include_router(remote_control_router, prefix=PREFIX)
 app.include_router(ws_router, prefix=PREFIX)   # WebSocket — no HTTP prefix stripping needed
 app.include_router(auth_router, prefix=PREFIX)
 app.include_router(trust_fabric_router, prefix=PREFIX)
