@@ -634,8 +634,8 @@
 <section id="claws">
   <div class="section-inner">
     <span class="section-tag">The Claw System</span>
-    <h2 class="section-title">24 Specialized Security Modules</h2>
-    <p class="section-sub">Each Claw is a self-contained security domain module with its own provider adapters, findings engine, and governance integration.</p>
+    <h2 class="section-title">26 Specialized Security Modules</h2>
+    <p class="section-sub">Each Claw is a self-contained security domain module with its own provider adapters, findings engine, and governance integration. Two new core modules ship in v0.3+.</p>
     <div class="claws-grid">
 
       <div class="claw-card">
@@ -782,12 +782,84 @@
         <div class="claw-desc">Custom REST Integrations — extend RegentClaw to any security tool or API</div>
       </div>
 
+      <div class="claw-card" style="border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.04);">
+        <div class="claw-top"><span class="claw-emoji">🧩</span><span class="phase-badge phase-mvp">New v0.3</span></div>
+        <div class="claw-name">ModelClaw</div>
+        <div class="claw-desc">AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, and Swarm Judge synthesis</div>
+      </div>
+
+      <div class="claw-card" style="border-color:rgba(59,130,246,0.4);background:rgba(59,130,246,0.04);">
+        <div class="claw-top"><span class="claw-emoji">⚡</span><span class="phase-badge phase-mvp">New v0.3</span></div>
+        <div class="claw-name">CommandClaw</div>
+        <div class="claw-desc">Multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, timeline audit, and bulk review</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- PLATFORM ENGINES -->
+<section style="background: var(--surface);">
+  <div class="section-inner">
+    <span class="section-tag">Platform Engines</span>
+    <h2 class="section-title">Always-On Intelligence. Built In.</h2>
+    <p class="section-sub">Beyond the 26 security claws, these core engines run continuously to govern every action, agent, and workflow.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2.5rem;">
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🛡️</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Trust Fabric</div>
+        <div style="font-size:.85rem;color:var(--text2);">Central zero-trust enforcement — 6-stage pipeline evaluating every security action before it executes. Policy eval, risk scoring, anomaly detection, immutable audit.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🔄</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Swarm Orchestration</div>
+        <div style="font-size:.85rem;color:var(--text2);">Parallel multi-agent investigation with planner, dispatcher, judge synthesis, SSE live stream, suspicious-identity presets, and ticket handoff to Jira/PagerDuty.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🚨</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Autonomous Remediation</div>
+        <div style="font-size:.85rem;color:var(--text2);">Finding → playbook matching → action execution → human approval gate → one-click rollback. 5 built-in playbooks, Okta/Entra/AWS/CrowdStrike integrations.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">💍</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Execution Ring Policy</div>
+        <div style="font-size:.85rem;color:var(--text2);">4-tier privilege isolation: ring0 (blocked), ring1 (2 approvals), ring2 (trust-gated), ring3 (auto-allow). Deterministic <code style="font-size:.78rem;background:var(--bg);padding:1px 4px;border-radius:3px;">execution_ring_violation</code> deny reason on all violations.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">📡</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Channel Gateway</div>
+        <div style="font-size:.85rem;color:var(--text2);">Normalizes Teams, Slack, webhook, email, and CLI commands into a single policy-governed CommandClaw contract. Multi-operator approval, bulk review, timeline audit.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🏥</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">SRE Policy Engine</div>
+        <div style="font-size:.85rem;color:var(--text2);">Circuit breaker, error budget enforcement, and SLO primitives for all governed modules. Cascading failure prevention tested against OWASP ASI-08.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🔐</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Connector Provenance</div>
+        <div style="font-size:.85rem;color:var(--text2);">SHA-256 content hash + Ed25519 signature verification at skill pack install time. Unsigned community packages warn; tampered manifests are blocked.</div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
+        <div style="font-size:1.5rem;margin-bottom:.5rem;">🌐</div>
+        <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">External Agent Control</div>
+        <div style="font-size:.85rem;color:var(--text2);">Remote agent registration, heartbeat, tenant-scoped dispatch, allowed-intent enforcement, and kill-switch. Every agent has a cryptographic identity via Ed25519 signing.</div>
+      </div>
+
     </div>
   </div>
 </section>
 
 <!-- ARCHITECTURE -->
-<section id="architecture" style="background: var(--surface);">
+<section id="architecture">
   <div class="section-inner">
     <span class="section-tag">Architecture</span>
     <h2 class="section-title">Built for Scale. Designed for Security.</h2>
@@ -810,13 +882,13 @@
         <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">ShadCN UI</div><div class="arch-item-text">Accessible component primitives</div></div></div>
       </div>
       <div class="arch-col">
-        <h3>Governance</h3>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">AGT Adapter Boundary</div><div class="arch-item-text">Provider isolation under Regent Fabric</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">MCP Gateway Controls</div><div class="arch-item-text">Skill install scan + policy block path</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">E2E Messaging Flag Path</div><div class="arch-item-text">Inter-claw secure envelope metadata</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">JWT Auth</div><div class="arch-item-text">Short-lived tokens with refresh rotation</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Zero Trust Policy Engine</div><div class="arch-item-text">Flexible rule evaluation per action</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Immutable Audit Log</div><div class="arch-item-text">Full lineage for every decision</div></div></div>
+        <h3>Governance &amp; Security</h3>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Trust Fabric Engine</div><div class="arch-item-text">6-stage pipeline: anomaly → policy → risk → audit → decision</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Execution Ring Policy</div><div class="arch-item-text">ring0 blocked → ring3 auto-allow, 4-tier privilege isolation</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Ed25519 Inter-Agent Signing</div><div class="arch-item-text">Cryptographic identity for every agent envelope</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">PyJWT + Rate Limiting</div><div class="arch-item-text">Short-lived tokens, 10 req/min brute-force guard</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">SRE Engine</div><div class="arch-item-text">Circuit breaker + error budget for all governed modules</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Immutable Audit Log</div><div class="arch-item-text">Every action, approval, and policy event with full lineage</div></div></div>
       </div>
     </div>
   </div>
@@ -857,7 +929,7 @@
       <div class="principle-card">
         <span class="principle-icon">⚙️</span>
         <div class="principle-title">Every module is governed</div>
-        <div class="principle-desc">All 24 claws share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
+        <div class="principle-desc">All 26 claws share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
       </div>
     </div>
   </div>
@@ -912,6 +984,7 @@
     <nav class="footer-links">
       <a href="docs.html">Documentation</a>
       <a href="changelog.html">Changelog</a>
+      <a href="owasp-agentic.html">OWASP Matrix</a>
       <a href="#claws">Security Claws</a>
       <a href="#architecture">Architecture</a>
       <a href="https://github.com/wcoreiron-rgb/regentclaw" target="_blank" rel="noopener">GitHub</a>
