@@ -27,6 +27,19 @@ function secureChannelMeta(outputJson?: string | null): string {
   }
 }
 
+function executionMeta(outputJson?: string | null): { mode: string; fallbackReason?: string } {
+  if (!outputJson) return { mode: 'unknown' };
+  try {
+    const parsed = JSON.parse(outputJson);
+    return {
+      mode: parsed?.execution_mode || 'unknown',
+      fallbackReason: parsed?.fallback_reason,
+    };
+  } catch {
+    return { mode: 'unknown' };
+  }
+}
+
 function judgeModelMeta(summary: any): { label: string; detail?: string; blocked?: boolean } {
   const jm = summary?.judge_model;
   if (!jm) return { label: 'deterministic fallback' };
@@ -840,6 +853,7 @@ export default function SwarmJobDetailPage() {
                   <th className="px-5 py-3 text-left">Confidence</th>
                   <th className="px-5 py-3 text-left">Risk</th>
                   <th className="px-5 py-3 text-left">Secure Channel</th>
+                  <th className="px-5 py-3 text-left">Execution</th>
                   <th className="px-5 py-3 text-left">Exec Time</th>
                 </tr>
               </thead>
@@ -848,6 +862,8 @@ export default function SwarmJobDetailPage() {
                   const tMeta = statusMeta(task.status);
                   const TIcon = tMeta.icon;
                   const secureState = secureChannelMeta(task.output_json);
+                  const exec = executionMeta(task.output_json);
+                  const simulated = exec.mode === 'simulated_fallback';
                   return (
                     <tr key={task.id} className="hover:bg-gray-800/40">
                       <td className="px-5 py-3 text-white">{task.claw}</td>
@@ -857,6 +873,22 @@ export default function SwarmJobDetailPage() {
                       <td className="px-5 py-3 text-gray-300">{task.confidence ?? '—'}</td>
                       <td className="px-5 py-3 text-gray-300">{task.risk_score ?? '—'}</td>
                       <td className="px-5 py-3 text-gray-300">{secureState}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-xs inline-flex w-fit px-1.5 py-0.5 rounded border ${
+                            simulated
+                              ? 'bg-yellow-900/30 text-yellow-300 border-yellow-800'
+                              : 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
+                          }`}>
+                            {simulated ? 'simulated fallback' : 'real handler'}
+                          </span>
+                          {simulated && exec.fallbackReason && (
+                            <span className="text-[11px] text-gray-500 max-w-[260px] truncate" title={exec.fallbackReason}>
+                              {exec.fallbackReason}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-5 py-3 text-gray-400">{task.execution_time_ms != null ? `${task.execution_time_ms}ms` : '—'}</td>
                     </tr>
                   );
