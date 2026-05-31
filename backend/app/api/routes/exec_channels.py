@@ -577,14 +577,22 @@ def get_production_gate(gate_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/production-gates/{gate_id}/approve")
-def approve_production_gate(gate_id: str, body: dict, db: Session = Depends(get_db)):
+def approve_production_gate(
+    gate_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
     if not g:
         raise HTTPException(404, "Gate not found")
     if g.status != "pending_approval":
         raise HTTPException(400, f"Gate is not pending approval (status: {g.status})")
 
-    approver = body.get("approved_by", "unknown")
+    # Approver identity always comes from JWT.
+    approver = current_user.get("sub", "unknown")
+    if approver == g.requested_by:
+        raise HTTPException(403, "Self-approval not permitted — a different user must approve")
     approvals = list(g.approvals_received or [])
 
     # Prevent same person approving twice
@@ -609,12 +617,17 @@ def approve_production_gate(gate_id: str, body: dict, db: Session = Depends(get_
 
 
 @router.post("/production-gates/{gate_id}/reject")
-def reject_production_gate(gate_id: str, body: dict, db: Session = Depends(get_db)):
+def reject_production_gate(
+    gate_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
     if not g:
         raise HTTPException(404, "Gate not found")
     g.status           = "rejected"
-    g.rejected_by      = body.get("rejected_by", "unknown")
+    g.rejected_by      = current_user.get("sub", "unknown")
     g.rejection_reason = body.get("reason", "")
     db.commit()
     return {"message": "Production gate rejected", "status": "rejected"}
@@ -627,6 +640,51 @@ def execute_production_gate(gate_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Gate not found")
     if g.status != "approved":
         raise HTTPException(400, f"Gate is not approved (status: {g.status})")
+
+    # Re-check Trust Fabric before production execution (authoritative gate).
+    try:
+        async def _run_enforce_production():
+            async with AsyncSessionLocal() as adb:
+                return await enforce(
+                    adb,
+                    ActionRequest(
+                        module="exec_channels",
+                        actor_id=g.agent_id or g.requested_by,
+                        actor_name=g.requested_by,
+                        actor_type="agent" if g.agent_id else "human",
+                        action="production",
+                        target=g.target_system,
+                        target_type="production_system",
+                        context={
+                            "channel": "production",
+                            "environment": "prod",
+                            "enforce_ring_policy": True,
+                            "caller_role": "admin",
+                            "trust_score": 50.0,
+                            "change_type": g.change_type,
+                        },
+                    ),
+                )
+
+        tf_decision = asyncio.run(_run_enforce_production())
+        if not tf_decision.allowed:
+            raise HTTPException(
+                403,
+                detail={
+                    "policy_name": tf_decision.policy_name,
+                    "deny_reason": tf_decision.reason,
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            503,
+            detail={
+                "policy_name": "trust_fabric_unavailable",
+                "deny_reason": "Trust Fabric evaluation failed for production execution",
+            },
+        ) from exc
 
     g.status      = "completed"
     g.executed_at = datetime.utcnow()

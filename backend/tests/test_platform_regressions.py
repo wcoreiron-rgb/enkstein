@@ -363,6 +363,71 @@ async def test_exec_execute_fails_closed_when_trust_fabric_unavailable(client, m
 
 
 @pytest.mark.asyncio
+async def test_production_gate_approve_uses_authenticated_identity(client, monkeypatch):
+    import app.api.routes.exec_channels as exec_routes
+
+    monkeypatch.setattr(exec_routes, "PRODUCTION_APPROVALS_REQUIRED", 1)
+    created = await client.post(
+        "/api/v1/exec/production",
+        json={
+            "title": "Apply prod change",
+            "requested_by": "operator-a",
+            "change_type": "config_update",
+            "target_system": "prod-api",
+        },
+    )
+    assert created.status_code == 200, created.text
+    gate_id = created.json()["id"]
+
+    approve = await client.post(
+        f"/api/v1/exec/production-gates/{gate_id}/approve",
+        json={"approved_by": "spoofed-user", "note": "approve"},
+    )
+    assert approve.status_code == 200, approve.text
+
+    detail = await client.get(f"/api/v1/exec/production-gates/{gate_id}")
+    assert detail.status_code == 200, detail.text
+    approvals = detail.json().get("approvals_received") or []
+    assert approvals
+    assert approvals[0]["approver"] == "test-user"
+
+
+@pytest.mark.asyncio
+async def test_production_gate_execute_fails_closed_when_trust_fabric_unavailable(client, monkeypatch):
+    import app.api.routes.exec_channels as exec_routes
+
+    monkeypatch.setattr(exec_routes, "PRODUCTION_APPROVALS_REQUIRED", 1)
+    created = await client.post(
+        "/api/v1/exec/production",
+        json={
+            "title": "Apply prod change",
+            "requested_by": "operator-a",
+            "change_type": "config_update",
+            "target_system": "prod-api",
+        },
+    )
+    assert created.status_code == 200, created.text
+    gate_id = created.json()["id"]
+
+    approve = await client.post(
+        f"/api/v1/exec/production-gates/{gate_id}/approve",
+        json={"approved_by": "admin-user"},
+    )
+    assert approve.status_code == 200, approve.text
+    assert approve.json()["status"] == "approved"
+
+    async def _raise_enforce(*args, **kwargs):
+        raise RuntimeError("tf down")
+
+    monkeypatch.setattr(exec_routes, "enforce", _raise_enforce)
+
+    execute = await client.post(f"/api/v1/exec/production-gates/{gate_id}/execute")
+    assert execute.status_code == 503, execute.text
+    detail = execute.json().get("detail", {})
+    assert detail.get("policy_name") == "trust_fabric_unavailable"
+
+
+@pytest.mark.asyncio
 async def test_remediation_approve_blocked_by_ring0_trust_fabric(client):
     # Create a manual remediation action with ring0 action_type.
     trig = await client.post(
