@@ -293,6 +293,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added Playwright E2E coverage for the Swarm Create Ticket flow:
     - `cd frontend && npm run test:e2e -- e2e/swarm-create-ticket.spec.ts`
     - Local sandbox note: E2E requires the dev server to bind to `127.0.0.1:3100`.
+ - Execution-channel/Remediation hardening:
+   - `exec_channels` create/execute routes now fail closed when Trust Fabric evaluation is unavailable.
+   - Production gate approve/reject now bind actor identity to JWT principal (body spoofing ignored) and block self-approval.
+   - Production gate execute now performs authoritative Trust Fabric re-check before completion.
+   - Remediation approve now fails closed when Trust Fabric evaluation is unavailable.
 
 ## Platform Modules (26 Security Claws + Core Engines)
 

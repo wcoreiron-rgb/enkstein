@@ -1091,6 +1091,52 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.4 — Trust Fabric Route Convergence Hardening                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Trust Fabric Convergence: Exec + Remediation + Production Gates</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Hardening</span>
+          <span class="tag tag-fix">Policy</span>
+          <span class="tag tag-feat">Runtime</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.4</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release removes compatibility bypass behavior and enforces authoritative Trust Fabric
+        decisions across execution and remediation approval paths.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Fail-closed execution requests:</strong> <code>/api/v1/exec/shell</code>, <code>/api/v1/exec/browser</code>, and execute paths now return <code>503 trust_fabric_unavailable</code> when policy evaluation cannot run.</li>
+          <li><strong>Production-gate identity enforcement:</strong> approve/reject actor is always sourced from JWT identity; request body identity fields are ignored.</li>
+          <li><strong>Production-gate self-approval block:</strong> requester cannot approve their own production gate.</li>
+          <li><strong>Production execute re-check:</strong> <code>/api/v1/exec/production-gates/{id}/execute</code> performs a pre-execution Trust Fabric authorization and fails closed on gateway error.</li>
+          <li><strong>Remediation approve fail-closed:</strong> remediation approval now returns governed deny when Trust Fabric evaluation is unavailable.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Platform regressions:</strong> new tests cover fail-closed behavior for exec create/execute, production-gate execute, and remediation approve.</li>
+          <li><strong>Identity regressions:</strong> tests confirm production-gate approve/reject uses JWT principal and blocks self-approval.</li>
+          <li><strong>Smoke:</strong> <code>pytest -q tests/test_platform_regressions.py</code> targeted slices + <code>tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> passed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.3 — Swarm Ticket Handoff Hardening                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

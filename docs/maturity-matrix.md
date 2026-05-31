@@ -11,7 +11,7 @@ Status legend:
 | Capability Area | Status | Current Evidence | Gaps to Close |
 |---|---|---|---|
 | Cryptographic agent identity mesh | In Progress | Ed25519 inter-agent signing + verify endpoint | Full attestation mesh (SPIFFE-like), key lifecycle/rotation policy |
-| Hard execution isolation model | In Progress | Ring policy + Trust Fabric ring decisions + route-level convergence in exec/remediation | Full OS sandbox guarantees across all execution channels |
+| Hard execution isolation model | In Progress | Ring policy + Trust Fabric ring decisions + route-level convergence in exec/remediation + fail-closed execution/approval behavior when Trust Fabric unavailable | Full OS sandbox guarantees across all execution channels |
 | Formal SRE governance layer | In Progress | Error-budget + circuit-breaker primitives, SRE API/status endpoints | Published SLO docs, error-budget policy packs, richer telemetry/export |
 | OWASP Agentic Top 10 evidence mapping | In Progress | Dedicated ASI mapping markdown + linked controls | Per-category adversarial tests and deeper evidence anchors |
 | Inter-agent secure messaging (prod default) | In Progress | Feature-flagged signed secure channel in swarm task paths + verify endpoint | Default-on rollout + key governance + replay resistance policy |
