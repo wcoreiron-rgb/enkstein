@@ -255,18 +255,43 @@ async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(g
     )
     result = await db.execute(stmt)
     findings = result.scalars().all()
+    live_rows = []
+    live_risks = []
+    if not findings:
+        for cfg in PROVIDER_CONFIG:
+            creds = await _get_provider_credentials(db, cfg["connector_type"])
+            if not creds:
+                continue
+            try:
+                raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+            except Exception:
+                continue
+            for row in raw_findings[:2]:
+                live_rows.append(
+                    {
+                        "title": row.get("title") or f"{cfg['provider']} live finding",
+                        "detail": (row.get("description") or "Connector-backed task finding")[:220],
+                    }
+                )
+                live_risks.append(float(row.get("risk_score") or 0.0))
+            if live_rows:
+                break
+
     max_risk = max([float(f.risk_score or 0.0) for f in findings], default=0.0)
+    if live_risks:
+        max_risk = max(max_risk, max(live_risks))
     severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
-    confidence = 0.88 if findings else 0.7
+    confidence = 0.9 if live_rows else (0.88 if findings else 0.7)
     elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
 
-    finding_rows = [
+    persisted_rows = [
         {
             "title": f.title,
             "detail": f"{f.provider or 'cloud'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}",
         }
         for f in findings[:3]
-    ] or [{"title": "No cloud findings persisted yet", "detail": "Run /cloudclaw/scan or configure providers."}]
+    ]
+    finding_rows = live_rows or persisted_rows or [{"title": "No cloud findings persisted yet", "detail": "Run /cloudclaw/scan or configure providers."}]
 
     return {
         "task_id": f"cloud-task-{int(started.timestamp())}",

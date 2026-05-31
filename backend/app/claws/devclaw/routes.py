@@ -443,6 +443,9 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 
 @router.post("/task", summary="Execute focused DevClaw swarm task")
 async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_db)):
+    from app.services.connector_check import is_connector_configured
+    from app.claws.devclaw.github_scanner import fetch_github_findings
+
     started = datetime.utcnow()
     stmt = (
         select(Finding)
@@ -452,18 +455,37 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
     )
     result = await db.execute(stmt)
     findings = result.scalars().all()
+    live_rows = []
+    live_risks = []
+    if not findings and await is_connector_configured(db, "github"):
+        try:
+            raw = await fetch_github_findings(db)
+        except Exception:
+            raw = []
+        for row in raw[:3]:
+            live_rows.append(
+                {
+                    "title": row.get("title") or "GitHub live finding",
+                    "detail": (row.get("description") or "Connector-backed task finding")[:220],
+                }
+            )
+            live_risks.append(float(row.get("risk_score") or 0.0))
+
     max_risk = max([float(f.risk_score or 0.0) for f in findings], default=0.0)
+    if live_risks:
+        max_risk = max(max_risk, max(live_risks))
     severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
-    confidence = 0.9 if findings else 0.7
+    confidence = 0.92 if live_rows else (0.9 if findings else 0.7)
     elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
 
-    finding_rows = [
+    persisted_rows = [
         {
             "title": f.title,
             "detail": f"{f.provider or 'dev'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}",
         }
         for f in findings[:3]
-    ] or [{"title": "No dev findings persisted yet", "detail": "Run /devclaw/scan or configure providers."}]
+    ]
+    finding_rows = live_rows or persisted_rows or [{"title": "No dev findings persisted yet", "detail": "Run /devclaw/scan or configure providers."}]
 
     return {
         "task_id": f"dev-task-{int(started.timestamp())}",
