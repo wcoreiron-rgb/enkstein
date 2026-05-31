@@ -376,6 +376,8 @@ export const rejectPendingCommand = (commandId: string, body?: { reviewer?: stri
     method: 'POST',
     body: JSON.stringify(body || {}),
   });
+export const getCommandTimeline = (commandId: string, limit = 100) =>
+  apiFetch<any>(`/commands/${encodeURIComponent(commandId)}/timeline?limit=${limit}`);
 
 // Governed Execution Channels
 export const submitShellExec = (body: object) =>

@@ -8,7 +8,7 @@ import {
 import {
   getChannelMessages, getChannelGatewayStats, simulateChannelMessage,
   getChannelIdentities, upsertChannelIdentity,
-  getPendingCommands, approvePendingCommand, rejectPendingCommand,
+  getPendingCommands, approvePendingCommand, rejectPendingCommand, getCommandTimeline,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
 
@@ -81,6 +81,15 @@ type PendingCommand = {
   required_approvals?: number;
   approvals_received?: number;
   approval_status?: string;
+};
+
+type TimelineEvent = {
+  timestamp: string | null;
+  actor: string;
+  action: string;
+  outcome: string;
+  policy_name: string;
+  reason: string;
 };
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -604,6 +613,9 @@ export default function ChannelGatewayPage() {
   const [simResult,  setSimResult]  = useState<any>(null);
   const [approving, setApproving] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
+  const [timelineOpenFor, setTimelineOpenFor] = useState<string | null>(null);
+  const [timelineLoadingFor, setTimelineLoadingFor] = useState<string | null>(null);
+  const [timelines, setTimelines] = useState<Record<string, TimelineEvent[]>>({});
 
   // Filters
   const [typeFilter,     setTypeFilter]     = useState('all');
@@ -654,6 +666,24 @@ export default function ChannelGatewayPage() {
       await load();
     } finally {
       setRejecting(null);
+    }
+  };
+
+  const toggleTimeline = async (commandId: string) => {
+    if (timelineOpenFor === commandId) {
+      setTimelineOpenFor(null);
+      return;
+    }
+    setTimelineOpenFor(commandId);
+    if (timelines[commandId]) return;
+    setTimelineLoadingFor(commandId);
+    try {
+      const res = await getCommandTimeline(commandId, 100);
+      setTimelines(prev => ({ ...prev, [commandId]: (res?.timeline || []) as TimelineEvent[] }));
+    } catch {
+      setTimelines(prev => ({ ...prev, [commandId]: [] }));
+    } finally {
+      setTimelineLoadingFor(null);
     }
   };
 
@@ -848,43 +878,76 @@ export default function ChannelGatewayPage() {
             </thead>
             <tbody>
               {pendingCommands.map(cmd => (
-                <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
-                  <td className="px-4 py-3 text-xs font-mono text-cyan-300">{cmd.command_id}</td>
-                  <td className="px-4 py-3 text-xs text-gray-300">{cmd.actor || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-300">{cmd.action}</td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{cmd.target || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-yellow-300">{Math.round(cmd.risk_score || 0)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-300">
-                    {(cmd.approvals_received ?? 0)}/{(cmd.required_approvals ?? 1)}
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
-                    {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => approveCommand(cmd.command_id)}
-                        disabled={approving === cmd.command_id || rejecting === cmd.command_id}
-                        className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
-                      >
-                        {approving === cmd.command_id
-                          ? <RefreshCw className="w-3 h-3 animate-spin" />
-                          : <Check className="w-3 h-3" />}
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => rejectCommand(cmd.command_id)}
-                        disabled={rejecting === cmd.command_id || approving === cmd.command_id}
-                        className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
-                      >
-                        {rejecting === cmd.command_id
-                          ? <RefreshCw className="w-3 h-3 animate-spin" />
-                          : <XCircle className="w-3 h-3" />}
-                        Reject
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <div key={cmd.command_id} className="contents">
+                  <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
+                    <td className="px-4 py-3 text-xs font-mono text-cyan-300">{cmd.command_id}</td>
+                    <td className="px-4 py-3 text-xs text-gray-300">{cmd.actor || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-300">{cmd.action}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{cmd.target || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-yellow-300">{Math.round(cmd.risk_score || 0)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-300">
+                      {(cmd.approvals_received ?? 0)}/{(cmd.required_approvals ?? 1)}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {cmd.timestamp ? new Date(cmd.timestamp).toLocaleTimeString() : '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button
+                          onClick={() => approveCommand(cmd.command_id)}
+                          disabled={approving === cmd.command_id || rejecting === cmd.command_id}
+                          className="px-2.5 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
+                        >
+                          {approving === cmd.command_id
+                            ? <RefreshCw className="w-3 h-3 animate-spin" />
+                            : <Check className="w-3 h-3" />}
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => rejectCommand(cmd.command_id)}
+                          disabled={rejecting === cmd.command_id || approving === cmd.command_id}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs flex items-center gap-1.5 disabled:opacity-60"
+                        >
+                          {rejecting === cmd.command_id
+                            ? <RefreshCw className="w-3 h-3 animate-spin" />
+                            : <XCircle className="w-3 h-3" />}
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => toggleTimeline(cmd.command_id)}
+                          disabled={timelineLoadingFor === cmd.command_id}
+                          className="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs flex items-center gap-1.5 disabled:opacity-60"
+                        >
+                          {timelineLoadingFor === cmd.command_id
+                            ? <RefreshCw className="w-3 h-3 animate-spin" />
+                            : <Clock className="w-3 h-3" />}
+                          Timeline
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {timelineOpenFor === cmd.command_id && (
+                    <tr className="border-b border-gray-800 bg-gray-950">
+                      <td colSpan={8} className="px-4 py-3">
+                        <p className="text-xs text-gray-400 mb-2">Command Timeline</p>
+                        <div className="space-y-1.5">
+                          {(timelines[cmd.command_id] || []).map((ev, idx) => (
+                            <div key={`${cmd.command_id}-${idx}`} className="text-xs bg-gray-900 border border-gray-800 rounded px-2.5 py-1.5 text-gray-300 flex flex-wrap gap-3">
+                              <span className="text-gray-500">{ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : '—'}</span>
+                              <span>{ev.action}</span>
+                              <span className="text-cyan-300">{ev.outcome}</span>
+                              <span>{ev.actor || '—'}</span>
+                              <span className="text-gray-500">{ev.policy_name || '—'}</span>
+                            </div>
+                          ))}
+                          {(timelines[cmd.command_id] || []).length === 0 && (
+                            <p className="text-xs text-gray-500">No timeline events available.</p>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </div>
               ))}
             </tbody>
           </table>

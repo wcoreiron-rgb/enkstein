@@ -359,6 +359,45 @@ async def list_recent_commands(
     return {"count": len(rows), "commands": rows}
 
 
+@router.get("/commands/{command_id}/timeline")
+async def command_timeline(
+    command_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Event)
+        .where(Event.source_module == "commandclaw")
+        .order_by(desc(Event.timestamp))
+        .limit(limit)
+    )
+    events = result.scalars().all()
+    timeline = []
+    for e in events:
+        event_cmd_id = _event_command_id(e)
+        if event_cmd_id != command_id and (e.target or "") != command_id:
+            continue
+        timeline.append(
+            {
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+                "actor": e.actor_name,
+                "actor_id": e.actor_id,
+                "action": e.action,
+                "target": e.target,
+                "outcome": e.outcome.value if hasattr(e.outcome, "value") else str(e.outcome),
+                "severity": e.severity.value if hasattr(e.severity, "value") else str(e.severity),
+                "risk_score": e.risk_score,
+                "policy_name": e.policy_name,
+                "reason": e.policy_reason,
+                "description": e.description,
+                "metadata": _event_metadata(e),
+            }
+        )
+    if not timeline:
+        raise HTTPException(status_code=404, detail="Command timeline not found")
+    return {"command_id": command_id, "count": len(timeline), "timeline": timeline}
+
+
 @router.get("/commands/pending")
 async def list_pending_commands(
     limit: int = Query(default=50, ge=1, le=200),

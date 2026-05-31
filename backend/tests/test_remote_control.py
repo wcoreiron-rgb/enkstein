@@ -324,3 +324,43 @@ async def test_commands_pending_reject_flow(client, db_session):
     assert pending_after.status_code == 200, pending_after.text
     commands = pending_after.json()["commands"]
     assert not any(c["command_id"] == cmd_id for c in commands)
+
+
+@pytest.mark.asyncio
+async def test_command_timeline_endpoint(client, db_session):
+    cmd_id = "cmd_timeline_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner3@company.com",
+        actor_name="owner3@company.com",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=55.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded for timeline test",
+        description="[commandclaw] owner3@company.com -> run_scan",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner3@company.com"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    approve = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "secops-a", "reason": "step one"},
+    )
+    assert approve.status_code == 200, approve.text
+
+    timeline = await client.get(f"/api/v1/commands/{cmd_id}/timeline")
+    assert timeline.status_code == 200, timeline.text
+    body = timeline.json()
+    assert body["command_id"] == cmd_id
+    assert body["count"] >= 2
+    actions = {item["action"] for item in body["timeline"]}
+    assert "run_scan" in actions
+    assert "approve_command_step" in actions or "approve_command" in actions

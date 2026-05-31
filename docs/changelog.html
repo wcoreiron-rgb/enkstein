@@ -335,6 +335,50 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.1 — Command Timeline Audit Trail                              -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Command Timeline Endpoint + UI Audit View</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">Audit</span>
+          <span class="tag tag-feat">Frontend</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.1</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This slice adds a full command lifecycle timeline API and exposes it in Channel Gateway so operators can inspect approval/rejection progression before acting.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New endpoint:</strong> <code>GET /api/v1/commands/{command_id}/timeline</code> returns command-linked lifecycle events and metadata.</li>
+          <li><strong>Channel Gateway commands UI</strong> adds a <code>Timeline</code> action that expands inline event history for each pending command.</li>
+          <li><strong>API client support</strong> adds <code>getCommandTimeline()</code> helper for frontend consumption.</li>
+          <li><strong>Pending review visibility</strong> improves operator context for multi-step approval decisions.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests</strong> include timeline endpoint coverage in <code>test_remote_control.py</code>.</li>
+          <li><strong>Regression run</strong>: <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> → <strong>15 passed</strong>.</li>
+          <li><strong>Frontend lint</strong>: <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.0 — Pending Command Rejection Flow                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
