@@ -239,6 +239,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - inline required-approvals selector for pending command delegation
     - quick-ingest actions for CLI/Webhook/Email adapters
     - expanded message detail with normalized `command_result` metadata
+  - Channel chat-ops review commands are now supported from ingress messages:
+    - `approve <command_id>`
+    - `reject <command_id>` / `deny <command_id>`
+    These invoke the same governed pending-command review path used by command APIs.
   - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
     - `provider` must be `jira` and `target_type` must be `ticket`
     - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
@@ -318,6 +322,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
    - Production gate approve/reject now bind actor identity to JWT principal (body spoofing ignored) and block self-approval.
    - Production gate execute now performs authoritative Trust Fabric re-check before completion.
    - Remediation approve now fails closed when Trust Fabric evaluation is unavailable.
+ - Control Center v2:
+   - Added backend summary endpoint for unified operator telemetry:
+     - `GET /api/v1/dashboard/control-center-summary`
+   - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, and execution gate status.
 
 ## Platform Modules (26 Security Claws + Core Engines)
 

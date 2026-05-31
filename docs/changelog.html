@@ -457,6 +457,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.1 — Control Center Summary + Channel Chat-Ops Review          -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Control Center Summary API + Channel Chat-Ops Approve/Reject</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Control Center</span>
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.1</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice unifies operator telemetry through a backend control-center summary surface and adds two-way channel review commands for pending command approvals.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Control Center summary API:</strong> added <code>GET /api/v1/dashboard/control-center-summary</code> for pending commands, swarm pressure, remote-agent health, schedule load, channel pressure, and execution-gate status.</li>
+          <li><strong>Control Center v2 UI:</strong> frontend control center now renders live summary cards from the new backend endpoint.</li>
+          <li><strong>Channel chat-ops review:</strong> channel messages now support <code>approve &lt;command_id&gt;</code> and <code>reject &lt;command_id&gt;</code> / <code>deny &lt;command_id&gt;</code> with the same command policy workflow used by direct APIs.</li>
+          <li><strong>Test-mode session routing:</strong> channel review path now reuses dependency-overridden async DB session in pytest to avoid bypassing the request test database.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_control_center_summary.py tests/test_channel_gateway_commands.py -q</code> → <strong>passing</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.0 — Timeline Export + Outcome Filter Validation               -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
