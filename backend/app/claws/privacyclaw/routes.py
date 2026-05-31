@@ -10,6 +10,7 @@ from sqlalchemy import desc
 
 from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
+from app.services.connector_check import is_connector_configured
 
 router = APIRouter(prefix="/privacyclaw", tags=["PrivacyClaw"])
 
@@ -363,6 +364,10 @@ async def get_dsr_requests(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused PrivacyClaw swarm task")
 async def run_privacy_task(payload: PrivacyTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
+    any_configured = any([
+        await is_connector_configured(db, p["connector_type"])
+        for p in PROVIDER_MAP if p.get("connector_type")
+    ])
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
     )
@@ -400,4 +405,6 @@ async def run_privacy_task(payload: PrivacyTaskRequest, db: AsyncSession = Depen
         "policy_decisions": [],
         "compliance_mappings": ["GDPR Art.5", "GDPR Art.28"],
         "execution_time_ms": elapsed_ms,
+        "data_source": "persisted_db" if findings else "seeded_fallback",
+        "connector_state": "configured" if any_configured else "unconfigured",
     }

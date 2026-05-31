@@ -388,4 +388,6 @@ async def run_custom_task(payload: CustomTaskRequest, db: AsyncSession = Depends
         "execution_time_ms": elapsed_ms,
         "definitions_count": len(definitions),
         "total_endpoints": total_endpoints,
+        "data_source": "persisted_db" if definitions else "seeded_fallback",
+        "connector_state": "configured" if definitions else "unconfigured",
     }

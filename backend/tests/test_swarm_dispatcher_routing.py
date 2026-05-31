@@ -94,6 +94,13 @@ async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
         "complianceclaw",
         "recoveryclaw",
         "automationclaw",
+        "intelclaw",
+        "privacyclaw",
+        "vendorclaw",
+        "insiderclaw",
+        "userclaw",
+        "saasclaw",
+        "customclaw",
     ],
 )
 async def test_dispatcher_task_provenance_fields_present(db_session, claw):
