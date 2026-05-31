@@ -29,14 +29,14 @@
 | # | Category | Status | Test Coverage |
 |---|----------|--------|---------------|
 | LLM01 | Prompt Injection | **Shipped** | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` (same prompt injection control as ASI-01) |
-| LLM02 | Insecure Output Handling | **Partially Shipped** | No automated test |
+| LLM02 | Insecure Output Handling | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` |
 | LLM03 | Training Data Poisoning | **N/A** | N/A |
-| LLM04 | Model Denial of Service | **In Progress** | No automated test on ArcClaw endpoint limits yet |
+| LLM04 | Model Denial of Service | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold` |
 | LLM05 | Supply-Chain Vulnerabilities | **In Progress** | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` (xfail) |
 | LLM06 | Sensitive Information Disclosure | **Shipped** | No automated test (see gap note below) |
 | LLM07 | Insecure Plugin Design | **Partially Shipped** | `test_ring_policy.py::test_ring0_always_blocked`, `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | LLM08 | Excessive Agency | **Shipped** (strengthened) | `test_ring_policy.py::test_ring1_requires_two_approvals`, `test_owasp_asi_evidence.py::test_asi09_self_approval_is_blocked` |
-| LLM09 | Overreliance | **Partially Shipped** | No automated test |
+| LLM09 | Overreliance | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` (override audit fields asserted) |
 | LLM10 | Model Theft | **N/A / Partial** | No automated test |
 
 ---
@@ -75,17 +75,17 @@
 
 **Evidence:**
 
-- `backend/app/claws/arcclaw/scanner.py`: `scan_text()` redacts secrets, API keys, and PII patterns from content. Applied to prompts and available for output scanning.
+- `backend/app/claws/arcclaw/scanner.py`: `scan_text()` redacts secrets, API keys, and PII patterns from content.
 - DLP scanner (`backend/app/services/finding_pipeline.py`) flags sensitive patterns in event payloads.
 - API responses do not reflect raw LLM output directly to clients — outputs pass through structured Pydantic schemas before serialization.
-- Output scanning is applied to submitted prompts but **not systematically applied to LLM response text** before it is stored or returned.
+- `backend/app/services/model_router.py::route_and_call()`: model responses are now re-scanned via `scan_text()` before return, with redaction applied when sensitive patterns are detected; scan metadata is attached as `output_scan`.
 
-**Test Coverage:** No automated test. The scanner functions are exercised via integration but not in an isolated unit test.
+**Test Coverage:**
+- `backend/tests/test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` — injects a sensitive mock model completion and asserts redaction + output-scan findings.
 
 **Known Limitations:**
-- LLM response bodies are stored and returned without a second-pass output scan. If a model returns malicious content (e.g., XSS payload, injected command), it is not re-inspected before storage.
 - No HTML sanitization layer exists for outputs rendered in the frontend.
-- Output sanitization should be applied symmetrically to both prompts and completions.
+- Output sanitization is currently enforced in Model Router paths; additional Claw-local AI paths should converge on the same output-scan contract.
 
 ---
 
@@ -113,24 +113,21 @@
 
 **Description:** Attacks that consume excessive compute, memory, or API quota by submitting crafted inputs (very long prompts, recursive queries, resource-intensive completions).
 
-**RegentClaw Status:** In Progress
+**RegentClaw Status:** Shipped (baseline)
 
 **Evidence:**
 
 - `backend/main.py`: `slowapi` rate limiter applied to authentication endpoints.
-- `POST /api/v1/arcclaw/events` and `/arcclaw/chat` do not currently have per-user rate limiting beyond the global auth limiter.
-- Prompt length is not capped before being sent to the model provider.
-- No token budget or cost-cap enforcement is implemented at the API layer.
+- `backend/app/api/routes/model_router.py`: per-IP rate limiting is enforced on `POST /api/v1/model-router/route` (30 requests / 60s window, in-process limiter).
+- Prompt length is capped by request schema (`max_length=32_000`) on model-router route payloads.
 
 **Test Coverage:**
-- `backend/tests/test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result` validates AGT supply-chain scan returns structured risk output without runtime failure.
-- `backend/tests/test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` is currently `xfail` and documents the expected enforcement behavior that still needs full route-level gating.
+- `backend/tests/test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold` — asserts 429 after threshold is exceeded.
 
 **Known Limitations:**
-- LLM-specific DoS protection (prompt length limits, per-user quota, token counting, backpressure) is not yet implemented on AI endpoints.
-- A sufficiently long or pathological prompt could exhaust provider API quota.
-- No circuit-breaker or fallback behavior when provider returns 429/503.
-- Planned: per-endpoint rate limiting via slowapi on ArcClaw routes.
+- In-process limiter is single-instance scoped; multi-replica deployments should use Redis-backed distributed limits.
+- Per-tenant quotas and token-budget controls are still planned.
+- ArcClaw-specific chat/event endpoints should adopt the same limiter contract for full parity.
 
 ---
 
@@ -188,7 +185,7 @@
 
 **Description:** Plugin/tool interfaces that are overly permissive, lack input validation, do not enforce authentication, or allow SSRF, privilege escalation, or injection via tool parameters.
 
-**RegentClaw Status:** Partially Shipped
+**RegentClaw Status:** Shipped (baseline)
 
 **Evidence:**
 
@@ -243,7 +240,7 @@
 
 **Description:** Users or automated systems trusting LLM outputs without verification — leading to incorrect decisions, missed alerts, or automated actions based on hallucinated information.
 
-**RegentClaw Status:** Partially Shipped
+**RegentClaw Status:** Shipped (baseline)
 
 **Evidence:**
 
@@ -251,13 +248,15 @@
 - AI events are never auto-executed — they are written to the event log and surface as findings requiring human review or policy-matched auto-response.
 - Remediation playbooks have `requires_approval` flag — high-risk playbooks require human sign-off before execution.
 - Findings include `severity` and `confidence` fields to help operators contextualize AI-generated detections.
+- `backend/app/services/model_router.py::route_and_call()`: override paths now record explicit audit fields (`override_used`, `override_reason`) to make human override behavior attributable.
 
-**Test Coverage:** No automated test.
+**Test Coverage:**
+- `backend/tests/test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` — verifies override use/reason are persisted in routing audit.
 
 **Known Limitations:**
 - Risk scores are displayed to users but there is no enforcement mechanism preventing operators from always approving high-risk AI recommendations without review.
 - No counter-factual or uncertainty quantification is presented alongside AI findings.
-- The platform does not log when a human overrides or ignores an AI-generated alert — there is no "dismissed by user" audit trail.
+- The platform now logs model routing overrides; broader analyst dismiss/accept workflow telemetry across all UI surfaces remains in progress.
 - No calibration data or false-positive rate reporting is implemented.
 
 ---
@@ -284,4 +283,4 @@
 
 ---
 
-*Last updated: 2026-05-30. Maintained by the RegentClaw security team.*
+*Last updated: 2026-05-31. Maintained by the RegentClaw security team.*

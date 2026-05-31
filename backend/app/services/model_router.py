@@ -18,6 +18,8 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+from app.claws.arcclaw.scanner import scan_text
+
 logger = logging.getLogger("regentclaw.model_router")
 
 
@@ -339,6 +341,7 @@ async def route_and_call(
     model_override: str | None = None,
     caller: str = "system",
     context_labels: list[str] | None = None,
+    override_reason: str | None = None,
     allow_fallback: bool = True,
 ) -> dict[str, Any]:
     """
@@ -376,6 +379,7 @@ async def route_and_call(
 
     # ── Step 2: Resolve provider ────────────────────────────────────────────
     provider = provider_override or _routing_table.get(sensitivity, Provider.ANTHROPIC)
+    override_used = bool(sensitivity_override or provider_override or model_override)
 
     # ── Step 3: Call backend ────────────────────────────────────────────────
     backend = _PROVIDER_BACKENDS.get(provider)
@@ -403,6 +407,18 @@ async def route_and_call(
 
     call_end = datetime.utcnow()
 
+    # ── Step 3b: Output re-scan (LLM02 hardening) ───────────────────────────
+    raw_response = str(result.get("response", ""))
+    output_scan = scan_text(raw_response, redact=True)
+    response_redacted = output_scan.redacted if output_scan.is_sensitive else raw_response
+    result["response"] = response_redacted
+    result["output_scan"] = {
+        "is_sensitive": output_scan.is_sensitive,
+        "findings": output_scan.findings,
+        "risk_signals": output_scan.risk_signals,
+        "redacted": output_scan.is_sensitive,
+    }
+
     # ── Step 4: Audit log ───────────────────────────────────────────────────
     audit_entry = {
         "id":           hashlib.sha256(f"{call_start.isoformat()}{caller}{prompt[:50]}".encode()).hexdigest()[:16],
@@ -419,6 +435,9 @@ async def route_and_call(
         "prompt_hash":  hashlib.sha256(prompt.encode()).hexdigest()[:16],
         "prompt_chars": len(prompt),
         "redacted":     transmitted_prompt != prompt,
+        "output_sensitive": output_scan.is_sensitive,
+        "override_used": override_used,
+        "override_reason": override_reason if override_used else None,
     }
     _append_audit(audit_entry)
 
@@ -429,6 +448,8 @@ async def route_and_call(
             "provider":       provider,
             "classification": classification,
             "redacted":       audit_entry["redacted"],
+            "override_used":  override_used,
+            "override_reason": override_reason if override_used else None,
         },
         "audit_id": audit_entry["id"],
     }

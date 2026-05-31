@@ -90,14 +90,14 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | Category | Status |
 |---|---|
 | LLM01 Prompt Injection | Shipped — 12-vector AGT audit on every AI event |
-| LLM02 Insecure Output Handling | Partially Shipped — input scanning only; output re-scan not yet applied |
+| LLM02 Insecure Output Handling | Shipped — prompt scanning + model-output re-scan/redaction metadata now applied in Model Router |
 | LLM03 Training Data Poisoning | N/A — uses provider APIs, no training pipeline |
-| LLM04 Model Denial of Service | In Progress — auth rate limiting exists; AI endpoint limits planned |
+| LLM04 Model Denial of Service | Shipped (baseline) — auth and `/model-router/route` per-IP rate limiting enforced; deeper tenant quotas remain planned |
 | LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan test coverage; no SBOM yet |
 | LLM06 Sensitive Information Disclosure | Shipped — Fernet encryption, DLP scanner, masked credential hints |
 | LLM07 Insecure Plugin Design | Partially Shipped — ring policy + SSRF protection shipped; OS sandbox not yet |
 | LLM08 Excessive Agency | Shipped — 4-ring privilege isolation, dual-approval gates, self-approval blocked |
-| LLM09 Overreliance | Partially Shipped — risk scores visible; no override audit trail yet |
+| LLM09 Overreliance | Shipped (baseline) — model override usage is now explicitly captured in routing audit (`override_used` + `override_reason`) |
 | LLM10 Model Theft | N/A — no hosted weights; API keys encrypted at rest |
 
 > This is a vendor self-assessment. Independent audit recommended before compliance reliance.

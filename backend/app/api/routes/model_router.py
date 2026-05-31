@@ -2,7 +2,11 @@
 RegentClaw — Secure Model Router API Routes
 """
 import logging
+import threading
+import time
+from collections import defaultdict
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends, Request, status
 from pydantic import BaseModel, Field
 
 from app.services.model_router import (
@@ -23,6 +27,28 @@ from app.services.model_router import (
 logger = logging.getLogger("regentclaw.model_router_api")
 router = APIRouter(prefix="/model-router", tags=["Model Router"])
 
+# ── In-process rate limiter for model routing (LLM04 hardening) ─────────────
+# For horizontally scaled deployments, swap for Redis-backed centralized limits.
+_MODEL_ROUTE_WINDOW = 60
+_MODEL_ROUTE_MAX = 30
+_model_route_store: dict[str, list[float]] = defaultdict(list)
+_model_route_lock = threading.Lock()
+
+
+def _model_route_rate_limit(request: Request) -> None:
+    ip = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    cutoff = now - _MODEL_ROUTE_WINDOW
+    with _model_route_lock:
+        window = [t for t in _model_route_store[ip] if t > cutoff]
+        if len(window) >= _MODEL_ROUTE_MAX:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many model route requests — please retry shortly.",
+                headers={"Retry-After": "60"},
+            )
+        window.append(now)
+        _model_route_store[ip] = window
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -33,6 +59,7 @@ class RouteRequest(BaseModel):
     model_override: str | None = None
     caller: str = Field(default="api")
     context_labels: list[str] | None = None
+    override_reason: str | None = Field(default=None, max_length=512)
 
 
 class ClassifyRequest(BaseModel):
@@ -47,7 +74,11 @@ class RoutingRuleUpdate(BaseModel):
 # ─── Endpoints ───────────────────────────────────────────────────────────────
 
 @router.post("/route", summary="Route a prompt to the appropriate model backend")
-async def route_prompt(body: RouteRequest):
+async def route_prompt(
+    body: RouteRequest,
+    request: Request,
+    _rl: None = Depends(_model_route_rate_limit),
+):
     """
     Classify the prompt's data sensitivity, route to the correct provider,
     call the model, and return the response with a full routing audit entry.
@@ -60,6 +91,7 @@ async def route_prompt(body: RouteRequest):
             model_override=body.model_override,
             caller=body.caller,
             context_labels=body.context_labels,
+            override_reason=body.override_reason,
         )
         return result
     except Exception:
