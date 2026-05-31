@@ -32,6 +32,8 @@ def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
         "logclaw",
         "netclaw",
         "complianceclaw",
+        "intelclaw",
+        "recoveryclaw",
     ],
 )
 async def test_dispatcher_routes_to_real_task(db_session, claw):

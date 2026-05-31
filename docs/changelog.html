@@ -335,6 +335,36 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.1 — Swarm Real Task Coverage: Intel + Recovery                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Dispatcher Routing Expanded to IntelClaw + RecoveryClaw</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-feat">Task Contract</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.1</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This batch replaces additional swarm simulation fallback paths by adding focused task endpoints for IntelClaw and RecoveryClaw and wiring dispatcher routing to use them.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New endpoints:</strong> <code>POST /api/v1/intelclaw/task</code> and <code>POST /api/v1/recoveryclaw/task</code>.</li>
+          <li><strong>Dispatcher routing:</strong> <code>backend/app/core/swarm/dispatcher.py</code> now routes IntelClaw/RecoveryClaw tasks through real handlers.</li>
+          <li><strong>Regression updates:</strong> dispatcher routing test matrix now includes intel and recovery claws.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.0 — Timeline Export + Outcome Filter Validation               -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

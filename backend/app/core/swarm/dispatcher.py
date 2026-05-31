@@ -20,8 +20,10 @@ from app.claws.dataclaw.routes import DataTaskRequest, run_data_task
 from app.claws.devclaw.routes import DevTaskRequest, run_dev_task
 from app.claws.endpointclaw.routes import EndpointTaskRequest, run_endpoint_task
 from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
+from app.claws.intelclaw.routes import IntelTaskRequest, run_intel_task
 from app.claws.logclaw.routes import LogTaskRequest, run_log_task
 from app.claws.netclaw.routes import NetTaskRequest, run_net_task
+from app.claws.recoveryclaw.routes import RecoveryTaskRequest, run_recovery_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
@@ -172,6 +174,10 @@ async def _execute_real_task_if_supported(
         output = await run_net_task(NetTaskRequest(**payload), db)
     elif claw == "complianceclaw":
         output = await run_compliance_task(ComplianceTaskRequest(**payload), db)
+    elif claw == "intelclaw":
+        output = await run_intel_task(IntelTaskRequest(**payload), db)
+    elif claw == "recoveryclaw":
+        output = await run_recovery_task(RecoveryTaskRequest(**payload), db)
     else:
         return None
 

@@ -1,8 +1,13 @@
 """IntelClaw — Threat Intelligence Feed API Routes."""
+from datetime import datetime
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.finding import Finding
 
 router = APIRouter(prefix="/intelclaw", tags=["IntelClaw"])
 CLAW_NAME = "intelclaw"
@@ -12,6 +17,15 @@ PROVIDER_MAP = [
     {"provider": "threatfox",   "label": "ThreatFox",  "connector_type": "threatfox"},
     {"provider": "cisa_kev",    "label": "CISA KEV",   "connector_type": "cisa_kev"},
 ]
+
+
+class IntelTaskRequest(BaseModel):
+    swarm_job_id: str = Field(..., min_length=3)
+    task_type: str = Field(default="investigate", min_length=2, max_length=128)
+    input: dict = Field(default_factory=dict)
+    classification: str = Field(default="internal", max_length=64)
+    model_profile: str | None = Field(default=None, max_length=128)
+    allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 _FINDINGS = [
     {
@@ -312,4 +326,53 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         "findings_updated": summary["updated"],
         "critical": summary["critical"],
         "high": summary["high"],
+    }
+
+
+@router.post("/task", summary="Execute focused IntelClaw swarm task")
+async def run_intel_task(payload: IntelTaskRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.utcnow()
+    result = await db.execute(
+        select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
+    )
+    findings = result.scalars().all()
+    fallback = _FINDINGS[:3] if not findings else []
+    max_risk = max(
+        [float(f.risk_score or 0.0) for f in findings],
+        default=max([float(f.get("risk_score") or 0.0) for f in fallback], default=0.0),
+    )
+    severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
+    confidence = 0.90 if findings else 0.76
+    elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+    rows = [
+        {
+            "title": f.title,
+            "detail": (f.description or f"{f.provider or 'intel'} finding")[:220],
+        }
+        for f in findings[:3]
+    ] or [
+        {
+            "title": f.get("title", "Intel finding"),
+            "detail": (f.get("description", "")[:220] or "Simulation finding"),
+        }
+        for f in fallback
+    ]
+    return {
+        "task_id": f"intel-task-{int(started.timestamp())}",
+        "swarm_job_id": payload.swarm_job_id,
+        "claw": "intelclaw",
+        "status": "completed",
+        "severity": severity,
+        "confidence": confidence,
+        "risk_score": max_risk,
+        "findings": rows or [{"title": "No intel findings", "detail": "Run /intelclaw/scan first."}],
+        "evidence": [],
+        "recommended_actions": [
+            "Validate high-confidence threat intel indicators against active assets",
+            "Prioritize remediations for actively exploited intel findings",
+        ],
+        "blocked_actions": [],
+        "policy_decisions": [],
+        "compliance_mappings": ["NIST SI-4", "ISO 27001 A.5.7"],
+        "execution_time_ms": elapsed_ms,
     }
