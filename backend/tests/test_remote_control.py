@@ -450,6 +450,8 @@ async def test_commands_pending_filters_and_status_endpoint(client, db_session):
     assert status_body["command_id"] == "cmd_filter_b"
     assert status_body["source"] == "teams"
     assert status_body["requester"] == "req-b@company.com"
+    assert "approval_audit" in status_body
+    assert status_body["approval_audit"]["approvals_count"] == 0
 
 
 @pytest.mark.asyncio
@@ -715,6 +717,45 @@ async def test_bulk_review_pending_commands_partial_errors_reported(client, db_s
     assert body["rejected"] == 0
     assert len(body["errors"]) == 1
     assert body["errors"][0]["command_id"] == "cmd_missing_partial"
+
+
+@pytest.mark.asyncio
+async def test_command_status_includes_approval_audit_details(client, db_session):
+    cmd_id = "cmd_status_audit_001"
+    seeded = Event(
+        source_module="commandclaw",
+        actor_id="owner-audit@company.com",
+        actor_name="owner-audit@company.com",
+        actor_type="human",
+        action="run_scan",
+        target="cloud",
+        target_type="command_target",
+        outcome=EventOutcome.REQUIRES_APPROVAL,
+        severity=EventSeverity.MEDIUM,
+        risk_score=61.0,
+        policy_name="seeded_requires_approval",
+        policy_reason="seeded status audit test",
+        description="[commandclaw] owner-audit@company.com -> run_scan",
+        metadata_json=json.dumps({"context": {"command_id": cmd_id, "requester": "owner-audit@company.com", "mode": "approval"}}),
+        is_anomaly=False,
+        requires_review=True,
+    )
+    db_session.add(seeded)
+    await db_session.commit()
+
+    first = await client.post(
+        f"/api/v1/commands/{cmd_id}/approve",
+        json={"approver": "audit-display", "reason": "first"},
+    )
+    assert first.status_code == 200, first.text
+
+    status = await client.get(f"/api/v1/commands/{cmd_id}/status")
+    assert status.status_code == 200, status.text
+    body = status.json()
+    audit = body.get("approval_audit") or {}
+    assert audit.get("approvals_count") == 1
+    assert audit.get("last_approved_by") == "test-user"
+    assert audit.get("last_approver_display") == "audit-display"
 
 
 @pytest.mark.asyncio

@@ -335,6 +335,36 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.4.8 — Command Approval Audit Summary                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--teal);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Command Approval Audit Summary in Status API</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-fix">Auditability</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.8</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice improves operator audit context by surfacing approval principal/display metadata directly in command status responses and Channel Gateway detail view.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Status endpoint enrichment:</strong> <code>GET /api/v1/commands/{command_id}/status</code> now returns <code>approval_audit</code> with latest approver and rejection metadata.</li>
+          <li><strong>Channel Gateway UX:</strong> expanded status strip in timeline panel now shows last approver for faster review.</li>
+          <li><strong>Regression tests:</strong> added status-level approval audit assertions in <code>test_remote_control.py</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.4.7 — JWT-Bound Command Approval Principals                     -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

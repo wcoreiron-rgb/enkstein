@@ -140,6 +140,23 @@ def _normalize_principal(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
+def _approval_audit_summary(state: dict) -> dict:
+    approvals = state.get("approvals") if isinstance(state, dict) else []
+    approvals = approvals if isinstance(approvals, list) else []
+    last = approvals[-1] if approvals else {}
+    if not isinstance(last, dict):
+        last = {}
+    return {
+        "approvals_count": len(approvals),
+        "last_approved_by": last.get("approved_by"),
+        "last_approver_display": last.get("approver_display"),
+        "last_approved_at": last.get("approved_at"),
+        "rejected_by": state.get("rejected_by") if isinstance(state, dict) else None,
+        "rejected_by_display": state.get("rejected_by_display") if isinstance(state, dict) else None,
+        "rejected_at": state.get("rejected_at") if isinstance(state, dict) else None,
+    }
+
+
 class RemoteAgentRegisterRequest(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     tenant_id: str = Field(..., min_length=2, max_length=128)
@@ -494,7 +511,12 @@ async def command_status(
     # Events are desc by timestamp: first item is latest.
     latest = matched[0]
     root = next((e for e in reversed(matched) if _event_command_id(e) == command_id), matched[-1])
-    approval_state = _approval_state(root) if latest.outcome in {EventOutcome.REQUIRES_APPROVAL, EventOutcome.ALLOWED, EventOutcome.BLOCKED} else {}
+    approval_state = _approval_state(root) if latest.outcome in {
+        EventOutcome.REQUIRES_APPROVAL,
+        EventOutcome.ALLOWED,
+        EventOutcome.BLOCKED,
+        EventOutcome.PENDING,
+    } else {}
     return {
         "command_id": command_id,
         "latest_outcome": latest.outcome.value if hasattr(latest.outcome, "value") else str(latest.outcome),
@@ -507,6 +529,7 @@ async def command_status(
         "requester": (_event_context(root).get("requester") if _event_context(root) else root.actor_name),
         "source": (_event_context(root).get("source") if _event_context(root) else None),
         "approval_state": approval_state,
+        "approval_audit": _approval_audit_summary(approval_state) if approval_state else {},
     }
 
 

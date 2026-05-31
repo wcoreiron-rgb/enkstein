@@ -1122,6 +1122,8 @@ export default function ChannelGatewayPage() {
                               Source: <span className="text-gray-200">{commandStatus[cmd.command_id].source || '—'}</span>
                               {' · '}
                               Requester: <span className="text-gray-200">{commandStatus[cmd.command_id].requester || '—'}</span>
+                              {' · '}
+                              Last approver: <span className="text-gray-200">{commandStatus[cmd.command_id]?.approval_audit?.last_approver_display || commandStatus[cmd.command_id]?.approval_audit?.last_approved_by || '—'}</span>
                             </div>
                           )}
                         </div>
