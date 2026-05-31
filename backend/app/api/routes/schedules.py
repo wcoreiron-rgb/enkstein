@@ -16,6 +16,7 @@ from app.schemas.agent import (
 )
 from app.core.swarm.schemas import SwarmJobCreate
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
+from app.models.swarm import SwarmJobStatus
 
 router = APIRouter(prefix="/schedules", tags=["Schedules"])
 
@@ -202,7 +203,13 @@ async def trigger_schedule_swarm(
         model_profile=action.get("model_profile"),
     )
     job = await create_swarm_job(db, payload)
-    await run_swarm_job_in_session(db, job.id)
+    requires_approval = bool(action.get("requires_approval_for_actions", False))
+    if requires_approval:
+        job.status = SwarmJobStatus.REQUIRES_APPROVAL
+        job.final_summary = "Awaiting approval before swarm execution"
+        await db.commit()
+    else:
+        await run_swarm_job_in_session(db, job.id)
     return {
         "job_id": str(job.id),
         "status": job.status.value,

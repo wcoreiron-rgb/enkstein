@@ -25,6 +25,7 @@ from app.models.finding import Finding, FindingSeverity
 from app.models.event import Event, EventSeverity
 from app.core.swarm.schemas import SwarmJobCreate
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job_in_session
+from app.models.swarm import SwarmJobStatus
 
 logger = logging.getLogger("trigger_engine")
 
@@ -203,8 +204,15 @@ async def _fire_trigger(
                 model_profile=cfg.get("model_profile"),
             )
             job = await create_swarm_job(db, payload)
-            await run_swarm_job_in_session(db, job.id)
-            logger.info("Trigger '%s' started swarm job %s", trigger.name, job.id)
+            requires_approval = bool(cfg.get("requires_approval_for_actions", False))
+            if requires_approval:
+                job.status = SwarmJobStatus.REQUIRES_APPROVAL
+                job.final_summary = "Awaiting approval before swarm execution"
+                await db.commit()
+                logger.info("Trigger '%s' created approval-gated swarm job %s", trigger.name, job.id)
+            else:
+                await run_swarm_job_in_session(db, job.id)
+                logger.info("Trigger '%s' started swarm job %s", trigger.name, job.id)
         except Exception as exc:
             logger.error("Trigger '%s' swarm fire failed: %s", trigger.name, exc)
 

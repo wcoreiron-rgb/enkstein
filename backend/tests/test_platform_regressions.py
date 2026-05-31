@@ -406,3 +406,100 @@ async def test_schedule_run_swarm_uses_notes_config(client):
     jobs = await client.get("/api/v1/swarm/jobs")
     assert jobs.status_code == 200, jobs.text
     assert any(j["name"] == "Hourly Swarm Check" for j in jobs.json())
+
+
+@pytest.mark.asyncio
+async def test_schedule_run_swarm_requires_pre_execution_approval(client):
+    agent_resp = await client.post(
+        "/api/v1/agents",
+        json={
+            "name": "Schedule Swarm Approval Agent",
+            "description": "approval schedule swarm",
+            "claw": "identityclaw",
+            "execution_mode": "monitor",
+            "risk_level": "low",
+            "status": "active",
+        },
+    )
+    assert agent_resp.status_code == 201, agent_resp.text
+    agent_id = agent_resp.json()["id"]
+
+    sched_resp = await client.post(
+        "/api/v1/schedules",
+        json={
+            "name": "Approval Swarm Schedule",
+            "agent_id": agent_id,
+            "frequency": "hourly",
+            "status": "active",
+            "approval_required": False,
+            "notes": json.dumps(
+                {
+                    "type": "SWARM_JOB",
+                    "action": {
+                        "name": "Approval-Gated Swarm",
+                        "profile": "FAST_TRIAGE",
+                        "participants": ["identityclaw", "cloudclaw"],
+                        "task_type": "analyze",
+                        "parallelism": 2,
+                        "requires_approval_for_actions": True,
+                    },
+                }
+            ),
+        },
+    )
+    assert sched_resp.status_code == 201, sched_resp.text
+    schedule_id = sched_resp.json()["id"]
+
+    run_resp = await client.post(f"/api/v1/schedules/{schedule_id}/run-swarm")
+    assert run_resp.status_code == 202, run_resp.text
+    run_body = run_resp.json()
+    assert run_body["status"] == "requires_approval"
+    job_id = run_body["job_id"]
+
+    job_resp = await client.get(f"/api/v1/swarm/jobs/{job_id}")
+    assert job_resp.status_code == 200, job_resp.text
+    assert job_resp.json()["started_at"] is None
+
+    approve_resp = await client.post(f"/api/v1/swarm/jobs/{job_id}/approve")
+    assert approve_resp.status_code == 200, approve_resp.text
+    assert approve_resp.json()["status"] in {"completed", "requires_approval"}
+
+    job_after = await client.get(f"/api/v1/swarm/jobs/{job_id}")
+    assert job_after.status_code == 200, job_after.text
+    assert job_after.json()["started_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_trigger_start_swarm_can_require_pre_execution_approval(client):
+    create = await client.post(
+        "/api/v1/triggers",
+        json={
+            "name": "Trigger -> Approval Swarm",
+            "trigger_type": "webhook_inbound",
+            "action_type": "start_swarm",
+            "target_claw": "identityclaw,threatclaw",
+            "alert_config_json": json.dumps(
+                {
+                    "name": "Webhook Approval Swarm",
+                    "profile": "INCIDENT_RESPONSE",
+                    "task_type": "investigate",
+                    "parallelism": 2,
+                    "requires_approval_for_actions": True,
+                }
+            ),
+            "is_active": True,
+        },
+    )
+    assert create.status_code == 201, create.text
+    trigger_id = create.json()["id"]
+
+    fire = await client.post(f"/api/v1/triggers/webhook/{trigger_id}", json={"incident": "approval-case"})
+    assert fire.status_code == 200, fire.text
+
+    jobs_resp = await client.get("/api/v1/swarm/jobs?limit=5")
+    assert jobs_resp.status_code == 200, jobs_resp.text
+    jobs = jobs_resp.json()
+    assert jobs
+    assert jobs[0]["name"] == "Webhook Approval Swarm"
+    assert jobs[0]["status"] == "requires_approval"
+    assert jobs[0]["started_at"] is None

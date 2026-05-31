@@ -214,7 +214,19 @@ async def approve_job(job_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Swarm job not found")
     if job.status != SwarmJobStatus.REQUIRES_APPROVAL:
         return SwarmActionResponse(job_id=job.id, status=job.status, message="No approval required")
+    # Pre-execution approval gate: run the job now.
+    if not job.started_at:
+        job.status = SwarmJobStatus.PENDING
+        await db.commit()
+        await run_swarm_job_in_session(db, job.id)
+        await db.refresh(job)
+        return SwarmActionResponse(
+            job_id=job.id,
+            status=job.status,
+            message="Job approved and executed",
+        )
 
+    # Post-judge approval gate: finalize as completed.
     job.status = SwarmJobStatus.COMPLETED
     await db.commit()
     return SwarmActionResponse(job_id=job.id, status=job.status, message="Job approved")
