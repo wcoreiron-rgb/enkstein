@@ -258,8 +258,8 @@ async def verify_endpoint(
             "message":     "Endpoint reachable, signature verified, response schema valid.",
         }
 
-    except ExternalAgentError as e:
-        agent.endpoint_last_error = str(e)
+    except ExternalAgentError:
+        agent.endpoint_last_error = "endpoint_verification_failed"
         await db.commit()
         raise HTTPException(status_code=502, detail="Endpoint verification failed")
 
