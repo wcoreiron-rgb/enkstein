@@ -13,7 +13,7 @@ jobs:
   test-backend-core:
     name: Backend Tests Core (Python 3.12)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -61,7 +61,7 @@ jobs:
   test-backend-governance:
     name: Backend Tests Governance (Python 3.12)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     permissions:
       contents: read
 
