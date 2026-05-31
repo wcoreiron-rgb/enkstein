@@ -23,8 +23,13 @@ from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
 from app.claws.intelclaw.routes import IntelTaskRequest, run_intel_task
 from app.claws.logclaw.routes import LogTaskRequest, run_log_task
 from app.claws.netclaw.routes import NetTaskRequest, run_net_task
+from app.claws.privacyclaw.routes import PrivacyTaskRequest, run_privacy_task
 from app.claws.recoveryclaw.routes import RecoveryTaskRequest, run_recovery_task
+from app.claws.saasclaw.routes import SaaSTaskRequest, run_saas_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
+from app.claws.userclaw.routes import UserTaskRequest, run_user_task
+from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
+from app.claws.vendorclaw.routes import VendorTaskRequest, run_vendor_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
 
@@ -178,6 +183,16 @@ async def _execute_real_task_if_supported(
         output = await run_intel_task(IntelTaskRequest(**payload), db)
     elif claw == "recoveryclaw":
         output = await run_recovery_task(RecoveryTaskRequest(**payload), db)
+    elif claw == "saasclaw":
+        output = await run_saas_task(SaaSTaskRequest(**payload), db)
+    elif claw == "privacyclaw":
+        output = await run_privacy_task(PrivacyTaskRequest(**payload), db)
+    elif claw == "userclaw":
+        output = await run_user_task(UserTaskRequest(**payload), db)
+    elif claw == "insiderclaw":
+        output = await run_insider_task(InsiderTaskRequest(**payload), db)
+    elif claw == "vendorclaw":
+        output = await run_vendor_task(VendorTaskRequest(**payload), db)
     else:
         return None
 

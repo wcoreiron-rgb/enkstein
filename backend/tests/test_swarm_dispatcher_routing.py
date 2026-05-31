@@ -34,6 +34,11 @@ def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
         "complianceclaw",
         "intelclaw",
         "recoveryclaw",
+        "saasclaw",
+        "privacyclaw",
+        "userclaw",
+        "insiderclaw",
+        "vendorclaw",
     ],
 )
 async def test_dispatcher_routes_to_real_task(db_session, claw):
@@ -51,11 +56,11 @@ async def test_dispatcher_routes_to_real_task(db_session, claw):
 
 @pytest.mark.asyncio
 async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
-    task = _mk_task("vendorclaw")
+    task = _mk_task("exposureclaw")
     db_session.add(task)
     await db_session.commit()
 
     out = await execute_task(db_session, task)
-    assert out["claw"] == "vendorclaw"
+    assert out["claw"] == "exposureclaw"
     assert out["status"] == "completed"
-    assert out["findings"][0]["title"] == "vendorclaw simulated analysis"
+    assert out["findings"][0]["title"] == "exposureclaw simulated analysis"

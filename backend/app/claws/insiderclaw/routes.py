@@ -1,11 +1,26 @@
 """InsiderClaw — Insider Threat Detection API Routes."""
+from datetime import datetime
+from typing import Any
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 
 from app.core.database import get_db
+from app.models.finding import Finding
 
 router = APIRouter(prefix="/insiderclaw", tags=["InsiderClaw"])
 CLAW_NAME = "insiderclaw"
+
+
+class InsiderTaskRequest(BaseModel):
+    swarm_job_id: str
+    task_type: str
+    input: dict[str, Any] = {}
+    classification: str = "internal"
+    model_profile: str | None = None
+    allowed_actions: list[str] = ["read", "analyze", "recommend"]
 
 PROVIDER_MAP = [
     {"provider": "dtex",             "label": "DTEX Systems",       "connector_type": "dtex"},
@@ -339,4 +354,47 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         "findings_updated": summary["updated"],
         "critical": summary["critical"],
         "high": summary["high"],
+    }
+
+
+@router.post("/task", summary="Execute focused InsiderClaw swarm task")
+async def run_insider_task(payload: InsiderTaskRequest, db: AsyncSession = Depends(get_db)):
+    started = datetime.utcnow()
+    result = await db.execute(
+        select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(5)
+    )
+    findings = result.scalars().all()
+    fallback = _FINDINGS[:3] if not findings else []
+    max_risk = max(
+        [float(f.risk_score or 0.0) for f in findings],
+        default=max([float(f.get("risk_score") or 0.0) for f in fallback], default=0.0),
+    )
+    severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
+    confidence = 0.88 if findings else 0.74
+    elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
+    rows = [
+        {"title": f.title, "detail": f"{f.provider or 'insider'} finding severity={f.severity.value if hasattr(f.severity, 'value') else f.severity}"}
+        for f in findings[:3]
+    ] or [
+        {"title": f.get("title", "Insider finding"), "detail": (f.get("description", "")[:220] or "Simulation finding")}
+        for f in fallback
+    ]
+    return {
+        "task_id": f"insider-task-{int(started.timestamp())}",
+        "swarm_job_id": payload.swarm_job_id,
+        "claw": "insiderclaw",
+        "status": "completed",
+        "severity": severity,
+        "confidence": confidence,
+        "risk_score": max_risk,
+        "findings": rows or [{"title": "No insider findings", "detail": "Run /insiderclaw/scan first."}],
+        "evidence": [],
+        "recommended_actions": [
+            "Escalate insider-risk anomalies to HR/legal workflow",
+            "Contain data exfiltration channels and preserve evidence",
+        ],
+        "blocked_actions": [],
+        "policy_decisions": [],
+        "compliance_mappings": ["ISO 27001 A.6", "NIST AU-6"],
+        "execution_time_ms": elapsed_ms,
     }
