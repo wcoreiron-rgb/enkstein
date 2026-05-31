@@ -1091,6 +1091,48 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.3.5 — Swarm Task Coverage Expansion                             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+
+    <div class="release-header">
+      <div>
+        <div class="release-title">Swarm Runtime: Expanded Real /task Routing Coverage</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-new">Runtime</span>
+          <span class="tag tag-fix">Tests</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.5</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="release-body">
+      <div class="release-description">
+        This release expands real Swarm task dispatch coverage so fewer modules rely on deterministic fallback.
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New focused task routes</strong> added for <code>attackpathclaw</code>, <code>automationclaw</code>, <code>configclaw</code>, and <code>exposureclaw</code>.</li>
+          <li><strong>Dispatcher routing expanded</strong> for the above modules plus prior additions (<code>saasclaw</code>, <code>privacyclaw</code>, <code>userclaw</code>, <code>insiderclaw</code>, <code>vendorclaw</code>).</li>
+          <li><strong>Swarm fallback reduced</strong> to only unsupported edge modules, preserving deterministic behavior where real handlers are not yet available.</li>
+        </ul>
+      </div>
+
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Swarm routing tests</strong> updated to validate all newly routed claws and fallback behavior on unsupported modules.</li>
+          <li><strong>Test runs</strong>: <code>pytest -q tests/test_swarm_dispatcher_routing.py tests/test_swarm.py</code> and <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> passed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.3.4 — Trust Fabric Route Convergence Hardening                  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
