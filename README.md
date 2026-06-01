@@ -395,8 +395,19 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 💍 Ring Policy | 4-tier execution isolation (ring0 blocked → ring3 auto-allow). Deterministic `execution_ring_violation` deny |
 | 📡 Channel Gateway | Multi-channel ingress normalization with approval workflow, bulk review, timeline audit |
 | 🔐 External Agent Control | Remote agent registration, heartbeat, dispatch, tenant enforcement, kill-switch |
-| 📦 Skill Pack Exchange | Signed marketplace for skills, policies, playbooks — provenance-verified at install |
+| 📦 Skill Pack Exchange | Signed marketplace for skills, policies, playbooks — provenance-verified install plus preview/upgrade/rollback lifecycle APIs |
 | 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
+
+### Skill Pack Exchange Lifecycle
+
+The Skill Pack API now supports governed install and lifecycle operations without a migration by preserving rollback snapshots in pack manifest metadata.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v1/skill-packs/{id}/install` | Trust Fabric-governed install with optional AGT MCP gateway `scan_path` enforcement |
+| `POST /api/v1/skill-packs/{id}/preview-update` | Shows skills, connectors, Claws, and scope-permission diff before upgrade |
+| `POST /api/v1/skill-packs/{id}/upgrade` | Upgrades an installed pack and stores a bounded previous-version snapshot |
+| `POST /api/v1/skill-packs/{id}/rollback` | Restores the latest previous version and records rollback actor/reason metadata |
 
 ## Tech Stack
 

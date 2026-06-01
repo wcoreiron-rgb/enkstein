@@ -427,6 +427,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.6 — Skill Pack Exchange Upgrade/Rollback Lifecycle             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Skill Pack Exchange Upgrade/Rollback Lifecycle</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Skill Exchange</span>
+          <span class="tag tag-fix">Supply Chain</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.6</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run adds product-grade Skill Pack lifecycle controls for update preview, installed-pack upgrade, and rollback to the previous version.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Update preview:</strong> added <code>POST /api/v1/skill-packs/{id}/preview-update</code> to show skill, connector, Claw, and scope-permission diffs before applying a pack upgrade.</li>
+          <li><strong>Installed-pack upgrade:</strong> added <code>POST /api/v1/skill-packs/{id}/upgrade</code> with bounded previous-version snapshots stored in manifest lifecycle metadata.</li>
+          <li><strong>Rollback:</strong> added <code>POST /api/v1/skill-packs/{id}/rollback</code> with rollback actor and reason metadata.</li>
+          <li><strong>Operator visibility:</strong> pack responses now expose <code>rollback_available</code> so the UI/API can show whether a pack can be restored.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_skill_packs.py -q</code> → <strong>4 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.5 — MemoryClaw Runtime Context + Swarm Memory Proposals       -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

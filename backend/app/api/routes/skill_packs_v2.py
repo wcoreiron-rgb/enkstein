@@ -57,6 +57,18 @@ class InstallRequest(BaseModel):
     scan_path: str | None = None
 
 
+class SkillPackUpgradeRequest(BaseModel):
+    version: str = Field(..., min_length=1, max_length=32)
+    manifest_json: str = "{}"
+    changelog: str | None = None
+    upgraded_by: str = "platform_admin"
+
+
+class SkillPackRollbackRequest(BaseModel):
+    rolled_back_by: str = "platform_admin"
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _pack_out(p: SkillPack) -> dict:
@@ -91,8 +103,48 @@ def _pack_out(p: SkillPack) -> dict:
         "license": p.license,
         "changelog": p.changelog,
         "manifest": manifest,
+        "rollback_available": bool((manifest.get("_lifecycle") or {}).get("previous_versions")),
         "created_at": p.created_at.isoformat(),
         "updated_at": p.updated_at.isoformat(),
+    }
+
+
+def _manifest(raw: str) -> dict:
+    try:
+        parsed = json.loads(raw or "{}")
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        raise HTTPException(status_code=400, detail="manifest_json must be valid JSON")
+
+
+def _strip_lifecycle(manifest: dict) -> dict:
+    cleaned = dict(manifest or {})
+    cleaned.pop("_lifecycle", None)
+    return cleaned
+
+
+def _manifest_diff(old: dict, new: dict) -> dict:
+    old_clean = _strip_lifecycle(old)
+    new_clean = _strip_lifecycle(new)
+
+    def _ids(items: list[dict], key: str = "id") -> set[str]:
+        return {str(item.get(key) or item.get("name")) for item in items if isinstance(item, dict)}
+
+    old_skills = _ids(old_clean.get("skills", []))
+    new_skills = _ids(new_clean.get("skills", []))
+    fields = ["required_connectors", "required_claws", "scope_permissions"]
+    field_changes = {}
+    for field in fields:
+        before = set(map(str, old_clean.get(field, []) or []))
+        after = set(map(str, new_clean.get(field, []) or []))
+        field_changes[field] = {
+            "added": sorted(after - before),
+            "removed": sorted(before - after),
+        }
+    return {
+        "skills_added": sorted(new_skills - old_skills),
+        "skills_removed": sorted(old_skills - new_skills),
+        "field_changes": field_changes,
     }
 
 
@@ -304,6 +356,112 @@ async def install_skill_pack(
     if gateway_scan is not None:
         payload["gateway_scan"] = gateway_scan
     return payload
+
+
+@router.post("/{pack_id}/preview-update", summary="Preview skill pack update diff")
+async def preview_skill_pack_update(
+    pack_id: str,
+    body: SkillPackUpgradeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+    pack = await db.get(SkillPack, UUID(pack_id))
+    if not pack:
+        raise HTTPException(status_code=404, detail="Skill pack not found")
+    old_manifest = _manifest(pack.manifest_json)
+    new_manifest = _manifest(body.manifest_json)
+    return {
+        "pack_id": pack_id,
+        "slug": pack.slug,
+        "current_version": pack.version,
+        "target_version": body.version,
+        "diff": _manifest_diff(old_manifest, new_manifest),
+        "scope_preview": {
+            "required_connectors": new_manifest.get("required_connectors", []),
+            "required_claws": new_manifest.get("required_claws", []),
+            "scope_permissions": new_manifest.get("scope_permissions", []),
+        },
+    }
+
+
+@router.post("/{pack_id}/upgrade", summary="Upgrade an installed skill pack")
+async def upgrade_skill_pack(
+    pack_id: str,
+    body: SkillPackUpgradeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+    pack = await db.get(SkillPack, UUID(pack_id))
+    if not pack:
+        raise HTTPException(status_code=404, detail="Skill pack not found")
+    if not pack.is_installed:
+        raise HTTPException(status_code=400, detail="Install the pack before upgrading it")
+
+    old_manifest = _manifest(pack.manifest_json)
+    new_manifest = _manifest(body.manifest_json)
+    lifecycle = new_manifest.get("_lifecycle") if isinstance(new_manifest.get("_lifecycle"), dict) else {}
+    previous_versions = lifecycle.get("previous_versions") if isinstance(lifecycle.get("previous_versions"), list) else []
+    previous_versions.append(
+        {
+            "version": pack.version,
+            "manifest": _strip_lifecycle(old_manifest),
+            "changelog": pack.changelog,
+            "signature": pack.signature,
+            "skill_count": pack.skill_count,
+            "saved_at": datetime.utcnow().isoformat(),
+            "saved_by": body.upgraded_by,
+        }
+    )
+    lifecycle["previous_versions"] = previous_versions[-5:]
+    lifecycle["last_upgraded_by"] = body.upgraded_by
+    lifecycle["last_upgraded_at"] = datetime.utcnow().isoformat()
+    new_manifest["_lifecycle"] = lifecycle
+
+    pack.version = body.version
+    pack.manifest_json = json.dumps(new_manifest)
+    pack.skill_count = len(new_manifest.get("skills", []))
+    pack.signature = hashlib.sha256(pack.manifest_json.encode()).hexdigest()[:32]
+    pack.changelog = body.changelog
+    pack.updated_at = datetime.utcnow()
+    await db.commit()
+    return {
+        **_pack_out(pack),
+        "upgrade_diff": _manifest_diff(old_manifest, new_manifest),
+    }
+
+
+@router.post("/{pack_id}/rollback", summary="Rollback a skill pack to its previous version")
+async def rollback_skill_pack(
+    pack_id: str,
+    body: SkillPackRollbackRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+    pack = await db.get(SkillPack, UUID(pack_id))
+    if not pack:
+        raise HTTPException(status_code=404, detail="Skill pack not found")
+    manifest = _manifest(pack.manifest_json)
+    lifecycle = manifest.get("_lifecycle") if isinstance(manifest.get("_lifecycle"), dict) else {}
+    previous_versions = lifecycle.get("previous_versions") if isinstance(lifecycle.get("previous_versions"), list) else []
+    if not previous_versions:
+        raise HTTPException(status_code=400, detail="No rollback version available")
+
+    target = previous_versions.pop()
+    restored_manifest = dict(target.get("manifest") or {})
+    lifecycle["previous_versions"] = previous_versions
+    lifecycle["last_rollback_by"] = body.rolled_back_by
+    lifecycle["last_rollback_at"] = datetime.utcnow().isoformat()
+    lifecycle["last_rollback_reason"] = body.reason
+    restored_manifest["_lifecycle"] = lifecycle
+
+    pack.version = str(target.get("version") or pack.version)
+    pack.manifest_json = json.dumps(restored_manifest)
+    pack.skill_count = int(target.get("skill_count") or len(restored_manifest.get("skills", [])))
+    pack.signature = str(target.get("signature") or hashlib.sha256(pack.manifest_json.encode()).hexdigest()[:32])
+    pack.changelog = target.get("changelog")
+    pack.updated_at = datetime.utcnow()
+    await db.commit()
+    return _pack_out(pack)
 
 
 @router.post("/{pack_id}/uninstall", summary="Uninstall a skill pack")
