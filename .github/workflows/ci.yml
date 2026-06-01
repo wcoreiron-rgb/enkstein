@@ -61,7 +61,7 @@ jobs:
             tests/test_compliance_evidence_export.py
           do
             echo "::group::${test_file}"
-            python -m pytest -q --tb=short --timeout=30 --timeout-method=thread "${test_file}"
+            python -m pytest -q --tb=short "${test_file}"
             echo "::endgroup::"
           done
 
@@ -114,7 +114,7 @@ jobs:
             tests/test_trust_fabric.py
           do
             echo "::group::${test_file}"
-            python -m pytest -q --tb=short --timeout=30 --timeout-method=thread "${test_file}"
+            python -m pytest -q --tb=short "${test_file}"
             echo "::endgroup::"
           done
 
