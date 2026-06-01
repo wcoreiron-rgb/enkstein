@@ -11,7 +11,7 @@ permissions:
 jobs:
   # ── Backend: Unit tests (split shards) ─────────────────────────────────────
   test-backend-core:
-    name: Backend Tests Core (Python 3.12)
+    name: Backend Tests Core (Python 3.11)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -24,10 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
@@ -66,7 +66,7 @@ jobs:
           done
 
   test-backend-governance:
-    name: Backend Tests Governance (Python 3.12)
+    name: Backend Tests Governance (Python 3.11)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -79,10 +79,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
           cache-dependency-path: |
             backend/requirements.txt
