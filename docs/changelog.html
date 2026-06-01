@@ -427,6 +427,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.4 — Remote Agent Signed Enrollment + Key Rotation              -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Remote Agent Signed Enrollment + Key Rotation</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Remote Agents</span>
+          <span class="tag tag-fix">Security</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run hardens the remote-agent lifecycle with signed enrollment scope checks, capability inventory, and public-key rotation tracking.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Enrollment token endpoint:</strong> added <code>POST /api/v1/remote-agents/enrollment-token</code> with signed tenant/owner/scope metadata and expiry.</li>
+          <li><strong>Registration guardrails:</strong> remote-agent registration can validate enrollment token tenant, owner, allowed actions, allowed Claws, and allowed connectors.</li>
+          <li><strong>Key rotation endpoint:</strong> added <code>POST /api/v1/remote-agents/{agent_id}/rotate-key</code> with duplicate-key rejection and rotation audit metadata.</li>
+          <li><strong>Capability inventory:</strong> registration and heartbeat can now persist remote-agent capabilities for operator and dispatch context.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_remote_control.py -q</code> → <strong>24 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.3 — Microsoft Identity Incident Demo Preset                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

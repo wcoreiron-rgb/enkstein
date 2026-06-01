@@ -16,6 +16,11 @@ GET  /commands/recent
 from __future__ import annotations
 
 import json
+import base64
+import hashlib
+import hmac
+import os
+import secrets
 from datetime import datetime, timezone, timedelta
 from uuid import UUID
 
@@ -37,6 +42,53 @@ _REMOTE_CATEGORY = "Remote Control Plane"
 _DEFAULT_COMMAND_APPROVALS_REQUIRED = 2
 _REMOTE_HEARTBEAT_TTL_MINUTES = 30
 _REMOTE_MIN_TRUST_SCORE = 35.0
+_REMOTE_ENROLLMENT_TOKEN_TTL_MINUTES = 60
+
+
+def _enrollment_secret() -> bytes:
+    return os.getenv("REMOTE_AGENT_ENROLLMENT_SECRET", "regentclaw-dev-enrollment-secret").encode("utf-8")
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("ascii"))
+
+
+def _sign_enrollment_payload(payload: dict) -> str:
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _b64url(hmac.new(_enrollment_secret(), serialized, hashlib.sha256).digest())
+
+
+def _encode_enrollment_token(payload: dict) -> str:
+    signed_payload = {**payload, "sig": _sign_enrollment_payload(payload)}
+    return _b64url(json.dumps(signed_payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+
+
+def _decode_enrollment_token(token: str) -> dict:
+    try:
+        signed_payload = json.loads(_b64url_decode(token).decode("utf-8"))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid enrollment token")
+    if not isinstance(signed_payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid enrollment token")
+    signature = signed_payload.pop("sig", None)
+    expected = _sign_enrollment_payload(signed_payload)
+    if not signature or not hmac.compare_digest(str(signature), expected):
+        raise HTTPException(status_code=403, detail="Enrollment token signature invalid")
+    expires_at = _parse_iso_utc(signed_payload.get("expires_at"))
+    if not expires_at or expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=403, detail="Enrollment token expired")
+    return signed_payload
+
+
+def _public_key_fingerprint(public_key: str | None) -> str | None:
+    if not public_key:
+        return None
+    return hashlib.sha256(public_key.encode("utf-8")).hexdigest()[:16]
 
 
 def _load_json_object(raw: str | None) -> dict:
@@ -71,6 +123,8 @@ def _agent_out(agent: Agent) -> dict:
         "trust_score": metadata.get("trust_score", 50.0),
         "version": metadata.get("version"),
         "public_key": metadata.get("public_key"),
+        "key_fingerprint": metadata.get("key_fingerprint"),
+        "capabilities": metadata.get("capabilities", []),
         "current_jobs": metadata.get("current_jobs", []),
         "kill_switch_status": metadata.get("kill_switch_status", "inactive"),
         "created_at": agent.created_at.isoformat() if agent.created_at else None,
@@ -188,6 +242,17 @@ class RemoteAgentRegisterRequest(BaseModel):
     trust_score: float = Field(default=50.0, ge=0, le=100)
     version: str | None = Field(default=None, max_length=64)
     public_key: str | None = Field(default=None, max_length=4096)
+    capabilities: list[str] = Field(default_factory=list)
+    enrollment_token: str | None = Field(default=None, max_length=8192)
+
+
+class RemoteEnrollmentTokenRequest(BaseModel):
+    tenant_id: str = Field(..., min_length=2, max_length=128)
+    owner: str = Field(..., min_length=2, max_length=255)
+    allowed_claws: list[str] = Field(default_factory=list)
+    allowed_connectors: list[str] = Field(default_factory=list)
+    allowed_actions: list[str] = Field(default_factory=lambda: ["run_swarm", "run_scan", "create_ticket"])
+    ttl_minutes: int = Field(default=_REMOTE_ENROLLMENT_TOKEN_TTL_MINUTES, ge=5, le=1440)
 
 
 class RemoteHeartbeatRequest(BaseModel):
@@ -195,6 +260,12 @@ class RemoteHeartbeatRequest(BaseModel):
     trust_score: float | None = Field(default=None, ge=0, le=100)
     current_jobs: list[str] = Field(default_factory=list)
     version: str | None = Field(default=None, max_length=64)
+    capabilities: list[str] = Field(default_factory=list)
+
+
+class RemoteKeyRotationRequest(BaseModel):
+    public_key: str = Field(..., min_length=16, max_length=4096)
+    reason: str | None = Field(default=None, max_length=1024)
 
 
 class CommandRequest(BaseModel):
@@ -283,11 +354,54 @@ async def _execute_command(db: AsyncSession, user: dict, body: CommandRequest) -
     }
 
 
+@router.post("/remote-agents/enrollment-token")
+async def create_remote_agent_enrollment_token(
+    body: RemoteEnrollmentTokenRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    now = datetime.now(timezone.utc)
+    payload = {
+        "tenant_id": body.tenant_id,
+        "owner": body.owner,
+        "allowed_claws": body.allowed_claws,
+        "allowed_connectors": body.allowed_connectors,
+        "allowed_actions": body.allowed_actions,
+        "issued_at": now.isoformat(),
+        "expires_at": (now + timedelta(minutes=body.ttl_minutes)).isoformat(),
+        "nonce": secrets.token_urlsafe(18),
+        "issued_by": current_user.get("sub") or current_user.get("email") or "system",
+    }
+    return {
+        "token": _encode_enrollment_token(payload),
+        "expires_at": payload["expires_at"],
+        "tenant_id": body.tenant_id,
+        "owner": body.owner,
+        "allowed_actions": body.allowed_actions,
+    }
+
+
 @router.post("/remote-agents/register")
 async def register_remote_agent(
     body: RemoteAgentRegisterRequest,
     db: AsyncSession = Depends(get_db),
 ):
+    token_payload = None
+    if body.enrollment_token:
+        token_payload = _decode_enrollment_token(body.enrollment_token)
+        if token_payload.get("tenant_id") != body.tenant_id:
+            raise HTTPException(status_code=403, detail="Enrollment token tenant mismatch")
+        if token_payload.get("owner") != body.owner:
+            raise HTTPException(status_code=403, detail="Enrollment token owner mismatch")
+        token_allowed_actions = set(token_payload.get("allowed_actions") or [])
+        if token_allowed_actions and not set(body.allowed_actions).issubset(token_allowed_actions):
+            raise HTTPException(status_code=403, detail="Requested actions exceed enrollment token scope")
+        token_allowed_claws = set(token_payload.get("allowed_claws") or [])
+        if token_allowed_claws and not set(body.allowed_claws).issubset(token_allowed_claws):
+            raise HTTPException(status_code=403, detail="Requested claws exceed enrollment token scope")
+        token_allowed_connectors = set(token_payload.get("allowed_connectors") or [])
+        if token_allowed_connectors and not set(body.allowed_connectors).issubset(token_allowed_connectors):
+            raise HTTPException(status_code=403, detail="Requested connectors exceed enrollment token scope")
+
     metadata = {
         "tenant_id": body.tenant_id,
         "owner": body.owner,
@@ -297,6 +411,13 @@ async def register_remote_agent(
         "trust_score": body.trust_score,
         "version": body.version,
         "public_key": body.public_key,
+        "key_fingerprint": _public_key_fingerprint(body.public_key),
+        "capabilities": body.capabilities,
+        "enrollment": {
+            "signed": bool(token_payload),
+            "issued_by": token_payload.get("issued_by") if token_payload else None,
+            "token_expires_at": token_payload.get("expires_at") if token_payload else None,
+        },
         "current_jobs": [],
         "kill_switch_status": "inactive",
         "last_seen": datetime.now(timezone.utc).isoformat(),
@@ -322,6 +443,44 @@ async def register_remote_agent(
     return _agent_out(agent)
 
 
+@router.post("/remote-agents/{agent_id}/rotate-key")
+async def rotate_remote_agent_key(
+    agent_id: UUID,
+    body: RemoteKeyRotationRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    result = await db.execute(select(Agent).where(Agent.id == agent_id, Agent.claw == _REMOTE_CLAW))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Remote agent not found")
+    metadata = _agent_metadata(agent)
+    old_fingerprint = metadata.get("key_fingerprint")
+    new_fingerprint = _public_key_fingerprint(body.public_key)
+    if old_fingerprint and old_fingerprint == new_fingerprint:
+        raise HTTPException(status_code=409, detail="New public key matches current key")
+    rotations = metadata.get("key_rotations")
+    if not isinstance(rotations, list):
+        rotations = []
+    rotations.append(
+        {
+            "old_fingerprint": old_fingerprint,
+            "new_fingerprint": new_fingerprint,
+            "rotated_at": datetime.now(timezone.utc).isoformat(),
+            "rotated_by": current_user.get("sub") or current_user.get("email") or "system",
+            "reason": body.reason,
+        }
+    )
+    metadata["public_key"] = body.public_key
+    metadata["key_fingerprint"] = new_fingerprint
+    metadata["key_rotations"] = rotations[-10:]
+    metadata["key_rotated_at"] = rotations[-1]["rotated_at"]
+    agent.scope_notes = json.dumps(metadata)
+    await db.commit()
+    await db.refresh(agent)
+    return _agent_out(agent)
+
+
 @router.post("/remote-agents/{agent_id}/heartbeat")
 async def remote_agent_heartbeat(
     agent_id: UUID,
@@ -341,6 +500,8 @@ async def remote_agent_heartbeat(
         metadata["trust_score"] = body.trust_score
     if body.version:
         metadata["version"] = body.version
+    if body.capabilities:
+        metadata["capabilities"] = body.capabilities
     agent.scope_notes = json.dumps(metadata)
     agent.last_run_at = datetime.now(timezone.utc)
     agent.last_run_status = body.status

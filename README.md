@@ -210,6 +210,12 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Remote-agent dispatch now also enforces heartbeat freshness and minimum trust-score threshold.
   - Added remote agent health visibility endpoint:
     - `GET /api/v1/remote-agents/health`
+  - Remote-agent lifecycle hardening now includes:
+    - `POST /api/v1/remote-agents/enrollment-token`
+    - `POST /api/v1/remote-agents/{agent_id}/rotate-key`
+    - signed enrollment token scope checks for tenant/owner/actions/claws/connectors
+    - public-key fingerprint tracking and key rotation audit metadata
+    - capability inventory updates on registration/heartbeat
   - Added approval workflow APIs for command outcomes:
     - `GET /api/v1/commands/pending`
     - `POST /api/v1/commands/{command_id}/approve`

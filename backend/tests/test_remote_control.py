@@ -48,6 +48,94 @@ async def test_remote_agent_register_list_and_heartbeat(client):
 
 
 @pytest.mark.asyncio
+async def test_remote_agent_signed_enrollment_and_key_rotation(client):
+    token_res = await client.post(
+        "/api/v1/remote-agents/enrollment-token",
+        json={
+            "tenant_id": "tenant_signed",
+            "owner": "signed-owner@company.com",
+            "allowed_claws": ["identityclaw"],
+            "allowed_connectors": ["entra_id"],
+            "allowed_actions": ["run_swarm"],
+            "ttl_minutes": 30,
+        },
+    )
+    assert token_res.status_code == 200, token_res.text
+    token = token_res.json()["token"]
+
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "signed-edge-worker",
+            "tenant_id": "tenant_signed",
+            "owner": "signed-owner@company.com",
+            "allowed_claws": ["identityclaw"],
+            "allowed_connectors": ["entra_id"],
+            "allowed_actions": ["run_swarm"],
+            "version": "2.0.0",
+            "public_key": "-----BEGIN PUBLIC KEY-----signed-key-v1-----END PUBLIC KEY-----",
+            "capabilities": ["swarm_task", "connector_read"],
+            "enrollment_token": token,
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    body = reg.json()
+    agent_id = body["id"]
+    assert body["key_fingerprint"]
+    assert body["capabilities"] == ["swarm_task", "connector_read"]
+
+    rotate = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/rotate-key",
+        json={
+            "public_key": "-----BEGIN PUBLIC KEY-----signed-key-v2-----END PUBLIC KEY-----",
+            "reason": "scheduled rotation",
+        },
+    )
+    assert rotate.status_code == 200, rotate.text
+    rotated = rotate.json()
+    assert rotated["key_fingerprint"] != body["key_fingerprint"]
+
+    duplicate = await client.post(
+        f"/api/v1/remote-agents/{agent_id}/rotate-key",
+        json={
+            "public_key": "-----BEGIN PUBLIC KEY-----signed-key-v2-----END PUBLIC KEY-----",
+            "reason": "duplicate rotation",
+        },
+    )
+    assert duplicate.status_code == 409, duplicate.text
+
+
+@pytest.mark.asyncio
+async def test_remote_agent_signed_enrollment_blocks_scope_expansion(client):
+    token_res = await client.post(
+        "/api/v1/remote-agents/enrollment-token",
+        json={
+            "tenant_id": "tenant_scope",
+            "owner": "scope-owner@company.com",
+            "allowed_claws": ["identityclaw"],
+            "allowed_connectors": ["entra_id"],
+            "allowed_actions": ["run_swarm"],
+        },
+    )
+    assert token_res.status_code == 200, token_res.text
+
+    reg = await client.post(
+        "/api/v1/remote-agents/register",
+        json={
+            "name": "scope-expansion-worker",
+            "tenant_id": "tenant_scope",
+            "owner": "scope-owner@company.com",
+            "allowed_claws": ["identityclaw", "cloudclaw"],
+            "allowed_connectors": ["entra_id"],
+            "allowed_actions": ["run_swarm", "create_ticket"],
+            "enrollment_token": token_res.json()["token"],
+        },
+    )
+    assert reg.status_code == 403, reg.text
+    assert "exceed enrollment token scope" in reg.text
+
+
+@pytest.mark.asyncio
 async def test_remote_agent_dispatch_and_recent_commands(client):
     reg = await client.post(
         "/api/v1/remote-agents/register",
