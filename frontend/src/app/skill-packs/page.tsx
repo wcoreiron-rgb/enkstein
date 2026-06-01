@@ -3,11 +3,12 @@ import { useEffect, useState, useCallback } from 'react';
 import {
   Package, CheckCircle, Download, Trash2, Play, Pause,
   RefreshCw, Search, Shield, AlertTriangle, ChevronDown, ChevronRight,
-  Plug, Cpu, Lock, FileText, Star, Tag,
+  Plug, Cpu, Lock, FileText, Star, Tag, RotateCcw, GitCompare,
 } from 'lucide-react';
 import {
   getSkillPacks, installSkillPack, uninstallSkillPack,
   activateSkillPack, deactivateSkillPack, getSkillPackStats,
+  previewSkillPackUpdate, upgradeSkillPack, rollbackSkillPack,
   ApiError,
 } from '@/lib/api';
 
@@ -44,6 +45,7 @@ type SkillPack = {
     scope_permissions?: string[];
     policy_mappings?: { skill_id: string; policy_name: string }[];
   };
+  rollback_available?: boolean;
 };
 
 type Stats = {
@@ -79,6 +81,9 @@ function PackCard({ pack, onAction }: { pack: SkillPack; onAction: () => void })
   const [busy, setBusy] = useState<string | null>(null);
   const [scanPath, setScanPath] = useState('');
   const [installResult, setInstallResult] = useState<any | null>(null);
+  const [lifecycleResult, setLifecycleResult] = useState<any | null>(null);
+  const [targetVersion, setTargetVersion] = useState(() => `${pack.version}.1`);
+  const [targetManifest, setTargetManifest] = useState(() => JSON.stringify(pack.manifest || {}, null, 2));
   const [actionError, setActionError] = useState<string | null>(null);
 
   const Icon = CATEGORY_ICONS[pack.category ?? 'default'] ?? Package;
@@ -90,6 +95,7 @@ function PackCard({ pack, onAction }: { pack: SkillPack; onAction: () => void })
     try {
       const result = await action();
       if (result?.install_policy || result?.gateway_scan) setInstallResult(result);
+      if (result?.diff || result?.upgrade_diff || result?.rollback) setLifecycleResult(result);
       onAction();
     } catch (err: any) {
       if (err instanceof ApiError && err.data && typeof err.data === 'object') {
@@ -206,6 +212,14 @@ function PackCard({ pack, onAction }: { pack: SkillPack; onAction: () => void })
               <Trash2 className="w-3 h-3" /> Uninstall
             </button>
           )}
+          {pack.is_installed && (
+            <button
+              onClick={() => setExpanded(true)}
+              className="flex items-center gap-1 text-xs text-cyan-400 hover:text-cyan-300 px-2 py-1.5 rounded-lg transition-colors"
+            >
+              <GitCompare className="w-3 h-3" /> Lifecycle
+            </button>
+          )}
           <button
             onClick={() => setExpanded(!expanded)}
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-white ml-auto transition-colors"
@@ -254,6 +268,86 @@ function PackCard({ pack, onAction }: { pack: SkillPack; onAction: () => void })
           {actionError && (
             <div className="rounded-lg border border-red-900 bg-red-950/30 px-3 py-2 text-xs text-red-300">
               {actionError}
+            </div>
+          )}
+
+          {pack.is_installed && (
+            <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs text-gray-400 uppercase tracking-wide">Lifecycle Preview / Upgrade / Rollback</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Preview manifest diff before applying an upgrade. Rollback restores the last saved previous version.
+                  </p>
+                </div>
+                {pack.rollback_available && (
+                  <span className="text-[11px] text-green-300 border border-green-800 rounded px-2 py-0.5">Rollback ready</span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <input
+                  value={targetVersion}
+                  onChange={(e) => setTargetVersion(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs outline-none focus:border-cyan-700"
+                  placeholder="1.1.0"
+                />
+                <button
+                  onClick={() => doAction(() => previewSkillPackUpdate(pack.id, {
+                    version: targetVersion,
+                    manifest_json: targetManifest,
+                    upgraded_by: 'platform_admin',
+                  }))}
+                  disabled={!!busy}
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-cyan-800 text-cyan-300 hover:bg-cyan-950/30 text-xs px-3 py-2"
+                >
+                  <GitCompare className="w-3 h-3" /> Preview
+                </button>
+                <button
+                  onClick={() => doAction(() => upgradeSkillPack(pack.id, {
+                    version: targetVersion,
+                    manifest_json: targetManifest,
+                    changelog: 'Upgraded from Skill Packs UI',
+                    upgraded_by: 'platform_admin',
+                  }))}
+                  disabled={!!busy}
+                  className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white text-xs px-3 py-2"
+                >
+                  <Download className="w-3 h-3" /> Upgrade
+                </button>
+              </div>
+              <textarea
+                value={targetManifest}
+                onChange={(e) => setTargetManifest(e.target.value)}
+                rows={5}
+                className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-gray-800 text-gray-200 text-xs font-mono outline-none focus:border-cyan-700"
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => doAction(() => rollbackSkillPack(pack.id, {
+                    rolled_back_by: 'platform_admin',
+                    reason: 'Rollback from Skill Packs UI',
+                  }))}
+                  disabled={!!busy || !pack.rollback_available}
+                  className="flex items-center gap-1.5 rounded-lg border border-yellow-800 disabled:opacity-40 text-yellow-300 hover:bg-yellow-950/30 text-xs px-3 py-2"
+                >
+                  <RotateCcw className="w-3 h-3" /> Rollback
+                </button>
+                {lifecycleResult?.diff && (
+                  <span className="text-xs text-cyan-300">
+                    Preview: +{lifecycleResult.diff.skills_added?.length ?? 0} skills, -{lifecycleResult.diff.skills_removed?.length ?? 0} removed
+                  </span>
+                )}
+                {lifecycleResult?.upgrade_diff && (
+                  <span className="text-xs text-blue-300">
+                    Upgraded to v{lifecycleResult.version}; rollback {lifecycleResult.rollback_available ? 'available' : 'not available'}
+                  </span>
+                )}
+                {lifecycleResult?.rollback && (
+                  <span className="text-xs text-yellow-300">
+                    Rolled back from v{lifecycleResult.rollback.rolled_back_from}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

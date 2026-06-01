@@ -613,6 +613,44 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.5 — Skill Pack Lifecycle UI                                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Skill Pack Lifecycle UI</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Skill Exchange</span>
+          <span class="tag tag-feat">Operator UX</span>
+          <span class="release-date">June 1, 2026 &nbsp;·&nbsp; v0.5.5</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run connects the existing Skill Pack lifecycle APIs to the operator UI so installed packs can be previewed, upgraded, and rolled back without leaving the dashboard.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Update preview:</strong> Skill Packs page can call <code>POST /api/v1/skill-packs/{id}/preview-update</code> and show added/removed skill counts.</li>
+          <li><strong>Upgrade:</strong> installed packs can be upgraded from the UI using edited target version and manifest JSON.</li>
+          <li><strong>Rollback:</strong> installed packs expose rollback availability and a rollback action wired to <code>POST /api/v1/skill-packs/{id}/rollback</code>.</li>
+          <li><strong>Install scan path:</strong> install still supports optional gateway <code>scan_path</code> and shows policy/gateway results.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/python -m pytest tests/test_skill_packs.py</code> → <strong>4 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.4 — MemoryClaw Proposal Review + Rollback                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

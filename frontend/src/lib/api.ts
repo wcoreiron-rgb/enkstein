@@ -342,6 +342,12 @@ export const deactivateSkillPack = (id: string) =>
   apiFetch<any>(`/skill-packs/${id}/deactivate`, { method: 'POST' });
 export const getSkillPackSkills = (id: string) =>
   apiFetch<any>(`/skill-packs/${id}/skills`);
+export const previewSkillPackUpdate = (id: string, body: object) =>
+  apiFetch<any>(`/skill-packs/${id}/preview-update`, { method: 'POST', body: JSON.stringify(body) });
+export const upgradeSkillPack = (id: string, body: object) =>
+  apiFetch<any>(`/skill-packs/${id}/upgrade`, { method: 'POST', body: JSON.stringify(body) });
+export const rollbackSkillPack = (id: string, body: object) =>
+  apiFetch<any>(`/skill-packs/${id}/rollback`, { method: 'POST', body: JSON.stringify(body) });
 
 // Connector Health
 export const getConnectorHealthSummary = () => apiFetch<any>('/connectors/health-summary');

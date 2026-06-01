@@ -431,6 +431,8 @@ The Skill Pack API now supports governed install and lifecycle operations withou
 | `POST /api/v1/skill-packs/{id}/upgrade` | Upgrades an installed pack and stores a bounded previous-version snapshot |
 | `POST /api/v1/skill-packs/{id}/rollback` | Restores the latest previous version and records rollback actor/reason metadata |
 
+The Skill Packs UI now exposes the same lifecycle controls: optional gateway `scan_path` on install, update preview diff, installed-pack upgrade, rollback availability, and rollback execution.
+
 ## Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy (async) + PostgreSQL + Redis
