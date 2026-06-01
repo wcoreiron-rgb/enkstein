@@ -292,6 +292,13 @@ export const addIncidentTimeline = (id: string, body: object) =>
   apiFetch<any>(`/memory/incidents/${id}/timeline`, { method: 'POST', body: JSON.stringify(body) });
 export const closeIncident = (id: string, body: object) =>
   apiFetch<any>(`/memory/incidents/${id}/close`, { method: 'POST', body: JSON.stringify(body) });
+export const getMemoryProposals = () => apiFetch<any[]>('/memory/proposals');
+export const approveMemoryProposal = (id: string, body: object) =>
+  apiFetch<any>(`/memory/proposals/${id}/approve`, { method: 'POST', body: JSON.stringify(body) });
+export const rejectMemoryProposal = (id: string, body: object) =>
+  apiFetch<any>(`/memory/proposals/${id}/reject`, { method: 'POST', body: JSON.stringify(body) });
+export const rollbackMemoryIncident = (id: string, body: object) =>
+  apiFetch<any>(`/memory/incidents/${id}/rollback`, { method: 'POST', body: JSON.stringify(body) });
 export const getTopAssets = (limit = 30) => apiFetch<any[]>(`/memory/assets?limit=${limit}`);
 export const upsertAsset = (body: object) =>
   apiFetch<any>('/memory/assets', { method: 'POST', body: JSON.stringify(body) });

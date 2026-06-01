@@ -613,6 +613,44 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.4 — MemoryClaw Proposal Review + Rollback                    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--purple);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">MemoryClaw Proposal Review + Rollback</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">MemoryClaw</span>
+          <span class="tag tag-feat">Operator UX</span>
+          <span class="release-date">June 1, 2026 &nbsp;·&nbsp; v0.5.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run productizes Swarm-proposed memory by adding an analyst review queue, approve/reject APIs, rollback controls, and UI visibility before memory can influence future investigations.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Proposal queue:</strong> <code>GET /api/v1/memory/proposals</code> lists Swarm-created incident memory awaiting review.</li>
+          <li><strong>Review actions:</strong> <code>POST /api/v1/memory/proposals/{id}/approve</code> and <code>/reject</code> preserve reviewer/reason in the incident timeline.</li>
+          <li><strong>Rollback:</strong> <code>POST /api/v1/memory/incidents/{id}/rollback</code> excludes stale or incorrect memory from runtime use without deleting the audit trail.</li>
+          <li><strong>UI:</strong> Memory page now shows pending proposals and adds rollback control on expanded incident rows.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/python -m pytest tests/test_memory_proposals.py tests/test_swarm.py::test_swarm_high_risk_judgement_proposes_incident_memory</code> → <strong>3 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.3 — Threaded Channel Approval Cards + Control Center Replies  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

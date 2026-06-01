@@ -907,6 +907,29 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-desc">Returns stale/healthy heartbeat counts, trust threshold config, and per-agent dispatchability status.</span>
       </div>
 
+      <h2>MemoryClaw Runtime Review</h2>
+      <p>High-risk Swarm Judge outputs can create proposed incident memory. Proposed memory is kept in review state until analysts approve or reject it, and approved memory can be rolled back if it should no longer influence runtime context.</p>
+      <div class="endpoint-row">
+        <span class="method method-get">GET</span>
+        <span class="endpoint-path">/api/v1/memory/proposals</span>
+        <span class="endpoint-desc">List Swarm-proposed memory updates awaiting analyst review</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/memory/proposals/{id}/approve</span>
+        <span class="endpoint-desc">Approve proposed memory for runtime use and append audit timeline</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/memory/proposals/{id}/reject</span>
+        <span class="endpoint-desc">Reject proposed memory and mark it false-positive/excluded</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/memory/incidents/{id}/rollback</span>
+        <span class="endpoint-desc">Rollback incident memory from future runtime context while preserving audit trail</span>
+      </div>
+
       <h2>Command Approval Workflow APIs</h2>
       <p>Commands that resolve to approval-required outcomes can now be tracked and approved via CommandClaw endpoints.</p>
       <div class="endpoint-row">

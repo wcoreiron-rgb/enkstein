@@ -335,6 +335,12 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Task outputs expose `memory_context_loaded` for operator/audit visibility.
   - High-risk Swarm Judge results now propose incident memory entries for analyst review.
   - Memory runtime blocks proposed writes that look like secrets or prompt-injection payloads.
+  - Memory proposal review is now exposed through:
+    - `GET /api/v1/memory/proposals`
+    - `POST /api/v1/memory/proposals/{id}/approve`
+    - `POST /api/v1/memory/proposals/{id}/reject`
+    - `POST /api/v1/memory/incidents/{id}/rollback`
+  - Memory UI includes a review queue for Swarm-proposed memory and rollback controls for approved incident memory.
 - Sprint 6 operator workflow:
   - Added one-click preset endpoint for **Suspicious Identity Investigation Swarm**:
     - `POST /api/v1/swarm/jobs/presets/suspicious-identity`

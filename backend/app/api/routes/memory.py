@@ -66,6 +66,11 @@ class IncidentCloseRequest(BaseModel):
     closed_by: str = "analyst"
 
 
+class MemoryReviewRequest(BaseModel):
+    reviewer: str = Field(default="analyst", max_length=255)
+    reason: str | None = Field(default=None, max_length=1024)
+
+
 class AssetUpsert(BaseModel):
     asset_id: str
     asset_type: str = "unknown"
@@ -173,6 +178,121 @@ async def close_incident_endpoint(
         return _incident_out(incident, full=True)
     except ValueError:
         raise HTTPException(status_code=404, detail="Incident not found")
+
+
+# ─── Memory proposal review ──────────────────────────────────────────────────
+
+def _is_memory_proposal(incident: IncidentMemory) -> bool:
+    return incident.created_by == "swarm_memory_runtime" or incident.source_claw == "swarmclaw"
+
+
+@router.get("/proposals", summary="List proposed memory updates awaiting analyst review")
+async def list_memory_proposals(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(IncidentMemory)
+        .where(IncidentMemory.created_by == "swarm_memory_runtime")
+        .where(IncidentMemory.status == "investigating")
+        .order_by(desc(IncidentMemory.opened_at))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return [_incident_out(i, full=True) for i in result.scalars().all()]
+
+
+@router.post("/proposals/{incident_id}/approve", summary="Approve a proposed memory update")
+async def approve_memory_proposal(
+    incident_id: str,
+    body: MemoryReviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+
+    incident = await db.get(IncidentMemory, UUID(incident_id))
+    if not incident:
+        raise HTTPException(status_code=404, detail="Memory proposal not found")
+    if not _is_memory_proposal(incident):
+        raise HTTPException(status_code=400, detail="Incident is not a MemoryClaw proposal")
+    if incident.status != "investigating":
+        raise HTTPException(status_code=409, detail=f"Memory proposal is already {incident.status}")
+
+    incident.status = "open"
+    incident.updated_at = datetime.utcnow()
+    await append_incident_timeline(
+        db,
+        incident_id,
+        actor=body.reviewer,
+        action="Memory proposal approved",
+        detail=body.reason or "Approved for runtime memory use",
+        event_type="memory_approved",
+    )
+    await db.commit()
+    await db.refresh(incident)
+    return _incident_out(incident, full=True)
+
+
+@router.post("/proposals/{incident_id}/reject", summary="Reject a proposed memory update")
+async def reject_memory_proposal(
+    incident_id: str,
+    body: MemoryReviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+
+    incident = await db.get(IncidentMemory, UUID(incident_id))
+    if not incident:
+        raise HTTPException(status_code=404, detail="Memory proposal not found")
+    if not _is_memory_proposal(incident):
+        raise HTTPException(status_code=400, detail="Incident is not a MemoryClaw proposal")
+    if incident.status != "investigating":
+        raise HTTPException(status_code=409, detail=f"Memory proposal is already {incident.status}")
+
+    incident.status = "false_positive"
+    incident.false_positive = True
+    incident.closed_at = datetime.utcnow()
+    incident.updated_at = datetime.utcnow()
+    await append_incident_timeline(
+        db,
+        incident_id,
+        actor=body.reviewer,
+        action="Memory proposal rejected",
+        detail=body.reason or "Rejected and excluded from runtime memory context",
+        event_type="memory_rejected",
+    )
+    await db.commit()
+    await db.refresh(incident)
+    return _incident_out(incident, full=True)
+
+
+@router.post("/incidents/{incident_id}/rollback", summary="Rollback a memory incident from runtime use")
+async def rollback_memory_incident(
+    incident_id: str,
+    body: MemoryReviewRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    from uuid import UUID
+
+    incident = await db.get(IncidentMemory, UUID(incident_id))
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    previous_status = incident.status
+    incident.status = "false_positive"
+    incident.false_positive = True
+    incident.closed_at = datetime.utcnow()
+    incident.updated_at = datetime.utcnow()
+    await append_incident_timeline(
+        db,
+        incident_id,
+        actor=body.reviewer,
+        action="Memory rollback applied",
+        detail=body.reason or f"Rolled back from {previous_status}",
+        event_type="memory_rollback",
+    )
+    await db.commit()
+    await db.refresh(incident)
+    return _incident_out(incident, full=True)
 
 
 # ─── Asset Memory ─────────────────────────────────────────────────────────────

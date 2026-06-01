@@ -13,7 +13,8 @@ import {
   getRiskTrends, createIncident, addIncidentTimeline, closeIncident,
   getEntityProfiles, getAnomalousEntities, getProfileStats, getEntityProfile,
   getEntityContext, recomputeBaseline, preflightScoreAnomaly,
-  logBehaviorEvent, getBehaviorEvents,
+  logBehaviorEvent, getBehaviorEvents, getMemoryProposals,
+  approveMemoryProposal, rejectMemoryProposal, rollbackMemoryIncident,
 } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -770,6 +771,7 @@ function ProfilesTab() {
 export default function MemoryPage() {
   const [summary, setSummary]     = useState<Summary | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [proposals, setProposals] = useState<any[]>([]);
   const [assets, setAssets]       = useState<Asset[]>([]);
   const [trends, setTrends]       = useState<TrendPoint[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -780,14 +782,16 @@ export default function MemoryPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumData, incData, assetData, trendData] = await Promise.all([
+      const [sumData, incData, proposalData, assetData, trendData] = await Promise.all([
         getMemorySummary().catch(() => null),
         getIncidents().catch(() => []),
+        getMemoryProposals().catch(() => []),
         getTopAssets().catch(() => []),
         getRiskTrends('daily', 14).catch(() => ({ data: [] })),
       ]);
       setSummary(sumData as Summary);
       setIncidents(incData as Incident[]);
+      setProposals(Array.isArray(proposalData) ? proposalData : []);
       setAssets(assetData as Asset[]);
       setTrends((trendData as any).data ?? []);
     } finally {
@@ -799,6 +803,13 @@ export default function MemoryPage() {
 
   const riskScores = trends.map(t => t.risk_score);
   const openFindingsTrend = trends.map(t => t.open_findings);
+  const reviewMemory = async (id: string, decision: 'approve' | 'reject' | 'rollback') => {
+    const body = { reviewer: 'memory_ui', reason: `${decision} from MemoryClaw UI` };
+    if (decision === 'approve') await approveMemoryProposal(id, body);
+    if (decision === 'reject') await rejectMemoryProposal(id, body);
+    if (decision === 'rollback') await rollbackMemoryIncident(id, body);
+    await load();
+  };
 
   if (loading && !summary) {
     return (
@@ -914,6 +925,48 @@ export default function MemoryPage() {
       {/* ── Incidents ──────────────────────────────────────────────────────── */}
       {activeTab === 'incidents' && (
         <div className="space-y-2">
+          {proposals.length > 0 && (
+            <section className="bg-yellow-950/20 border border-yellow-800 rounded-xl overflow-hidden mb-4">
+              <div className="px-5 py-4 border-b border-yellow-900/60 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-yellow-200 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    Memory Review Queue
+                  </h2>
+                  <p className="text-xs text-yellow-300/70 mt-1">
+                    Swarm-proposed incident memory requires analyst approval before it should influence future investigations.
+                  </p>
+                </div>
+                <span className="text-xs text-yellow-200">{proposals.length} pending</span>
+              </div>
+              <div className="divide-y divide-yellow-900/40">
+                {proposals.slice(0, 5).map((proposal) => (
+                  <div key={proposal.id} className="px-5 py-3 flex flex-col md:flex-row md:items-center gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{proposal.title}</p>
+                      <p className="text-xs text-yellow-200/70 mt-0.5">
+                        {proposal.severity} · {proposal.source_claw || 'memoryclaw'} · {proposal.affected_users?.join(', ') || 'no user scope'}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => reviewMemory(proposal.id, 'approve')}
+                        className="px-3 py-1.5 rounded-lg bg-green-700 hover:bg-green-600 text-white text-xs font-semibold"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => reviewMemory(proposal.id, 'reject')}
+                        className="px-3 py-1.5 rounded-lg bg-red-800 hover:bg-red-700 text-white text-xs font-semibold"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
           {incidents.length === 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl px-6 py-10 text-center">
               <Brain className="w-10 h-10 text-gray-600 mx-auto mb-3" />
@@ -980,6 +1033,17 @@ export default function MemoryPage() {
                       <div>
                         <p className="text-gray-500">Assigned to</p>
                         <p className="text-white">{inc.assigned_to}</p>
+                      </div>
+                    )}
+                    {inc.status !== 'false_positive' && (
+                      <div>
+                        <p className="text-gray-500">Memory control</p>
+                        <button
+                          onClick={() => reviewMemory(inc.id, 'rollback')}
+                          className="mt-1 px-2.5 py-1 rounded-lg border border-red-800 text-red-300 hover:bg-red-950/30"
+                        >
+                          Roll back memory
+                        </button>
                       </div>
                     )}
                   </div>
