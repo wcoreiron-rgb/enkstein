@@ -84,6 +84,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | [LLM Top 10 Mapping (Markdown)](docs/owasp-agentic-mapping.md) | Markdown |
 | [Agentic ASI Top 10 Mapping (Markdown)](docs/owasp-asi-mapping.md) | Markdown |
 | [Platform Maturity Matrix (Markdown)](docs/maturity-matrix.md) | Markdown |
+| [Production Deployment Guide](docs/production-deployment.md) | Markdown |
 
 **Current posture (2026-05-31):**
 
@@ -103,6 +104,8 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 > This is a vendor self-assessment. Independent audit recommended before compliance reliance.
 
 Supply-chain policy gating supports a temporary time-boxed waiver baseline at `security/supply_chain_baseline.json` so CI blocks on net-new risk while legacy debt is being burned down.
+
+ComplianceClaw now exposes a Trust Fabric-governed evidence bundle export at `POST /api/v1/complianceclaw/evidence/export`, including findings, compliance-relevant audit logs, framework rollups, and a SHA-256 chain-of-custody hash.
 
 ## Quick Start
 

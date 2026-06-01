@@ -1,14 +1,18 @@
 """ComplianceClaw — Compliance & Audit Management API Routes."""
+import hashlib
+import json
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.models.audit import AuditLog
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
+from app.trust_fabric import ActionRequest, enforce
 
 router = APIRouter(prefix="/complianceclaw", tags=["ComplianceClaw"])
 
@@ -184,6 +188,61 @@ class ComplianceTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
+class EvidenceExportRequest(BaseModel):
+    requested_by: str = Field(default="compliance_admin", min_length=3, max_length=255)
+    frameworks: list[str] = Field(default_factory=lambda: ["SOC 2", "ISO 27001", "NIST 800-53"])
+    include_findings: bool = True
+    include_audit_logs: bool = True
+    max_audit_logs: int = Field(default=100, ge=1, le=1000)
+    classification: str = Field(default="confidential", max_length=64)
+
+
+def _redact_text(value: str | None, limit: int = 500) -> str | None:
+    if value is None:
+        return None
+    text = str(value)[:limit]
+    for marker in ("password=", "token=", "secret=", "api_key="):
+        if marker in text.lower():
+            return "[redacted-sensitive-evidence]"
+    return text
+
+
+def _finding_evidence(f: Finding) -> dict:
+    return {
+        "id": str(f.id),
+        "claw": f.claw,
+        "provider": f.provider,
+        "title": _redact_text(f.title, 240),
+        "description": _redact_text(f.description, 500),
+        "category": f.category,
+        "severity": f.severity.value if hasattr(f.severity, "value") else f.severity,
+        "status": f.status.value if hasattr(f.status, "value") else f.status,
+        "resource_type": f.resource_type,
+        "resource_name": _redact_text(f.resource_name, 200),
+        "risk_score": f.risk_score,
+        "remediation": _redact_text(f.remediation, 500),
+        "first_seen": f.first_seen.isoformat() if f.first_seen else None,
+        "last_seen": f.last_seen.isoformat() if f.last_seen else None,
+    }
+
+
+def _audit_evidence(a: AuditLog) -> dict:
+    return {
+        "id": str(a.id),
+        "timestamp": a.timestamp.isoformat() if a.timestamp else None,
+        "actor": a.actor,
+        "actor_type": a.actor_type,
+        "action": a.action,
+        "resource_type": a.resource_type,
+        "resource_name": _redact_text(a.resource_name, 200),
+        "outcome": a.outcome,
+        "policy_applied": a.policy_applied,
+        "module": a.module,
+        "compliance_relevant": a.compliance_relevant,
+        "frameworks": a.frameworks,
+    }
+
+
 @router.get("/stats", summary="ComplianceClaw summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
@@ -276,6 +335,119 @@ async def get_frameworks(db: AsyncSession = Depends(get_db)):
     open_count = sum(1 for f in result.scalars().all()
                      if (f.status.value if hasattr(f.status, "value") else f.status) == "open")
     return {"frameworks": frameworks, "open_findings": open_count}
+
+
+@router.post("/evidence/export", summary="Export audit-ready compliance evidence bundle")
+async def export_evidence_bundle(
+    body: EvidenceExportRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    policy_decision = await enforce(
+        db=db,
+        request=ActionRequest(
+            module="complianceclaw",
+            actor_id=body.requested_by,
+            actor_name=body.requested_by,
+            actor_type="human",
+            action="export_compliance_evidence",
+            target="compliance_evidence_bundle",
+            target_type="evidence_export",
+            context={
+                "frameworks": body.frameworks,
+                "classification": body.classification,
+                "include_findings": body.include_findings,
+                "include_audit_logs": body.include_audit_logs,
+            },
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    if not policy_decision.allowed:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "message": "Compliance evidence export blocked by Trust Fabric policy.",
+                "policy": policy_decision.policy_name,
+                "reason": policy_decision.reason,
+                "outcome": policy_decision.outcome.value,
+                "risk_score": policy_decision.risk_score,
+            },
+        )
+
+    finding_rows = []
+    if body.include_findings:
+        finding_result = await db.execute(
+            select(Finding).where(Finding.claw == CLAW_NAME).order_by(desc(Finding.risk_score)).limit(250)
+        )
+        finding_rows = [_finding_evidence(f) for f in finding_result.scalars().all()]
+        if not finding_rows:
+            finding_rows = [
+                {
+                    "id": f["id"],
+                    "claw": CLAW_NAME,
+                    "provider": f.get("provider"),
+                    "title": _redact_text(f.get("title"), 240),
+                    "description": _redact_text(f.get("description"), 500),
+                    "category": f.get("category"),
+                    "severity": str(f.get("severity", "")).lower(),
+                    "status": str(f.get("status", "")).lower(),
+                    "resource_type": f.get("resource_type"),
+                    "resource_name": _redact_text(f.get("resource_name"), 200),
+                    "risk_score": f.get("risk_score"),
+                    "remediation": _redact_text(f.get("remediation"), 500),
+                    "first_seen": f.get("first_seen"),
+                    "last_seen": None,
+                }
+                for f in _FINDINGS[:25]
+            ]
+
+    audit_rows = []
+    if body.include_audit_logs:
+        audit_result = await db.execute(
+            select(AuditLog)
+            .where(AuditLog.compliance_relevant == True)
+            .order_by(desc(AuditLog.timestamp))
+            .limit(body.max_audit_logs)
+        )
+        audit_rows = [_audit_evidence(a) for a in audit_result.scalars().all()]
+
+    generated_at = datetime.utcnow().isoformat()
+    controls = {}
+    for framework in body.frameworks:
+        controls[framework] = {
+            "findings_linked": len(finding_rows),
+            "audit_events_linked": len(audit_rows),
+            "evidence_state": "collected" if finding_rows or audit_rows else "empty",
+        }
+
+    bundle = {
+        "bundle_id": f"evidence-{uuid.uuid4()}",
+        "generated_at": generated_at,
+        "requested_by": body.requested_by,
+        "classification": body.classification,
+        "frameworks": body.frameworks,
+        "policy_decision": {
+            "outcome": policy_decision.outcome.value,
+            "risk_score": policy_decision.risk_score,
+            "policy_name": policy_decision.policy_name,
+        },
+        "summary": {
+            "finding_count": len(finding_rows),
+            "audit_log_count": len(audit_rows),
+            "framework_count": len(body.frameworks),
+        },
+        "controls": controls,
+        "findings": finding_rows,
+        "audit_logs": audit_rows,
+    }
+    canonical = json.dumps(bundle, sort_keys=True, separators=(",", ":"))
+    bundle["chain_of_custody"] = {
+        "hash_algorithm": "sha256",
+        "bundle_hash": hashlib.sha256(canonical.encode()).hexdigest(),
+        "generated_by": "complianceclaw",
+        "note": "Hash covers the bundle content before this chain_of_custody block is appended.",
+    }
+    return bundle
 
 
 @router.post("/scan", summary="Run Compliance Claw scan and persist findings")

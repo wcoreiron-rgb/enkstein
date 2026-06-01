@@ -427,6 +427,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.7 — Compliance Evidence Export + Production Hardening Docs     -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Compliance Evidence Export + Production Hardening Docs</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Compliance</span>
+          <span class="tag tag-fix">Production</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.7</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run adds a Trust Fabric-governed ComplianceClaw evidence export and documents the baseline production deployment controls.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Evidence export:</strong> added <code>POST /api/v1/complianceclaw/evidence/export</code> for audit-ready JSON bundles.</li>
+          <li><strong>Trust Fabric gate:</strong> evidence export can be denied by policy before findings or audit logs are returned.</li>
+          <li><strong>Chain of custody:</strong> export responses include per-framework rollups and a SHA-256 bundle hash.</li>
+          <li><strong>Production guide:</strong> added <code>docs/production-deployment.md</code> with TLS, secrets, database, Redis, CI security, and backup/restore expectations.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_compliance_evidence_export.py -q</code> → <strong>2 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.6 — Skill Pack Exchange Upgrade/Rollback Lifecycle             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
