@@ -42,7 +42,7 @@ from app.api.routes.remote_control import (
     approve_pending_command,
     reject_pending_command,
 )
-from app.services.channel_processor import process_message
+from app.services.channel_processor import dispatch_alert, process_message
 
 router = APIRouter(prefix="/channel-gateway", tags=["channel-gateway"])
 logger = logging.getLogger(__name__)
@@ -163,6 +163,50 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
     return msg
 
 
+def _response_title(result: dict) -> str:
+    decision = (result.get("policy_decision") or "processed").replace("_", " ").title()
+    return f"RegentClaw {decision}"
+
+
+async def _send_channel_response(db: Session, msg: ChannelMessage, result: dict) -> dict:
+    """
+    Deliver the normalized response back to configured Slack/Teams channels.
+    Missing webhook config is explicit so operators can distinguish queued work
+    from channel delivery gaps.
+    """
+    if msg.channel_type not in {"slack", "teams"}:
+        return {"status": "skipped", "reason": "channel_type_not_supported"}
+    if not msg.response_text:
+        return {"status": "skipped", "reason": "empty_response"}
+
+    config = (
+        db.query(ChannelConfig)
+        .filter(
+            ChannelConfig.channel_type == msg.channel_type,
+            ChannelConfig.channel_id == msg.channel_id,
+            ChannelConfig.is_enabled == True,
+        )
+        .first()
+    )
+    if not config or not config.webhook_url:
+        return {"status": "skipped", "reason": "missing_webhook_url"}
+
+    delivered = await dispatch_alert(
+        msg.channel_type,
+        _response_title(result),
+        msg.response_text,
+        {"webhook_url": config.webhook_url, "color": "#0078D4"},
+    )
+    msg.response_sent = bool(delivered)
+    db.commit()
+    return {
+        "status": "sent" if delivered else "failed",
+        "channel_type": msg.channel_type,
+        "channel_id": msg.channel_id,
+        "message_id": msg.id,
+    }
+
+
 async def _ingest_normalized_message(
     db: Session,
     *,
@@ -189,7 +233,13 @@ async def _ingest_normalized_message(
     command_result = await _execute_channel_command(result, ci)
     _apply_command_outcome(result, command_result)
     msg = _persist_message(db, result, channel_name)
-    return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
+    outbound_delivery = await _send_channel_response(db, msg, result)
+    return {
+        **_msg_out(msg),
+        "response": result["response_text"],
+        "command_result": command_result,
+        "outbound_delivery": outbound_delivery,
+    }
 
 
 def _map_intent(detected_intent: str) -> str:
@@ -562,7 +612,13 @@ async def cli_command(body: dict, db: Session = Depends(get_db)):
         command_result = await _execute_channel_command(result, channel_identity)
         _apply_command_outcome(result, command_result)
         msg = _persist_message(db, result, body.get("terminal_name", body["terminal_id"]))
-        return {**_msg_out(msg), "response": result["response_text"], "command_result": command_result}
+        outbound_delivery = await _send_channel_response(db, msg, result)
+        return {
+            **_msg_out(msg),
+            "response": result["response_text"],
+            "command_result": command_result,
+            "outbound_delivery": outbound_delivery,
+        }
 
     return await _ingest_normalized_message(
         db,

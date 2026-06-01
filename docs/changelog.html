@@ -427,6 +427,44 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.2 — Channel Outbound Response Delivery                         -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--cyan);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Slack/Teams Outbound Response Delivery</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="tag tag-feat">Operator UX</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.2</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run adds the first production-shaped two-way channel response path: inbound Slack/Teams messages can now trigger configured outbound webhook replies, with delivery state persisted for operator review.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Outbound delivery:</strong> Slack/Teams channel responses are posted through configured <code>ChannelConfig.webhook_url</code> values when available.</li>
+          <li><strong>Explicit status:</strong> ingress responses now include <code>outbound_delivery.status</code> as <code>sent</code>, <code>failed</code>, or <code>skipped</code>.</li>
+          <li><strong>Persisted signal:</strong> <code>ChannelMessage.response_sent</code> is updated after successful outbound delivery.</li>
+          <li><strong>UI visibility:</strong> Channel Gateway message rows and detail panels show whether the response was delivered or not configured.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_channel_gateway_commands.py -q</code> → <strong>10 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.1 — Swarm Real Task Coverage: Intel + Recovery                -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

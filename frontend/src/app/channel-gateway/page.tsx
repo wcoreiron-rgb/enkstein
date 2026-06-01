@@ -29,6 +29,7 @@ type Message = {
   detected_claws:   string[];
   execution_status: string;
   workflow_run_id:  string;
+  response_sent:    boolean;
   response_text:    string;
   created_at:       string;
   command_result?: {
@@ -185,6 +186,12 @@ function MessageRow({ msg }: { msg: Message }) {
           {msg.workflow_run_id && (
             <p className="text-xs text-gray-600 mt-0.5 font-mono truncate max-w-24">{msg.workflow_run_id.slice(0, 8)}…</p>
           )}
+          <p className={`text-xs mt-1 flex items-center gap-1 ${
+            msg.response_sent ? 'text-cyan-300' : 'text-gray-600'
+          }`}>
+            <Send className="w-3 h-3" />
+            {msg.response_sent ? 'reply sent' : 'reply not sent'}
+          </p>
         </td>
         <td className="px-4 py-3 text-xs text-gray-600">
           {msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : '—'}
@@ -215,6 +222,14 @@ function MessageRow({ msg }: { msg: Message }) {
                 <pre className="text-xs text-gray-300 bg-gray-900 rounded-lg p-3 whitespace-pre-wrap">
                   {msg.response_text}
                 </pre>
+                <p className={`mt-2 text-xs flex items-center gap-1 ${
+                  msg.response_sent ? 'text-cyan-300' : 'text-gray-500'
+                }`}>
+                  <Send className="w-3 h-3" />
+                  {msg.response_sent
+                    ? 'Outbound channel response delivered'
+                    : 'Outbound channel response not delivered or not configured'}
+                </p>
                 {msg.command_result && (
                   <div className="mt-2">
                     <p className="text-xs text-gray-500 mb-1">Command Result</p>

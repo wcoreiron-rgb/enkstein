@@ -243,6 +243,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `approve <command_id>`
     - `reject <command_id>` / `deny <command_id>`
     These invoke the same governed pending-command review path used by command APIs.
+  - Slack/Teams outbound responses now use configured channel webhooks when available:
+    - persisted messages expose `response_sent`
+    - API responses include `outbound_delivery.status` (`sent`, `failed`, or `skipped`)
+    - Channel Gateway message detail shows delivered/not-configured response status
   - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
     - `provider` must be `jira` and `target_type` must be `ticket`
     - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)

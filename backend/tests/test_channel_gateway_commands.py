@@ -325,3 +325,106 @@ async def test_channel_gateway_message_can_reject_pending_command(client, db_ses
     assert cr["outcome"] == "allowed"
     assert body["execution_status"] == "dispatched"
     assert body["response_text"].startswith("🛑 Rejected command")
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_outbound_response_skips_without_webhook(client):
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "teams",
+            "platform_user_id": "outbound-no-hook",
+            "platform_email": "outbound@company.com",
+            "platform_name": "Outbound User",
+            "regentclaw_role": "engineer",
+            "is_trusted": True,
+            "trust_score": 85,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/message",
+        json={
+            "channel_type": "teams",
+            "channel_id": "missing-webhook-room",
+            "sender_id": "outbound-no-hook",
+            "sender_email": "outbound@company.com",
+            "sender_name": "Outbound User",
+            "message_text": "run cloud scan in prod",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["response_sent"] is False
+    assert body["outbound_delivery"] == {
+        "status": "skipped",
+        "reason": "missing_webhook_url",
+    }
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_outbound_response_posts_to_configured_channel(client, monkeypatch):
+    calls = []
+
+    async def fake_dispatch_alert(channel_type, title, text, config):
+        calls.append(
+            {
+                "channel_type": channel_type,
+                "title": title,
+                "text": text,
+                "config": config,
+            }
+        )
+        return True
+
+    monkeypatch.setattr(
+        "app.api.routes.channel_gateway.dispatch_alert",
+        fake_dispatch_alert,
+    )
+
+    config = await client.post(
+        "/api/v1/channel-gateway/configs",
+        json={
+            "channel_type": "slack",
+            "channel_id": "configured-room",
+            "channel_name": "Configured Room",
+            "webhook_url": "https://hooks.slack.test/services/T/B/C",
+            "is_enabled": True,
+        },
+    )
+    assert config.status_code == 200, config.text
+
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "slack",
+            "platform_user_id": "outbound-hook",
+            "platform_email": "hooked@company.com",
+            "platform_name": "Hooked User",
+            "regentclaw_role": "engineer",
+            "is_trusted": True,
+            "trust_score": 88,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/message",
+        json={
+            "channel_type": "slack",
+            "channel_id": "configured-room",
+            "sender_id": "outbound-hook",
+            "sender_email": "hooked@company.com",
+            "sender_name": "Hooked User",
+            "message_text": "run cloud scan in prod",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["response_sent"] is True
+    assert body["outbound_delivery"]["status"] == "sent"
+    assert body["outbound_delivery"]["channel_type"] == "slack"
+    assert calls
+    assert calls[0]["channel_type"] == "slack"
+    assert calls[0]["config"]["webhook_url"].startswith("https://hooks.slack.test/")
