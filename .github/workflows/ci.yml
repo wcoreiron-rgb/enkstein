@@ -61,7 +61,7 @@ jobs:
             tests/test_compliance_evidence_export.py
           do
             echo "::group::${test_file}"
-            python -m pytest -q --tb=short "${test_file}"
+            python scripts/pytest_force_exit.py "${test_file}"
             echo "::endgroup::"
           done
 
@@ -114,7 +114,7 @@ jobs:
             tests/test_trust_fabric.py
           do
             echo "::group::${test_file}"
-            python -m pytest -q --tb=short "${test_file}"
+            python scripts/pytest_force_exit.py "${test_file}"
             echo "::endgroup::"
           done
 
