@@ -16,6 +16,7 @@ from app.core.swarm.judge import judge_swarm_result_with_modelclaw
 from app.core.swarm.planner import select_participants
 from app.core.swarm.schemas import SwarmJobCreate
 from app.models.swarm import SwarmJob, SwarmJobStatus, SwarmTask, SwarmTaskStatus
+from app.services.memory_runtime import propose_swarm_memory_update
 
 
 async def create_swarm_job(db: AsyncSession, payload: SwarmJobCreate) -> SwarmJob:
@@ -97,6 +98,7 @@ async def run_swarm_job_in_session(db: AsyncSession, job_id: UUID) -> None:
             classification=job.classification,
             swarm_job_id=str(job.id),
         )
+        judged["memory_update"] = await propose_swarm_memory_update(db, job, judged, aggregate)
         job.confidence = judged["confidence"]
         job.overall_severity = judged["overall_severity"]
         job.final_summary = judged["executive_summary"]
@@ -181,6 +183,7 @@ async def run_swarm_job(job_id: UUID) -> None:
                 classification=job.classification,
                 swarm_job_id=str(job.id),
             )
+            judged["memory_update"] = await propose_swarm_memory_update(db, job, judged, aggregate)
             job.confidence = judged["confidence"]
             job.overall_severity = judged["overall_severity"]
             job.final_summary = judged["executive_summary"]

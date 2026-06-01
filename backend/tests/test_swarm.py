@@ -2,6 +2,11 @@ import pytest
 from app.fabric.providers.agt import adapter as agt_adapter_module
 from app.core.config import settings
 import json
+from sqlalchemy import select
+
+from app.models.memory import IncidentMemory, TenantMemory
+from app.models.swarm import SwarmJob, SwarmJobStatus
+from app.services.memory_runtime import propose_swarm_memory_update
 
 
 BASE = "/api/v1/swarm/jobs"
@@ -250,3 +255,71 @@ async def test_microsoft_identity_incident_preset_creates_connector_oriented_job
     approve_res = await client.post(f"{BASE}/{job_id}/approve")
     assert approve_res.status_code == 200, approve_res.text
     assert approve_res.json()["status"] in {"completed", "requires_approval"}
+
+
+@pytest.mark.asyncio
+async def test_swarm_task_output_marks_loaded_memory_context(client, db_session):
+    db_session.add(
+        TenantMemory(
+            id=1,
+            overall_risk_level="high",
+            overall_risk_score=72,
+            analyst_notes="Approved memory: finance admins have recurring impossible-travel false positives.",
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        BASE,
+        json={
+            "name": "Memory Context Test",
+            "profile": "FAST_TRIAGE",
+            "requested_by": "memory-test",
+            "trigger_type": "manual",
+            "participants": ["identityclaw"],
+            "task_type": "investigate_identity_risk",
+            "input": {"identity": "finance-admin@company.com"},
+            "parallelism": 1,
+        },
+    )
+    assert response.status_code == 201, response.text
+    tasks = await client.get(f"{BASE}/{response.json()['id']}/tasks")
+    assert tasks.status_code == 200, tasks.text
+    output = json.loads(tasks.json()[0]["output_json"])
+    assert output["memory_context_loaded"] is True
+
+
+@pytest.mark.asyncio
+async def test_swarm_high_risk_judgement_proposes_incident_memory(db_session):
+    job = SwarmJob(
+        name="High Risk Memory Proposal",
+        profile="INCIDENT_RESPONSE",
+        status=SwarmJobStatus.RUNNING,
+        requested_by="memory-test",
+        trigger_type="manual",
+        input_json=json.dumps({"identity": "vip@company.com"}),
+        classification="confidential",
+        participants_json=json.dumps(["identityclaw"]),
+        parallelism=1,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    result = await propose_swarm_memory_update(
+        db_session,
+        job,
+        {
+            "overall_severity": "critical",
+            "confidence": 0.92,
+            "executive_summary": "Critical suspicious identity incident requires investigation.",
+        },
+        {"top_findings": [{"title": "Risky VIP sign-in"}]},
+    )
+    assert result["status"] == "created"
+
+    incidents = await db_session.execute(select(IncidentMemory))
+    rows = incidents.scalars().all()
+    assert len(rows) == 1
+    assert rows[0].source_claw == "swarmclaw"
+    assert rows[0].severity == "critical"

@@ -316,6 +316,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - pre-execution approval now starts/runs the job
     - post-judge approval now finalizes the job
   - Added shared swarm profile defaults (`FAST_TRIAGE`, `DEEP_INVESTIGATION`, `INCIDENT_RESPONSE`, `AUTONOMOUS_LOW_RISK`, `EMERGENCY_CONTAINMENT`) applied to trigger/schedule launches.
+- MemoryClaw runtime integration:
+  - Swarm tasks now receive short, redacted `memory_context` when relevant tenant/incidents memory exists.
+  - Task outputs expose `memory_context_loaded` for operator/audit visibility.
+  - High-risk Swarm Judge results now propose incident memory entries for analyst review.
+  - Memory runtime blocks proposed writes that look like secrets or prompt-injection payloads.
 - Sprint 6 operator workflow:
   - Added one-click preset endpoint for **Suspicious Identity Investigation Swarm**:
     - `POST /api/v1/swarm/jobs/presets/suspicious-identity`

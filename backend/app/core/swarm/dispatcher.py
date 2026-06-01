@@ -38,6 +38,7 @@ from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
 from app.claws.vendorclaw.routes import VendorTaskRequest, run_vendor_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
+from app.services.memory_runtime import build_swarm_memory_context
 
 logger = logging.getLogger("swarm_dispatcher")
 
@@ -69,6 +70,9 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         task_input = json.loads(task.input_json) if task.input_json else {}
     except Exception:
         task_input = {}
+    memory_context = await build_swarm_memory_context(db, task_input, task.claw)
+    if memory_context.get("loaded"):
+        task_input = {**task_input, "memory_context": memory_context}
 
     real_output = await _execute_real_task_if_supported(
         db=db,
@@ -82,6 +86,7 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
     if real_output is not None:
         output = real_output
         output.setdefault("execution_mode", "real_task_handler")
+        output["memory_context_loaded"] = bool(memory_context.get("loaded"))
     else:
         # Fallback simulation for claws that have not shipped /task yet.
         logger.warning("Swarm task %s using simulated fallback for unsupported claw '%s'", task.id, task.claw)
@@ -114,6 +119,7 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
             "execution_time_ms": simulated_ms,
             "execution_mode": "simulated_fallback",
             "fallback_reason": f"Unsupported claw '{task.claw}' does not provide /task handler",
+            "memory_context_loaded": bool(memory_context.get("loaded")),
         }
 
     adapter = get_agt_adapter()

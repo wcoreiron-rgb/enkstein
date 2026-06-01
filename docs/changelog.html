@@ -427,6 +427,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.5 — MemoryClaw Runtime Context + Swarm Memory Proposals       -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--teal);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">MemoryClaw Runtime Context + Swarm Memory Proposals</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">MemoryClaw</span>
+          <span class="tag tag-feat">Swarm</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.5</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run connects MemoryClaw to Swarm execution so tasks can use safe runtime context and high-risk judged outcomes can create reviewable incident memory.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Runtime memory context:</strong> Swarm dispatcher now injects short, redacted tenant/incident memory into task input when relevant memory exists.</li>
+          <li><strong>Task provenance:</strong> task outputs include <code>memory_context_loaded</code> for audit/operator visibility.</li>
+          <li><strong>Memory proposals:</strong> high-risk Swarm Judge results create proposed <code>IncidentMemory</code> entries linked to the swarm job.</li>
+          <li><strong>Safety scan:</strong> memory writes are blocked when summaries resemble secrets or prompt-injection payloads.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_swarm.py -q</code> → <strong>13 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.4 — Remote Agent Signed Enrollment + Key Rotation              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
