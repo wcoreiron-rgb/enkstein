@@ -2,6 +2,7 @@ import pytest
 from app.claws.cloudclaw import routes as cloud_routes
 from app.claws.endpointclaw import routes as endpoint_routes
 from app.claws.devclaw import routes as dev_routes
+from app.claws.identityclaw import routes as identity_routes
 
 
 @pytest.mark.asyncio
@@ -72,6 +73,32 @@ async def test_cloud_task_uses_connector_backed_path_when_available(client, monk
     body = response.json()
     assert body["risk_score"] >= 91
     assert body["findings"][0]["title"] == "Live Cloud Exposure"
+
+
+@pytest.mark.asyncio
+async def test_identity_task_uses_entra_connector_backed_path_when_available(client, monkeypatch):
+    class _Adapter:
+        @staticmethod
+        async def get_findings(credentials=None):
+            return [{"title": "Live Entra Risky User", "description": "connector finding", "risk_score": 89}]
+
+    async def _creds(*args, **kwargs):
+        return {"tenant_id": "t", "client_id": "c", "client_secret": "s"}
+
+    monkeypatch.setattr(identity_routes, "_get_identity_provider_credentials", _creds)
+    monkeypatch.setattr(
+        identity_routes,
+        "IDENTITY_PROVIDER_CONFIG",
+        [{"provider": "entra_id", "connector_type": "entra_id", "label": "Microsoft Entra ID", "adapter": _Adapter}],
+    )
+
+    response = await client.post("/api/v1/identityclaw/task", json={"swarm_job_id": "job_x", "task_type": "investigate"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["risk_score"] >= 89
+    assert body["findings"][0]["title"] == "Live Entra Risky User"
+    assert body["data_source"] == "live_connector"
+    assert body["providers_used"] == ["entra_id"]
 
 
 @pytest.mark.asyncio

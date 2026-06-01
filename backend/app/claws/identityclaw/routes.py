@@ -14,7 +14,9 @@ from app.schemas.identity import IdentityCreate, IdentityRead, IdentityUpdate
 from app.claws.identityclaw.models import IdentityRiskEvent, PrivilegedAction, IdentityRiskLevel
 from app.services.risk_scoring import calculate_event_risk
 from app.services.audit_service import log_action
+from app.services.secrets_manager import get_credential
 from app.models.connector import Connector
+from app.claws.accessclaw.providers import entra as entra_adapter
 
 router = APIRouter(prefix="/identityclaw", tags=["IdentityClaw — Identity Security"])
 
@@ -73,6 +75,24 @@ class IdentityTaskRequest(BaseModel):
     classification: str = "internal"
     model_profile: Optional[str] = None
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
+
+
+IDENTITY_PROVIDER_CONFIG = [
+    {
+        "provider": "entra_id",
+        "connector_type": "entra_id",
+        "label": "Microsoft Entra ID",
+        "adapter": entra_adapter,
+    },
+]
+
+
+async def _get_identity_provider_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
+    result = await db.execute(select(Connector).where(Connector.connector_type == connector_type))
+    connector = result.scalar_one_or_none()
+    if not connector:
+        return None
+    return get_credential(str(connector.id))
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -295,9 +315,38 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
     connector_state = "configured" if connector_result.scalars().first() else "unconfigured"
     identities = await db.execute(select(Identity).order_by(desc(Identity.risk_score)).limit(5))
     top = identities.scalars().all()
+    live_rows = []
+    live_risks = []
+    live_providers = []
+    if not top:
+        for cfg in IDENTITY_PROVIDER_CONFIG:
+            creds = await _get_identity_provider_credentials(db, cfg["connector_type"])
+            if not creds:
+                continue
+            connector_state = "configured"
+            try:
+                raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+            except Exception:
+                continue
+            for row in raw_findings[:3]:
+                live_rows.append(
+                    {
+                        "title": row.get("title") or f"{cfg['label']} identity finding",
+                        "detail": (row.get("description") or "Connector-backed identity task finding")[:240],
+                        "provider": cfg["provider"],
+                    }
+                )
+                live_risks.append(float(row.get("risk_score") or 0.0))
+            if live_rows:
+                live_providers.append(cfg["provider"])
+                break
     high = [i for i in top if (i.risk_score or 0) >= 70]
     max_risk = max([float(i.risk_score or 0.0) for i in top], default=0.0)
+    if live_risks:
+        max_risk = max(max_risk, max(live_risks))
     confidence = 0.9 if high else 0.72
+    if live_rows:
+        confidence = 0.91
     severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
     elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
 
@@ -310,6 +359,8 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
     ]
     if not findings:
         findings = [{"title": "No high-risk identity found", "detail": "Top identities are below high-risk threshold."}]
+    if live_rows:
+        findings = live_rows
 
     return {
         "task_id": f"identity-task-{int(started.timestamp())}",
@@ -329,6 +380,7 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
         "policy_decisions": [],
         "compliance_mappings": ["NIST AC-2", "ISO27001 A.5.16"],
         "execution_time_ms": elapsed_ms,
-        "data_source": "persisted_db",
+        "data_source": "live_connector" if live_rows else ("persisted_db" if top else "seeded_fallback"),
         "connector_state": connector_state,
+        "providers_used": live_providers,
     }

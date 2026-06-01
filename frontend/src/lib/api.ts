@@ -152,6 +152,8 @@ export const createSwarmJob = (body: object) =>
   apiFetch<any>('/swarm/jobs', { method: 'POST', body: JSON.stringify(body) });
 export const createSuspiciousIdentitySwarm = (body?: object) =>
   apiFetch<any>('/swarm/jobs/presets/suspicious-identity', { method: 'POST', body: JSON.stringify(body || {}) });
+export const createMicrosoftIdentityIncidentSwarm = (body?: object) =>
+  apiFetch<any>('/swarm/jobs/presets/microsoft-identity-incident', { method: 'POST', body: JSON.stringify(body || {}) });
 export const getSwarmJobs = (params?: Record<string, string>) => {
   const qs = params ? '?' + new URLSearchParams(params).toString() : '';
   return apiFetch<any[]>(`/swarm/jobs${qs}`);

@@ -427,6 +427,44 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.3 — Microsoft Identity Incident Demo Preset                    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Microsoft Identity Incident Preset + Entra-Backed Identity Tasks</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Swarm</span>
+          <span class="tag tag-feat">Microsoft</span>
+          <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This run adds a Microsoft security demo path and deepens connector-backed focused task execution for identity investigations.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>New preset:</strong> <code>POST /api/v1/swarm/jobs/presets/microsoft-identity-incident</code> launches Identity, Cloud, Endpoint, Log, Threat, Compliance, and Automation tasks.</li>
+          <li><strong>Connector preference metadata:</strong> preset input declares Entra ID, Azure Defender, Defender Endpoint, and Microsoft Sentinel as preferred connector families.</li>
+          <li><strong>IdentityClaw task upgrade:</strong> <code>POST /api/v1/identityclaw/task</code> now attempts Entra-backed findings through configured connector credentials before falling back to persisted or seeded data.</li>
+          <li><strong>Swarm UI:</strong> incident preset controls now include a Microsoft Incident quick-launch action.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/pytest tests/test_claw_task_endpoints.py tests/test_swarm.py::test_microsoft_identity_incident_preset_creates_connector_oriented_job -q</code> → <strong>17 passed</strong>.</li>
+          <li><strong>Frontend lint:</strong> <code>cd frontend && npm run lint</code> → <strong>pass</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.2 — Channel Outbound Response Delivery                         -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

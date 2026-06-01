@@ -314,6 +314,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added one-click preset endpoint for **Suspicious Identity Investigation Swarm**:
     - `POST /api/v1/swarm/jobs/presets/suspicious-identity`
   - Preset launches Identity/Threat/Cloud/Data/Compliance/Automation participants with incident-response defaults and approval gate.
+  - Added Microsoft security demo preset endpoint:
+    - `POST /api/v1/swarm/jobs/presets/microsoft-identity-incident`
+    This launches Identity/Cloud/Endpoint/Log/Threat/Compliance/Automation with Entra/Azure Defender/Defender Endpoint/Sentinel connector preference metadata and deterministic fallback when credentials are absent.
+  - IdentityClaw focused `/task` now uses configured Entra ID credentials through the existing Entra adapter before falling back to persisted/seeded identity data.
   - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
   - Swarm job detail now generates a live ticket draft and compliance impact rollup from judge/task evidence.
   - Added direct **Create Ticket** handoff from Swarm detail to `POST /api/v1/remediation/trigger` using `create_jira_ticket` action specs.

@@ -128,6 +128,67 @@ async def create_suspicious_identity_preset(
     return job
 
 
+@router.post("/presets/microsoft-identity-incident", response_model=SwarmJobRead, status_code=201)
+async def create_microsoft_identity_incident_preset(
+    body: dict | None = None,
+    background_tasks: BackgroundTasks = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Microsoft security demo preset: identity-led incident investigation.
+    Uses Entra/Defender/Sentinel/Azure-capable Claws when connectors are configured,
+    with deterministic fallback preserved for local demos without credentials.
+    """
+    payload = body or {}
+    identity = payload.get("identity") or payload.get("user_id") or payload.get("principal") or "unknown_identity"
+    time_range = payload.get("time_range") or "24h"
+    classification = payload.get("classification") or "confidential"
+
+    swarm_payload = SwarmJobCreate(
+        name=payload.get("name") or f"Microsoft Identity Incident - {identity}",
+        profile="INCIDENT_RESPONSE",
+        requested_by=payload.get("requested_by") or "portal-user",
+        trigger_type=payload.get("trigger_type") or "manual_preset",
+        classification=classification,
+        participants=[
+            "identityclaw",
+            "cloudclaw",
+            "endpointclaw",
+            "logclaw",
+            "threatclaw",
+            "complianceclaw",
+            "automationclaw",
+        ],
+        task_type="investigate_microsoft_identity_incident",
+        input={
+            "identity": identity,
+            "time_range": time_range,
+            "scenario": "microsoft_identity_incident",
+            "preferred_connectors": [
+                "entra_id",
+                "azure_defender",
+                "defender_endpoint",
+                "microsoft_sentinel",
+            ],
+            "requested_outcome": "identity_endpoint_cloud_log_correlation_ticket_draft",
+        },
+        parallelism=7,
+        model_profile=payload.get("model_profile") or "swarm_judge_profile",
+    )
+    job = await create_swarm_job(db, swarm_payload)
+    if payload.get("requires_approval_for_actions", True):
+        job.status = SwarmJobStatus.REQUIRES_APPROVAL
+        job.final_summary = "Awaiting approval before Microsoft identity incident swarm execution"
+        await db.commit()
+        await db.refresh(job)
+    elif os.getenv("PYTEST_CURRENT_TEST") or background_tasks is None:
+        await run_swarm_job_in_session(db, job.id)
+        await db.refresh(job)
+    else:
+        background_tasks.add_task(run_swarm_job, job.id)
+    return job
+
+
 @router.post("", response_model=SwarmJobRead, status_code=201)
 async def create_job(
     payload: SwarmJobCreate,

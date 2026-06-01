@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Users2, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
-import { approveSwarmJob, cancelSwarmJob, createSuspiciousIdentitySwarm, createSwarmJob, getSwarmJobs } from '@/lib/api';
+import { approveSwarmJob, cancelSwarmJob, createMicrosoftIdentityIncidentSwarm, createSuspiciousIdentitySwarm, createSwarmJob, getSwarmJobs } from '@/lib/api';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -130,11 +130,12 @@ export default function SwarmPage() {
     } finally { setBusyId(null); }
   };
 
-  const launchIdentityPreset = async () => {
+  const launchPreset = async (preset: 'suspicious' | 'microsoft') => {
     setLaunchingPreset(true);
     setError(null);
     try {
-      await createSuspiciousIdentitySwarm({
+      const create = preset === 'microsoft' ? createMicrosoftIdentityIncidentSwarm : createSuspiciousIdentitySwarm;
+      await create({
         identity: presetIdentity,
         time_range: presetTimeRange,
         requested_by: form.requested_by || 'portal-user',
@@ -142,7 +143,7 @@ export default function SwarmPage() {
       });
       await load();
     } catch (e: any) {
-      setError(e?.message || 'Failed to launch suspicious identity preset.');
+      setError(e?.message || 'Failed to launch swarm preset.');
     } finally {
       setLaunchingPreset(false);
     }
@@ -183,8 +184,8 @@ export default function SwarmPage() {
       <div className="bg-gray-900 border border-cyan-900/60 rounded-xl p-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h3 className="text-cyan-300 font-semibold">Sprint 6 Preset · Suspicious Identity Investigation</h3>
-            <p className="text-xs text-gray-400 mt-1">Launches Identity + Threat + Cloud + Data + Compliance + Automation with approval gate.</p>
+            <h3 className="text-cyan-300 font-semibold">Incident Presets</h3>
+            <p className="text-xs text-gray-400 mt-1">Launch suspicious identity or Microsoft incident swarms with approval gate and connector-backed task paths where configured.</p>
           </div>
           <div className="flex items-center gap-2">
             <input
@@ -200,11 +201,18 @@ export default function SwarmPage() {
               className="w-24 px-2 py-1.5 rounded bg-gray-950 border border-gray-800 text-sm text-gray-200"
             />
             <button
-              onClick={launchIdentityPreset}
+              onClick={() => launchPreset('suspicious')}
               disabled={launchingPreset || !presetIdentity.trim()}
               className="px-3 py-1.5 rounded bg-cyan-700 hover:bg-cyan-600 text-white text-sm disabled:opacity-60"
             >
-              {launchingPreset ? 'Launching...' : 'Launch Preset'}
+              {launchingPreset ? 'Launching...' : 'Suspicious ID'}
+            </button>
+            <button
+              onClick={() => launchPreset('microsoft')}
+              disabled={launchingPreset || !presetIdentity.trim()}
+              className="px-3 py-1.5 rounded bg-blue-700 hover:bg-blue-600 text-white text-sm disabled:opacity-60"
+            >
+              {launchingPreset ? 'Launching...' : 'Microsoft Incident'}
             </button>
           </div>
         </div>
