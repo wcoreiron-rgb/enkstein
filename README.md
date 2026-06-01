@@ -172,6 +172,14 @@ Key endpoints:
 | GET | /api/v1/events | All events |
 | GET | /api/v1/events/anomalies | Anomalies only |
 | GET | /api/v1/audit | Audit log |
+| POST | /api/v1/remediation/trigger | Trigger a remediation playbook/action |
+| POST | /api/v1/remediation/actions/{id}/approve | Approve a queued remediation action |
+| POST | /api/v1/swarm/jobs | Launch a multi-agent swarm investigation |
+| POST | /api/v1/exec/shell | Submit a governed shell command (ring + dual-approval) |
+| POST | /api/v1/channel-gateway/message | Ingest a command from Slack/Teams/webhook |
+| POST | /api/v1/remote-agents/register | Register a remote/edge agent |
+| POST | /api/v1/skill-packs/{id}/install | Provenance-verified skill pack install |
+| GET | /api/v1/trust-fabric/containment-probe | Trust Fabric containment self-test |
 
 ## Security Design Principles
 
@@ -400,6 +408,8 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 🔐 External Agent Control | Remote agent registration, heartbeat, dispatch, tenant enforcement, kill-switch |
 | 📦 Skill Pack Exchange | Signed marketplace for skills, policies, playbooks — provenance-verified install plus preview/upgrade/rollback lifecycle APIs |
 | 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
+| 🖥️ Governed Exec Channels | Shell / browser / credential execution behind dual-approval, ring policy, and fail-closed Trust Fabric gating |
+| 🛰️ Remote Control | Remote/edge agent registration, heartbeat, command dispatch, tenant scoping, and kill-switch |
 
 ### Skill Pack Exchange Lifecycle
 

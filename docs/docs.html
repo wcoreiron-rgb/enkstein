@@ -1317,6 +1317,36 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
         <span class="endpoint-path">/api/v1/approvals/{id}/reject</span>
         <span class="endpoint-desc">Reject with required reason</span>
       </div>
+
+      <h2>Execution Ring Policy</h2>
+      <p>Every governed action is classified into one of four privilege rings. The ring determines whether the action is auto-allowed, requires approval, or is blocked outright with a deterministic <code>execution_ring_violation</code> deny reason.</p>
+      <table>
+        <thead><tr><th>Ring</th><th>Scope</th><th>Rule</th></tr></thead>
+        <tbody>
+          <tr><td>ring0</td><td>System / kernel</td><td>Hard-blocked — no role, trust score, or approval can bypass</td></tr>
+          <tr><td>ring1</td><td>Privileged (quarantine, suspend, IAM, delete secret)</td><td>2 approvals required; low-privilege roles denied</td></tr>
+          <tr><td>ring2</td><td>Standard (tickets, alerts, kill process)</td><td>Auto-allow at trust ≥ 80, else 1 approval</td></tr>
+          <tr><td>ring3</td><td>Unprivileged (read logs, lookup CVE, list)</td><td>Always auto-allowed</td></tr>
+        </tbody>
+      </table>
+      <p>Implemented in <code>backend/app/services/ring_policy.py</code>; enforced in exec channels and the remediation approval path. 32 tests in <code>test_ring_policy.py</code>.</p>
+
+      <h2>Governed Execution Channels</h2>
+      <p>Shell, browser, and credential execution requests pass through the Trust Fabric before running. Shell/browser/credential channels require dual approval, self-approval is blocked (the requester cannot approve their own request), and the approver identity is always taken from the JWT — never the client body.</p>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/exec/shell</span>
+        <span class="endpoint-desc">Submit a governed shell command (ring + dual-approval gated)</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/api/v1/exec/requests/{id}/approve</span>
+        <span class="endpoint-desc">Approve a pending exec request (separation-of-duties enforced)</span>
+      </div>
+
+      <h2>Connector &amp; Skill-Pack Provenance</h2>
+      <p>Skill pack installs are verified at install time via SHA-256 content hash and optional Ed25519 publisher signature. A tampered manifest fails the integrity check and the install is blocked with <code>manifest_integrity_failure</code>. Unsigned community packs are allowed with a warning.</p>
+      <p>Implemented in <code>backend/app/services/provenance.py</code>; 10 tests in <code>test_provenance.py</code>.</p>
     </div>
 
     <!-- ─── INTEGRATIONS: CLOUD ─── -->
