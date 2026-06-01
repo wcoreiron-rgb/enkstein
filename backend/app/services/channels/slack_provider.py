@@ -28,6 +28,7 @@ async def send_message(
     webhook_url: str,
     text: str,
     blocks: list[dict[str, Any]] | None = None,
+    thread_ts: str | None = None,
 ) -> bool:
     """
     Send a message to a Slack channel via an Incoming Webhook URL.
@@ -37,6 +38,7 @@ async def send_message(
         text:        Fallback plain-text content (shown in notifications / when
                      blocks cannot be rendered).
         blocks:      Optional list of Slack Block Kit block objects.
+        thread_ts:   Optional Slack thread timestamp for threaded replies.
 
     Returns:
         True if Slack returned HTTP 200, False otherwise.
@@ -44,6 +46,8 @@ async def send_message(
     payload: dict[str, Any] = {"text": text}
     if blocks:
         payload["blocks"] = blocks
+    if thread_ts:
+        payload["thread_ts"] = thread_ts
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

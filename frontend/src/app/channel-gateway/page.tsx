@@ -31,6 +31,20 @@ type Message = {
   workflow_run_id:  string;
   response_sent:    boolean;
   response_text:    string;
+  thread_ts?:        string;
+  outbound_delivery?: {
+    status?: string;
+    reason?: string;
+    card_type?: string;
+    action_count?: number;
+    thread_ts?: string;
+  } | null;
+  outbound_card?: {
+    title?: string;
+    facts?: { name: string; value: string }[];
+    actions?: any[];
+    thread_ts?: string;
+  } | null;
   created_at:       string;
   command_result?: {
     command_id: string;
@@ -230,6 +244,26 @@ function MessageRow({ msg }: { msg: Message }) {
                     ? 'Outbound channel response delivered'
                     : 'Outbound channel response not delivered or not configured'}
                 </p>
+                {msg.outbound_delivery && (
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs bg-gray-900 rounded-lg p-3">
+                    <p className="text-gray-500">Delivery <span className="text-gray-300 ml-1">{msg.outbound_delivery.status || '—'}</span></p>
+                    <p className="text-gray-500">Card <span className="text-gray-300 ml-1">{msg.outbound_delivery.card_type || 'status_update'}</span></p>
+                    <p className="text-gray-500">Actions <span className="text-gray-300 ml-1">{msg.outbound_delivery.action_count ?? 0}</span></p>
+                    <p className="text-gray-500">Thread <span className="text-gray-300 font-mono ml-1">{msg.outbound_delivery.thread_ts || msg.thread_ts || '—'}</span></p>
+                  </div>
+                )}
+                {msg.outbound_card?.facts?.length ? (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-500 mb-1">Outbound Card Facts</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-gray-900 rounded-lg p-3">
+                      {msg.outbound_card.facts.slice(0, 6).map((fact) => (
+                        <p key={`${fact.name}-${fact.value}`} className="text-gray-500">
+                          {fact.name} <span className="text-gray-300 ml-1">{fact.value}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 {msg.command_result && (
                   <div className="mt-2">
                     <p className="text-xs text-gray-500 mb-1">Command Result</p>

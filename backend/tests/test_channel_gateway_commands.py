@@ -428,3 +428,90 @@ async def test_channel_gateway_outbound_response_posts_to_configured_channel(cli
     assert calls
     assert calls[0]["channel_type"] == "slack"
     assert calls[0]["config"]["webhook_url"].startswith("https://hooks.slack.test/")
+
+
+@pytest.mark.asyncio
+async def test_channel_gateway_outbound_approval_card_includes_thread_and_actions(client, monkeypatch):
+    calls = []
+
+    async def fake_execute_channel_command(result, channel_identity):
+        return {
+            "command_id": "cmd-channel-approval",
+            "source": result["channel_type"],
+            "requester": result["sender_email"],
+            "tenant_id": "tenant-approval",
+            "intent": "run_scan",
+            "target": "cloudclaw",
+            "outcome": "requires_approval",
+        }
+
+    async def fake_dispatch_alert(channel_type, title, text, config):
+        calls.append(
+            {
+                "channel_type": channel_type,
+                "title": title,
+                "text": text,
+                "config": config,
+            }
+        )
+        return True
+
+    monkeypatch.setattr(
+        "app.api.routes.channel_gateway._execute_channel_command",
+        fake_execute_channel_command,
+    )
+    monkeypatch.setattr(
+        "app.api.routes.channel_gateway.dispatch_alert",
+        fake_dispatch_alert,
+    )
+
+    config = await client.post(
+        "/api/v1/channel-gateway/configs",
+        json={
+            "channel_type": "slack",
+            "channel_id": "threaded-approval-room",
+            "channel_name": "Threaded Approval Room",
+            "webhook_url": "https://hooks.slack.test/services/T/B/D",
+            "is_enabled": True,
+        },
+    )
+    assert config.status_code == 200, config.text
+
+    identity = await client.post(
+        "/api/v1/channel-gateway/identities",
+        json={
+            "channel_type": "slack",
+            "platform_user_id": "approver-user",
+            "platform_email": "approver@company.com",
+            "platform_name": "Approver User",
+            "regentclaw_role": "engineer",
+            "is_trusted": True,
+            "trust_score": 92,
+        },
+    )
+    assert identity.status_code == 200, identity.text
+
+    resp = await client.post(
+        "/api/v1/channel-gateway/message",
+        json={
+            "channel_type": "slack",
+            "channel_id": "threaded-approval-room",
+            "sender_id": "approver-user",
+            "sender_email": "approver@company.com",
+            "sender_name": "Approver User",
+            "message_text": "run cloud scan in prod",
+            "message_ts": "1717000000.123",
+            "thread_ts": "1717000000.123",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["response_sent"] is True
+    assert body["outbound_delivery"]["status"] == "sent"
+    assert body["outbound_delivery"]["card_type"] == "approval_card"
+    assert body["outbound_delivery"]["action_count"] == 1
+    assert body["outbound_delivery"]["thread_ts"] == "1717000000.123"
+    assert body["outbound_card"]["facts"][0]["value"] == "cmd-channel-approval"
+    assert body["outbound_card"]["actions"][0]["type"] == "actions"
+    assert calls[0]["config"]["thread_ts"] == "1717000000.123"
+    assert calls[0]["config"]["blocks"][-1]["type"] == "actions"

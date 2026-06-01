@@ -23,6 +23,8 @@ async def send_message(
     title: str,
     text: str,
     color: str = "#0078D4",
+    actions: list[dict[str, Any]] | None = None,
+    facts: list[dict[str, str]] | None = None,
 ) -> bool:
     """
     Send a formatted MessageCard to a Microsoft Teams channel webhook.
@@ -34,6 +36,8 @@ async def send_message(
         color:        Accent colour for the card's left border (hex string).
                       Defaults to Microsoft blue (#0078D4).
                       Use "#D13438" for critical alerts, "#CA5010" for warnings.
+        actions:      Optional MessageCard potentialAction list.
+        facts:        Optional MessageCard facts rendered below the message body.
 
     Returns:
         True if Teams accepted the payload (HTTP 200 with body "1"), False otherwise.
@@ -48,9 +52,12 @@ async def send_message(
                 "activityTitle": title,
                 "activityText":  text,
                 "markdown":      True,
+                "facts":         facts or [],
             }
         ],
     }
+    if actions:
+        payload["potentialAction"] = actions
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

@@ -273,7 +273,12 @@ async def dispatch_alert(
         if not webhook:
             logger.error("dispatch_alert: Slack config missing webhook_url")
             return False
-        return await _slack(webhook_url=webhook, text=f"*{title}*\n{text}")
+        return await _slack(
+            webhook_url=webhook,
+            text=f"*{title}*\n{text}",
+            blocks=config.get("blocks"),
+            thread_ts=config.get("thread_ts"),
+        )
 
     if ct == "teams":
         from app.services.channels.teams_provider import send_message as _teams
@@ -286,6 +291,8 @@ async def dispatch_alert(
             title=title,
             text=text,
             color=config.get("color", "#D13438"),  # default to red for alerts
+            actions=config.get("actions"),
+            facts=config.get("facts"),
         )
 
     if ct == "email":

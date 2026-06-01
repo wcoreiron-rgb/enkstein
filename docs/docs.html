@@ -886,6 +886,8 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <li><strong>CLI adapter:</strong> <code>POST /api/v1/channel-gateway/cli/command</code> routes terminal-originated commands through the same path, with optional inline tenant metadata.</li>
         <li><strong>Normalization target:</strong> CommandClaw contract shape used by <code>POST /api/v1/commands</code> (<code>command_id</code>, <code>source</code>, <code>requester</code>, <code>tenant_id</code>, <code>intent</code>, <code>target</code>, <code>scope</code>, <code>mode</code>).</li>
         <li><strong>Response metadata:</strong> channel message responses now include <code>command_result</code> with policy outcome and command identifiers for traceability.</li>
+        <li><strong>Outbound replies:</strong> configured Slack/Teams webhooks now receive status-update cards. Approval-required responses include approve/reject action metadata and Slack thread metadata when the inbound event supplies <code>thread_ts</code>.</li>
+        <li><strong>Operator visibility:</strong> persisted message detail exposes <code>response_sent</code>, <code>outbound_delivery</code>, and <code>outbound_card</code>. Control Center also reports 24-hour sent/pending-config reply counts.</li>
         <li><strong>Simulation parity:</strong> <code>POST /api/v1/channel-gateway/simulate</code> now runs the same normalization and returns <code>command_result</code> for dry-run validation.</li>
         <li><strong>Graceful fallback:</strong> when async command backend is unavailable, channel ingestion remains non-breaking and returns <code>outcome: unavailable</code>.</li>
       </ul>

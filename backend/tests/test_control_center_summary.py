@@ -16,6 +16,8 @@ async def test_control_center_summary_endpoint_returns_expected_shape(client):
         "schedules_total",
         "channel_messages_24h",
         "channel_blocked_24h",
+        "channel_replies_sent_24h",
+        "channel_replies_pending_24h",
         "execution_pending_approval",
         "execution_blocked_24h",
         "blocked_actions_24h",

@@ -263,7 +263,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Slack/Teams outbound responses now use configured channel webhooks when available:
     - persisted messages expose `response_sent`
     - API responses include `outbound_delivery.status` (`sent`, `failed`, or `skipped`)
-    - Channel Gateway message detail shows delivered/not-configured response status
+    - Slack replies include thread metadata (`thread_ts`) when the source event provides it
+    - approval-required responses include Slack Block Kit / Teams MessageCard action metadata for approve/reject review
+    - Channel Gateway message detail shows delivered/not-configured response status, card type, action count, thread id, and outbound card facts
+    - Control Center summary now tracks replies sent/pending-config in the last 24 hours
   - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
     - `provider` must be `jira` and `target_type` must be `ticket`
     - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
@@ -355,7 +358,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
  - Control Center v2:
    - Added backend summary endpoint for unified operator telemetry:
      - `GET /api/v1/dashboard/control-center-summary`
-   - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, and execution gate status.
+   - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, execution gate status, and outbound channel reply health.
 
 ## Platform Modules (26 Security Claws + Core Engines)
 

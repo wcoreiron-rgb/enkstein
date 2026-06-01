@@ -613,6 +613,43 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.5.3 — Threaded Channel Approval Cards + Control Center Replies  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--cyan);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Threaded Channel Approval Cards + Reply Health</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Channel Gateway</span>
+          <span class="tag tag-feat">Control Center</span>
+          <span class="release-date">June 1, 2026 &nbsp;·&nbsp; v0.5.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice upgrades two-way channel behavior from plain webhook text into structured operator cards with thread metadata, approval action metadata, and Control Center reply-health counters.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Threaded Slack replies:</strong> inbound Slack <code>ts</code>/<code>thread_ts</code> values are carried into outbound reply payloads when available.</li>
+          <li><strong>Approval card metadata:</strong> approval-required commands now generate Slack Block Kit action blocks and Teams MessageCard actions for approve/reject workflows.</li>
+          <li><strong>Persisted delivery context:</strong> message detail exposes <code>outbound_delivery</code> and <code>outbound_card</code> facts alongside <code>response_sent</code>.</li>
+          <li><strong>Control Center reply health:</strong> <code>GET /api/v1/dashboard/control-center-summary</code> now includes 24-hour replies-sent and replies-pending-config counters.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend tests:</strong> <code>cd backend && .venv/bin/python -m pytest tests/test_channel_gateway_commands.py tests/test_control_center_summary.py</code> → <strong>12 passed</strong>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.2 — Channel Outbound Response Delivery                         -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

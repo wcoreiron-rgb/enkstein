@@ -78,6 +78,7 @@ async def _channel_command_session():
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
 def _msg_out(m: ChannelMessage) -> dict:
+    raw_payload = m.raw_payload or {}
     return {
         "id":               m.id,
         "channel_type":     m.channel_type,
@@ -98,6 +99,9 @@ def _msg_out(m: ChannelMessage) -> dict:
         "agent_run_id":     m.agent_run_id,
         "response_text":    m.response_text,
         "response_sent":    m.response_sent,
+        "outbound_delivery": raw_payload.get("outbound_delivery"),
+        "outbound_card":    raw_payload.get("outbound_card"),
+        "thread_ts":        m.thread_ts,
         "created_at":       m.created_at.isoformat() if m.created_at else None,
         "processed_at":     m.processed_at.isoformat() if m.processed_at else None,
     }
@@ -155,6 +159,9 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
         workflow_run_id  = result.get("workflow_run_id", ""),
         agent_run_id     = result.get("agent_run_id", ""),
         response_text    = result["response_text"],
+        message_ts       = result.get("message_ts", ""),
+        thread_ts        = result.get("thread_ts", ""),
+        raw_payload      = result.get("raw_payload", {}),
         processed_at     = datetime.utcnow(),
     )
     db.add(msg)
@@ -166,6 +173,97 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
 def _response_title(result: dict) -> str:
     decision = (result.get("policy_decision") or "processed").replace("_", " ").title()
     return f"RegentClaw {decision}"
+
+
+def _response_color(result: dict) -> str:
+    decision = result.get("policy_decision")
+    if decision == "blocked":
+        return "#D13438"
+    if decision == "requires_approval":
+        return "#CA5010"
+    return "#107C10"
+
+
+def _command_actions(command_id: str, channel_type: str) -> list[dict]:
+    if not command_id:
+        return []
+    if channel_type == "slack":
+        return [
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Approve"},
+                        "style": "primary",
+                        "value": f"approve {command_id}",
+                        "action_id": f"approve_{command_id}",
+                    },
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "Reject"},
+                        "style": "danger",
+                        "value": f"reject {command_id}",
+                        "action_id": f"reject_{command_id}",
+                    },
+                ],
+            }
+        ]
+    if channel_type == "teams":
+        return [
+            {
+                "@type": "HttpPOST",
+                "name": "Approve",
+                "target": f"regentclaw://channel-command/approve/{command_id}",
+                "body": f"approve {command_id}",
+            },
+            {
+                "@type": "HttpPOST",
+                "name": "Reject",
+                "target": f"regentclaw://channel-command/reject/{command_id}",
+                "body": f"reject {command_id}",
+            },
+        ]
+    return []
+
+
+def _build_outbound_card(msg: ChannelMessage, result: dict) -> dict:
+    command = result.get("command_result") or {}
+    command_id = command.get("command_id", "")
+    status = result.get("execution_status", "processed")
+    decision = result.get("policy_decision", "processed")
+    intent = command.get("intent") or result.get("detected_intent") or "channel_message"
+    target = command.get("target") or ", ".join(result.get("detected_claws") or []) or "regentclaw"
+    facts = [
+        {"name": "Decision", "value": decision},
+        {"name": "Status", "value": status},
+        {"name": "Intent", "value": str(intent)},
+        {"name": "Target", "value": str(target)},
+    ]
+    if command_id:
+        facts.insert(0, {"name": "Command", "value": command_id})
+
+    card: dict = {
+        "channel_type": msg.channel_type,
+        "title": _response_title(result),
+        "text": msg.response_text,
+        "facts": facts,
+        "actions": [],
+        "thread_ts": msg.thread_ts or msg.message_ts or "",
+    }
+    if decision == "requires_approval" and command_id:
+        card["actions"] = _command_actions(command_id, msg.channel_type)
+
+    if msg.channel_type == "slack":
+        fields = [
+            {"type": "mrkdwn", "text": f"*{fact['name']}*\n{fact['value']}"}
+            for fact in facts
+        ]
+        card["blocks"] = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": f"*{card['title']}*\n{msg.response_text}"}},
+            {"type": "section", "fields": fields[:10]},
+        ] + card["actions"]
+    return card
 
 
 async def _send_channel_response(db: Session, msg: ChannelMessage, result: dict) -> dict:
@@ -189,22 +287,48 @@ async def _send_channel_response(db: Session, msg: ChannelMessage, result: dict)
         .first()
     )
     if not config or not config.webhook_url:
-        return {"status": "skipped", "reason": "missing_webhook_url"}
+        delivery = {"status": "skipped", "reason": "missing_webhook_url"}
+        msg.raw_payload = {**(msg.raw_payload or {}), "outbound_delivery": delivery}
+        db.commit()
+        return delivery
+
+    card = _build_outbound_card(msg, result)
 
     delivered = await dispatch_alert(
         msg.channel_type,
         _response_title(result),
         msg.response_text,
-        {"webhook_url": config.webhook_url, "color": "#0078D4"},
+        {
+            "webhook_url": config.webhook_url,
+            "color": _response_color(result),
+            "blocks": card.get("blocks"),
+            "thread_ts": card.get("thread_ts"),
+            "actions": card.get("actions"),
+            "facts": card.get("facts"),
+        },
     )
     msg.response_sent = bool(delivered)
-    db.commit()
-    return {
+    delivery = {
         "status": "sent" if delivered else "failed",
         "channel_type": msg.channel_type,
         "channel_id": msg.channel_id,
         "message_id": msg.id,
+        "thread_ts": card.get("thread_ts", ""),
+        "card_type": "approval_card" if card.get("actions") else "status_update",
+        "action_count": len(card.get("actions") or []),
     }
+    msg.raw_payload = {
+        **(msg.raw_payload or {}),
+        "outbound_delivery": delivery,
+        "outbound_card": {
+            "title": card.get("title"),
+            "facts": card.get("facts", []),
+            "actions": card.get("actions", []),
+            "thread_ts": card.get("thread_ts", ""),
+        },
+    }
+    db.commit()
+    return delivery
 
 
 async def _ingest_normalized_message(
@@ -218,6 +342,9 @@ async def _ingest_normalized_message(
     channel_type: str,
     channel_id: str,
     channel_name: str,
+    message_ts: str = "",
+    thread_ts: str = "",
+    raw_payload: dict | None = None,
 ) -> dict:
     ci = _get_channel_identity(db, channel_type, sender_id, sender_email)
     result = process_message(
@@ -230,6 +357,9 @@ async def _ingest_normalized_message(
         channel_id=channel_id,
         channel_identity=ci,
     )
+    result["message_ts"] = message_ts
+    result["thread_ts"] = thread_ts or message_ts
+    result["raw_payload"] = raw_payload or {}
     command_result = await _execute_channel_command(result, ci)
     _apply_command_outcome(result, command_result)
     msg = _persist_message(db, result, channel_name)
@@ -474,6 +604,9 @@ async def slack_events(
         channel_type="slack",
         channel_id=channel_id,
         channel_name=channel_name,
+        message_ts=event.get("ts", ""),
+        thread_ts=event.get("thread_ts", event.get("ts", "")),
+        raw_payload={"provider": "slack", "event_type": event.get("type", "")},
     )
     return {"ok": True, "response": out["response"]}
 
@@ -509,6 +642,9 @@ async def teams_webhook(
         channel_type="teams",
         channel_id=channel_id,
         channel_name=channel_name,
+        message_ts=payload.get("id", ""),
+        thread_ts=payload.get("replyToId", payload.get("id", "")),
+        raw_payload={"provider": "teams"},
     )
 
     # Teams expects an Activity response
@@ -542,6 +678,9 @@ async def webhook_ingest(body: dict, db: Session = Depends(get_db)):
         channel_type="webhook",
         channel_id=body["channel_id"],
         channel_name=body.get("channel_name", body["channel_id"]),
+        message_ts=str(body.get("message_ts", "")),
+        thread_ts=str(body.get("thread_ts", body.get("message_ts", ""))),
+        raw_payload={"provider": "webhook"},
     )
 
 
@@ -570,6 +709,9 @@ async def email_inbound(body: dict, db: Session = Depends(get_db)):
         channel_type="email",
         channel_id=body["inbox"],
         channel_name=body.get("inbox_name", body["inbox"]),
+        message_ts=str(body.get("message_id", "")),
+        thread_ts=str(body.get("thread_id", body.get("message_id", ""))),
+        raw_payload={"provider": "email", "subject": subject},
     )
 
 
@@ -609,6 +751,7 @@ async def cli_command(body: dict, db: Session = Depends(get_db)):
             channel_id=body["terminal_id"],
             channel_identity=channel_identity,
         )
+        result["raw_payload"] = {"provider": "cli", "tenant_id": tenant_id}
         command_result = await _execute_channel_command(result, channel_identity)
         _apply_command_outcome(result, command_result)
         msg = _persist_message(db, result, body.get("terminal_name", body["terminal_id"]))
@@ -630,6 +773,7 @@ async def cli_command(body: dict, db: Session = Depends(get_db)):
         channel_type="cli",
         channel_id=body["terminal_id"],
         channel_name=body.get("terminal_name", body["terminal_id"]),
+        raw_payload={"provider": "cli"},
     )
 
 
@@ -656,6 +800,9 @@ async def ingest_message(body: dict, db: Session = Depends(get_db)):
         channel_type=body["channel_type"],
         channel_id=body["channel_id"],
         channel_name=body.get("channel_name", body["channel_id"]),
+        message_ts=str(body.get("message_ts", "")),
+        thread_ts=str(body.get("thread_ts", body.get("message_ts", ""))),
+        raw_payload={"provider": body.get("channel_type", "channel")},
     )
 
 

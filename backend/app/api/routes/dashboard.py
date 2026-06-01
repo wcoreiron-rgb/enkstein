@@ -44,6 +44,8 @@ class ControlCenterSummary(BaseModel):
     schedules_total: int
     channel_messages_24h: int
     channel_blocked_24h: int
+    channel_replies_sent_24h: int
+    channel_replies_pending_24h: int
     execution_pending_approval: int
     execution_blocked_24h: int
     blocked_actions_24h: int
@@ -198,6 +200,21 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
             .where(ChannelMessage.policy_decision == "blocked")
         )
     ).scalar() or 0
+    channel_replies_sent_24h = (
+        await db.execute(
+            select(func.count(ChannelMessage.id))
+            .where(ChannelMessage.created_at >= since_24h)
+            .where(ChannelMessage.response_sent == True)
+        )
+    ).scalar() or 0
+    channel_replies_pending_24h = (
+        await db.execute(
+            select(func.count(ChannelMessage.id))
+            .where(ChannelMessage.created_at >= since_24h)
+            .where(ChannelMessage.channel_type.in_(["slack", "teams"]))
+            .where(ChannelMessage.response_sent == False)
+        )
+    ).scalar() or 0
 
     execution_pending_approval = (
         await db.execute(select(func.count(ExecRequest.id)).where(ExecRequest.status == "pending"))
@@ -228,6 +245,8 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
         schedules_total=schedules_total,
         channel_messages_24h=channel_messages_24h,
         channel_blocked_24h=channel_blocked_24h,
+        channel_replies_sent_24h=channel_replies_sent_24h,
+        channel_replies_pending_24h=channel_replies_pending_24h,
         execution_pending_approval=execution_pending_approval,
         execution_blocked_24h=execution_blocked_24h,
         blocked_actions_24h=blocked_actions_24h,

@@ -142,6 +142,8 @@ export default function ControlCenterPage() {
   const pendingExecEff = summary?.execution_pending_approval ?? pendingExec;
   const channelBlockedEff = summary?.channel_blocked_24h ?? channelStats?.blocked ?? 0;
   const channelMsgs24hEff = summary?.channel_messages_24h ?? channelStats?.total_messages ?? 0;
+  const channelRepliesSentEff = summary?.channel_replies_sent_24h ?? 0;
+  const channelRepliesPendingEff = summary?.channel_replies_pending_24h ?? 0;
   const blockedActions24hEff = summary?.blocked_actions_24h ?? 0;
 
   return (
@@ -216,6 +218,8 @@ export default function ControlCenterPage() {
             <div className="flex justify-between"><span className="text-gray-400">Allowed</span><span className="text-green-300">{channelStats?.allowed ?? 0}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Blocked</span><span className="text-red-300">{channelStats?.blocked ?? 0}</span></div>
             <div className="flex justify-between"><span className="text-gray-400">Pending</span><span className="text-yellow-300">{channelStats?.pending_approval ?? 0}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Replies sent (24h)</span><span className="text-cyan-300">{channelRepliesSentEff}</span></div>
+            <div className="flex justify-between"><span className="text-gray-400">Replies pending config</span><span className="text-yellow-300">{channelRepliesPendingEff}</span></div>
           </div>
         </section>
       </div>
