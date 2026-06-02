@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #07090f;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+    color: #e8eaf2;
+    padding: 56px 60px;
+    width: 1200px;
+  }
+  .head { display:flex; align-items:center; gap:14px; margin-bottom: 8px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg,#4f6ef7,#818cf8);
+    display:flex; align-items:center; justify-content:center;
+  }
+  h1 { font-size: 30px; font-weight: 800; letter-spacing:-.03em; }
+  .sub { color:#8b93a7; font-size:15px; margin: 10px 0 30px; max-width: 980px; line-height:1.5; }
+  table { width:100%; border-collapse: collapse; }
+  th, td { text-align:left; padding: 13px 16px; font-size: 14px; }
+  thead th { font-size: 13px; color:#8b93a7; font-weight:700; border-bottom: 2px solid #252f42; vertical-align: bottom; }
+  thead th small { display:block; font-weight:500; color:#4a5268; font-size:11px; margin-top:2px; }
+  thead th.rc { color:#818cf8; }
+  tbody tr { border-bottom: 1px solid #161c28; }
+  td.cap { font-weight:600; color:#e8eaf2; width: 360px; }
+  td.mark { text-align:center; font-size:17px; }
+  td.rc { background: rgba(79,110,247,.07); }
+  .yes { color:#22c55e; }
+  .no  { color:#ef4444; opacity:.7; }
+  .partial { color:#f59e0b; }
+  .rcyes { color:#818cf8; font-weight:700; }
+  .footer { margin-top:26px; color:#4a5268; font-size:12px; display:flex; justify-content:space-between; align-items:center; }
+  .tagline { margin-top:22px; font-size:16px; color:#e8eaf2; }
+  .tagline b { color:#818cf8; }
+  .legend { color:#4a5268; font-size:12px; margin-top:14px; }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+    </div>
+    <h1>How RegentClaw Compares</h1>
+  </div>
+  <p class="sub">An agent framework gives you <b>capability</b>. A SOAR gives you <b>process</b>. RegentClaw gives you autonomous capability that is <b>governed by default</b> — every AI action authorized, risk-scored, and audited.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:360px">Capability</th>
+        <th>Raw LLM Agents<small>AutoGPT-style</small></th>
+        <th>Agent Frameworks<small>LangChain etc.</small></th>
+        <th>Traditional SOAR<small>playbook engines</small></th>
+        <th class="rc">RegentClaw</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td class="cap">Autonomous AI investigation &amp; reasoning</td><td class="mark yes">✓</td><td class="mark yes">✓</td><td class="mark no">✗</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Per-action policy enforcement</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark partial">~</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Continuous risk scoring</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark partial">~</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Execution privilege isolation (ring policy)</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Human approval gates + self-approval block</td><td class="mark no">✗</td><td class="mark partial">~</td><td class="mark yes">✓</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Immutable audit of every agent action</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark partial">~</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">AI governance (prompt injection, DLP)</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Security domain coverage out of the box</td><td class="mark no">✗</td><td class="mark no">✗</td><td class="mark partial">~</td><td class="mark rc rcyes">✓ 25 claws</td></tr>
+      <tr><td class="cap">Governed multi-agent orchestration</td><td class="mark partial">~</td><td class="mark partial">~</td><td class="mark no">✗</td><td class="mark rc rcyes">✓</td></tr>
+      <tr><td class="cap">Self-hosted · bring-your-own-keys</td><td class="mark partial">~</td><td class="mark yes">✓</td><td class="mark partial">~</td><td class="mark rc rcyes">✓</td></tr>
+    </tbody>
+  </table>
+
+  <p class="legend">✓ native &nbsp;·&nbsp; ~ partial / depends on configuration &nbsp;·&nbsp; ✗ not available. &nbsp; Categories represent common tooling patterns, not specific vendors. Vendor self-assessment.</p>
+
+  <div class="footer">
+    <span><b style="color:#818cf8;">RegentClaw</b> — Zero Trust Security Ecosystem</span>
+    <span>github.com/wcoreiron-rgb/regentclaw</span>
+  </div>
+</body>
+</html>
