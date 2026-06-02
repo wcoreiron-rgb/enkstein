@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "regentclaw-core"
+version         = "0.1.0"
+description     = "Embeddable RegentClaw governance primitives — execution ring policy, provenance verification, and secret/PII scanning. No server required."
+readme          = "README.md"
+requires-python = ">=3.11"
+license         = { text = "MIT" }
+keywords        = ["security", "zero-trust", "secret-scanning", "policy", "governance"]
+authors         = [{ name = "RegentClaw" }]
+
+dependencies = [
+    "cryptography>=42.0",
+]
+
+[project.urls]
+Homepage      = "https://github.com/wcoreiron-rgb/regentclaw"
+Documentation = "https://wcoreiron-rgb.github.io/regentclaw/"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["regentclaw_core*"]
