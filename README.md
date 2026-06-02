@@ -7,6 +7,21 @@
 <p align="center">Modular, governed security ecosystem with Zero Trust enforcement across every module, agent, and workflow.</p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/status-v0.x%20preview-f59e0b?style=flat-square" alt="v0.x preview" />
+  <img src="https://img.shields.io/badge/deployment-self--hosted-2563eb?style=flat-square" alt="self-hosted" />
+  <img src="https://img.shields.io/badge/data-simulated%20by%20default-7c3aed?style=flat-square" alt="simulated data by default" />
+  <img src="https://img.shields.io/badge/audit-not%20yet%20independently%20audited-64748b?style=flat-square" alt="not yet audited" />
+</p>
+
+> [!NOTE]
+> **Project status — early preview (v0.x).** RegentClaw is a self-hosted, open-source platform under active development.
+> It runs on **realistic simulated findings out of the box** — connect your own API credentials to enable live integrations.
+> Security hardening is ongoing and the platform has **not yet had an independent third-party audit**. It is built for
+> evaluation, self-hosted testing, and community feedback — not yet for unmonitored production or multi-tenant SaaS use.
+> See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/regentclaw/owasp-agentic.html) and
+> [Maturity Matrix](docs/maturity-matrix.md) for exactly what's shipped vs. in progress.
+
+<p align="center">
   <a href="https://wcoreiron-rgb.github.io/regentclaw/">
     <img src="https://img.shields.io/badge/Documentation-1f2937?style=for-the-badge&logo=gitbook&logoColor=white" alt="Documentation" />
   </a>
@@ -64,6 +79,21 @@
   <img src="https://img.shields.io/badge/JavaScript-0.0%25-F7DF1E?logo=javascript&logoColor=black" alt="JavaScript 0.0%" />
   <img src="https://img.shields.io/badge/Mako-0.0%25-8B5CF6" alt="Mako 0.0%" />
 </p>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dashboard.png" alt="Platform Overview dashboard" /><br/><sub><b>Platform Overview</b> — risk score, live event feed, module &amp; connector status across the Zero Trust CoreOS.</sub></td>
+    <td width="50%"><img src="docs/screenshots/swarm.png" alt="Swarm multi-agent orchestration" /><br/><sub><b>Swarm Orchestration</b> — parallel multi-claw investigations with judge models, confidence scoring, and approval gates.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/remediation.png" alt="Autonomous Remediation engine" /><br/><sub><b>Autonomous Remediation</b> — approval queue, action history with one-click rollback, and built-in response playbooks.</sub></td>
+    <td width="50%"><img src="docs/screenshots/arcclaw.png" alt="ArcClaw Security Copilot" /><br/><sub><b>Security Copilot (ArcClaw)</b> — AI agent with live tool calling for CVEs, MITRE ATT&amp;CK, findings, and posture.</sub></td>
+  </tr>
+</table>
+
+> More views: [Trust Fabric](docs/screenshots/trust-fabric.png) · [Control Center](docs/screenshots/control-center.png) · [Connector Marketplace](docs/screenshots/connectors.png)
 
 ## Architecture
 
