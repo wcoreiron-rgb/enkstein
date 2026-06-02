@@ -80,6 +80,27 @@
   <img src="https://img.shields.io/badge/Mako-0.0%25-8B5CF6" alt="Mako 0.0%" />
 </p>
 
+## What is RegentClaw?
+
+**RegentClaw is AI-driven security automation with a Zero Trust governance layer baked into every action.**
+
+Security teams today face a hard tradeoff:
+
+- **Agent frameworks & raw LLM agents** (AutoGPT / LangChain-style) are *powerful but ungoverned* — they can call any tool, hit any API, and execute anything, with no policy layer, no risk scoring, and no audit trail. You would never point one at production.
+- **Traditional SOAR platforms** are *governed but not intelligent* — rigid, pre-scripted playbooks that can't reason, correlate, or adapt to a novel incident.
+
+RegentClaw collapses that tradeoff. The thesis is simple:
+
+> **AI agents should investigate and act on security problems autonomously — but every action they take must be authorized, risk-scored, and fully auditable.** That's Zero Trust, applied to AI automation.
+
+### How it works
+
+1. **AI does the work, not just the talking.** A Security Copilot and parallel multi-agent **Swarms** investigate findings, query live CVE/MITRE/CISA data, correlate identity and cloud risk, and propose (or execute) remediations.
+2. **The Trust Fabric governs every action.** Each tool call, credential access, and remediation passes through a central enforcement layer that evaluates policy, scores risk, enforces **execution rings** (privilege tiers), requires human approval for high-risk actions, and writes an **immutable audit log**. There are no escape hatches and no ungoverned execution paths.
+3. **25 security domains out of the box.** From cloud posture and identity to endpoint, threat intel, and DevSec — plus AI-specific governance (prompt-injection detection, DLP) most platforms don't have at all.
+
+**The problem it solves:** *How do I let AI agents actually do security work — not just chat about it — without handing them unbounded power over my environment?*
+
 ## Screenshots
 
 <table>
@@ -94,6 +115,27 @@
 </table>
 
 > More views: [Trust Fabric](docs/screenshots/trust-fabric.png) · [Control Center](docs/screenshots/control-center.png) · [Connector Marketplace](docs/screenshots/connectors.png)
+
+## How RegentClaw Compares
+
+RegentClaw sits at the intersection of three tool categories — and is the only one that delivers all of it under one governed roof. Each category below has real strengths (shown honestly); the gap RegentClaw fills is **governance + intelligence + security-domain coverage together.**
+
+| Capability | Raw LLM Agents<br/><sub>(AutoGPT-style)</sub> | Agent Frameworks<br/><sub>(LangChain etc.)</sub> | Traditional SOAR<br/><sub>(playbook engines)</sub> | **RegentClaw** |
+|---|:---:|:---:|:---:|:---:|
+| Autonomous AI investigation & reasoning | ✅ | ✅ | ❌ rigid scripts | ✅ Copilot + multi-agent swarms |
+| Per-action policy enforcement | ❌ | ❌ build it yourself | ~ static rules | ✅ Trust Fabric on **every** action |
+| Continuous risk scoring (action / session / device) | ❌ | ❌ | ~ | ✅ |
+| Execution privilege isolation | ❌ | ❌ | ❌ | ✅ 4-tier ring policy |
+| Human-in-the-loop approval gates | ❌ | ~ DIY | ✅ | ✅ dual-approval, self-approval blocked |
+| Immutable audit of every agent action | ❌ | ❌ | ~ | ✅ |
+| AI-specific governance (prompt injection, DLP) | ❌ | ❌ | ❌ | ✅ 12-vector AGT audit |
+| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 25 security claws |
+| Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
+| Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
+
+<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/regentclaw/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
+
+**In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, RegentClaw gives you **autonomous capability that is governed by default.**
 
 ## Architecture
 
