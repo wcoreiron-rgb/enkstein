@@ -1,0 +1,78 @@
+# RegentClaw MCP Server
+
+Bring **governed security tools** into Cursor, VS Code, and Claude Desktop.
+
+This [Model Context Protocol](https://modelcontextprotocol.io) server exposes
+RegentClaw's security capabilities as tools your AI coding agent can call —
+scanning code for secrets, checking security posture, listing findings, and
+launching multi-agent investigations. Every call is forwarded to your running
+RegentClaw backend, where the **Trust Fabric** applies policy, risk scoring, and
+audit. The MCP server itself holds no credentials and executes nothing locally.
+
+## Tools
+
+| Tool | What it does |
+|---|---|
+| `scan_text_for_secrets` | Scan code/text for exposed secrets, API keys, PII, and prompt-injection patterns. Run it before you commit. |
+| `get_security_posture` | Current platform posture — modules, identities, connectors, high-risk events, pending approvals. |
+| `list_findings` | List security findings, filterable by claw and severity. |
+| `list_connectors` | Show connected security tools and their status. |
+| `run_swarm_investigation` | Launch a governed multi-agent investigation (high-risk actions still need human approval). |
+
+## Install
+
+```bash
+pip install regentclaw-mcp
+```
+
+## Configure your editor
+
+You need a running RegentClaw backend (`docker compose up`) reachable at
+`REGENTCLAW_API_URL`.
+
+### Cursor — `~/.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "regentclaw": {
+      "command": "regentclaw-mcp",
+      "env": {
+        "REGENTCLAW_API_URL": "http://localhost:8000",
+        "REGENTCLAW_TOKEN": ""
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop — `claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "regentclaw": {
+      "command": "regentclaw-mcp",
+      "env": { "REGENTCLAW_API_URL": "http://localhost:8000" }
+    }
+  }
+}
+```
+
+### VS Code (with an MCP-capable extension)
+
+Point the extension at the `regentclaw-mcp` command with the same env vars.
+
+Set `REGENTCLAW_TOKEN` to a JWT when your server runs with `DEBUG=false`
+(get one from `POST /api/v1/auth/token`). In local DEBUG mode it can be empty.
+
+## Example prompts (once connected)
+
+> "Scan the file I have open for hardcoded secrets."
+> "What's my current security posture?"
+> "List critical cloudclaw findings."
+> "Investigate suspicious identity activity for user@corp.com."
+
+## License
+
+MIT

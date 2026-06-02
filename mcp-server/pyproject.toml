@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name            = "regentclaw-mcp"
+version         = "0.1.0"
+description     = "RegentClaw MCP server — governed security tools for AI agents in Cursor, VS Code, and Claude Desktop"
+readme          = "README.md"
+requires-python = ">=3.11"
+license         = { text = "MIT" }
+keywords        = ["mcp", "security", "zero-trust", "cursor", "vscode", "ai-agents"]
+authors         = [{ name = "RegentClaw" }]
+
+dependencies = [
+    "mcp>=1.2.0",
+    "httpx>=0.27",
+]
+
+[project.urls]
+Homepage      = "https://github.com/wcoreiron-rgb/regentclaw"
+Documentation = "https://wcoreiron-rgb.github.io/regentclaw/"
+
+[project.scripts]
+regentclaw-mcp = "regentclaw_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["regentclaw_mcp*"]
