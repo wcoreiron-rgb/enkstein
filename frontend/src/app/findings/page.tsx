@@ -3,9 +3,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, Filter, RefreshCw, ChevronRight, X, ExternalLink,
   AlertTriangle, ShieldAlert, Info, Bug, Clock, CheckCircle2,
-  Flame, AlertCircle, SlidersHorizontal,
+  Flame, AlertCircle, SlidersHorizontal, Users2,
 } from 'lucide-react';
-import { getFindings, getFindingsStats, updateFinding } from '@/lib/api';
+import { createSwarmJob, getFindings, getFindingsStats, updateFinding } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -87,6 +87,8 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
   finding: any; onClose: () => void; onUpdate: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [launchingSwarm, setLaunchingSwarm] = useState(false);
+  const [swarmError, setSwarmError] = useState<string | null>(null);
   const [status, setStatus] = useState(finding.status);
   const sev   = SEV_STYLE[finding.severity] ?? SEV_STYLE.info;
   const score = Number(finding.risk_score ?? 50);
@@ -96,6 +98,43 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
     try { await updateFinding(finding.id, { status }); onUpdate(); }
     catch (e) { console.error(e); }
     finally { setSaving(false); }
+  };
+
+  const launchSwarm = async () => {
+    setLaunchingSwarm(true);
+    setSwarmError(null);
+    const selectedFinding = {
+      finding_id: finding.id,
+      claw: finding.claw,
+      provider: finding.provider,
+      title: finding.title,
+      repo: finding.resource_name || finding.resource_id || finding.account_id || '',
+      package: finding.package || finding.component || finding.category || '',
+      severity: finding.severity,
+      risk_score: finding.risk_score,
+    };
+    try {
+      const job = await createSwarmJob({
+        name: `${finding.provider || finding.claw} Finding Investigation Swarm`,
+        profile: 'DEEP_INVESTIGATION',
+        requested_by: 'portal-user',
+        trigger_type: 'finding_context',
+        classification: 'confidential',
+        participants: ['devclaw', 'appclaw', 'threatclaw', 'complianceclaw', 'automationclaw'],
+        task_type: 'investigate_selected_finding',
+        input: {
+          source: 'findings_page',
+          selected_finding: selectedFinding,
+        },
+        parallelism: 5,
+        model_profile: 'swarm_judge_profile',
+      });
+      if (job?.id) window.location.href = `/swarm/${job.id}`;
+    } catch (e: any) {
+      setSwarmError(e?.message || 'Failed to launch focused swarm.');
+    } finally {
+      setLaunchingSwarm(false);
+    }
   };
 
   return (
@@ -224,10 +263,22 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
               ))}
             </div>
           </div>
+
+          {swarmError && (
+            <div className="rounded-xl px-4 py-3 text-xs text-red-300 border border-red-900 bg-red-950/30">
+              {swarmError}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="px-5 py-4 border-t flex gap-2" style={{ borderColor: 'var(--rc-border)' }}>
+          <button onClick={launchSwarm} disabled={launchingSwarm}
+            className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-40"
+            style={{ background: 'rgb(8 145 178)' }}>
+            {launchingSwarm ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Users2 className="w-4 h-4" />}
+            Investigate
+          </button>
           <button onClick={save} disabled={saving || status === finding.status}
             className="flex items-center gap-2 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-40"
             style={{ background: 'var(--regent-600)' }}>
@@ -254,6 +305,7 @@ export default function FindingsPage() {
   const [severity, setSeverity] = useState('');
   const [claw,     setClaw]     = useState('');
   const [status,   setStatus]   = useState('');
+  const [sort,     setSort]     = useState<'recent' | 'risk' | 'last_seen'>('recent');
   const [showFilters, setShowFilters] = useState(false);
 
   const { subscribe } = useWebSocket();
@@ -269,13 +321,13 @@ export default function FindingsPage() {
   }, []);
 
   const buildParams = useCallback(() => {
-    const p: Record<string, string> = { limit: '200' };
+    const p: Record<string, string> = { limit: '200', sort };
     if (severity) p.severity = severity;
     if (claw)     p.claw     = claw;
     if (status)   p.status   = status;
     if (search)   p.search   = search;
     return p;
-  }, [severity, claw, status, search]);
+  }, [severity, claw, status, search, sort]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -345,6 +397,27 @@ export default function FindingsPage() {
           {(severity || claw || status) && <span className="w-2 h-2 rounded-full bg-cyan-500" />}
         </button>
 
+        <div className="flex items-center rounded-xl overflow-hidden border" style={{ borderColor: 'var(--rc-border)' }}>
+          {[
+            { value: 'recent', label: 'Latest' },
+            { value: 'risk', label: 'Risk' },
+            { value: 'last_seen', label: 'Last seen' },
+          ].map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setSort(opt.value as 'recent' | 'risk' | 'last_seen')}
+              className="text-xs px-3 py-2 transition-colors"
+              style={{
+                background: sort === opt.value ? 'var(--regent-600)' : 'var(--rc-bg-elevated)',
+                color: sort === opt.value ? '#fff' : 'var(--rc-text-2)',
+                borderRight: opt.value !== 'last_seen' ? '1px solid var(--rc-border)' : undefined,
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {/* Active filter pills */}
         {severity && (
           <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${SEV_STYLE[severity]?.badge}`}>
@@ -364,7 +437,9 @@ export default function FindingsPage() {
           </span>
         )}
 
-        <span className="ml-auto text-xs" style={{ color: 'var(--rc-text-3)' }}>{findings.length} findings</span>
+        <span className="ml-auto text-xs" style={{ color: 'var(--rc-text-3)' }}>
+          {findings.length} findings · sorted by {sort === 'recent' ? 'latest run' : sort === 'last_seen' ? 'last seen' : 'risk'}
+        </span>
       </div>
 
       {/* Expanded filters */}
@@ -438,7 +513,7 @@ export default function FindingsPage() {
         <div className="grid text-xs font-semibold uppercase tracking-wide px-4 py-2.5 border-b"
           style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)', gridTemplateColumns: '28px 1fr 100px 80px 60px 90px 80px 20px' }}>
           <span /><span>Finding</span><span>Claw</span><span>Status</span>
-          <span>Risk</span><span>First Seen</span><span>KEV</span><span />
+          <span>Risk</span><span>{sort === 'recent' ? 'Created' : sort === 'last_seen' ? 'Last Seen' : 'First Seen'}</span><span>KEV</span><span />
         </div>
 
         {loading ? (
@@ -485,7 +560,9 @@ export default function FindingsPage() {
                   </span>
 
                   {/* First seen */}
-                  <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{fmt(f.first_seen)}</span>
+                  <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                    {fmt(sort === 'recent' ? f.created_at : sort === 'last_seen' ? f.last_seen : f.first_seen)}
+                  </span>
 
                   {/* KEV */}
                   {f.actively_exploited

@@ -432,7 +432,7 @@
     <a class="sidebar-link" onclick="show('tf-agt')">Ring Policy &amp; Swarm</a>
 
     <div class="sidebar-section-title">The Claw System</div>
-    <a class="sidebar-link" onclick="show('claws-all')">All 26 Claws</a>
+    <a class="sidebar-link" onclick="show('claws-all')">24 Security Claws</a>
     <a class="sidebar-link" onclick="show('claws-pattern')">Claw Pattern</a>
     <a class="sidebar-link" onclick="show('claws-adapters')">Provider Adapters</a>
 
@@ -440,6 +440,7 @@
     <a class="sidebar-link" onclick="show('core-agents')">Swarm Orchestration</a>
     <a class="sidebar-link" onclick="show('core-triggers')">Channel Gateway</a>
     <a class="sidebar-link" onclick="show('core-scheduling')">Remediation Engine</a>
+    <a class="sidebar-link" onclick="show('core-release')">ReleaseClaw</a>
     <a class="sidebar-link" onclick="show('core-approvals')">Approvals &amp; Ring Policy</a>
 
     <div class="sidebar-section-title">Integrations</div>
@@ -474,7 +475,7 @@
       <p>RegentClaw is a comprehensive security operations platform organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
-        <li><strong>26 Security Claws</strong> — Specialized domain modules covering AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, and more. Each claw is self-contained with its own provider adapters and findings engine. Includes new ModelClaw (AI model governance) and CommandClaw (multi-channel command ingestion).</li>
+        <li><strong>24 Security Claws + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, and more. ModelClaw, CommandClaw, and ReleaseClaw sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
         <li><strong>Trust Fabric</strong> — The central zero-trust enforcement layer. Every action passes through a 6-stage pipeline: anomaly detection → policy evaluation → risk scoring → audit log → decision. Includes Execution Ring Policy (ring0–ring3 privilege isolation) and SRE Engine (circuit breaker, error budget).</li>
         <li><strong>CoreOS</strong> — The orchestration layer managing agents, Swarm multi-agent jobs, multi-step workflows, event-driven triggers, scheduled jobs, Channel Gateway command ingestion, and human approval flows with dual-approval enforcement.</li>
       </ul>
@@ -637,7 +638,7 @@
 ┌──────────────────────▼──────────────────────────────┐
 │                 FastAPI Backend                       │
 │   ┌──────────┐  ┌─────────────┐  ┌───────────────┐  │
-│   │ 26 Claws │  │ Trust Fabric│  │    CoreOS     │  │
+│   │ 24 Claws │  │ Trust Fabric│  │    CoreOS     │  │
 │   │  Routes  │  │  Pipeline   │  │Swarm/Cmd/Sched│  │
 │   └────┬─────┘  └──────┬──────┘  └───────┬───────┘  │
 │        └───────────────┼──────────────────┘          │
@@ -1054,10 +1055,10 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       </ul>
     </div>
 
-    <!-- ─── ALL 26 CLAWS ─── -->
+    <!-- ─── 24 SECURITY CLAWS ─── -->
     <div id="sec-claws-all" class="doc-section">
-      <h1>All 26 Claws</h1>
-      <p class="lead">Each claw is a self-contained security domain module with standardized endpoints, its own database tables, provider adapters, and frontend page. ModelClaw and CommandClaw are new core modules added in v0.3+.</p>
+      <h1>24 Security Claws</h1>
+      <p class="lead">Each security claw is a self-contained domain module with standardized endpoints, provider adapters, findings, and focused task execution. ModelClaw, CommandClaw, and ReleaseClaw are documented separately as core control surfaces.</p>
 
       <table>
         <thead><tr><th>Claw</th><th>Domain</th><th>Phase</th><th>Key Providers</th></tr></thead>
@@ -1086,8 +1087,6 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
           <tr><td>🧠 IntelClaw</td><td>Threat Intel Feeds</td><td><span class="badge badge-gray">Phase 3</span></td><td>STIX/TAXII, custom OSINT</td></tr>
           <tr><td>🔄 RecoveryClaw</td><td>Incident Recovery</td><td><span class="badge badge-gray">Phase 3</span></td><td>PagerDuty, custom runbooks</td></tr>
           <tr><td>🔌 CustomClaw</td><td>Custom REST Integrations</td><td><span class="badge badge-gray">Phase 3</span></td><td>Any REST API</td></tr>
-          <tr style="background:rgba(139,92,246,0.05);"><td>🧩 ModelClaw</td><td>AI Model Governance</td><td><span class="badge badge-blue">v0.3+</span></td><td>OpenAI, Anthropic, NVIDIA NIM, Ollama</td></tr>
-          <tr style="background:rgba(59,130,246,0.05);"><td>⚡ CommandClaw</td><td>Multi-Channel Command Ingestion</td><td><span class="badge badge-blue">v0.3+</span></td><td>Teams, Slack, webhook, email, CLI</td></tr>
         </tbody>
       </table>
     </div>
@@ -1095,7 +1094,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
     <!-- ─── CLAW PATTERN ─── -->
     <div id="sec-claws-pattern" class="doc-section">
       <h1>The Claw Pattern</h1>
-      <p class="lead">All 26 claws follow a consistent implementation pattern. This makes claws predictable to develop, test, and integrate with the Trust Fabric.</p>
+      <p class="lead">All 24 security claws follow a consistent implementation pattern. This makes claws predictable to develop, test, and integrate with the Trust Fabric.</p>
 
       <h2>Directory Structure</h2>
       <pre>backend/app/claws/
@@ -1305,6 +1304,50 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
       <div class="callout tip">
         <strong>Reliability note:</strong> Deleting schedules with historical runs is supported; the backend now safely detaches linked run schedule references before deletion.
       </div>
+    </div>
+
+    <!-- ─── COREOS: RELEASECLAW ─── -->
+    <div id="sec-core-release" class="doc-section">
+      <h1>ReleaseClaw</h1>
+      <p class="lead">ReleaseClaw is the Zero Trust deployment governance surface. It normalizes CI/CD, GitOps, cloud SDK/CLI, scripting, full-stack, and AI-stack deployments into one preflight, approval, handoff, and evidence contract.</p>
+
+      <h2>Supported Deployment Paths</h2>
+      <p>ReleaseClaw supports deployment requests from GitHub Actions, GitLab CI, Jenkins, Azure DevOps, ArgoCD, Terraform Cloud, AWS CLI/SDK, Azure CLI/SDK, GCloud, Kubernetes, Helm, Docker, Docker Compose, Bash, PowerShell, Python, Node, Ansible, webhooks, and custom adapters.</p>
+
+      <div class="callout">
+        <strong>Security boundary:</strong> ReleaseClaw does not directly execute arbitrary scripts. A successful preflight returns a governed handoff plan for CI/CD runners, GitOps controllers, cloud runners, or ExecChannels.
+      </div>
+
+      <h2>Deployment Flow</h2>
+      <ol class="steps">
+        <li><div><strong>Normalize request</strong> — source, environment, application, change reference, deployment type, mode, artifacts, execution plan, and rollback plan.</div></li>
+        <li><div><strong>Apply template controls</strong> — required controls and Claw coverage are selected from release templates such as GitHub Actions production, Terraform apply, ArgoCD sync, full-stack app, AI service stack, or emergency patch.</div></li>
+        <li><div><strong>Score blockers</strong> — missing rollback plans, unsafe script content, missing model profile for AI-stack deployments, production mode, and sensitive classification increase risk.</div></li>
+        <li><div><strong>Trust Fabric decision</strong> — deployment preflight, approval, and execute handoff are audited and policy-governed.</div></li>
+        <li><div><strong>Evidence bundle</strong> — result includes controls, Claws, policy decision, artifacts, handoff metadata, and a SHA-256 chain-of-custody hash.</div></li>
+      </ol>
+
+      <h2>Core Endpoints</h2>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/releaseclaw/templates</span><span class="endpoint-desc">List governed release templates</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/releaseclaw/adapters</span><span class="endpoint-desc">List deployment source adapters and execution channels</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/releaseclaw/preflight</span><span class="endpoint-desc">Create Trust Fabric-governed deployment preflight</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/releaseclaw/deployments/{id}/approve</span><span class="endpoint-desc">Approve a release gate; self-approval is blocked</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/releaseclaw/deployments/{id}/execute</span><span class="endpoint-desc">Create governed execution handoff after approval when required</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/releaseclaw/deployments/{id}/evidence</span><span class="endpoint-desc">Return chain-of-custody release evidence bundle</span></div>
+
+      <h2>Example Preflight</h2>
+      <pre>{
+  <span class="c-key">"requested_by"</span>: <span class="c-str">"release-owner"</span>,
+  <span class="c-key">"source"</span>: <span class="c-str">"github_actions"</span>,
+  <span class="c-key">"environment"</span>: <span class="c-str">"prod"</span>,
+  <span class="c-key">"application"</span>: <span class="c-str">"customer-api"</span>,
+  <span class="c-key">"change_ref"</span>: <span class="c-str">"release-2026.06.02"</span>,
+  <span class="c-key">"deployment_type"</span>: <span class="c-str">"container"</span>,
+  <span class="c-key">"mode"</span>: <span class="c-str">"APPROVAL_REQUIRED"</span>,
+  <span class="c-key">"template_id"</span>: <span class="c-str">"github-actions-prod"</span>,
+  <span class="c-key">"execution_plan"</span>: [{ <span class="c-key">"step"</span>: <span class="c-num">1</span>, <span class="c-key">"command"</span>: <span class="c-str">"workflow_dispatch customer-api production"</span> }],
+  <span class="c-key">"rollback_plan"</span>: [{ <span class="c-key">"step"</span>: <span class="c-num">1</span>, <span class="c-key">"command"</span>: <span class="c-str">"restore previous artifact"</span> }]
+}</pre>
     </div>
 
     <!-- ─── COREOS: APPROVALS ─── -->

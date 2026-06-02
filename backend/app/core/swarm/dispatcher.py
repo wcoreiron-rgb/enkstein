@@ -31,6 +31,7 @@ from app.claws.logclaw.routes import LogTaskRequest, run_log_task
 from app.claws.netclaw.routes import NetTaskRequest, run_net_task
 from app.claws.privacyclaw.routes import PrivacyTaskRequest, run_privacy_task
 from app.claws.recoveryclaw.routes import RecoveryTaskRequest, run_recovery_task
+from app.claws.releaseclaw.routes import ReleaseTaskRequest, run_release_task
 from app.claws.saasclaw.routes import SaaSTaskRequest, run_saas_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
 from app.claws.userclaw.routes import UserTaskRequest, run_user_task
@@ -55,6 +56,98 @@ def _severity_from_risk(risk_score: float) -> str:
     return "info"
 
 
+def _risk_from_severity(severity: str | None) -> float:
+    sev = (severity or "").lower()
+    if sev == "critical":
+        return 90.0
+    if sev == "high":
+        return 75.0
+    if sev == "medium":
+        return 50.0
+    if sev == "low":
+        return 25.0
+    return 0.0
+
+
+def _normalize_risk_score(value: Any) -> float:
+    try:
+        score = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0 < score <= 1:
+        return round(score * 100, 2)
+    return score
+
+
+def _selected_finding_context(task_input: dict[str, Any]) -> dict[str, Any] | None:
+    selected = task_input.get("selected_finding") or task_input.get("finding_context")
+    if not isinstance(selected, dict):
+        selected = {
+            key: task_input.get(key)
+            for key in ("finding_id", "claw", "provider", "title", "repo", "package", "severity", "risk_score")
+            if task_input.get(key) is not None
+        }
+    if not selected or not selected.get("title"):
+        return None
+    normalized = dict(selected)
+    if normalized.get("risk_score") is not None:
+        normalized["risk_score"] = _normalize_risk_score(normalized.get("risk_score"))
+    return normalized
+
+
+def _focus_output_on_selected_finding(
+    output: dict[str, Any],
+    selected: dict[str, Any] | None,
+    claw: str,
+) -> dict[str, Any]:
+    if not selected:
+        output["risk_score"] = _normalize_risk_score(output.get("risk_score"))
+        output["severity"] = output.get("severity") or _severity_from_risk(float(output.get("risk_score") or 0.0))
+        return output
+
+    prior_findings = output.get("findings") if isinstance(output.get("findings"), list) else []
+    evidence = output.get("evidence") if isinstance(output.get("evidence"), list) else []
+    selected_risk = max(
+        _normalize_risk_score(selected.get("risk_score")),
+        _risk_from_severity(selected.get("severity")),
+    )
+    output_risk = max(_normalize_risk_score(output.get("risk_score")), selected_risk)
+    selected_title = str(selected.get("title") or "Selected finding")
+    selected_provider = selected.get("provider") or "unknown provider"
+    repo = selected.get("repo") or selected.get("repository") or selected.get("resource_name") or selected.get("resource_id")
+    package = selected.get("package") or selected.get("dependency") or selected.get("component")
+
+    detail_bits = [
+        f"{claw} investigated the selected {selected_provider} finding",
+        f"severity={selected.get('severity', 'unknown')}",
+    ]
+    if repo:
+        detail_bits.append(f"repo={repo}")
+    if package:
+        detail_bits.append(f"package={package}")
+
+    output["selected_finding"] = selected
+    output["risk_score"] = output_risk
+    output["severity"] = _severity_from_risk(output_risk)
+    output["findings"] = [
+        {
+            "title": f"{claw}: {selected_title}",
+            "detail": "; ".join(detail_bits),
+            "selected_finding_id": selected.get("finding_id") or selected.get("id"),
+            "provider": selected_provider,
+            "repo": repo,
+            "package": package,
+            "severity": selected.get("severity"),
+        }
+    ]
+    evidence.append({"type": "selected_finding_context", "finding": selected})
+    if prior_findings:
+        evidence.append({"type": "related_context_sample", "items": prior_findings[:3]})
+    output["evidence"] = evidence
+    output["investigation_scope"] = "selected_finding"
+    return output
+
+
 async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
     """
     Sprint 1 dispatcher.
@@ -70,6 +163,9 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         task_input = json.loads(task.input_json) if task.input_json else {}
     except Exception:
         task_input = {}
+    selected_finding = _selected_finding_context(task_input)
+    if selected_finding:
+        task_input = {**task_input, "selected_finding": selected_finding, "investigation_scope": "selected_finding"}
     memory_context = await build_swarm_memory_context(db, task_input, task.claw)
     if memory_context.get("loaded"):
         task_input = {**task_input, "memory_context": memory_context}
@@ -84,7 +180,7 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         task_input=task_input,
     )
     if real_output is not None:
-        output = real_output
+        output = _focus_output_on_selected_finding(real_output, selected_finding, task.claw)
         output.setdefault("execution_mode", "real_task_handler")
         output["memory_context_loaded"] = bool(memory_context.get("loaded"))
     else:
@@ -121,6 +217,7 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
             "fallback_reason": f"Unsupported claw '{task.claw}' does not provide /task handler",
             "memory_context_loaded": bool(memory_context.get("loaded")),
         }
+        output = _focus_output_on_selected_finding(output, selected_finding, task.claw)
 
     adapter = get_agt_adapter()
     secure_channel = adapter.send_secure_message(
@@ -201,6 +298,8 @@ async def _execute_real_task_if_supported(
         output = await run_intel_task(IntelTaskRequest(**payload), db)
     elif claw == "recoveryclaw":
         output = await run_recovery_task(RecoveryTaskRequest(**payload), db)
+    elif claw == "releaseclaw":
+        output = await run_release_task(ReleaseTaskRequest(**payload), db)
     elif claw == "saasclaw":
         output = await run_saas_task(SaaSTaskRequest(**payload), db)
     elif claw == "privacyclaw":

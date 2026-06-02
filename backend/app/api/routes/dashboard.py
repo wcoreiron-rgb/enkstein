@@ -144,9 +144,11 @@ async def run_supply_chain_scan():
 
 @router.get("/control-center-summary", response_model=ControlCenterSummary, summary="Control Center unified summary")
 async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    # Several operational tables still use timezone-naive UTC columns. Keep the
+    # summary cutoff naive as well so Postgres does not reject mixed comparisons.
+    since_24h = datetime.utcnow() - timedelta(hours=24)
 
     pending_commands = (
         await db.execute(

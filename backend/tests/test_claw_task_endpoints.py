@@ -137,3 +137,43 @@ async def test_dev_task_uses_github_connector_backed_path_when_available(client,
     body = response.json()
     assert body["risk_score"] >= 96
     assert body["findings"][0]["title"] == "Live GitHub Secret"
+
+
+@pytest.mark.asyncio
+async def test_dev_task_anchors_selected_finding_and_normalizes_fractional_risk(client, monkeypatch):
+    async def _configured(*args, **kwargs):
+        return True
+
+    async def _fetch(*args, **kwargs):
+        return []
+
+    monkeypatch.setattr("app.services.connector_check.is_connector_configured", _configured)
+    monkeypatch.setattr("app.claws.devclaw.github_scanner.fetch_github_findings", _fetch)
+
+    response = await client.post(
+        "/api/v1/devclaw/task",
+        json={
+            "swarm_job_id": "job_x",
+            "task_type": "investigate_selected_finding",
+            "input": {
+                "selected_finding": {
+                    "finding_id": "finding_123",
+                    "claw": "devclaw",
+                    "provider": "github",
+                    "title": "Authorization Bypass in Next.js Middleware in next",
+                    "repo": "wcoreiron-rgb/regentclaw",
+                    "package": "next",
+                    "severity": "critical",
+                    "risk_score": 0.95,
+                }
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["risk_score"] == 95
+    assert body["severity"] == "critical"
+    assert body["investigation_scope"] == "selected_finding"
+    assert body["selected_finding"]["risk_score"] == 95
+    assert body["findings"][0]["selected_finding_id"] == "finding_123"
+    assert body["findings"][0]["package"] == "next"

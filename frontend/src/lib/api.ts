@@ -135,6 +135,19 @@ export const getRunReplayById = (runId: string) =>
 export const getRecentRuns = (limit = 20) =>
   apiFetch<any[]>(`/orchestrations/runs/recent?limit=${limit}`);
 
+// ReleaseClaw
+export const getReleaseStats = () => apiFetch<any>('/releaseclaw/stats');
+export const getReleaseAdapters = () => apiFetch<any[]>('/releaseclaw/adapters');
+export const getReleaseTemplates = () => apiFetch<any[]>('/releaseclaw/templates');
+export const getReleaseDeployments = (limit = 50) =>
+  apiFetch<any[]>(`/releaseclaw/deployments?limit=${limit}`);
+export const preflightRelease = (body: object) =>
+  apiFetch<any>('/releaseclaw/preflight', { method: 'POST', body: JSON.stringify(body) });
+export const approveRelease = (id: string, body: object) =>
+  apiFetch<any>(`/releaseclaw/deployments/${id}/approve`, { method: 'POST', body: JSON.stringify(body) });
+export const executeRelease = (id: string) =>
+  apiFetch<any>(`/releaseclaw/deployments/${id}/execute`, { method: 'POST' });
+
 // Swarm
 export interface SwarmTask {
   id: string;

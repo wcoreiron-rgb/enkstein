@@ -366,7 +366,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
      - `GET /api/v1/dashboard/control-center-summary`
    - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, execution gate status, and outbound channel reply health.
 
-## Platform Modules (26 Security Claws + Core Engines)
+## Platform Modules (24 Security Claws + 4 Core Surfaces + Core Engines)
 
 ### Security Domain Claws (24)
 
@@ -397,13 +397,14 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 🔄 RecoveryClaw | Incident Recovery & Runbooks — Veeam, Rubrik |
 | 🔌 CustomClaw | User-defined REST API integrations — no-code builder |
 
-### New Core Platform Modules (2)
+### New Core Platform Surfaces (4)
 
 | Module | Description |
 |--------|-------------|
 | 🧩 ModelClaw | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, ModelClaw Judge synthesis |
 | ⚡ CommandClaw | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
 | 🎛️ Control Center | Unified operator cockpit — commands, approvals, swarms, remote agents, channel pressure, execution gates |
+| 🚀 ReleaseClaw | Zero Trust Deployment Governance — preflight CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments before execution handoff |
 
 ### Platform Engines (always-on)
 
@@ -419,6 +420,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
 | 🖥️ Governed Exec Channels | Shell / browser / credential execution behind dual-approval, ring policy, and fail-closed Trust Fabric gating |
 | 🛰️ Remote Control | Remote/edge agent registration, heartbeat, command dispatch, tenant scoping, and kill-switch |
+| 🚀 Release Governance | Deployment request → ReleaseClaw preflight → Trust Fabric decision → approval/execute handoff → chain-of-custody evidence |
 
 ### Skill Pack Exchange Lifecycle
 

@@ -193,6 +193,48 @@ async def test_swarm_job_stream_includes_execution_provenance_for_fallback_task(
 
 
 @pytest.mark.asyncio
+async def test_swarm_selected_finding_context_focuses_all_task_outputs(client):
+    selected = {
+        "finding_id": "finding_123",
+        "claw": "devclaw",
+        "provider": "github",
+        "title": "Authorization Bypass in Next.js Middleware in next",
+        "repo": "wcoreiron-rgb/regentclaw",
+        "package": "next",
+        "severity": "critical",
+        "risk_score": 0.95,
+    }
+    create = await client.post(
+        BASE,
+        json=_payload(
+            name="Selected GitHub Finding Swarm",
+            participants=["devclaw", "appclaw", "threatclaw", "complianceclaw", "automationclaw"],
+            task_type="investigate_selected_finding",
+            input={"source": "test", "selected_finding": selected},
+            parallelism=5,
+        ),
+    )
+    assert create.status_code == 201, create.text
+    job_id = create.json()["id"]
+
+    tasks_res = await client.get(f"{BASE}/{job_id}/tasks")
+    assert tasks_res.status_code == 200, tasks_res.text
+    tasks = tasks_res.json()
+    assert len(tasks) == 5
+    for task in tasks:
+        output = json.loads(task["output_json"])
+        assert output["investigation_scope"] == "selected_finding"
+        assert output["selected_finding"]["finding_id"] == "finding_123"
+        assert output["selected_finding"]["risk_score"] == 95
+        assert output["risk_score"] >= 90
+        assert output["severity"] == "critical"
+        assert len(output["findings"]) == 1
+        assert output["findings"][0]["selected_finding_id"] == "finding_123"
+        assert output["findings"][0]["package"] == "next"
+        assert "Authorization Bypass" in output["findings"][0]["title"]
+
+
+@pytest.mark.asyncio
 async def test_sprint6_suspicious_identity_preset_creates_approval_gated_job(client):
     response = await client.post(
         f"{BASE}/presets/suspicious-identity",

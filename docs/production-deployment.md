@@ -15,6 +15,7 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | Authentication | Require real JWT/OIDC identity in front of operator routes. Do not rely on local development defaults. |
 | Trust Fabric | Keep policy evaluation fail-closed for execution, remediation, model calls, connector calls, and evidence exports. |
 | CI security | Keep SBOM and dependency audit jobs enabled. Use `security/supply_chain_baseline.json` only for time-boxed accepted legacy findings. |
+| Release gates | Run production deployments through ReleaseClaw preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
 
 ## Minimum Environment Checklist
 
@@ -27,6 +28,35 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - CORS allows only approved frontend origins.
 - Reverse proxy enforces TLS, request size limits, and sane timeouts.
 - Backend logs redact request bodies and secrets.
+- ReleaseClaw preflight templates are reviewed for the target deployment path.
+- Production release handoff is approved by someone other than the requester.
+- Rollback plans/artifacts exist before non-dry-run deployments.
+
+## ReleaseClaw Deployment Gates
+
+ReleaseClaw is the deployment governance layer for production changes. It
+normalizes deployment paths such as GitHub Actions, GitLab CI, Jenkins, Azure
+DevOps, ArgoCD, Terraform Cloud, AWS/Azure/GCP CLIs, Kubernetes/Helm/Docker,
+Bash, PowerShell, Python, Node, Ansible, webhooks, full-stack application
+rollouts, and AI service stacks.
+
+```http
+POST /api/v1/releaseclaw/preflight
+```
+
+ReleaseClaw checks:
+
+- source adapter and execution channel
+- target environment and data classification
+- required controls from deployment templates
+- rollback plan/artifact presence
+- AI-stack model profile and model-call governance expectations
+- risky script/cloud operations before execution handoff
+- Trust Fabric policy decision, ring-policy posture, and audit event creation
+
+ReleaseClaw does not directly execute arbitrary scripts. A successful preflight
+returns a governed handoff plan for CI/CD, GitOps, cloud runners, or
+ExecChannels, plus a SHA-256 evidence hash.
 
 ## Backup And Restore
 

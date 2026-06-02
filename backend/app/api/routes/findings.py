@@ -38,12 +38,13 @@ async def list_findings(
     severity: Optional[str] = Query(None, description="Filter by severity"),
     status: Optional[str] = Query(None, description="Filter by status"),
     search: Optional[str] = Query(None, description="Search in title"),
+    sort: str = Query("risk", pattern="^(risk|recent|last_seen)$", description="Sort by risk, recent creation, or last_seen"),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db),
 ):
     """List all findings with optional filters."""
-    stmt = select(Finding).order_by(desc(Finding.risk_score), desc(Finding.created_at))
+    stmt = select(Finding)
 
     if claw:
         stmt = stmt.where(Finding.claw == claw)
@@ -55,6 +56,13 @@ async def list_findings(
         stmt = stmt.where(Finding.status == _parse_status(status))
     if search:
         stmt = stmt.where(Finding.title.ilike(f"%{search}%"))
+
+    if sort == "recent":
+        stmt = stmt.order_by(desc(Finding.created_at), desc(Finding.risk_score))
+    elif sort == "last_seen":
+        stmt = stmt.order_by(desc(Finding.last_seen), desc(Finding.created_at), desc(Finding.risk_score))
+    else:
+        stmt = stmt.order_by(desc(Finding.risk_score), desc(Finding.created_at))
 
     stmt = stmt.offset(offset).limit(limit)
     result = await db.execute(stmt)

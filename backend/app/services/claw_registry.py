@@ -60,8 +60,8 @@ CONNECTOR_TO_CLAWS: dict[str, list[str]] = {
     "bigid":             ["dataclaw", "privacyclaw"],
 
     # App / Dev
-    "github":            ["devclaw", "appclaw"],
-    "gitlab":            ["devclaw", "appclaw"],
+    "github":            ["devclaw", "appclaw", "releaseclaw"],
+    "gitlab":            ["devclaw", "appclaw", "releaseclaw"],
     "snyk":              ["appclaw", "devclaw"],
     "checkmarx":         ["appclaw"],
 
@@ -110,6 +110,7 @@ CLAW_SCAN_PATHS: dict[str, str] = {
     "devclaw":         "/devclaw/scan",
     "intelclaw":       "/intelclaw/scan",
     "recoveryclaw":    "/recoveryclaw/scan",
+    "releaseclaw":     "/releaseclaw/scan",
     "identityclaw":    "/identityclaw/scan",
 }
 

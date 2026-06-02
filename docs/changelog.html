@@ -335,6 +335,47 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.6.0 — ReleaseClaw Deployment Governance                         -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">ReleaseClaw Zero Trust Deployment Preflight</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">ReleaseClaw</span>
+          <span class="tag tag-feat">Deployment</span>
+          <span class="tag tag-fix">Governance</span>
+          <span class="release-date">June 2, 2026 &nbsp;·&nbsp; v0.6.0</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice adds ReleaseClaw as RegentClaw's governed release authority for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Universal deployment contract:</strong> deployment preflight normalizes source, environment, app, change ref, deployment type, mode, artifacts, execution plan, rollback plan, model profile, and classification.</li>
+          <li><strong>Adapter catalog:</strong> GitHub Actions, GitLab CI, Jenkins, Azure DevOps, ArgoCD, Terraform Cloud, AWS/Azure/GCP CLI, Kubernetes, Helm, Docker, Docker Compose, Bash, PowerShell, Python, Node, Ansible, webhook, and custom paths are represented as governed handoff adapters.</li>
+          <li><strong>Trust Fabric gating:</strong> preflight, approval, and execution handoff are policy-governed and audited; self-approval is blocked.</li>
+          <li><strong>Evidence bundle:</strong> deployment gates include required controls, Claw coverage, blockers, warnings, policy decision, handoff metadata, and SHA-256 chain-of-custody hash.</li>
+          <li><strong>UI:</strong> ReleaseClaw page added to the Infrastructure blade with templates, adapters, preflight form, approval, execute handoff, recent gates, and evidence hash visibility.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Verification</div>
+        <ul class="change-list">
+          <li><strong>Backend focused tests:</strong> <code>cd backend &amp;&amp; .venv/bin/python -m pytest tests/test_releaseclaw.py tests/test_claw_task_endpoints.py tests/test_swarm.py -q</code> → <strong>36 passed</strong>.</li>
+          <li><strong>Backend full suite:</strong> <code>cd backend &amp;&amp; .venv/bin/python -m pytest -q</code> → <strong>286 passed, 3 skipped, 7 xfailed, 2 xpassed</strong>.</li>
+          <li><strong>Frontend:</strong> <code>cd frontend &amp;&amp; npm run lint</code> and <code>cd frontend &amp;&amp; npm run build</code> both passed.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.5.4 — Provenance Completion + Provider-Error Log Sanitization   -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

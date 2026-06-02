@@ -1,25 +1,34 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Clock,
-  Link2,
   MessageSquare,
   PlayCircle,
-  ShieldAlert,
+  RefreshCw,
+  Rocket,
   Shield,
+  ShieldAlert,
   Siren,
   Timer,
   Users2,
+  Wifi,
+  WifiOff,
   Workflow,
+  Zap,
 } from 'lucide-react';
+import StatCard from '@/components/StatCard';
+import RiskBadge from '@/components/RiskBadge';
+import ClientDate from '@/components/ClientDate';
+import { useWebSocket } from '@/hooks/useWebSocket';
 import {
-  getControlCenterSummary,
   getChannelGatewayStats,
+  getControlCenterSummary,
   getExecStats,
   getPendingCommands,
   getRecentRuns,
@@ -28,33 +37,38 @@ import {
   listExternalAgents,
 } from '@/lib/api';
 
-type KpiCardProps = {
+type Shortcut = {
+  href: string;
   label: string;
-  value: string;
-  hint?: string;
-  tone?: 'cyan' | 'green' | 'yellow' | 'red' | 'gray';
+  sub: string;
   icon: React.ElementType;
 };
 
-function KpiCard({ label, value, hint, tone = 'gray', icon: Icon }: KpiCardProps) {
-  const toneClass =
-    tone === 'cyan'
-      ? 'border-cyan-800 bg-cyan-950/20 text-cyan-200'
-      : tone === 'green'
-        ? 'border-green-800 bg-green-950/20 text-green-200'
-        : tone === 'yellow'
-          ? 'border-yellow-800 bg-yellow-950/20 text-yellow-200'
-          : tone === 'red'
-            ? 'border-red-800 bg-red-950/20 text-red-200'
-            : 'border-gray-800 bg-gray-950/40 text-gray-200';
+const shortcuts: Shortcut[] = [
+  { href: '/channel-gateway', label: 'Commands', sub: 'Review approvals and channel timelines.', icon: MessageSquare },
+  { href: '/swarm', label: 'Swarms', sub: 'Launch investigations and watch live tasks.', icon: Users2 },
+  { href: '/external-agents', label: 'Remote Agents', sub: 'Heartbeat, trust, dispatch, kill switch.', icon: Activity },
+  { href: '/exec-channels', label: 'Execution Gates', sub: 'Ring-policy and production approvals.', icon: ShieldAlert },
+  { href: '/releaseclaw', label: 'Release Gates', sub: 'Preflight deployments and generate evidence.', icon: Rocket },
+];
+
+function toneForQueue(value: number) {
+  if (value >= 5) return 'red';
+  if (value > 0) return 'yellow';
+  return 'green';
+}
+
+function MiniMetric({ label, value, tone = 'gray' }: { label: string; value: string | number; tone?: 'green' | 'yellow' | 'red' | 'cyan' | 'gray' }) {
+  const color =
+    tone === 'green' ? '#4ade80'
+      : tone === 'yellow' ? '#facc15'
+        : tone === 'red' ? '#f87171'
+          : tone === 'cyan' ? '#22d3ee'
+            : 'var(--rc-text-1)';
   return (
-    <div className={`rounded-lg border p-4 ${toneClass}`}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs uppercase tracking-wider opacity-80">{label}</p>
-        <Icon className="w-4 h-4 opacity-80" />
-      </div>
-      <p className="mt-2 text-2xl font-semibold">{value}</p>
-      {hint ? <p className="mt-1 text-xs opacity-80">{hint}</p> : null}
+    <div className="rounded-xl border px-4 py-3" style={{ background: 'var(--rc-bg-elevated)', borderColor: 'var(--rc-border)' }}>
+      <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{label}</p>
+      <p className="text-2xl font-bold mt-1" style={{ color }}>{value}</p>
     </div>
   );
 }
@@ -70,52 +84,50 @@ export default function ControlCenterPage() {
   const [execStats, setExecStats] = useState<any>(null);
   const [channelStats, setChannelStats] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
+  const refreshing = useRef(false);
+  const { connected, status: wsStatus, reconnect } = useWebSocket();
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [
-          summaryData,
-          pending,
-          swarms,
-          remoteAgents,
-          recentRuns,
-          schedules,
-          exec,
-          gateway,
-        ] = await Promise.all([
-          getControlCenterSummary(),
-          getPendingCommands(100),
-          getSwarmJobs(),
-          listExternalAgents(),
-          getRecentRuns(20),
-          getSchedules(),
-          getExecStats(),
-          getChannelGatewayStats(),
-        ]);
-        if (!active) return;
-        setSummary(summaryData || null);
-        setPendingCount((pending as any)?.count ?? 0);
-        setSwarmJobs(Array.isArray(swarms) ? swarms : []);
-        setAgents(Array.isArray(remoteAgents) ? remoteAgents : []);
-        setRuns(Array.isArray(recentRuns) ? recentRuns : []);
-        setScheduleCount(Array.isArray(schedules) ? schedules.length : 0);
-        setExecStats(exec || null);
-        setChannelStats(gateway || null);
-      } catch (e: any) {
-        if (!active) return;
-        setError(e?.message || 'Failed to load control center');
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
+  const load = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    setError(null);
+    try {
+      const [
+        summaryData,
+        pending,
+        swarms,
+        remoteAgents,
+        recentRuns,
+        schedules,
+        exec,
+        gateway,
+      ] = await Promise.all([
+        getControlCenterSummary(),
+        getPendingCommands(100),
+        getSwarmJobs(),
+        listExternalAgents(),
+        getRecentRuns(20),
+        getSchedules(),
+        getExecStats(),
+        getChannelGatewayStats(),
+      ]);
+      setSummary(summaryData || null);
+      setPendingCount((pending as any)?.count ?? 0);
+      setSwarmJobs(Array.isArray(swarms) ? swarms : []);
+      setAgents(Array.isArray(remoteAgents) ? remoteAgents : []);
+      setRuns(Array.isArray(recentRuns) ? recentRuns : []);
+      setScheduleCount(Array.isArray(schedules) ? schedules.length : 0);
+      setExecStats(exec || null);
+      setChannelStats(gateway || null);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to load control center');
+    } finally {
+      refreshing.current = false;
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const runningSwarms = useMemo(
     () => swarmJobs.filter((j) => ['pending', 'running'].includes((j?.status || '').toLowerCase())),
@@ -129,219 +141,226 @@ export default function ControlCenterPage() {
     () => agents.filter((a) => ['active', 'online'].includes((a?.status || '').toLowerCase())).length,
     [agents],
   );
-  const pendingExec = Number(execStats?.pending_approval || 0);
   const recentFailures = useMemo(
     () => runs.filter((r) => ['failed', 'error', 'blocked'].includes((r?.status || '').toLowerCase())).slice(0, 6),
     [runs],
   );
-  const pendingCommandsEff = summary?.pending_commands ?? pendingCount;
+
+  const pendingCommands = summary?.pending_commands ?? pendingCount;
   const runningSwarmsEff = summary?.running_swarms ?? runningSwarms.length;
   const blockedSwarmsEff = summary?.blocked_swarms ?? blockedSwarms.length;
   const remoteOnlineEff = summary?.remote_agents_online ?? remoteOnline;
   const remoteTotalEff = summary?.remote_agents_total ?? agents.length;
-  const pendingExecEff = summary?.execution_pending_approval ?? pendingExec;
-  const channelBlockedEff = summary?.channel_blocked_24h ?? channelStats?.blocked ?? 0;
-  const channelMsgs24hEff = summary?.channel_messages_24h ?? channelStats?.total_messages ?? 0;
-  const channelRepliesSentEff = summary?.channel_replies_sent_24h ?? 0;
-  const channelRepliesPendingEff = summary?.channel_replies_pending_24h ?? 0;
-  const blockedActions24hEff = summary?.blocked_actions_24h ?? 0;
+  const pendingExec = summary?.execution_pending_approval ?? Number(execStats?.pending_approval || 0);
+  const blockedExec = summary?.execution_blocked_24h ?? 0;
+  const channelMessages = summary?.channel_messages_24h ?? channelStats?.total_messages ?? 0;
+  const channelBlocked = summary?.channel_blocked_24h ?? channelStats?.blocked ?? 0;
+  const channelReplies = summary?.channel_replies_sent_24h ?? 0;
+  const channelRepliesPending = summary?.channel_replies_pending_24h ?? 0;
+  const schedulesActive = summary?.schedules_active ?? 0;
+  const schedulesTotal = summary?.schedules_total ?? scheduleCount;
+  const blockedActions = summary?.blocked_actions_24h ?? 0;
+  const pressureScore = pendingCommands + pendingExec + blockedSwarmsEff + channelBlocked + blockedExec;
+  const pressureColor = pressureScore >= 8 ? '#b91c1c' : pressureScore > 0 ? '#a16207' : '#15803d';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64" style={{ color: 'var(--rc-text-2)' }}>
+        Loading Regent Control Center…
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-8">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white flex items-center gap-2">
-            <Shield className="w-6 h-6 text-cyan-400" />
+          <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
+            <Shield className="w-7 h-7 text-cyan-400" />
             Regent Control Center
           </h1>
-          <p className="mt-1 text-sm text-gray-400">
-            Unified command and orchestration view across channels, swarms, remote agents, approvals, and execution.
+          <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
+            Command, channel, swarm, remote-agent, and execution control plane.
           </p>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-3 py-2 rounded-lg border border-gray-800 text-sm text-gray-300 hover:bg-gray-900"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <div
+            className="flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border"
+            style={{
+              background: connected ? 'rgba(34,197,94,0.1)' : wsStatus === 'failed' ? 'rgba(113,113,122,0.1)' : 'rgba(239,68,68,0.1)',
+              borderColor: connected ? 'rgba(34,197,94,0.3)' : wsStatus === 'failed' ? 'rgba(113,113,122,0.3)' : 'rgba(239,68,68,0.3)',
+              color: connected ? '#4ade80' : wsStatus === 'failed' ? '#a1a1aa' : '#f87171',
+            }}
+          >
+            {connected
+              ? <><Wifi className="w-3 h-3" /> Live</>
+              : wsStatus === 'failed'
+                ? <><WifiOff className="w-3 h-3" /> Disconnected</>
+                : <><WifiOff className="w-3 h-3" /> Reconnecting…</>}
+          </div>
+          {wsStatus === 'failed' && (
+            <button onClick={reconnect} className="text-xs px-2 py-1 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500">
+              Retry
+            </button>
+          )}
+          <button
+            onClick={load}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors"
+            style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing.current ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-800 bg-red-950/20 p-4 text-sm text-red-300">
+        <div className="rounded-xl border border-red-800 bg-red-950/20 p-4 text-sm text-red-300">
           {error}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard label="Pending Commands" value={String(pendingCommandsEff)} hint="Awaiting human decision" tone={pendingCommandsEff > 0 ? 'yellow' : 'green'} icon={Clock} />
-        <KpiCard label="Running Swarms" value={String(runningSwarmsEff)} hint={`${blockedSwarmsEff} blocked/failed`} tone={runningSwarmsEff > 0 ? 'cyan' : 'gray'} icon={Users2} />
-        <KpiCard label="Remote Agents Online" value={`${remoteOnlineEff}/${remoteTotalEff}`} hint="External and remote workers" tone={remoteOnlineEff > 0 ? 'green' : 'red'} icon={Activity} />
-        <KpiCard label="Pending Exec Gates" value={String(pendingExecEff)} hint="Ring policy approvals" tone={pendingExecEff > 0 ? 'yellow' : 'green'} icon={Workflow} />
+      <div className="rounded-xl border p-6 flex items-center justify-between bg-gradient-to-r from-regent-900/80 to-gray-900 border-regent-700/50">
+        <div>
+          <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>Operator Pressure</p>
+          <p className="text-5xl font-bold mt-1" style={{ color: pressureColor }}>{pressureScore}</p>
+          <p className="text-xs mt-2" style={{ color: 'var(--rc-text-3)' }}>
+            Pending approvals, blocked swarms, blocked channel messages, and execution gates.
+          </p>
+          <div className="mt-3 flex items-center gap-4 text-xs" style={{ color: 'var(--rc-text-2)' }}>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> Clear</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> Needs review</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Saturated</span>
+          </div>
+        </div>
+        <Siren className="w-20 h-20 opacity-20" style={{ color: 'var(--regent-500)' }} />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Pending Commands" value={pendingCommands} icon={Clock} color={toneForQueue(pendingCommands)} sub="Awaiting human decision" />
+        <StatCard label="Running Swarms" value={runningSwarmsEff} icon={Users2} color={runningSwarmsEff > 0 ? 'indigo' : 'green'} sub={`${blockedSwarmsEff} blocked or failed`} />
+        <StatCard label="Remote Agents" value={`${remoteOnlineEff}/${remoteTotalEff}`} icon={Activity} color={remoteOnlineEff > 0 ? 'green' : 'red'} sub="Online / enrolled" />
+        <StatCard label="Execution Gates" value={pendingExec} icon={Workflow} color={toneForQueue(pendingExec)} sub={`${blockedExec} blocked in 24h`} />
+        <StatCard label="Channel Messages" value={channelMessages} icon={MessageSquare} color="indigo" sub={`${channelReplies} replies sent`} />
+        <StatCard label="Blocked (24h)" value={blockedActions} icon={Ban} color={blockedActions > 0 ? 'red' : 'green'} sub={`${channelBlocked} channel blocks`} />
+        <StatCard label="Schedules" value={schedulesActive} icon={Timer} color="green" sub={`${schedulesTotal} configured`} />
+        <StatCard label="Reply Gaps" value={channelRepliesPending} icon={AlertTriangle} color={channelRepliesPending > 0 ? 'yellow' : 'green'} sub="Needs channel config" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <section className="xl:col-span-2 rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-yellow-400" />
+        <section className="xl:col-span-2 rounded-xl border overflow-hidden" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--rc-border)' }}>
+            <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
+              <Zap className="w-4 h-4 text-yellow-400" />
               Immediate Operator Queue
             </h2>
-            <Link href="/channel-gateway" className="text-xs text-cyan-300 hover:text-cyan-200">Open Commands</Link>
+            <Link href="/channel-gateway" className="text-xs text-cyan-400 hover:text-cyan-300">Open Commands</Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-            <div className="rounded border border-gray-800 p-3">
-              <p className="text-gray-400 text-xs">Command approvals</p>
-              <p className="text-xl font-semibold text-white mt-1">{pendingCommandsEff}</p>
-            </div>
-            <div className="rounded border border-gray-800 p-3">
-              <p className="text-gray-400 text-xs">Channel blocked (24h)</p>
-              <p className="text-xl font-semibold text-white mt-1">{channelBlockedEff}</p>
-            </div>
-            <div className="rounded border border-gray-800 p-3">
-              <p className="text-gray-400 text-xs">Schedules configured</p>
-              <p className="text-xl font-semibold text-white mt-1">{summary?.schedules_total ?? scheduleCount}</p>
-            </div>
-            <div className="rounded border border-gray-800 p-3">
-              <p className="text-gray-400 text-xs">Platform blocked (24h)</p>
-              <p className="text-xl font-semibold text-white mt-1">{blockedActions24hEff}</p>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-5">
+            <MiniMetric label="Command approvals" value={pendingCommands} tone={pendingCommands > 0 ? 'yellow' : 'green'} />
+            <MiniMetric label="Channel blocked" value={channelBlocked} tone={channelBlocked > 0 ? 'red' : 'green'} />
+            <MiniMetric label="Exec approvals" value={pendingExec} tone={pendingExec > 0 ? 'yellow' : 'green'} />
+            <MiniMetric label="Platform blocked" value={blockedActions} tone={blockedActions > 0 ? 'red' : 'green'} />
           </div>
         </section>
 
-        <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2 mb-3">
-            <MessageSquare className="w-4 h-4 text-cyan-400" />
-            Channel Ingress
-          </h2>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-400">Messages (24h)</span><span className="text-white">{channelMsgs24hEff}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Allowed</span><span className="text-green-300">{channelStats?.allowed ?? 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Blocked</span><span className="text-red-300">{channelStats?.blocked ?? 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Pending</span><span className="text-yellow-300">{channelStats?.pending_approval ?? 0}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Replies sent (24h)</span><span className="text-cyan-300">{channelRepliesSentEff}</span></div>
-            <div className="flex justify-between"><span className="text-gray-400">Replies pending config</span><span className="text-yellow-300">{channelRepliesPendingEff}</span></div>
+        <section className="rounded-xl border overflow-hidden" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--rc-border)' }}>
+            <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
+              <MessageSquare className="w-4 h-4 text-cyan-400" />
+              Channel Ingress
+            </h2>
+          </div>
+          <div className="p-5 space-y-3 text-sm">
+            {[
+              ['Messages (24h)', channelMessages, 'var(--rc-text-1)'],
+              ['Allowed', channelStats?.allowed ?? 0, '#4ade80'],
+              ['Blocked', channelStats?.blocked ?? 0, '#f87171'],
+              ['Pending', channelStats?.pending_approval ?? 0, '#facc15'],
+              ['Replies sent', channelReplies, '#22d3ee'],
+              ['Replies pending config', channelRepliesPending, '#facc15'],
+            ].map(([label, value, color]) => (
+              <div key={String(label)} className="flex justify-between gap-3">
+                <span style={{ color: 'var(--rc-text-2)' }}>{label}</span>
+                <span className="font-semibold" style={{ color: String(color) }}>{String(value)}</span>
+              </div>
+            ))}
           </div>
         </section>
       </div>
 
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-cyan-400" />
-            Control Plane Shortcuts
-          </h2>
+      <section className="rounded-xl border overflow-hidden" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+        <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--rc-border)' }}>
+          <h2 className="font-semibold" style={{ color: 'var(--rc-text-1)' }}>Control Plane Shortcuts</h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-          <Link href="/channel-gateway" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <div className="flex items-center gap-2 text-cyan-300 text-sm font-medium"><MessageSquare className="w-4 h-4" /> Commands</div>
-            <p className="text-xs text-gray-400 mt-1">Review, approve, reject, and export command timelines.</p>
-          </Link>
-          <Link href="/swarm" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <div className="flex items-center gap-2 text-cyan-300 text-sm font-medium"><Users2 className="w-4 h-4" /> Swarms</div>
-            <p className="text-xs text-gray-400 mt-1">Launch investigations and monitor live task execution.</p>
-          </Link>
-          <Link href="/external-agents" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <div className="flex items-center gap-2 text-cyan-300 text-sm font-medium"><Activity className="w-4 h-4" /> Remote Agents</div>
-            <p className="text-xs text-gray-400 mt-1">Trust, heartbeat, dispatch, and kill-switch visibility.</p>
-          </Link>
-          <Link href="/exec-channels" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <div className="flex items-center gap-2 text-cyan-300 text-sm font-medium"><ShieldAlert className="w-4 h-4" /> Execution Gates</div>
-            <p className="text-xs text-gray-400 mt-1">Ring-policy execution requests and production approvals.</p>
-          </Link>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 divide-y md:divide-y-0 md:divide-x" style={{ borderColor: 'var(--rc-border)' }}>
+          {shortcuts.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="p-5 transition-colors hover:opacity-80">
+                <div className="flex items-center gap-2 text-sm font-semibold text-cyan-400">
+                  <Icon className="w-4 h-4" />
+                  {item.label}
+                </div>
+                <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{item.sub}</p>
+              </Link>
+            );
+          })}
         </div>
       </section>
 
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Siren className="w-4 h-4 text-yellow-400" />
-            Orchestration Pressure
-          </h2>
-          <Link href="/schedules" className="text-xs text-cyan-300 hover:text-cyan-200">Open Schedules</Link>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <div className="rounded border border-gray-800 p-3">
-            <p className="text-gray-400 text-xs">Swarms running</p>
-            <p className="text-xl font-semibold text-white mt-1">{runningSwarmsEff}</p>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <section className="xl:col-span-2 rounded-xl border overflow-hidden" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+          <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--rc-border)' }}>
+            <h2 className="font-semibold" style={{ color: 'var(--rc-text-1)' }}>Recent Failed / Blocked Runs</h2>
+            <Link href="/runs" className="text-xs text-cyan-400 hover:text-cyan-300">Open Run History</Link>
           </div>
-          <div className="rounded border border-gray-800 p-3">
-            <p className="text-gray-400 text-xs">Swarms blocked/failed</p>
-            <p className="text-xl font-semibold text-white mt-1">{blockedSwarmsEff}</p>
-          </div>
-          <div className="rounded border border-gray-800 p-3">
-            <p className="text-gray-400 text-xs">Active schedules</p>
-            <p className="text-xl font-semibold text-white mt-1">{summary?.schedules_active ?? 0}</p>
-          </div>
-        </div>
-      </section>
+          {recentFailures.length === 0 ? (
+            <div className="p-6 text-sm flex items-center gap-2" style={{ color: 'var(--rc-text-2)' }}>
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              No recent failed or blocked runs.
+            </div>
+          ) : (
+            <div>
+              {recentFailures.map((r: any, i: number) => (
+                <div key={r.id} className="px-6 py-3 flex items-center gap-4" style={{ borderTop: i === 0 ? 'none' : '1px solid var(--rc-border)' }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate" style={{ color: 'var(--rc-text-1)' }}>{r.run_id || r.id}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--rc-text-3)' }}>
+                      {r.started_at ? <ClientDate value={r.started_at} /> : 'No start time'}
+                    </p>
+                  </div>
+                  <RiskBadge value={r.status || 'failed'} />
+                  <span className="text-xs" style={{ color: 'var(--rc-text-2)' }}>{r.triggered_by || 'system'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white">Recent Failed / Blocked Runs</h2>
-          <Link href="/runs" className="text-xs text-cyan-300 hover:text-cyan-200">Open Run History</Link>
-        </div>
-        {loading ? (
-          <p className="text-sm text-gray-400">Loading…</p>
-        ) : recentFailures.length === 0 ? (
-          <div className="text-sm text-gray-400 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-400" />
-            No recent failed/blocked runs.
+        <section className="rounded-xl border overflow-hidden" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+          <div className="px-6 py-4 border-b" style={{ borderColor: 'var(--rc-border)' }}>
+            <h2 className="font-semibold flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
+              <PlayCircle className="w-4 h-4 text-cyan-400" />
+              Next Actions
+            </h2>
           </div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-gray-500 border-b border-gray-800">
-                <tr>
-                  <th className="py-2 text-left">Run</th>
-                  <th className="py-2 text-left">Status</th>
-                  <th className="py-2 text-left">Triggered By</th>
-                  <th className="py-2 text-left">Started</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentFailures.map((r: any) => (
-                  <tr key={r.id} className="border-b border-gray-900">
-                    <td className="py-2 text-gray-200">{r.run_id || r.id}</td>
-                    <td className="py-2">
-                      <span className="px-2 py-0.5 rounded border border-red-800 bg-red-950/20 text-red-300 text-xs">
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="py-2 text-gray-300">{r.triggered_by || '—'}</td>
-                    <td className="py-2 text-gray-400 flex items-center gap-1">
-                      <Timer className="w-3 h-3" />
-                      {r.started_at ? new Date(r.started_at).toLocaleString() : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-5 space-y-4">
+            <Link href="/channel-gateway" className="block">
+              <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Clear pending approvals</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>Prioritize command approvals before queue saturation.</p>
+            </Link>
+            <Link href="/swarm" className="block">
+              <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Review blocked swarms</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>Inspect failed runs and retry with corrected scope.</p>
+            </Link>
+            <Link href="/external-agents" className="block">
+              <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Validate remote trust posture</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>Check heartbeat freshness and trust score drift.</p>
+            </Link>
           </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-gray-800 bg-gray-950/40 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <PlayCircle className="w-4 h-4 text-cyan-400" />
-            Next Actions
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <Link href="/channel-gateway" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <p className="text-gray-200 font-medium">Clear pending approvals</p>
-            <p className="text-gray-400 text-xs mt-1">Prioritize command approvals before queue saturation.</p>
-          </Link>
-          <Link href="/swarm" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <p className="text-gray-200 font-medium">Review blocked swarms</p>
-            <p className="text-gray-400 text-xs mt-1">Inspect failed/blocked runs and retry with corrected scope.</p>
-          </Link>
-          <Link href="/external-agents" className="rounded border border-gray-800 p-3 hover:border-cyan-700 transition-colors">
-            <p className="text-gray-200 font-medium">Validate remote trust posture</p>
-            <p className="text-gray-400 text-xs mt-1">Check heartbeat freshness and trust score drift.</p>
-          </Link>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

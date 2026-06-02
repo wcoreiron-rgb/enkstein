@@ -447,6 +447,20 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
     from app.claws.devclaw.github_scanner import fetch_github_findings
 
     started = datetime.utcnow()
+    selected = payload.input.get("selected_finding") or payload.input.get("finding_context")
+    if not isinstance(selected, dict):
+        selected = {
+            key: payload.input.get(key)
+            for key in ("finding_id", "claw", "provider", "title", "repo", "package", "severity", "risk_score")
+            if payload.input.get(key) is not None
+        }
+    if selected and selected.get("risk_score") is not None:
+        try:
+            selected_score = float(selected.get("risk_score") or 0.0)
+            selected["risk_score"] = round(selected_score * 100, 2) if 0 < selected_score <= 1 else selected_score
+        except (TypeError, ValueError):
+            selected.pop("risk_score", None)
+
     stmt = (
         select(Finding)
         .where(Finding.claw == CLAW_NAME)
@@ -475,6 +489,13 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
     max_risk = max([float(f.risk_score or 0.0) for f in findings], default=0.0)
     if live_risks:
         max_risk = max(max_risk, max(live_risks))
+    if selected:
+        selected_risk = float(selected.get("risk_score") or 0.0)
+        severity_floor = {"critical": 90.0, "high": 75.0, "medium": 50.0, "low": 25.0}.get(
+            str(selected.get("severity") or "").lower(),
+            0.0,
+        )
+        max_risk = max(max_risk, selected_risk, severity_floor)
     severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
     confidence = 0.92 if live_rows else (0.9 if findings else 0.7)
     elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)
@@ -486,7 +507,25 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         }
         for f in findings[:3]
     ]
-    finding_rows = live_rows or persisted_rows or [{"title": "No dev findings persisted yet", "detail": "Run /devclaw/scan or configure providers."}]
+    selected_rows = []
+    if selected:
+        selected_rows = [
+            {
+                "title": selected.get("title") or "Selected GitHub finding",
+                "detail": (
+                    f"Selected finding context; provider={selected.get('provider', 'unknown')}; "
+                    f"repo={selected.get('repo') or selected.get('repository') or 'unknown'}; "
+                    f"package={selected.get('package') or selected.get('dependency') or 'unknown'}; "
+                    f"severity={selected.get('severity', 'unknown')}"
+                ),
+                "selected_finding_id": selected.get("finding_id") or selected.get("id"),
+                "provider": selected.get("provider"),
+                "repo": selected.get("repo") or selected.get("repository"),
+                "package": selected.get("package") or selected.get("dependency"),
+                "severity": selected.get("severity"),
+            }
+        ]
+    finding_rows = selected_rows or live_rows or persisted_rows or [{"title": "No dev findings persisted yet", "detail": "Run /devclaw/scan or configure providers."}]
     data_source = "live_connector" if live_rows else ("persisted_db" if persisted_rows else "seeded_fallback")
     connector_state = "configured" if github_configured else "unconfigured"
 
@@ -499,7 +538,7 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         "confidence": confidence,
         "risk_score": max_risk,
         "findings": finding_rows,
-        "evidence": [],
+        "evidence": ([{"type": "selected_finding_context", "finding": selected}] if selected else []),
         "recommended_actions": [
             "Rotate exposed secrets and enforce pre-commit scanning",
             "Block unsigned or vulnerable artifacts in CI/CD",
@@ -510,4 +549,6 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         "execution_time_ms": elapsed_ms,
         "data_source": data_source,
         "connector_state": connector_state,
+        "selected_finding": selected or None,
+        "investigation_scope": "selected_finding" if selected else "broad_task",
     }

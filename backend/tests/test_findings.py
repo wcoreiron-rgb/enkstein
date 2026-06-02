@@ -7,6 +7,7 @@ Endpoints under test:
   GET  /api/v1/findings?claw=cloudclaw   — filter findings by claw
 """
 import pytest
+import asyncio
 
 
 FINDINGS_BASE  = "/api/v1/findings"
@@ -72,6 +73,43 @@ async def test_findings_filter_by_severity(client):
     """GET /api/v1/findings with severity filter should not error."""
     resp = await client.get(FINDINGS_BASE, params={"severity": "high"})
     assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_findings_support_recent_sort_for_last_run_visibility(client):
+    older = await client.post(
+        FINDINGS_BASE,
+        json={
+            "claw": "legacyclaw",
+            "provider": "seed",
+            "title": "Older critical backlog finding",
+            "severity": "critical",
+            "risk_score": 99,
+        },
+    )
+    assert older.status_code == 201, older.text
+    await asyncio.sleep(0.01)
+    newer = await client.post(
+        FINDINGS_BASE,
+        json={
+            "claw": "devclaw",
+            "provider": "github",
+            "title": "Latest GitHub run finding",
+            "severity": "medium",
+            "risk_score": 45,
+        },
+    )
+    assert newer.status_code == 201, newer.text
+
+    recent = await client.get(FINDINGS_BASE, params={"sort": "recent", "limit": "2"})
+    assert recent.status_code == 200, recent.text
+    recent_rows = recent.json()
+    assert recent_rows[0]["title"] == "Latest GitHub run finding"
+
+    risk = await client.get(FINDINGS_BASE, params={"sort": "risk", "limit": "2"})
+    assert risk.status_code == 200, risk.text
+    risk_rows = risk.json()
+    assert risk_rows[0]["title"] == "Older critical backlog finding"
 
 
 @pytest.mark.asyncio
