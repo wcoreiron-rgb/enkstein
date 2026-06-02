@@ -14,9 +14,18 @@ router = APIRouter(prefix="/devclaw", tags=["DevClaw"])
 logger = logging.getLogger("devclaw")
 CLAW_NAME = "devclaw"
 
+
+def _normalize_risk_score(value) -> float:
+    try:
+        score = float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(score * 100, 2) if 0 < score <= 1 else round(score, 2)
+
+
 PROVIDER_MAP = [
     {"provider": "github", "label": "GitHub",           "connector_type": "github"},
-    {"provider": "aws",    "label": "AWS Security Hub", "connector_type": "aws_security_hub"},
+    {"provider": "aws",    "label": "AWS Security Hub / IAM", "connector_type": "aws_security_hub", "connector_types": ["aws_security_hub", "aws_iam"]},
 ]
 
 _FINDINGS = [
@@ -362,7 +371,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             for p in PROVIDER_MAP if p.get("connector_type")
         ])
         if not any_configured:
-            return _FINDINGS
+            return [{**f, "risk_score": _normalize_risk_score(f.get("risk_score"))} for f in _FINDINGS]
         return []   # connector configured but no findings yet — return clean empty list
     return [
         {
@@ -372,7 +381,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             "status": f.status.value if hasattr(f.status, "value") else f.status,
             "resource_id": f.resource_id, "resource_type": f.resource_type,
             "resource_name": f.resource_name, "region": f.region,
-            "risk_score": f.risk_score, "actively_exploited": f.actively_exploited,
+            "risk_score": _normalize_risk_score(f.risk_score), "actively_exploited": f.actively_exploited,
             "remediation": f.remediation, "remediation_effort": f.remediation_effort,
             "external_id": f.external_id,
             "first_seen": f.first_seen.isoformat() if f.first_seen else None,
@@ -456,8 +465,7 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
         }
     if selected and selected.get("risk_score") is not None:
         try:
-            selected_score = float(selected.get("risk_score") or 0.0)
-            selected["risk_score"] = round(selected_score * 100, 2) if 0 < selected_score <= 1 else selected_score
+            selected["risk_score"] = _normalize_risk_score(selected.get("risk_score"))
         except (TypeError, ValueError):
             selected.pop("risk_score", None)
 
@@ -484,9 +492,9 @@ async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_d
                     "detail": (row.get("description") or "Connector-backed task finding")[:220],
                 }
             )
-            live_risks.append(float(row.get("risk_score") or 0.0))
+            live_risks.append(_normalize_risk_score(row.get("risk_score")))
 
-    max_risk = max([float(f.risk_score or 0.0) for f in findings], default=0.0)
+    max_risk = max([_normalize_risk_score(f.risk_score) for f in findings], default=0.0)
     if live_risks:
         max_risk = max(max_risk, max(live_risks))
     if selected:

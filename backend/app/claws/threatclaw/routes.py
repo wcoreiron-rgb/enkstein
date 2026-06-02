@@ -10,9 +10,11 @@ router = APIRouter(prefix="/threatclaw", tags=["ThreatClaw"])
 CLAW_NAME = "threatclaw"
 
 PROVIDER_MAP = [
-    {"provider": "microsoft_sentinel", "label": "Microsoft Sentinel",        "connector_type": "microsoft_sentinel"},
+    {"provider": "microsoft_sentinel", "label": "Microsoft Sentinel",        "connector_type": "sentinel"},
     {"provider": "crowdstrike",        "label": "CrowdStrike Falcon X",      "connector_type": "crowdstrike"},
+    {"provider": "sentinelone",        "label": "SentinelOne",               "connector_type": "sentinelone"},
     {"provider": "recorded_future",    "label": "Recorded Future",           "connector_type": "recorded_future"},
+    {"provider": "virustotal",         "label": "VirusTotal",                "connector_type": "virustotal"},
 ]
 
 

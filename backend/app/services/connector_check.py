@@ -45,8 +45,8 @@ async def check_providers(
     """
     output = []
     for p in provider_map:
-        ct = p.get("connector_type", "")
-        configured = await is_connector_configured(db, ct) if ct else False
+        connector_types = p.get("connector_types") or ([p.get("connector_type")] if p.get("connector_type") else [])
+        configured = any([await is_connector_configured(db, ct) for ct in connector_types])
         output.append({
             "provider":   p["provider"],
             "label":      p["label"],

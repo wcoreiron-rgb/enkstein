@@ -32,6 +32,7 @@ PROVIDER_CONFIG = [
     {
         "provider": "aws",
         "connector_type": "aws_security_hub",
+        "connector_types": ["aws_security_hub", "aws_iam"],
         "label": "AWS Security Hub",
         "adapter": aws_adapter,
     },
@@ -61,21 +62,22 @@ class CloudTaskRequest(BaseModel):
 
 # ─── Helper: look up connector + credentials ─────────────────────────────────
 
-async def _get_provider_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
+async def _get_provider_credentials(db: AsyncSession, connector_type: str | list[str]) -> Optional[dict]:
     """
     Check if a connector of the given type exists and has stored credentials.
     Returns the decrypted credential dict, or None if not configured.
     """
-    result = await db.execute(
-        select(Connector).where(Connector.connector_type == connector_type)
-    )
-    connector = result.scalar_one_or_none()
-    if not connector:
-        return None
-
-    connector_id = str(connector.id)
-    creds = get_credential(connector_id)
-    return creds  # None if no secret stored
+    connector_types = connector_type if isinstance(connector_type, list) else [connector_type]
+    for ct in connector_types:
+        result = await db.execute(
+            select(Connector).where(Connector.connector_type == ct)
+        )
+        connectors = result.scalars().all()
+        for connector in connectors:
+            creds = get_credential(str(connector.id))
+            if creds:
+                return creds
+    return None
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -178,7 +180,7 @@ async def get_configured_providers(db: AsyncSession = Depends(get_db)):
     """
     output = []
     for cfg in PROVIDER_CONFIG:
-        creds = await _get_provider_credentials(db, cfg["connector_type"])
+        creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]))
         output.append({
             "provider": cfg["provider"],
             "label": cfg["label"],
@@ -202,7 +204,7 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
 
     for cfg in PROVIDER_CONFIG:
         provider_name = cfg["provider"]
-        creds = await _get_provider_credentials(db, cfg["connector_type"])
+        creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]))
 
         try:
             raw_findings = await cfg["adapter"].get_findings(credentials=creds)
