@@ -226,6 +226,62 @@ Every Claw module supports real integrations. Go to **Connectors** and add crede
 
 Without credentials, all modules run on realistic simulated findings so the platform is fully usable for demos and evaluation.
 
+## Use it from your terminal & editor
+
+RegentClaw ships in three installable forms beyond the web platform. All three talk to your running RegentClaw server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
+
+### ⚡ Add RegentClaw to Cursor in 30 seconds (MCP)
+
+Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
+
+```bash
+pip install regentclaw-mcp
+```
+
+Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
+
+```json
+{
+  "mcpServers": {
+    "regentclaw": {
+      "command": "regentclaw-mcp",
+      "env": { "REGENTCLAW_API_URL": "http://localhost:8000" }
+    }
+  }
+}
+```
+
+Restart Cursor, then just ask:
+
+> *"Scan the file I have open for hardcoded secrets."*
+> *"What's my current security posture?"*
+> *"Investigate suspicious identity activity for user@corp.com."*
+
+Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findings` · `list_connectors` · `run_swarm_investigation`. → [full MCP docs](mcp-server/README.md)
+
+### 🖥️ CLI — drive the platform from your shell
+
+```bash
+pip install regentclaw-cli
+export REGENTCLAW_API_URL=http://localhost:8000
+regentclaw status dashboard
+regentclaw connectors test okta
+regentclaw evidence collect --framework soc2
+```
+→ [full CLI docs](cli/README.md)
+
+### 🧩 Embed the governance core (no server)
+
+Drop RegentClaw's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
+
+```bash
+pip install regentclaw-core
+```
+```python
+from regentclaw_core import classify_ring, evaluate_ring, scan_text, verify_package
+```
+→ [full core docs](regentclaw-core/README.md)
+
 ## API Reference
 
 Full interactive docs at: http://localhost:8000/docs
