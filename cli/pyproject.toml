@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name            = "regentclaw-cli"
@@ -8,11 +8,18 @@ version         = "0.2.0"
 description     = "RegentClaw Zero Trust Ecosystem — Command Line Interface"
 readme          = "README.md"
 requires-python = ">=3.11"
+license         = { text = "MIT" }
+keywords        = ["security", "zero-trust", "soc", "automation", "cli"]
+authors         = [{ name = "RegentClaw" }]
 
 dependencies = [
     "typer[all]>=0.12",
     "httpx>=0.27",
 ]
+
+[project.urls]
+Homepage      = "https://github.com/wcoreiron-rgb/regentclaw"
+Documentation = "https://wcoreiron-rgb.github.io/regentclaw/"
 
 [project.scripts]
 regentclaw = "regentclaw.cli:main"
