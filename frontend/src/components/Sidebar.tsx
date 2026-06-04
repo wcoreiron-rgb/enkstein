@@ -11,7 +11,7 @@ import {
   Bot, GitMerge, Radar, ClipboardCheck, Lock, Handshake,
   GitBranch, Settings, RefreshCcw, Network, CalendarClock, Layers, Workflow, Webhook, Sparkles,
   MessageSquare, ShoppingBag, PanelLeftClose, PanelLeftOpen, ShieldAlert,
-  Users2, Rocket,
+  Users2, Rocket, Container,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '@/components/ThemeProvider';
@@ -119,6 +119,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Infrastructure',
     defaultOpen: false,
     items: [
+      { label: 'TerraClaw',    href: '/terraclaw',    icon: Container, tag: 'IaC Sec' },
       { label: 'DevClaw',      href: '/devclaw',      icon: GitBranch, tag: 'DevSecOps' },
       { label: 'ConfigClaw',   href: '/configclaw',   icon: Settings,  tag: 'Hardening' },
       { label: 'ReleaseClaw',  href: '/releaseclaw',  icon: Rocket,    tag: 'Deploy' },
