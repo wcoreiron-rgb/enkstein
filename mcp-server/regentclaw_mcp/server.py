@@ -159,7 +159,22 @@ async def run_swarm_investigation(prompt: str, window: str = "24h") -> str:
     `prompt` (e.g. "investigate suspicious identity activity for user@corp.com").
     """
     try:
-        r = await _post("/swarm/jobs", {"objective": prompt, "window": window})
+        r = await _post("/swarm/jobs", {
+            "name": f"MCP Investigation — {prompt[:80]}",
+            "profile": "DEEP_INVESTIGATION",
+            "requested_by": "mcp-client",
+            "trigger_type": "mcp",
+            "classification": "internal",
+            "participants": ["devclaw", "threatclaw", "cloudclaw", "identityclaw"],
+            "task_type": "investigate_security_signal",
+            "input": {
+                "objective": prompt,
+                "time_range": window,
+                "source": "mcp",
+            },
+            "parallelism": 4,
+            "model_profile": "swarm_judge_profile",
+        })
         return (
             f"Swarm job created: {r.get('id', r.get('job_id', '?'))}\n"
             f"Status: {r.get('status', 'submitted')}\n"
