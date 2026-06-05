@@ -433,10 +433,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/attackpathclaw/task`
     - `/api/v1/automationclaw/task`
     - `/api/v1/configclaw/task`
+    - `/api/v1/terraclaw/task`
     - `/api/v1/exposureclaw/task`
     - `/api/v1/customclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
-  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed claw task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
+  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed claw task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/Terra/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
   - CloudClaw/EndpointClaw provider-scan failures now log sanitized provider context without raw exception payloads.
 - ModelClaw scaffold:
   - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
@@ -494,9 +495,9 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
      - `GET /api/v1/dashboard/control-center-summary`
    - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, execution gate status, and outbound channel reply health.
 
-## Platform Modules (24 Security Claws + 4 Core Surfaces + Core Engines)
+## Platform Modules (25 Security Claws + 4 Core Surfaces + Core Engines)
 
-### Security Domain Claws (24)
+### Security Domain Claws (25)
 
 | Module | Description |
 |--------|-------------|
@@ -513,6 +514,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 📱 AppClaw | Application Security — SAST, SCA, Snyk, Veracode |
 | ☁️ SaasClaw | SaaS Security Posture Management — Netskope, Zscaler |
 | ⚙️ ConfigClaw | Configuration Compliance — AWS Config, Azure Policy |
+| 🧱 TerraClaw | Terraform & IaC Security Governance — HCL review, secure generation, plan risk analysis, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
 | ✅ ComplianceClaw | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
 | 🔒 PrivacyClaw | Privacy & GDPR enforcement — OneTrust, TrustArc |
 | 🏢 VendorClaw | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |

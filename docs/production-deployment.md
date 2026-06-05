@@ -16,6 +16,7 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | Trust Fabric | Keep policy evaluation fail-closed for execution, remediation, model calls, connector calls, and evidence exports. |
 | CI security | Keep SBOM and dependency audit jobs enabled. Use `security/supply_chain_baseline.json` only for time-boxed accepted legacy findings. |
 | Release gates | Run production deployments through ReleaseClaw preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
+| Terraform/IaC gates | Run TerraClaw review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
 
 ## Minimum Environment Checklist
 
@@ -33,6 +34,19 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - Rollback plans/artifacts exist before non-dry-run deployments.
 
 ## ReleaseClaw Deployment Gates
+
+For Terraform-backed releases, run TerraClaw first:
+
+```http
+POST /api/v1/terraclaw/review
+POST /api/v1/terraclaw/plan
+```
+
+Attach the review and plan decisions to the ReleaseClaw preflight evidence for
+Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. TerraClaw identifies
+public network exposure, excessive IAM, hardcoded secrets, data-protection
+misconfiguration, missing diagnostics, and risky replacement/delete operations;
+ReleaseClaw then gates the execution handoff.
 
 ReleaseClaw is the deployment governance layer for production changes. It
 normalizes deployment paths such as GitHub Actions, GitLab CI, Jenkins, Azure

@@ -432,7 +432,7 @@
     <a class="sidebar-link" onclick="show('tf-agt')">Ring Policy &amp; Swarm</a>
 
     <div class="sidebar-section-title">The Claw System</div>
-    <a class="sidebar-link" onclick="show('claws-all')">24 Security Claws</a>
+    <a class="sidebar-link" onclick="show('claws-all')">25 Security Claws</a>
     <a class="sidebar-link" onclick="show('claws-pattern')">Claw Pattern</a>
     <a class="sidebar-link" onclick="show('claws-adapters')">Provider Adapters</a>
 
@@ -440,6 +440,7 @@
     <a class="sidebar-link" onclick="show('core-agents')">Swarm Orchestration</a>
     <a class="sidebar-link" onclick="show('core-triggers')">Channel Gateway</a>
     <a class="sidebar-link" onclick="show('core-scheduling')">Remediation Engine</a>
+    <a class="sidebar-link" onclick="show('core-terraclaw')">TerraClaw</a>
     <a class="sidebar-link" onclick="show('core-release')">ReleaseClaw</a>
     <a class="sidebar-link" onclick="show('core-approvals')">Approvals &amp; Ring Policy</a>
 
@@ -475,7 +476,7 @@
       <p>RegentClaw is a comprehensive security operations platform organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
-        <li><strong>24 Security Claws + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, and more. ModelClaw, CommandClaw, and ReleaseClaw sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
+        <li><strong>25 Security Claws + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. ModelClaw, CommandClaw, and ReleaseClaw sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
         <li><strong>Trust Fabric</strong> — The central zero-trust enforcement layer. Every action passes through a 6-stage pipeline: anomaly detection → policy evaluation → risk scoring → audit log → decision. Includes Execution Ring Policy (ring0–ring3 privilege isolation) and SRE Engine (circuit breaker, error budget).</li>
         <li><strong>CoreOS</strong> — The orchestration layer managing agents, Swarm multi-agent jobs, multi-step workflows, event-driven triggers, scheduled jobs, Channel Gateway command ingestion, and human approval flows with dual-approval enforcement.</li>
       </ul>
@@ -1055,9 +1056,9 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       </ul>
     </div>
 
-    <!-- ─── 24 SECURITY CLAWS ─── -->
+    <!-- ─── 25 SECURITY CLAWS ─── -->
     <div id="sec-claws-all" class="doc-section">
-      <h1>24 Security Claws</h1>
+      <h1>25 Security Claws</h1>
       <p class="lead">Each security claw is a self-contained domain module with standardized endpoints, provider adapters, findings, and focused task execution. ModelClaw, CommandClaw, and ReleaseClaw are documented separately as core control surfaces.</p>
 
       <table>
@@ -1076,6 +1077,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
           <tr><td>📱 AppClaw</td><td>Application Security</td><td><span class="badge badge-purple">Phase 2</span></td><td>Snyk, Semgrep, Checkmarx</td></tr>
           <tr><td>☁️ SaasClaw</td><td>SaaS Security Posture</td><td><span class="badge badge-purple">Phase 2</span></td><td>Obsidian, AppOmni, custom</td></tr>
           <tr><td>⚙️ ConfigClaw</td><td>Configuration Compliance</td><td><span class="badge badge-purple">Phase 2</span></td><td>AWS Config, Azure Policy, Chef InSpec</td></tr>
+          <tr><td>🧱 TerraClaw</td><td>Terraform &amp; IaC Security Governance</td><td><span class="badge badge-purple">Phase 2</span></td><td>Terraform Cloud, tfsec/Trivy, Checkov, Infracost</td></tr>
           <tr><td>✅ ComplianceClaw</td><td>Compliance Frameworks</td><td><span class="badge badge-purple">Phase 2</span></td><td>Drata, Vanta, custom</td></tr>
           <tr><td>🔒 PrivacyClaw</td><td>Privacy &amp; GDPR</td><td><span class="badge badge-gray">Phase 3</span></td><td>OneTrust, custom</td></tr>
           <tr><td>🏢 VendorClaw</td><td>Third-Party Risk</td><td><span class="badge badge-gray">Phase 3</span></td><td>BitSight, SecurityScorecard</td></tr>
@@ -1094,7 +1096,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
     <!-- ─── CLAW PATTERN ─── -->
     <div id="sec-claws-pattern" class="doc-section">
       <h1>The Claw Pattern</h1>
-      <p class="lead">All 24 security claws follow a consistent implementation pattern. This makes claws predictable to develop, test, and integrate with the Trust Fabric.</p>
+      <p class="lead">All 25 security claws follow a consistent implementation pattern. This makes claws predictable to develop, test, and integrate with the Trust Fabric.</p>
 
       <h2>Directory Structure</h2>
       <pre>backend/app/claws/
@@ -1130,6 +1132,11 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         <span class="endpoint-path">/scan</span>
         <span class="endpoint-desc">Trigger a new scan (routes through Trust Fabric)</span>
       </div>
+      <div class="endpoint-row">
+        <span class="method method-post">POST</span>
+        <span class="endpoint-path">/task</span>
+        <span class="endpoint-desc">Execute a focused Swarm assignment and return the standard Swarm Task Contract</span>
+      </div>
 
       <h2>Routes File Template</h2>
       <pre><span class="c-kw">from</span> fastapi <span class="c-kw">import</span> APIRouter, Depends
@@ -1150,7 +1157,10 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
 <span class="c-kw">async def</span> get_providers(): ...
 
 @router.post(<span class="c-str">"/scan"</span>, dependencies=[Depends(require_authorization)])
-<span class="c-kw">async def</span> run_scan(): ...</pre>
+<span class="c-kw">async def</span> run_scan(): ...
+
+@router.post(<span class="c-str">"/task"</span>, dependencies=[Depends(require_authorization)])
+<span class="c-kw">async def</span> run_task(): ...</pre>
     </div>
 
     <!-- ─── PROVIDER ADAPTERS ─── -->
@@ -1303,6 +1313,37 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
       </div>
       <div class="callout tip">
         <strong>Reliability note:</strong> Deleting schedules with historical runs is supported; the backend now safely detaches linked run schedule references before deletion.
+      </div>
+    </div>
+
+    <!-- ─── COREOS: TERRACLAW ─── -->
+    <div id="sec-core-terraclaw" class="doc-section">
+      <h1>TerraClaw</h1>
+      <p class="lead">TerraClaw is the Terraform and infrastructure-as-code governance claw. It reviews HCL, generates secure Terraform templates, analyzes Terraform plan risk before apply, and participates in Swarm investigations through the standard task contract.</p>
+
+      <h2>What TerraClaw Covers</h2>
+      <ul>
+        <li><strong>HCL review:</strong> local rule checks for public network exposure, weak data protection, excessive IAM permissions, hardcoded secrets, missing diagnostics, and risky Kubernetes control plane settings.</li>
+        <li><strong>Secure generation:</strong> approved Terraform templates for common cloud patterns with private networking, encryption, diagnostic logging, and secret-management defaults.</li>
+        <li><strong>Plan analysis:</strong> pre-apply review of creates, updates, deletes, replacements, and sensitive attribute changes with APPROVE / WARN / BLOCK decisions.</li>
+        <li><strong>Compliance mapping:</strong> findings map to CIS AWS, CIS Azure, NIST, SOC 2, ISO 27001, PCI-DSS, and OWASP sensitive-data controls where applicable.</li>
+      </ul>
+
+      <h2>Provider Surfaces</h2>
+      <p>TerraClaw exposes provider status for Terraform Cloud, tfsec/Trivy, Checkov, and Infracost. Current runtime behavior includes deterministic rule review, seeded fallback findings, scan persistence, connector-state metadata, and Swarm task output; deeper live provider-backed ingestion remains an adapter expansion area.</p>
+
+      <h2>Core Endpoints</h2>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/stats</span><span class="endpoint-desc">Summary counts and secure score</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/findings</span><span class="endpoint-desc">Normalized Terraform/IaC findings using 0-100 risk scores</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/providers</span><span class="endpoint-desc">Terraform Cloud, tfsec/Trivy, Checkov, and Infracost connector status</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/review</span><span class="endpoint-desc">Trust Fabric-gated Terraform HCL security review</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/generate</span><span class="endpoint-desc">Generate secure Terraform from a natural-language description</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/plan</span><span class="endpoint-desc">Analyze Terraform plan changes before apply</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/scan</span><span class="endpoint-desc">Persist seeded or connector-backed TerraClaw findings through the finding pipeline</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/task</span><span class="endpoint-desc">Focused Swarm assignment output for IaC investigations</span></div>
+
+      <div class="callout">
+        <strong>Deployment relationship:</strong> TerraClaw reviews Terraform/IaC risk. ReleaseClaw gates the broader deployment handoff. A Terraform apply should use TerraClaw review/plan evidence before ReleaseClaw approves execution.
       </div>
     </div>
 

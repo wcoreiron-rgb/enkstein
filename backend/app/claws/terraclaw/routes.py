@@ -16,6 +16,17 @@ router = APIRouter(prefix="/terraclaw", tags=["TerraClaw"])
 
 CLAW_NAME = "terraclaw"
 
+
+def _normalize_risk_score(value) -> float:
+    try:
+        score = float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0 < score <= 1:
+        return round(score * 100, 2)
+    return round(score, 2)
+
+
 PROVIDER_MAP = [
     {"provider": "terraform_cloud", "label": "Terraform Cloud",  "connector_type": "terraform_cloud"},
     {"provider": "tfsec",           "label": "tfsec / Trivy",    "connector_type": "tfsec"},
@@ -875,7 +886,13 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             for p in PROVIDER_MAP if p.get("connector_type")
         ])
         if not any_configured:
-            return _FINDINGS
+            return [
+                {
+                    **f,
+                    "risk_score": _normalize_risk_score(f.get("risk_score")),
+                }
+                for f in _FINDINGS
+            ]
         return []
     return [
         {
@@ -890,7 +907,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             "resource_type": f.resource_type,
             "resource_name": f.resource_name,
             "region": f.region,
-            "risk_score": f.risk_score,
+            "risk_score": _normalize_risk_score(f.risk_score),
             "remediation": f.remediation,
             "remediation_effort": f.remediation_effort,
             "first_seen": f.first_seen.isoformat() if f.first_seen else None,
@@ -1182,7 +1199,7 @@ async def run_terra_task(payload: TerraTaskRequest, db: AsyncSession = Depends(g
         [float(f.risk_score or 0.0) for f in findings],
         default=max([float(f.get("risk_score") or 0.0) for f in fallback], default=0.0),
     )
-    max_risk = int(max_risk_raw * 100) if max_risk_raw <= 1.0 else int(max_risk_raw)
+    max_risk = int(_normalize_risk_score(max_risk_raw))
     severity = "critical" if max_risk >= 85 else "high" if max_risk >= 70 else "medium" if max_risk >= 40 else "low"
     confidence = 0.91 if findings else 0.78
     elapsed_ms = int((datetime.utcnow() - started).total_seconds() * 1000)

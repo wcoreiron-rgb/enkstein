@@ -64,6 +64,10 @@ CONNECTOR_TO_CLAWS: dict[str, list[str]] = {
     "gitlab":            ["devclaw", "appclaw", "releaseclaw"],
     "snyk":              ["appclaw", "devclaw"],
     "checkmarx":         ["appclaw"],
+    "terraform_cloud":   ["terraclaw", "releaseclaw"],
+    "tfsec":             ["terraclaw"],
+    "checkov":           ["terraclaw"],
+    "infracost":         ["terraclaw"],
 
     # Compliance
     "drata":             ["complianceclaw"],
@@ -111,6 +115,7 @@ CLAW_SCAN_PATHS: dict[str, str] = {
     "intelclaw":       "/intelclaw/scan",
     "recoveryclaw":    "/recoveryclaw/scan",
     "releaseclaw":     "/releaseclaw/scan",
+    "terraclaw":       "/terraclaw/scan",
     "identityclaw":    "/identityclaw/scan",
 }
 

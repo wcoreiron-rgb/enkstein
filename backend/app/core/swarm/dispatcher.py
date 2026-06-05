@@ -33,6 +33,7 @@ from app.claws.privacyclaw.routes import PrivacyTaskRequest, run_privacy_task
 from app.claws.recoveryclaw.routes import RecoveryTaskRequest, run_recovery_task
 from app.claws.releaseclaw.routes import ReleaseTaskRequest, run_release_task
 from app.claws.saasclaw.routes import SaaSTaskRequest, run_saas_task
+from app.claws.terraclaw.routes import TerraTaskRequest, run_terra_task
 from app.claws.threatclaw.routes import ThreatTaskRequest, run_task as run_threat_task
 from app.claws.userclaw.routes import UserTaskRequest, run_user_task
 from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
@@ -300,6 +301,8 @@ async def _execute_real_task_if_supported(
         output = await run_recovery_task(RecoveryTaskRequest(**payload), db)
     elif claw == "releaseclaw":
         output = await run_release_task(ReleaseTaskRequest(**payload), db)
+    elif claw == "terraclaw":
+        output = await run_terra_task(TerraTaskRequest(**payload), db)
     elif claw == "saasclaw":
         output = await run_saas_task(SaaSTaskRequest(**payload), db)
     elif claw == "privacyclaw":

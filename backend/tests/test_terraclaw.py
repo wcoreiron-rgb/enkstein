@@ -30,6 +30,7 @@ async def test_terraclaw_findings_returns_seeded(client: AsyncClient):
     assert "title" in f
     assert "severity" in f
     assert "resource_type" in f
+    assert f["risk_score"] > 1
 
 
 # ─── /providers ──────────────────────────────────────────────────────────────
