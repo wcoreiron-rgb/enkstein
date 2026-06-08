@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   db:
     image: postgres:16-alpine
@@ -75,10 +73,6 @@ services:
       # Setting it to http://localhost:8000 would make the browser try to reach
       # the backend directly, which fails from inside Docker.
       INTERNAL_API_URL: http://backend:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
       - backend
     restart: unless-stopped
