@@ -335,6 +335,39 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.6.4 — TerraClaw Terraform MCP Agent Generation                 -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">TerraClaw Terraform MCP Agent Generation</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">TerraClaw</span>
+          <span class="tag tag-feat">MCP</span>
+          <span class="tag tag-sec">IaC Security</span>
+          <span class="release-date">June 8, 2026 &nbsp;·&nbsp; v0.6.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice turns TerraClaw Generate into an agent-style Terraform workspace: operators can describe infrastructure, receive governed Terraform output, inspect MCP trace/artifacts/controls, and hand the result into Review or Plan Analysis.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Terraform MCP provider:</strong> TerraClaw now reports Terraform MCP as a provider surface and maps the <code>terraform_mcp</code> connector to TerraClaw.</li>
+          <li><strong>MCP tools:</strong> the RegentClaw MCP server exposes <code>terraclaw_generate_secure_terraform</code>, <code>terraclaw_review_hcl</code>, and <code>terraclaw_analyze_plan</code>.</li>
+          <li><strong>Agent response contract:</strong> <code>/api/v1/terraclaw/generate</code> returns MCP mode, agent trace, output artifacts, applied controls, framework metadata, and next actions.</li>
+          <li><strong>Cloud coverage:</strong> added a secure GCP Cloud SQL PostgreSQL template with private networking, encrypted storage, backups, SSL-only connections, and deletion protection.</li>
+          <li><strong>Generate UI:</strong> the TerraClaw Generate tab now behaves like a chat-style agent surface with Review and Plan handoff buttons.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.6.3 — Docker Frontend Runtime Stabilization                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

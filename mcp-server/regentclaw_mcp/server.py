@@ -184,6 +184,77 @@ async def run_swarm_investigation(prompt: str, window: str = "24h") -> str:
         return _safe(str(e))
 
 
+@mcp.tool()
+async def terraclaw_generate_secure_terraform(
+    description: str,
+    cloud: str = "azure",
+    environment: str = "dev",
+    workspace: str = "default",
+) -> str:
+    """
+    Ask TerraClaw to generate secure Terraform from a natural-language deployment
+    request. The backend runs Trust Fabric policy checks and TerraClaw review
+    before returning the module. Use for secure-by-default IaC drafts.
+    """
+    try:
+        r = await _post("/terraclaw/generate", {
+            "description": description,
+            "cloud": cloud.lower(),
+            "environment": environment,
+            "workspace": workspace,
+        })
+        return (
+            f"Decision: {r.get('decision')} | Risk: {r.get('risk_score')}/100 | "
+            f"Secure Score: {r.get('secure_score')}/100\n"
+            f"Template: {r.get('template_name', r.get('template_used'))}\n"
+            f"Generate ID: {r.get('generate_id')}\n\n"
+            f"{r.get('terraform', '')}"
+        )
+    except Exception as e:  # noqa: BLE001
+        return _safe(str(e))
+
+
+@mcp.tool()
+async def terraclaw_review_hcl(hcl: str, context: str = "") -> str:
+    """
+    Review Terraform HCL with TerraClaw's governed rule engine. Returns the
+    APPROVE/WARN/BLOCK decision, risk score, and remediation findings.
+    """
+    try:
+        r = await _post("/terraclaw/review", {"hcl": hcl, "context": context})
+        findings = r.get("findings") or []
+        lines = [
+            f"Decision: {r.get('decision')} | Risk: {r.get('risk_score')}/100 | "
+            f"Secure Score: {r.get('secure_score')}/100",
+            f"Findings: {r.get('finding_count', len(findings))}",
+        ]
+        for f in findings[:8]:
+            lines.append(f"- [{f.get('severity')}] {f.get('id')}: {f.get('name')} — {f.get('remediation')}")
+        return "\n".join(lines)
+    except Exception as e:  # noqa: BLE001
+        return _safe(str(e))
+
+
+@mcp.tool()
+async def terraclaw_analyze_plan(changes: list[dict], context: str = "") -> str:
+    """
+    Analyze Terraform plan changes before apply. Pass a normalized list of
+    changes with action, resource_type, resource_name, and attribute_changes.
+    """
+    try:
+        r = await _post("/terraclaw/plan", {"changes": changes, "context": context})
+        risky = r.get("risky_changes") or []
+        lines = [
+            f"Decision: {r.get('decision')} | Risk: {r.get('risk_score')}/100",
+            f"Changes: {r.get('summary', {}).get('total_changes', len(changes))} | Risky: {len(risky)}",
+        ]
+        for item in risky[:8]:
+            lines.append(f"- [{item.get('severity')}] {item.get('resource')}: {item.get('reason')}")
+        return "\n".join(lines)
+    except Exception as e:  # noqa: BLE001
+        return _safe(str(e))
+
+
 def main() -> None:
     """Console-script entrypoint. Uses stdio transport (editor default)."""
     mcp.run()

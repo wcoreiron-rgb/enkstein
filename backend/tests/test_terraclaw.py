@@ -175,6 +175,11 @@ async def test_generate_azure_sql(client: AsyncClient):
     assert "terraform" in d
     assert "azurerm_mssql_server" in d["terraform"]
     assert "private_endpoint" in d["terraform"].lower() or "private_endpoint" in d["terraform"]
+    assert d["template_used"] == "azure_sql"
+    assert d["template_name"] == "Secure Azure SQL Server with Private Endpoint"
+    assert d["mcp"]["tool"] == "terraclaw_generate_secure_terraform"
+    assert d["artifacts"][0]["path"] == "main.tf"
+    assert "TC-NET-004" in d["controls_applied"]
     # Generated templates use secure defaults — should never BLOCK
     assert d["decision"] in ("APPROVE", "WARN")
     assert d["risk_score"] < 70
@@ -202,6 +207,24 @@ async def test_generate_aks_cluster(client: AsyncClient):
     d = r.json()
     assert "azurerm_kubernetes_cluster" in d["terraform"]
     assert "private_cluster_enabled" in d["terraform"]
+
+
+@pytest.mark.asyncio
+async def test_generate_gcp_cloud_sql(client: AsyncClient):
+    r = await client.post("/api/v1/terraclaw/generate", json={
+        "description": "Create a secure GCP Cloud SQL postgres database with private networking",
+        "cloud": "gcp",
+        "environment": "prod",
+        "workspace": "gcp-platform",
+    })
+    assert r.status_code == 200
+    d = r.json()
+    assert d["template_used"] == "gcp_cloud_sql"
+    assert d["cloud"] == "gcp"
+    assert d["environment"] == "prod"
+    assert "google_sql_database_instance" in d["terraform"]
+    assert "ipv4_enabled    = false" in d["terraform"]
+    assert "TC-NET-004" in d["controls_applied"]
 
 
 @pytest.mark.asyncio

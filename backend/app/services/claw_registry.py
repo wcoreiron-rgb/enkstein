@@ -65,6 +65,7 @@ CONNECTOR_TO_CLAWS: dict[str, list[str]] = {
     "snyk":              ["appclaw", "devclaw"],
     "checkmarx":         ["appclaw"],
     "terraform_cloud":   ["terraclaw", "releaseclaw"],
+    "terraform_mcp":     ["terraclaw"],
     "tfsec":             ["terraclaw"],
     "checkov":           ["terraclaw"],
     "infracost":         ["terraclaw"],

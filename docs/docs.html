@@ -1329,27 +1329,30 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
       <ul>
         <li><strong>Natural-language build wizard:</strong> <code>POST /api/v1/terraclaw/build</code> turns an operator request into a hardened Terraform module after ArcClaw prompt-injection scanning and Trust Fabric policy evaluation.</li>
         <li><strong>HCL review:</strong> local rule checks for public network exposure, weak data protection, excessive IAM permissions, hardcoded secrets, missing diagnostics, and risky Kubernetes control plane settings.</li>
-        <li><strong>Secure generation:</strong> approved Terraform templates for common cloud patterns with private networking, encryption, diagnostic logging, and secret-management defaults.</li>
+        <li><strong>Agentic secure generation:</strong> approved Terraform templates for common cloud patterns with private networking, encryption, diagnostic logging, and secret-management defaults. The Generate surface now behaves like a TerraClaw agent session with Terraform MCP trace, module artifacts, applied controls, and handoffs into Review and Plan Analysis.</li>
         <li><strong>Plan analysis:</strong> pre-apply review of creates, updates, deletes, replacements, and sensitive attribute changes with APPROVE / WARN / BLOCK decisions.</li>
         <li><strong>Compliance mapping:</strong> findings map to CIS AWS, CIS Azure, NIST, SOC 2, ISO 27001, PCI-DSS, and OWASP sensitive-data controls where applicable.</li>
       </ul>
 
       <h2>Provider Surfaces</h2>
-      <p>TerraClaw exposes provider status for Terraform Cloud, tfsec/Trivy, Checkov, and Infracost. Current runtime behavior includes deterministic rule review, seeded fallback findings, scan persistence, connector-state metadata, and Swarm task output; deeper live provider-backed ingestion remains an adapter expansion area.</p>
+      <p>TerraClaw exposes provider status for Terraform MCP, Terraform Cloud, tfsec/Trivy, Checkov, and Infracost. Current runtime behavior includes deterministic rule review, secure Terraform generation, MCP-callable tools through the RegentClaw MCP server, seeded fallback findings, scan persistence, connector-state metadata, and Swarm task output; deeper live provider-backed ingestion remains an adapter expansion area.</p>
 
       <h2>Core Endpoints</h2>
       <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/stats</span><span class="endpoint-desc">Summary counts and secure score</span></div>
       <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/findings</span><span class="endpoint-desc">Normalized Terraform/IaC findings using 0-100 risk scores</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/providers</span><span class="endpoint-desc">Terraform Cloud, tfsec/Trivy, Checkov, and Infracost connector status</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/providers</span><span class="endpoint-desc">Terraform MCP, Terraform Cloud, tfsec/Trivy, Checkov, and Infracost connector status</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/build</span><span class="endpoint-desc">Natural-language Terraform module builder with ArcClaw input scan and secure output review</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/review</span><span class="endpoint-desc">Trust Fabric-gated Terraform HCL security review</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/generate</span><span class="endpoint-desc">Generate secure Terraform from a natural-language description</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/generate</span><span class="endpoint-desc">Generate secure Terraform from a natural-language description with MCP trace, artifacts, controls, and review evidence</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/plan</span><span class="endpoint-desc">Analyze Terraform plan changes before apply</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/scan</span><span class="endpoint-desc">Persist seeded or connector-backed TerraClaw findings through the finding pipeline</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/task</span><span class="endpoint-desc">Focused Swarm assignment output for IaC investigations</span></div>
 
       <div class="callout">
         <strong>Deployment relationship:</strong> TerraClaw reviews Terraform/IaC risk. ReleaseClaw gates the broader deployment handoff. A Terraform apply should use TerraClaw build/review/plan evidence before ReleaseClaw approves execution.
+      </div>
+      <div class="callout">
+        <strong>MCP relationship:</strong> The RegentClaw MCP server now exposes TerraClaw tools for secure Terraform generation, HCL review, and plan analysis, so external coding agents can ask TerraClaw for governed IaC output without bypassing Trust Fabric.
       </div>
     </div>
 

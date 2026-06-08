@@ -43,20 +43,28 @@ For Terraform-backed releases, run TerraClaw first:
 ```http
 POST /api/v1/terraclaw/build
 POST /api/v1/terraclaw/review
+POST /api/v1/terraclaw/generate
 POST /api/v1/terraclaw/plan
 ```
 
 Use `build` when an operator wants a secure Terraform module from plain
-English. Use `review` for existing `.tf` content. Use `plan` before apply to
-detect risky creates, deletes, replacements, public network exposure, weak data
-protection, hardcoded secrets, excessive IAM, missing diagnostics, and other
-high-risk IaC changes.
+English. Use `generate` for the TerraClaw agent/MCP path, which returns
+Terraform module output, artifacts, applied controls, Trust Fabric metadata, and
+security-review evidence. Use `review` for existing `.tf` content. Use `plan`
+before apply to detect risky creates, deletes, replacements, public network
+exposure, weak data protection, hardcoded secrets, excessive IAM, missing
+diagnostics, and other high-risk IaC changes.
 
-Attach the build, review, and plan decisions to the ReleaseClaw preflight
+Attach the build/generate, review, and plan decisions to the ReleaseClaw preflight
 evidence for Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. TerraClaw
 identifies public network exposure, excessive IAM, hardcoded secrets,
 data-protection misconfiguration, missing diagnostics, and risky
 replacement/delete operations; ReleaseClaw then gates the execution handoff.
+
+External coding agents can use the RegentClaw MCP server tools
+`terraclaw_generate_secure_terraform`, `terraclaw_review_hcl`, and
+`terraclaw_analyze_plan`; the MCP server forwards to the backend API and does
+not execute Terraform locally or hold provider credentials.
 
 ## ReleaseClaw Deployment Gates
 

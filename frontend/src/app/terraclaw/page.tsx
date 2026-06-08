@@ -4,7 +4,8 @@ import {
   Container, RefreshCw, Plug, ChevronDown, ChevronRight,
   ShieldCheck, ShieldAlert, ShieldX, AlertTriangle,
   Code2, Wand2, FileSearch, ClipboardList, BarChart3,
-  Copy, CheckCheck, ExternalLink,
+  Copy, CheckCheck, ExternalLink, Bot, User, Send, TerminalSquare,
+  Network, Layers3, Route, Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
@@ -43,8 +44,19 @@ interface GenerateResult {
   secure_score: number;
   terraform: string;
   template_used: string;
+  template_name?: string;
+  cloud: string;
+  workspace: string;
+  environment: string;
+  output_mode: string;
+  mcp?: { server: string; tool: string; mode: string; terraform_cloud_ready: boolean };
+  agent_trace?: Array<{ step: string; status: string; detail: string }>;
+  artifacts?: Array<{ path: string; type: string; bytes?: number; variables?: string[]; template?: string }>;
+  controls_applied?: string[];
+  frameworks_impacted?: Record<string, number>;
   security_review: { finding_count: number; findings: ReviewFinding[] };
   notes: string[];
+  next_actions?: Array<{ label: string; target: string; type: string }>;
   execution_time_ms: number;
 }
 
@@ -167,6 +179,16 @@ function ReviewTab() {
   const [result, setResult] = useState<ReviewResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ hcl?: string; context?: string }>).detail;
+      if (detail?.hcl) setHcl(detail.hcl);
+      if (detail?.context) setContext(detail.context);
+    };
+    window.addEventListener('terraclaw:set-review-hcl', handler);
+    return () => window.removeEventListener('terraclaw:set-review-hcl', handler);
+  }, []);
 
   const handleReview = async () => {
     if (hcl.trim().length < 10) return;
@@ -294,27 +316,86 @@ function ReviewTab() {
 function GenerateTab() {
   const [description, setDescription] = useState('');
   const [cloud, setCloud] = useState<'azure' | 'aws' | 'gcp'>('azure');
+  const [environment, setEnvironment] = useState('prod');
+  const [workspace, setWorkspace] = useState('platform-secure-iac');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [chat, setChat] = useState<Array<{ role: 'user' | 'agent'; text: string; id: string }>>([
+    {
+      id: 'welcome',
+      role: 'agent',
+      text: 'Describe the infrastructure you want. TerraClaw will choose a secure Terraform module, run Trust Fabric, review the HCL, and return artifacts you can send to plan analysis.',
+    },
+  ]);
 
   const handleGenerate = async () => {
     if (description.trim().length < 5) return;
     setLoading(true);
     setError(null);
     setResult(null);
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user' as const,
+      text: description.trim(),
+    };
+    setChat(prev => [...prev, userMessage]);
     try {
       const res = await apiFetch<GenerateResult>('/terraclaw/generate', {
         method: 'POST',
-        body: JSON.stringify({ description, cloud }),
+        body: JSON.stringify({ description, cloud, environment, workspace, output_mode: 'module' }),
       });
       setResult(res);
+      setChat(prev => [
+        ...prev,
+        {
+          id: res.generate_id,
+          role: 'agent',
+          text: `${res.decision}: generated ${res.template_name ?? res.template_used} with risk ${res.risk_score}/100 and secure score ${res.secure_score}/100.`,
+        },
+      ]);
     } catch (e: any) {
       setError(e?.message ?? 'Generation failed');
+      setChat(prev => [...prev, { id: `err-${Date.now()}`, role: 'agent', text: `Generation failed: ${e?.message ?? 'Unknown error'}` }]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const sendToReview = () => {
+    if (!result) return;
+    window.dispatchEvent(new CustomEvent('terraclaw:switch-tab', { detail: { tab: 'review' } }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('terraclaw:set-review-hcl', {
+        detail: {
+          hcl: result.terraform,
+          context: `${result.template_name ?? result.template_used} · ${result.cloud}/${result.environment} · ${result.generate_id}`,
+        },
+      }));
+    }, 0);
+  };
+
+  const sendToPlan = () => {
+    if (!result) return;
+    const resources = result.artifacts?.find(a => a.path === 'main.tf');
+    const sample = JSON.stringify([
+      {
+        action: 'create',
+        resource_type: result.template_used,
+        resource_name: result.template_name ?? result.template_used,
+        attribute_changes: { source: resources?.path ?? 'main.tf', generated_by: result.generate_id },
+      },
+    ], null, 2);
+    window.dispatchEvent(new CustomEvent('terraclaw:switch-tab', { detail: { tab: 'plan' } }));
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('terraclaw:set-plan-json', {
+        detail: {
+          planJson: sample,
+          context: `Plan pre-check for ${result.generate_id}`,
+        },
+      }));
+    }, 0);
   };
 
   const EXAMPLES = [
@@ -326,58 +407,113 @@ function GenerateTab() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="text-sm font-medium mb-2 block" style={{ color: 'var(--rc-text-1)' }}>Describe what you want to deploy</label>
-        <textarea
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          placeholder="e.g. Deploy a secure Azure SQL Server with Private Endpoint and Entra ID admin login"
-          rows={3}
-          className="w-full rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)] text-sm px-3 py-2 focus:outline-none focus:border-regent-500 resize-none"
-          style={{ color: 'var(--rc-text-1)' }}
-        />
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)] gap-4">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)]">
+          <div className="border-b border-white/10 px-4 py-3 flex items-center gap-2">
+            <Bot className="w-4 h-4 text-orange-300" />
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>TerraClaw Agent</p>
+              <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>Terraform MCP · Trust Fabric · secure module generation</p>
+            </div>
+          </div>
+          <div className="p-4 space-y-3 max-h-[360px] overflow-auto">
+            {chat.map(msg => (
+              <div key={msg.id} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.role === 'agent' && <Bot className="w-5 h-5 mt-1 text-orange-300 flex-shrink-0" />}
+                <div className={`max-w-[86%] rounded-lg px-3 py-2 text-sm border ${
+                  msg.role === 'user'
+                    ? 'bg-regent-900/40 border-regent-700 text-regent-100'
+                    : 'bg-white/5 border-white/10'
+                }`} style={msg.role === 'agent' ? { color: 'var(--rc-text-2)' } : {}}>
+                  {msg.text}
+                </div>
+                {msg.role === 'user' && <User className="w-5 h-5 mt-1 text-regent-300 flex-shrink-0" />}
+              </div>
+            ))}
+            {loading && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}>
+                <RefreshCw className="w-4 h-4 animate-spin" /> TerraClaw is selecting module, applying policy, and reviewing HCL…
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-2 block" style={{ color: 'var(--rc-text-1)' }}>Describe what you want to deploy</label>
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            placeholder="e.g. Create Azure SQL with private endpoint, Defender, diagnostics, Key Vault-ready variables, and no public network access"
+            rows={4}
+            className="w-full rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)] text-sm px-3 py-2 focus:outline-none focus:border-regent-500 resize-none"
+            style={{ color: 'var(--rc-text-1)' }}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {EXAMPLES.map(ex => (
+            <button
+              key={ex}
+              onClick={() => setDescription(ex)}
+              className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/10 transition-colors text-left"
+              style={{ color: 'var(--rc-text-3)' }}
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--rc-text-2)' }}>Workspace</label>
+            <input
+              value={workspace}
+              onChange={e => setWorkspace(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)] text-sm px-3 py-2 focus:outline-none focus:border-regent-500"
+              style={{ color: 'var(--rc-text-1)' }}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--rc-text-2)' }}>Environment</label>
+            <input
+              value={environment}
+              onChange={e => setEnvironment(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)] text-sm px-3 py-2 focus:outline-none focus:border-regent-500"
+              style={{ color: 'var(--rc-text-1)' }}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="text-sm font-medium" style={{ color: 'var(--rc-text-2)' }}>Cloud:</label>
+          {(['azure', 'aws', 'gcp'] as const).map(c => (
+            <button
+              key={c}
+              onClick={() => setCloud(c)}
+              className={`text-sm px-3 py-1 rounded border transition-colors ${
+                cloud === c
+                  ? 'border-regent-500 bg-regent-900/40 text-regent-300'
+                  : 'border-white/10 hover:bg-white/10'
+              }`}
+              style={cloud !== c ? { color: 'var(--rc-text-2)' } : {}}
+            >
+              {c.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={handleGenerate}
+          disabled={loading || description.trim().length < 5}
+          className="px-4 py-2 rounded-lg bg-regent-600 hover:bg-regent-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          {loading ? 'Generating…' : 'Generate Secure Terraform'}
+        </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {EXAMPLES.map(ex => (
-          <button
-            key={ex}
-            onClick={() => setDescription(ex)}
-            className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/10 transition-colors text-left"
-            style={{ color: 'var(--rc-text-3)' }}
-          >
-            {ex}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <label className="text-sm font-medium" style={{ color: 'var(--rc-text-2)' }}>Cloud:</label>
-        {(['azure', 'aws', 'gcp'] as const).map(c => (
-          <button
-            key={c}
-            onClick={() => setCloud(c)}
-            className={`text-sm px-3 py-1 rounded border transition-colors ${
-              cloud === c
-                ? 'border-regent-500 bg-regent-900/40 text-regent-300'
-                : 'border-white/10 hover:bg-white/10'
-            }`}
-            style={cloud !== c ? { color: 'var(--rc-text-2)' } : {}}
-          >
-            {c.toUpperCase()}
-          </button>
-        ))}
-      </div>
-
-      <button
-        onClick={handleGenerate}
-        disabled={loading || description.trim().length < 5}
-        className="px-4 py-2 rounded-lg bg-regent-600 hover:bg-regent-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-      >
-        {loading && <RefreshCw className="w-4 h-4 animate-spin" />}
-        {loading ? 'Generating…' : 'Generate Secure Terraform'}
-      </button>
+      <div className="space-y-4">
 
       {error && (
         <div className="p-3 rounded-lg bg-red-900/20 border border-red-800 text-sm text-red-300">{error}</div>
@@ -386,6 +522,51 @@ function GenerateTab() {
       {result && (
         <div className="space-y-4 mt-2">
           <DecisionBanner decision={result.decision} risk_score={result.risk_score} secure_score={result.secure_score} />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide" style={{ color: 'var(--rc-text-3)' }}>
+                <Network className="w-4 h-4" /> MCP Mode
+              </div>
+              <p className="mt-1 text-sm font-semibold text-orange-300">{result.mcp?.mode ?? 'local_guarded_fallback'}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{result.mcp?.server ?? 'regentclaw-mcp'} · {result.mcp?.tool ?? 'generate'}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide" style={{ color: 'var(--rc-text-3)' }}>
+                <Layers3 className="w-4 h-4" /> Module
+              </div>
+              <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{result.template_name ?? result.template_used}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{result.cloud.toUpperCase()} · {result.environment} · {result.workspace}</p>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide" style={{ color: 'var(--rc-text-3)' }}>
+                <Route className="w-4 h-4" /> Next Gates
+              </div>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <button onClick={sendToReview} className="text-xs px-2 py-1 rounded border border-green-800 bg-green-900/20 text-green-300 hover:bg-green-900/30">Review</button>
+                <button onClick={sendToPlan} className="text-xs px-2 py-1 rounded border border-blue-800 bg-blue-900/20 text-blue-300 hover:bg-blue-900/30">Plan</button>
+              </div>
+            </div>
+          </div>
+
+          {result.agent_trace && result.agent_trace.length > 0 && (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
+                <Sparkles className="w-4 h-4 text-orange-300" /> Agent Trace
+              </h3>
+              <div className="space-y-2">
+                {result.agent_trace.map(step => (
+                  <div key={step.step} className="flex gap-2 text-xs">
+                    <span className="mt-1 w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                    <div>
+                      <span className="font-mono text-regent-300">{step.step}</span>
+                      <span className="ml-2" style={{ color: 'var(--rc-text-3)' }}>{step.detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -420,6 +601,36 @@ function GenerateTab() {
             </div>
           )}
 
+          {result.artifacts && result.artifacts.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2 flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
+                <TerminalSquare className="w-4 h-4 text-regent-300" /> Output Artifacts
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {result.artifacts.map(a => (
+                  <div key={a.path} className="rounded-lg border border-white/10 bg-white/5 p-3">
+                    <p className="text-sm font-mono" style={{ color: 'var(--rc-text-1)' }}>{a.path}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{a.type}{a.bytes ? ` · ${a.bytes} bytes` : ''}</p>
+                    {a.variables && a.variables.length > 0 && (
+                      <p className="text-xs mt-1 text-regent-300">{a.variables.length} variables</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {result.controls_applied && result.controls_applied.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--rc-text-1)' }}>Controls Applied</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {result.controls_applied.map(ctrl => (
+                  <span key={ctrl} className="text-xs px-2 py-0.5 rounded bg-regent-900/40 border border-regent-800 text-regent-300">{ctrl}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {result.notes.length > 0 && (
             <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-800 space-y-1">
               {result.notes.map((n, i) => (
@@ -433,6 +644,16 @@ function GenerateTab() {
           </p>
         </div>
       )}
+      {!result && !error && (
+        <div className="rounded-lg border border-dashed border-white/15 bg-white/5 p-8 text-center">
+          <Wand2 className="w-8 h-8 mx-auto text-orange-300" />
+          <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Generated Terraform will appear here</p>
+          <p className="mt-1 text-xs max-w-md mx-auto" style={{ color: 'var(--rc-text-3)' }}>
+            TerraClaw returns the module, Trust Fabric decision, controls, MCP trace, review findings, and plan-ready artifacts.
+          </p>
+        </div>
+      )}
+      </div>
     </div>
   );
 }
@@ -467,6 +688,16 @@ function PlanTab() {
   const [result, setPlanResult] = useState<PlanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ planJson?: string; context?: string }>).detail;
+      if (detail?.planJson) setPlanJson(detail.planJson);
+      if (detail?.context) setContext(detail.context);
+    };
+    window.addEventListener('terraclaw:set-plan-json', handler);
+    return () => window.removeEventListener('terraclaw:set-plan-json', handler);
+  }, []);
 
   const handleAnalyze = async () => {
     setParseError(null);
@@ -868,6 +1099,15 @@ type TabId = typeof TABS[number]['id'];
 
 export default function TerraClawPage() {
   const [activeTab, setActiveTab] = useState<TabId>('review');
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: TabId }>).detail?.tab;
+      if (tab && TABS.some(t => t.id === tab)) setActiveTab(tab);
+    };
+    window.addEventListener('terraclaw:switch-tab', handler);
+    return () => window.removeEventListener('terraclaw:switch-tab', handler);
+  }, []);
 
   return (
     <div className="space-y-6">
