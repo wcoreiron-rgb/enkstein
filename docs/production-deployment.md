@@ -16,7 +16,7 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | Trust Fabric | Keep policy evaluation fail-closed for execution, remediation, model calls, connector calls, and evidence exports. |
 | CI security | Keep SBOM and dependency audit jobs enabled. Use `security/supply_chain_baseline.json` only for time-boxed accepted legacy findings. |
 | Release gates | Run production deployments through ReleaseClaw preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
-| Terraform/IaC gates | Run TerraClaw review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
+| Terraform/IaC gates | Run TerraClaw build/review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
 
 ## Minimum Environment Checklist
 
@@ -32,21 +32,31 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - ReleaseClaw preflight templates are reviewed for the target deployment path.
 - Production release handoff is approved by someone other than the requester.
 - Rollback plans/artifacts exist before non-dry-run deployments.
+- Terraform modules generated or reviewed by TerraClaw are checked before apply.
 
-## ReleaseClaw Deployment Gates
+## TerraClaw Terraform/IaC Gates
 
 For Terraform-backed releases, run TerraClaw first:
 
 ```http
+POST /api/v1/terraclaw/build
 POST /api/v1/terraclaw/review
 POST /api/v1/terraclaw/plan
 ```
 
-Attach the review and plan decisions to the ReleaseClaw preflight evidence for
-Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. TerraClaw identifies
-public network exposure, excessive IAM, hardcoded secrets, data-protection
-misconfiguration, missing diagnostics, and risky replacement/delete operations;
-ReleaseClaw then gates the execution handoff.
+Use `build` when an operator wants a secure Terraform module from plain
+English. Use `review` for existing `.tf` content. Use `plan` before apply to
+detect risky creates, deletes, replacements, public network exposure, weak data
+protection, hardcoded secrets, excessive IAM, missing diagnostics, and other
+high-risk IaC changes.
+
+Attach the build, review, and plan decisions to the ReleaseClaw preflight
+evidence for Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. TerraClaw
+identifies public network exposure, excessive IAM, hardcoded secrets,
+data-protection misconfiguration, missing diagnostics, and risky
+replacement/delete operations; ReleaseClaw then gates the execution handoff.
+
+## ReleaseClaw Deployment Gates
 
 ReleaseClaw is the deployment governance layer for production changes. It
 normalizes deployment paths such as GitHub Actions, GitLab CI, Jenkins, Azure

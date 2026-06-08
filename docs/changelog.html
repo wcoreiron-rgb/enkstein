@@ -335,6 +335,38 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.6.2 — TerraClaw Natural-Language Build Wizard                   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">TerraClaw Natural-Language Terraform Build Wizard</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">TerraClaw</span>
+          <span class="tag tag-sec">IaC Security</span>
+          <span class="tag tag-feat">ArcClaw</span>
+          <span class="release-date">June 5, 2026 &nbsp;·&nbsp; v0.6.2</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice expands TerraClaw with a plain-English Terraform module builder that scans operator input with ArcClaw, generates hardened IaC modules, reviews the output, and returns deployment guidance.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Build endpoint:</strong> added <code>POST /api/v1/terraclaw/build</code> for natural-language Terraform module generation.</li>
+          <li><strong>ArcClaw safety scan:</strong> build requests run prompt-injection and sensitive-pattern checks before module generation.</li>
+          <li><strong>Secure module output:</strong> generated modules include secure-by-default controls such as private networking, encryption, diagnostics, managed identity, and secret generation where applicable.</li>
+          <li><strong>Build UI:</strong> TerraClaw page now starts on a Build tab with intent summary, generated module, security controls, review findings, and deploy steps.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.6.1 — TerraClaw Terraform / IaC Governance                      -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

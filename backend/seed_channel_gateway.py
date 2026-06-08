@@ -61,7 +61,7 @@ CHANNEL_CONFIGS = [
     {
         "id": "cfg-teams-exec-brief-004",
         "channel_type": "teams",
-        "channel_id": "19:redacted_user2",
+        "channel_id": "19:redacted_exec_briefing",
         "channel_name": "Executive Security Briefing",
         "webhook_url": "https://company.webhook.office.com/webhookb2/placeholder_exec_briefing",
         "bot_token": "placeholder-teams-bot-token-exec",
@@ -174,9 +174,9 @@ def seed():
     try:
         # ── ChannelConfig ──────────────────────────────────────────────────────
         for cfg in CHANNEL_CONFIGS:
-            existing = db.query(ChannelConfig).filter(
-                ChannelConfig.id == cfg["id"]
-            ).first()
+            existing = db.query(ChannelConfig).filter(ChannelConfig.id == cfg["id"]).first()
+            if not existing:
+                existing = db.query(ChannelConfig).filter(ChannelConfig.channel_id == cfg["channel_id"]).first()
             if not existing:
                 record = ChannelConfig(**cfg)
                 db.add(record)

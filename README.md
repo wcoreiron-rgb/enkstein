@@ -514,7 +514,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 📱 AppClaw | Application Security — SAST, SCA, Snyk, Veracode |
 | ☁️ SaasClaw | SaaS Security Posture Management — Netskope, Zscaler |
 | ⚙️ ConfigClaw | Configuration Compliance — AWS Config, Azure Policy |
-| 🧱 TerraClaw | Terraform & IaC Security Governance — HCL review, secure generation, plan risk analysis, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
+| 🧱 TerraClaw | Terraform & IaC Security Governance — natural-language build wizard, HCL review, secure generation, plan risk analysis, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
 | ✅ ComplianceClaw | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
 | 🔒 PrivacyClaw | Privacy & GDPR enforcement — OneTrust, TrustArc |
 | 🏢 VendorClaw | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |
