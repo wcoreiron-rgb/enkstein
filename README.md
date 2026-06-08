@@ -197,6 +197,8 @@ Then open:
 - **API Docs**: http://localhost:8000/docs
 - **Health check**: http://localhost:8000/health
 
+The Docker frontend runs as a production Next.js server. The image builds the UI with `npm run build`, starts it with `npm run start`, and proxies browser `/api/v1/*` calls to `http://backend:8000` inside Docker.
+
 ### First steps after launch
 
 1. Open http://localhost:3000/dashboard

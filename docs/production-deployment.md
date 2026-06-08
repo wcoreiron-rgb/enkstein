@@ -17,6 +17,7 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | CI security | Keep SBOM and dependency audit jobs enabled. Use `security/supply_chain_baseline.json` only for time-boxed accepted legacy findings. |
 | Release gates | Run production deployments through ReleaseClaw preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
 | Terraform/IaC gates | Run TerraClaw build/review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
+| Frontend runtime | Build the Next.js frontend into the container image and serve it with `npm run start`; do not mount `.next` or run `next dev` in the production Compose path. |
 
 ## Minimum Environment Checklist
 
@@ -33,6 +34,7 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - Production release handoff is approved by someone other than the requester.
 - Rollback plans/artifacts exist before non-dry-run deployments.
 - Terraform modules generated or reviewed by TerraClaw are checked before apply.
+- The frontend container is rebuilt before deployment so `INTERNAL_API_URL=http://backend:8000` is baked into Next.js rewrites for Docker-internal API proxying.
 
 ## TerraClaw Terraform/IaC Gates
 

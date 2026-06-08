@@ -377,7 +377,7 @@
     Claims in this document have been matched against source code in this repository but have not been
     independently audited. An independent third-party security assessment is strongly recommended before
     relying on this document for compliance or procurement purposes.
-    Last reviewed: <strong>2026-06-01</strong>.
+    Last reviewed: <strong>2026-06-08</strong>.
   </div>
 
   <!-- ── SUMMARY TABLE ── -->
@@ -609,13 +609,13 @@
           <li><code>backend/requirements.txt</code>: PyJWT pinned to 2.9.0 (patched). <code>python-multipart</code> pinned to 0.0.12 (patched for CVE-2024-53498).</li>
           <li><code>backend/app/services/connector_tester.py</code>: SSRF protection — URLs validated against private IP blocklist before connector test requests.</li>
           <li>Connector installs require administrator approval via the Zero Trust Baseline policy pack ("ZT — Block Connector Install Without Approval").</li>
+          <li><code>frontend/Dockerfile</code> and <code>docker-compose.yml</code>: frontend container runs a reproducible production Next.js build, avoids runtime source mounts that shadow build artifacts, and uses Docker-internal API proxying.</li>
         </ul>
       </div>
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>No automated supply-chain scanning (Trivy, Snyk, pip-audit) integrated into CI — transitive dependency vulnerabilities would not be caught automatically.</li>
-          <li>No SBOM (Software Bill of Materials) generated in the build pipeline.</li>
+          <li>SBOM and dependency audit CI surfaces exist, but current dependency advisories still require triage and remediation before production reliance.</li>
           <li>Connector code is not sandboxed at the OS level — a malicious connector could access process memory or make unexpected system calls.</li>
           <li>Provider API keys are encrypted at rest but transmitted to third-party endpoints — provider compromise is out of RegentClaw's direct threat model.</li>
         </ul>
@@ -821,7 +821,7 @@
     <a href="owasp-agentic-mapping.md">Markdown version</a>
     <a href="https://github.com/wcoreiron-rgb/regentclaw" target="_blank" rel="noopener">GitHub</a>
   </div>
-  <p>RegentClaw — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;·&nbsp; 2026-06-01</p>
+  <p>RegentClaw — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;·&nbsp; 2026-06-08</p>
 </footer>
 
 <script>

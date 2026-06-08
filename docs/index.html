@@ -963,7 +963,8 @@
       <div class="quickstart-text">
         <span class="section-tag">Quick Start</span>
         <h2 class="section-title">Up and Running in Minutes</h2>
-        <p>RegentClaw is fully containerized. A single <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">docker compose up</code> starts the entire stack — backend API, frontend, PostgreSQL, and Redis.</p>
+        <p>RegentClaw is fully containerized. A single <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">docker compose up --build</code> starts the entire stack — backend API, production Next.js frontend, PostgreSQL, and Redis.</p>
+        <p>The frontend image builds once and runs with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">next start</code>, with browser <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">/api/v1/*</code> calls proxied to the backend service inside Docker.</p>
         <p>Fully self-hosted. Your credentials stay on your machine — encrypted at rest, never sent anywhere. Add your own API keys via the Connectors UI and each Claw connects to your real environment.</p>
         <p class="quickstart-security-note">
           <strong>Security:</strong> Never commit <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">backend/.secrets/</code> to git. This folder holds your encryption key and is gitignored by default. Each deployment generates its own isolated key on first run.

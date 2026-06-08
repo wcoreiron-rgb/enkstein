@@ -537,12 +537,16 @@
 <span class="c-key">REDIS_URL</span>=<span class="c-str">redis://localhost:6379</span></pre>
 
       <h2>2. Start Services</h2>
-      <pre><span class="c-cmd">docker compose up -d</span>
+      <pre><span class="c-cmd">docker compose up --build -d</span>
 
 <span class="c-comment"># Verify all containers are healthy</span>
 <span class="c-cmd">docker compose ps</span></pre>
 
-      <p>This starts four containers: <code>api</code> (FastAPI on port 8000), <code>frontend</code> (Next.js on port 3000), <code>postgres</code>, and <code>redis</code>.</p>
+      <p>This starts four containers: <code>backend</code> (FastAPI on port 8000), <code>frontend</code> (Next.js production server on port 3000), <code>postgres</code>, and <code>redis</code>.</p>
+
+      <div class="callout">
+        <strong>Runtime note:</strong> Docker Compose intentionally runs the frontend as a production build. The image runs <code>npm run build</code> during build and <code>npm run start</code> at runtime. Browser <code>/api/v1/*</code> calls are proxied to <code>http://backend:8000</code> inside the Compose network.
+      </div>
 
       <h2>3. Seed the Database</h2>
       <p>Seed scripts populate RegentClaw with example data for policies, agents, connectors, workflows, and more. Run them once after a fresh install:</p>
@@ -639,7 +643,7 @@
 ┌──────────────────────▼──────────────────────────────┐
 │                 FastAPI Backend                       │
 │   ┌──────────┐  ┌─────────────┐  ┌───────────────┐  │
-│   │ 24 Claws │  │ Trust Fabric│  │    CoreOS     │  │
+│   │25 Claws  │  │ Trust Fabric│  │    CoreOS     │  │
 │   │  Routes  │  │  Pipeline   │  │Swarm/Cmd/Sched│  │
 │   └────┬─────┘  └──────┬──────┘  └───────┬───────┘  │
 │        └───────────────┼──────────────────┘          │

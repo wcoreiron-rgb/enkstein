@@ -335,6 +335,38 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.6.3 — Docker Frontend Runtime Stabilization                    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Docker Frontend Runtime Stabilization</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Runtime Fix</span>
+          <span class="tag tag-sec">Deployment</span>
+          <span class="release-date">June 8, 2026 &nbsp;·&nbsp; v0.6.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        This slice stabilizes the local Docker stack so the RegentClaw dashboard, Control Center, and frontend API proxy work reliably from <code>http://localhost:3000</code>.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's Fixed</div>
+        <ul class="change-list">
+          <li><strong>Frontend container:</strong> switched Docker runtime from <code>next dev</code> to production <code>npm run build</code> + <code>npm run start</code>.</li>
+          <li><strong>Compose mounts:</strong> removed frontend bind mounts that could shadow the baked <code>.next</code> build output and cause missing manifest errors.</li>
+          <li><strong>API proxy:</strong> bakes <code>INTERNAL_API_URL=http://backend:8000</code> into the frontend image so browser <code>/api/v1/*</code> calls route correctly inside Docker.</li>
+          <li><strong>Root route:</strong> <code>/</code> now renders the dashboard directly instead of relying on a server redirect shell.</li>
+          <li><strong>Verification:</strong> confirmed <code>/</code>, <code>/dashboard</code>, <code>/control-center</code>, and <code>/api/v1/dashboard/control-center-summary</code> return HTTP 200 locally.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.6.2 — TerraClaw Natural-Language Build Wizard                   -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
