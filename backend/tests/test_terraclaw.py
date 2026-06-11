@@ -195,6 +195,23 @@ async def test_generate_aws_rds(client: AsyncClient):
     d = r.json()
     assert "aws_db_instance" in d["terraform"]
     assert "storage_encrypted" in d["terraform"]
+    assert d["template_used"] == "aws_rds"
+    assert d["cloud"] == "aws"
+
+
+@pytest.mark.asyncio
+async def test_generate_aws_sql_prompt_overrides_default_cloud(client: AsyncClient):
+    r = await client.post("/api/v1/terraclaw/generate", json={
+        "description": "Create an AWS SQL database with encryption and private subnets",
+        "cloud": "azure",
+    })
+    assert r.status_code == 200
+    d = r.json()
+    assert d["selected_cloud"] == "azure"
+    assert d["cloud"] == "aws"
+    assert d["template_used"] == "aws_rds"
+    assert "aws_db_instance" in d["terraform"]
+    assert "azurerm_" not in d["terraform"]
 
 
 @pytest.mark.asyncio

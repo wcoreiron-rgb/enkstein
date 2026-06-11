@@ -786,27 +786,43 @@ resource "google_sql_user" "app" {
 }
 
 
+def _infer_cloud(description: str, selected_cloud: str = "") -> str:
+    desc_lower = description.lower()
+    if any(k in desc_lower for k in ("aws", "rds", "ec2", "aurora", "eks", "s3", "dynamodb")):
+        return "aws"
+    if any(k in desc_lower for k in ("gcp", "google cloud", "cloud sql", "gke", "bigquery")):
+        return "gcp"
+    if any(k in desc_lower for k in ("azure", "azurerm", "aks", "mssql", "entra", "defender")):
+        return "azure"
+    return (selected_cloud or "azure").lower()
+
+
 def _detect_template_key(description: str, cloud: str = "") -> str:
     desc_lower = description.lower()
-    cloud_lower = cloud.lower()
-    if cloud_lower == "gcp" and any(k in desc_lower for k in ("sql", "postgres", "database", "cloud sql")):
-        return "gcp_cloud_sql"
-    if any(k in desc_lower for k in ("azure sql", "mssql", "sql server")):
-        return "azure_sql"
-    if any(k in desc_lower for k in ("azure storage", "storage account", "blob")):
-        return "azure_storage"
-    if any(k in desc_lower for k in ("aws rds", "rds postgres", "aurora", "rds mysql")):
-        return "aws_rds"
-    if any(k in desc_lower for k in ("aws ec2", "ec2 instance", "virtual machine", "aws vm")):
-        return "aws_ec2"
-    if any(k in desc_lower for k in ("aks", "kubernetes", "k8s", "eks", "gke")):
-        return "aks"
+    cloud_lower = _infer_cloud(description, cloud)
+
     if cloud_lower == "aws":
+        if any(k in desc_lower for k in ("rds", "aurora", "postgres", "postgresql", "mysql", "sql", "database", "db")):
+            return "aws_rds"
+        if any(k in desc_lower for k in ("ec2", "instance", "virtual machine", "vm", "server")):
+            return "aws_ec2"
         return "aws_ec2"
+
     if cloud_lower == "gcp":
         return "gcp_cloud_sql"
-    # Default to azure_storage as a safe starting template.
+
+    if any(k in desc_lower for k in ("sql", "mssql", "sql server", "database", "db")):
+        return "azure_sql"
+    if any(k in desc_lower for k in ("storage", "storage account", "blob")):
+        return "azure_storage"
+    if any(k in desc_lower for k in ("aks", "kubernetes", "k8s")):
+        return "aks"
     return "azure_storage"
+
+
+def _template_cloud(template_key: str, fallback: str) -> str:
+    meta = _TEMPLATE_METADATA.get(template_key)
+    return str(meta.get("cloud", fallback)) if meta else fallback
 
 
 _TEMPLATE_METADATA = {
@@ -1129,6 +1145,8 @@ async def generate_terraform(
     db: AsyncSession = Depends(get_db),
 ):
     started = datetime.utcnow()
+    template_key = _detect_template_key(body.description, body.cloud)
+    effective_cloud = _template_cloud(template_key, body.cloud)
 
     policy_decision = await enforce(
         db=db,
@@ -1142,10 +1160,12 @@ async def generate_terraform(
             target_type="iac_artifact",
             context={
                 "classification": body.classification,
-                "cloud": body.cloud,
+                "cloud": effective_cloud,
+                "selected_cloud": body.cloud,
                 "workspace": body.workspace,
                 "environment": body.environment,
                 "output_mode": body.output_mode,
+                "template": template_key,
             },
         ),
         ip_address=request.client.host if request.client else None,
@@ -1160,7 +1180,6 @@ async def generate_terraform(
             },
         )
 
-    template_key = _detect_template_key(body.description, body.cloud)
     terraform = _TEMPLATES.get(template_key, _TEMPLATES["azure_storage"])
     template_meta = _TEMPLATE_METADATA.get(template_key, _TEMPLATE_METADATA["azure_storage"])
 
@@ -1182,7 +1201,8 @@ async def generate_terraform(
         "terraform": terraform,
         "template_used": template_key,
         "template_name": template_meta["name"],
-        "cloud": body.cloud,
+        "cloud": effective_cloud,
+        "selected_cloud": body.cloud,
         "workspace": body.workspace,
         "environment": body.environment,
         "output_mode": body.output_mode,

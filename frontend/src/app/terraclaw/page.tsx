@@ -46,6 +46,7 @@ interface GenerateResult {
   template_used: string;
   template_name?: string;
   cloud: string;
+  selected_cloud?: string;
   workspace: string;
   environment: string;
   output_mode: string;
@@ -330,6 +331,20 @@ function GenerateTab() {
     },
   ]);
 
+  const inferCloudFromText = (text: string): 'azure' | 'aws' | 'gcp' | null => {
+    const lower = text.toLowerCase();
+    if (/\b(aws|rds|ec2|aurora|eks|s3|dynamodb)\b/.test(lower)) return 'aws';
+    if (/\b(gcp|google cloud|cloud sql|gke|bigquery)\b/.test(lower)) return 'gcp';
+    if (/\b(azure|azurerm|aks|mssql|entra|defender)\b/.test(lower)) return 'azure';
+    return null;
+  };
+
+  const setPrompt = (text: string) => {
+    setDescription(text);
+    const inferred = inferCloudFromText(text);
+    if (inferred) setCloud(inferred);
+  };
+
   const handleGenerate = async () => {
     if (description.trim().length < 5) return;
     setLoading(true);
@@ -344,7 +359,7 @@ function GenerateTab() {
     try {
       const res = await apiFetch<GenerateResult>('/terraclaw/generate', {
         method: 'POST',
-        body: JSON.stringify({ description, cloud, environment, workspace, output_mode: 'module' }),
+          body: JSON.stringify({ description, cloud: inferCloudFromText(description) ?? cloud, environment, workspace, output_mode: 'module' }),
       });
       setResult(res);
       setChat(prev => [
@@ -443,7 +458,11 @@ function GenerateTab() {
           <label className="text-sm font-medium mb-2 block" style={{ color: 'var(--rc-text-1)' }}>Describe what you want to deploy</label>
           <textarea
             value={description}
-            onChange={e => setDescription(e.target.value)}
+            onChange={e => {
+              setDescription(e.target.value);
+              const inferred = inferCloudFromText(e.target.value);
+              if (inferred) setCloud(inferred);
+            }}
             placeholder="e.g. Create Azure SQL with private endpoint, Defender, diagnostics, Key Vault-ready variables, and no public network access"
             rows={4}
             className="w-full rounded-lg border border-white/10 bg-[var(--rc-bg-elevated)] text-sm px-3 py-2 focus:outline-none focus:border-regent-500 resize-none"
@@ -455,7 +474,7 @@ function GenerateTab() {
           {EXAMPLES.map(ex => (
             <button
               key={ex}
-              onClick={() => setDescription(ex)}
+            onClick={() => setPrompt(ex)}
               className="text-xs px-2 py-1 rounded border border-white/10 hover:bg-white/10 transition-colors text-left"
               style={{ color: 'var(--rc-text-3)' }}
             >
