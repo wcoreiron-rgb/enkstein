@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name            = "regentclaw-core"
-version         = "0.1.0"
+version         = "0.7.0"
 description     = "Embeddable RegentClaw governance primitives — execution ring policy, provenance verification, and secret/PII scanning. No server required."
 readme          = "README.md"
 requires-python = ">=3.11"
-license         = { text = "MIT" }
+license         = "MIT"
 keywords        = ["security", "zero-trust", "secret-scanning", "policy", "governance"]
 authors         = [{ name = "RegentClaw" }]
 

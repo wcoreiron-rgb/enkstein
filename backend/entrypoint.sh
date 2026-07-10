@@ -107,4 +107,11 @@ echo "✅  Seeds done."
 echo ""
 echo "🚀  Starting RegentClaw API on :8000"
 echo ""
-exec uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+uvicorn_args=(main:app --host 0.0.0.0 --port 8000)
+if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
+  echo "    Development reload enabled."
+  uvicorn_args+=(--reload)
+fi
+
+exec uvicorn "${uvicorn_args[@]}"

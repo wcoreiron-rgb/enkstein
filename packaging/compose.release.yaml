@@ -1,0 +1,75 @@
+name: regentclaw
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-regentclaw}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-regentclaw}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-regentclaw}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      sh -c "redis-server --requirepass $$REDIS_PASSWORD"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-regentclaw}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-regentclaw}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      DEBUG: "false"
+      UVICORN_RELOAD: "false"
+      AGT_ENABLE_AGENT_MESH: ${AGT_ENABLE_AGENT_MESH:-false}
+      AGT_ENABLE_E2E_MESSAGING: ${AGT_ENABLE_E2E_MESSAGING:-false}
+      AGT_ENABLE_MCP_GATEWAY: ${AGT_ENABLE_MCP_GATEWAY:-false}
+      AGT_ENABLE_SHADOW_DISCOVERY: ${AGT_ENABLE_SHADOW_DISCOVERY:-false}
+      ALLOWED_ORIGINS: '["http://localhost:${FRONTEND_PORT:-3000}","http://frontend:3000"]'
+    volumes:
+      - backend_secrets:/app/.secrets
+      - backend_state:/app/.state
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    environment:
+      INTERNAL_API_URL: http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_secrets:
+  backend_state:

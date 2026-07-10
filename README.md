@@ -181,6 +181,23 @@ ComplianceClaw now exposes a Trust Fabric-governed evidence bundle export at `PO
 
 ## Quick Start
 
+### Download a release package
+
+The easiest installation path is a versioned bundle from
+[GitHub Releases](https://github.com/wcoreiron-rgb/regentclaw/releases). Each
+release includes `.tar.gz` and `.zip` self-hosted bundles, Python package
+artifacts, and `SHA256SUMS` integrity checks.
+
+```bash
+tar -xzf regentclaw-VERSION.tar.gz
+cd regentclaw-VERSION
+./install.sh
+```
+
+The installer validates Docker Compose, creates a private `.env` with unique
+random secrets, builds the containers, and starts RegentClaw. It never
+overwrites an existing `.env`. See [installation details](docs/installation.md).
+
 ### Prerequisites
 - Docker + Docker Compose installed
 - 4GB RAM available
@@ -237,7 +254,7 @@ RegentClaw ships in three installable forms beyond the web platform. All three t
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install regentclaw-mcp
+pip install ./regentclaw_mcp-0.7.0-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -259,12 +276,12 @@ Restart Cursor, then just ask:
 > *"What's my current security posture?"*
 > *"Investigate suspicious identity activity for user@corp.com."*
 
-Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findings` · `list_connectors` · `run_swarm_investigation`. → [full MCP docs](mcp-server/README.md)
+Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findings` · `list_connectors` · `run_swarm_investigation` · `terraclaw_generate_secure_terraform` · `terraclaw_review_hcl` · `terraclaw_analyze_plan`. → [full MCP docs](mcp-server/README.md)
 
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install regentclaw-cli
+pip install ./regentclaw_cli-0.7.0-py3-none-any.whl
 export REGENTCLAW_API_URL=http://localhost:8000
 regentclaw status dashboard
 regentclaw connectors test okta
@@ -277,7 +294,7 @@ regentclaw evidence collect --framework soc2
 Drop RegentClaw's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install regentclaw-core
+pip install ./regentclaw_core-0.7.0-py3-none-any.whl
 ```
 ```python
 from regentclaw_core import classify_ring, evaluate_ring, scan_text, verify_package

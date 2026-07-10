@@ -511,6 +511,12 @@
       <h1>Quick Start</h1>
       <p class="lead">Get a fully functional RegentClaw instance running locally in under 10 minutes using Docker Compose.</p>
 
+      <h2>Downloadable Package</h2>
+      <p>Versioned GitHub Releases include <code>.tar.gz</code> and <code>.zip</code> self-hosted bundles, Python wheels/source distributions, and a <code>SHA256SUMS</code> integrity file. Extract the bundle and run <code>./install.sh</code>. The installer validates Docker Compose, creates unique installation secrets without overwriting an existing <code>.env</code>, and starts the production Compose stack.</p>
+      <pre><code>tar -xzf regentclaw-VERSION.tar.gz
+cd regentclaw-VERSION
+./install.sh</code></pre>
+
       <h2>Prerequisites</h2>
       <ul>
         <li>Docker Desktop 24+ and Docker Compose v2</li>

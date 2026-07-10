@@ -335,6 +335,38 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  v0.7.0 — Downloadable Release Packaging                           -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Downloadable Release Packaging</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Packaging</span>
+          <span class="tag tag-sec">Supply Chain</span>
+          <span class="release-date">July 9, 2026 &nbsp;·&nbsp; v0.7.0</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">
+        RegentClaw can now publish versioned, checksum-protected self-hosted bundles and Python package artifacts from a Git tag.
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Release bundles:</strong> build scripts produce <code>.tar.gz</code> and <code>.zip</code> packages containing the backend, frontend, production Compose model, installer, and deployment documentation.</li>
+          <li><strong>Secure installer:</strong> <code>install.sh</code> validates prerequisites and generates unique application, PostgreSQL, and Redis secrets without replacing an existing environment file.</li>
+          <li><strong>Persistent runtime:</strong> the release Compose model uses named volumes for PostgreSQL, encrypted connector credentials, and runtime state instead of development source mounts.</li>
+          <li><strong>Python artifacts:</strong> tagged releases build CLI, governance-core, and MCP wheel/source packages.</li>
+          <li><strong>Integrity:</strong> every published asset is covered by <code>SHA256SUMS</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  v0.6.4 — TerraClaw Terraform MCP Agent Generation                 -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -18,12 +18,18 @@ audit. The MCP server itself holds no credentials and executes nothing locally.
 | `list_findings` | List security findings, filterable by claw and severity. |
 | `list_connectors` | Show connected security tools and their status. |
 | `run_swarm_investigation` | Launch a governed multi-agent investigation (high-risk actions still need human approval). |
+| `terraclaw_generate_secure_terraform` | Generate Trust Fabric-governed Terraform from a deployment request. |
+| `terraclaw_review_hcl` | Review Terraform HCL and return an APPROVE/WARN/BLOCK decision with remediations. |
+| `terraclaw_analyze_plan` | Analyze normalized Terraform plan changes before apply. |
 
 ## Install
 
 ```bash
-pip install regentclaw-mcp
+pip install ./regentclaw_mcp-0.7.0-py3-none-any.whl
 ```
+
+Download the wheel from the matching GitHub Release. PyPI publication is not
+part of the current release workflow.
 
 ## Configure your editor
 
@@ -72,6 +78,8 @@ Set `REGENTCLAW_TOKEN` to a JWT when your server runs with `DEBUG=false`
 > "What's my current security posture?"
 > "List critical cloudclaw findings."
 > "Investigate suspicious identity activity for user@corp.com."
+> "Generate secure AWS RDS Terraform with encryption and private subnets."
+> "Review this Terraform module before I open a pull request."
 
 ## License
 

@@ -10,7 +10,7 @@ agents, CI pipelines, or pre-commit hooks.
 ## Install
 
 ```bash
-pip install regentclaw-core
+pip install ./regentclaw_core-0.7.0-py3-none-any.whl
 ```
 
 Only dependency: `cryptography`.

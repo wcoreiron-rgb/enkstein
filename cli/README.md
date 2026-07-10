@@ -7,10 +7,13 @@ the same way `kubectl` talks to a cluster.
 ## Install
 
 ```bash
-pip install regentclaw-cli
+pip install ./regentclaw_cli-0.7.0-py3-none-any.whl
 # or from source:
 pip install ./cli
 ```
+
+Download the wheel from the matching GitHub Release. PyPI publication is not
+part of the current release workflow.
 
 ## Configure
 
