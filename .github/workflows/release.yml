@@ -6,11 +6,11 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  package:
-    name: Build downloadable packages
+  portable:
+    name: Build portable and Python packages
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -43,11 +43,9 @@ jobs:
           python -m build --outdir "$GITHUB_WORKSPACE/dist" regentclaw-core
           python -m build --outdir "$GITHUB_WORKSPACE/dist" mcp-server
 
-      - name: Build self-hosted bundles
-        run: ./scripts/build_release_bundle.sh "${GITHUB_REF_NAME}"
-
-      - name: Validate bundle
+      - name: Build and validate self-hosted bundles
         run: |
+          ./scripts/build_release_bundle.sh "${GITHUB_REF_NAME}"
           bundle_dir="dist/regentclaw-${GITHUB_REF_NAME#v}"
           test -x "$bundle_dir/install.sh"
           test -f "$bundle_dir/compose.yaml"
@@ -55,9 +53,164 @@ jobs:
           "$bundle_dir/install.sh" --check
           rm -rf "$bundle_dir"
 
+      - name: Upload portable assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-assets
+          path: dist/*
+          if-no-files-found: error
+
+  macos:
+    name: Build signed and notarized macOS package
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Apple signing configuration
+        env:
+          APP_CERT: ${{ secrets.APPLE_APPLICATION_CERT_P12_BASE64 }}
+          APP_CERT_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERT_PASSWORD }}
+          APP_IDENTITY: ${{ secrets.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          INSTALLER_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+          INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APP_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for value in "$APP_CERT" "$APP_CERT_PASSWORD" "$APP_IDENTITY" "$INSTALLER_CERT" "$INSTALLER_CERT_PASSWORD" "$INSTALLER_IDENTITY" "$APP_ID" "$TEAM_ID" "$APP_PASSWORD"; do
+            test -n "$value" || { echo "Missing required Apple signing/notarization secret" >&2; exit 1; }
+          done
+
+      - name: Import Developer ID certificates
+        env:
+          APP_CERT: ${{ secrets.APPLE_APPLICATION_CERT_P12_BASE64 }}
+          APP_CERT_PASSWORD: ${{ secrets.APPLE_APPLICATION_CERT_PASSWORD }}
+          INSTALLER_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/regentclaw-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          echo "$keychain_password" > "$RUNNER_TEMP/keychain-password"
+          echo "$APP_CERT" | /usr/bin/base64 -D > "$RUNNER_TEMP/application.p12"
+          echo "$INSTALLER_CERT" | /usr/bin/base64 -D > "$RUNNER_TEMP/installer.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/application.p12" -k "$keychain" -P "$APP_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/installer.p12" -k "$keychain" -P "$INSTALLER_CERT_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/productsign
+          security list-keychains -d user -s "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+
+      - name: Build signed macOS package
+        env:
+          APPLE_APPLICATION_SIGNING_IDENTITY: ${{ secrets.APPLE_APPLICATION_SIGNING_IDENTITY }}
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+        run: ./scripts/build_macos_pkg.sh "${GITHUB_REF_NAME}"
+
+      - name: Notarize and staple package
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          package="dist/RegentClaw-${GITHUB_REF_NAME#v}-macos.pkg"
+          xcrun notarytool submit "$package" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+          xcrun stapler staple "$package"
+          xcrun stapler validate "$package"
+          spctl --assess --type install --verbose=2 "$package"
+
+      - name: Upload macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-assets
+          path: dist/RegentClaw-*-macos.pkg
+          if-no-files-found: error
+
+      - name: Remove temporary signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/regentclaw-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/application.p12" "$RUNNER_TEMP/installer.p12" "$RUNNER_TEMP/keychain-password"
+
+  windows:
+    name: Build Windows installer
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup imagemagick --no-progress -y
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: ./scripts/build_windows_installer.ps1 -Version "${{ github.ref_name }}"
+
+      - name: Verify Windows signing configuration
+        shell: pwsh
+        env:
+          WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
+            throw "Windows Authenticode signing secrets are required for a public release"
+          }
+
+      - name: Sign Windows installer
+        shell: pwsh
+        env:
+          WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          $installer = "dist\RegentClaw-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
+          $certificate = Join-Path $env:RUNNER_TEMP "windows-signing.pfx"
+          [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERT))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
+            Sort-Object FullName |
+            Select-Object -Last 1
+          if (-not $signtool) { throw "signtool.exe was not found" }
+          & $signtool.FullName sign /f $certificate /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $installer
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed" }
+          & $signtool.FullName verify /pa /v $installer
+
+      - name: Remove temporary Windows signing certificate
+        if: always()
+        shell: pwsh
+        run: Remove-Item "$env:RUNNER_TEMP\windows-signing.pfx" -Force -ErrorAction SilentlyContinue
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-assets
+          path: dist/RegentClaw-*-windows-x64-setup.exe
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [portable, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*-assets"
+          path: release-assets
+          merge-multiple: true
+
       - name: Generate SHA-256 checksums
         run: |
-          cd dist
+          cd release-assets
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
             | sort -z \
             | xargs -0 sha256sum > SHA256SUMS
@@ -67,9 +220,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+            gh release upload "${GITHUB_REF_NAME}" release-assets/* --clobber
           else
-            gh release create "${GITHUB_REF_NAME}" dist/* \
+            gh release create "${GITHUB_REF_NAME}" release-assets/* \
               --verify-tag \
               --generate-notes \
               --title "RegentClaw ${GITHUB_REF_NAME}"

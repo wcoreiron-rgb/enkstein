@@ -341,11 +341,11 @@
     <div class="release-dot" style="background: var(--green);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">Downloadable Release Packaging</div>
+        <div class="release-title">Downloadable Native Release Packaging</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Packaging</span>
           <span class="tag tag-sec">Supply Chain</span>
-          <span class="release-date">July 9, 2026 &nbsp;·&nbsp; v0.7.0</span>
+          <span class="release-date">July 12, 2026 &nbsp;·&nbsp; v0.7.0</span>
         </div>
       </div>
     </div>
@@ -360,6 +360,8 @@
           <li><strong>Secure installer:</strong> <code>install.sh</code> validates prerequisites and generates unique application, PostgreSQL, and Redis secrets without replacing an existing environment file.</li>
           <li><strong>Persistent runtime:</strong> the release Compose model uses named volumes for PostgreSQL, encrypted connector credentials, and runtime state instead of development source mounts.</li>
           <li><strong>Python artifacts:</strong> tagged releases build CLI, governance-core, and MCP wheel/source packages.</li>
+          <li><strong>macOS:</strong> builds a clickable app inside a Developer ID-signed, notarized, and stapled <code>.pkg</code>; installation launches RegentClaw for the signed-in user.</li>
+          <li><strong>Windows:</strong> builds a per-user Inno Setup executable with Start Menu/desktop shortcuts, Docker startup, secure environment initialization, and optional Authenticode signing.</li>
           <li><strong>Integrity:</strong> every published asset is covered by <code>SHA256SUMS</code>.</li>
         </ul>
       </div>

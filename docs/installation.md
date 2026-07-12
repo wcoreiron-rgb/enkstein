@@ -1,5 +1,22 @@
 # Install RegentClaw
 
+## Native installers
+
+For the simplest desktop experience, download the installer for your operating
+system from GitHub Releases:
+
+- macOS: `RegentClaw-VERSION-macos.pkg`
+- Windows x64: `RegentClaw-VERSION-windows-x64-setup.exe`
+
+Both installers create a clickable RegentClaw launcher. The launcher starts
+Docker Desktop when needed, initializes unique secrets, starts the platform,
+and opens the dashboard. Docker Desktop remains required because RegentClaw
+includes multiple services and persistent PostgreSQL/Redis data.
+
+The macOS package is signed and notarized by Apple. Tagged public Windows
+installers require Authenticode signing.
+See [native installer and signing details](native-installers.md).
+
 ## Downloadable self-hosted package
 
 Each versioned GitHub Release includes a `.tar.gz` and `.zip` bundle. The

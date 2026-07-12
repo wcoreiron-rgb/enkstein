@@ -1,0 +1,103 @@
+name: Native Package Validation
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "packaging/**"
+      - "scripts/build_release_bundle.sh"
+      - "scripts/build_macos_pkg.sh"
+      - "scripts/build_windows_installer.ps1"
+      - ".github/workflows/native-package-check.yml"
+      - ".github/workflows/release.yml"
+      - "cli/pyproject.toml"
+      - "mcp-server/pyproject.toml"
+      - "regentclaw-core/pyproject.toml"
+      - ".env.example"
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "scripts/build_release_bundle.sh"
+      - "scripts/build_macos_pkg.sh"
+      - "scripts/build_windows_installer.ps1"
+      - ".github/workflows/native-package-check.yml"
+      - ".github/workflows/release.yml"
+      - "cli/pyproject.toml"
+      - "mcp-server/pyproject.toml"
+      - "regentclaw-core/pyproject.toml"
+      - ".env.example"
+
+permissions:
+  contents: read
+
+jobs:
+  macos-package:
+    name: macOS package (unsigned validation)
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve package version
+        run: |
+          version=$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)"/\1/p' cli/pyproject.toml)
+          test -n "$version"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Build package
+        run: ./scripts/build_macos_pkg.sh "$VERSION"
+
+      - name: Validate package payload
+        run: |
+          rm -rf "$RUNNER_TEMP/regentclaw-pkg"
+          pkgutil --expand-full "dist/RegentClaw-$VERSION-macos.pkg" "$RUNNER_TEMP/regentclaw-pkg"
+          payload="$RUNNER_TEMP/regentclaw-pkg/RegentClaw-component.pkg/Payload/Applications/RegentClaw.app"
+          test -x "$payload/Contents/MacOS/RegentClaw"
+          test -f "$payload/Contents/Resources/runtime/compose.yaml"
+          test -f "$payload/Contents/Resources/runtime/VERSION"
+          test -x "$RUNNER_TEMP/regentclaw-pkg/RegentClaw-component.pkg/Scripts/postinstall"
+          codesign --verify --deep --strict --verbose=2 "$payload"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-unsigned-preview
+          path: dist/RegentClaw-${{ env.VERSION }}-macos.pkg
+          retention-days: 7
+
+  windows-package:
+    name: Windows installer (unsigned validation)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve package version
+        shell: pwsh
+        run: |
+          $manifest = Get-Content -Raw cli/pyproject.toml
+          $match = [regex]::Match($manifest, '(?m)^version\s*=\s*"([^"]+)"')
+          if (-not $match.Success) { throw "Could not resolve package version" }
+          "VERSION=$($match.Groups[1].Value)" | Out-File -Append -FilePath $env:GITHUB_ENV
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup imagemagick --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: ./scripts/build_windows_installer.ps1 -Version $env:VERSION
+
+      - name: Validate installer
+        shell: pwsh
+        run: |
+          $installer = "dist\RegentClaw-$env:VERSION-windows-x64-setup.exe"
+          if (-not (Test-Path $installer)) { throw "Installer missing: $installer" }
+          if ((Get-Item $installer).Length -lt 1MB) { throw "Installer is unexpectedly small" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned-preview
+          path: dist/RegentClaw-${{ env.VERSION }}-windows-x64-setup.exe
+          retention-days: 7

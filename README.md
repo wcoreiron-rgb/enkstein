@@ -198,6 +198,21 @@ The installer validates Docker Compose, creates a private `.env` with unique
 random secrets, builds the containers, and starts RegentClaw. It never
 overwrites an existing `.env`. See [installation details](docs/installation.md).
 
+### One-click desktop installers
+
+GitHub Releases also provide native launchers:
+
+- **macOS:** install `RegentClaw-VERSION-macos.pkg`, then RegentClaw launches
+  from `/Applications`.
+- **Windows x64:** run `RegentClaw-VERSION-windows-x64-setup.exe`; setup creates
+  Start Menu and optional desktop shortcuts and launches RegentClaw.
+
+Both launchers start Docker Desktop when necessary, generate unique local
+secrets, start the RegentClaw services, and open the dashboard. Docker Desktop
+is still required. Connector credentials are added afterward through the
+Connectors UI and remain encrypted in persistent local volumes. See
+[native installer details](docs/native-installers.md).
+
 ### Prerequisites
 - Docker + Docker Compose installed
 - 4GB RAM available
