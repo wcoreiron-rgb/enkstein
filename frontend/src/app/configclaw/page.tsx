@@ -67,7 +67,7 @@ export default function ConfigClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Settings className="text-sky-400" /> ConfigClaw
+            <Settings className="text-sky-400" /> Configuration Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Configuration drift detection - baseline deviations, hardening failures, and CIS benchmark violations across cloud and on-prem.

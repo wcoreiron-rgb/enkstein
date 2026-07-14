@@ -7,6 +7,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { nlToWorkflow, approveDraft, saveAsTemplate, discardDraft } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type PolicyFlag = { rule: string; severity: string; message: string };
@@ -152,7 +153,7 @@ function DraftCard({ draft, onApprove, onSave, onDiscard }: {
             <div className="flex flex-wrap gap-1.5">
               {ex.detected_claws.map(c => (
                 <span key={c.claw_id} className="text-xs bg-blue-900/40 border border-blue-800 text-blue-300 rounded-lg px-2 py-0.5">
-                  {c.label}
+                  {capabilityName(c.claw_id || c.label)}
                 </span>
               ))}
               {ex.detected_intents.map(i => (
@@ -197,7 +198,7 @@ function DraftCard({ draft, onApprove, onSave, onDiscard }: {
             {[
               { label: 'Trigger', value: draft.workflow.trigger_type },
               { label: 'Category', value: draft.workflow.category },
-              { label: 'Claws', value: ex.detected_claws.length.toString() },
+              { label: 'Capabilities', value: ex.detected_claws.length.toString() },
             ].map(item => (
               <div key={item.label} className="bg-gray-800/50 rounded-lg px-3 py-2">
                 <p className="text-gray-500">{item.label}</p>
@@ -254,7 +255,7 @@ export default function CopilotPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: "Hello! I'm the RegentClaw Copilot. Describe a security workflow in plain English and I'll generate a governed, policy-evaluated workflow draft for you to review before running.",
+      text: "Hello! I'm the Marcellus Copilot. Describe a security workflow in plain English and I'll generate a governed, policy-evaluated workflow draft for you to review before running.",
     },
   ]);
   const [input, setInput]       = useState('');
@@ -293,7 +294,7 @@ export default function CopilotPage() {
       const draft = await nlToWorkflow(text) as Draft;
       updateMsg(thinkingId, {
         loading: false,
-        text: `I've analysed your intent and generated a ${draft.explanation.step_count}-step workflow covering ${draft.explanation.detected_claws.length} claw(s). Policy evaluation: **${draft.policy_evaluation.decision}**.`,
+        text: `I've analysed your intent and generated a ${draft.explanation.step_count}-step workflow covering ${draft.explanation.detected_claws.length} capabilities. Policy evaluation: **${draft.policy_evaluation.decision}**.`,
         draft,
       });
     } catch (e: any) {

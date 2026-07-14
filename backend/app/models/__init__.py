@@ -8,6 +8,14 @@ from app.models.workflow import Workflow, WorkflowRun
 from app.models.audit import AuditLog
 from app.models.finding import Finding, FindingSeverity, FindingStatus, RemediationEffort
 from app.models.swarm import SwarmJob, SwarmTask, SwarmJobStatus, SwarmTaskStatus
+from app.models.marcellus import (
+    CapabilityNodeRuntime,
+    NodeCheckpoint,
+    PlexusMessage,
+    ReflexDefinition,
+    ReflexExecution,
+    RegenerationRun,
+)
 
 __all__ = [
     "Identity", "IdentityType", "IdentityStatus",
@@ -20,4 +28,6 @@ __all__ = [
     "AuditLog",
     "Finding", "FindingSeverity", "FindingStatus", "RemediationEffort",
     "SwarmJob", "SwarmTask", "SwarmJobStatus", "SwarmTaskStatus",
+    "PlexusMessage", "ReflexDefinition", "ReflexExecution",
+    "NodeCheckpoint", "CapabilityNodeRuntime", "RegenerationRun",
 ]

@@ -79,7 +79,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64" style={{ color: 'var(--rc-text-2)' }}>
-        Loading RegentClaw platform data…
+        Loading Marcellus platform data…
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Platform Overview</h1>
             <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
-              Zero Trust Security Ecosystem — RegentClaw CoreOS
+              Distributed Zero Trust Security — Marcellus Cortex
             </p>
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function DashboardPage() {
         <div>
           {data.recent_events.length === 0 && (
             <p className="text-sm p-6" style={{ color: 'var(--rc-text-3)' }}>
-              No events yet. Submit an ArcClaw event to get started.
+              No events yet. Submit an AI Security event to get started.
             </p>
           )}
           {data.recent_events.map((e: any, i: number) => (

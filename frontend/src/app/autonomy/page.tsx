@@ -10,6 +10,7 @@ import {
   activateEmergencyMode, deactivateEmergencyMode,
   getAutonomyAgents, updateAgentMode, bulkUpdateAgentModes,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Mode metadata ────────────────────────────────────────────────────────────
 const MODES = [
@@ -193,7 +194,7 @@ export default function AutonomyPage() {
             <Shield className="text-purple-400" /> Autonomy Mode Controls
           </h1>
           <p className="text-gray-400 mt-1 text-sm">
-            Control how much the platform self-executes — per agent, per claw, or platform-wide.
+            Control how much the platform self-executes — per agent, per capability, or platform-wide.
           </p>
         </div>
         <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white">
@@ -394,7 +395,7 @@ export default function AutonomyPage() {
                   className="w-full px-6 py-3.5 flex items-center gap-3 hover:bg-gray-800/30 transition-colors text-left"
                 >
                   {isOpen ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
-                  <p className="text-white text-sm font-medium flex-1">{claw}</p>
+                  <p className="text-white text-sm font-medium flex-1">{capabilityName(claw)}</p>
                   <span className="text-xs text-gray-500">{clawAgents.length} agents</span>
                   {hasDowngraded && (
                     <span className="text-xs text-yellow-400 flex items-center gap-1 ml-2">

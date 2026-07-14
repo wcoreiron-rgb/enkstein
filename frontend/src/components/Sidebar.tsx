@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -11,7 +11,7 @@ import {
   Bot, GitMerge, Radar, ClipboardCheck, Lock, Handshake,
   GitBranch, Settings, RefreshCcw, Network, CalendarClock, Layers, Workflow, Webhook, Sparkles,
   MessageSquare, ShoppingBag, PanelLeftClose, PanelLeftOpen, ShieldAlert,
-  Users2, Rocket, Container,
+  Users2, Rocket, Container, BrainCircuit,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '@/components/ThemeProvider';
@@ -31,12 +31,13 @@ type NavGroup = {
 
 const NAV_GROUPS: NavGroup[] = [
   {
-    label: 'Platform',
+    label: 'Cortex & Hearts',
     defaultOpen: true,
     items: [
+      { label: 'Marcellus',        href: '/marcellus',        icon: BrainCircuit,     tag: 'Architecture' },
       { label: 'Control Center',   href: '/control-center',   icon: Shield,           tag: 'Command' },
       { label: 'Dashboard',        href: '/dashboard',        icon: LayoutDashboard },
-      { label: 'Findings',         href: '/findings',         icon: AlertTriangle,    tag: 'All Claws' },
+      { label: 'Findings',         href: '/findings',         icon: AlertTriangle,    tag: 'All Nodes' },
       { label: 'Trust Fabric',     href: '/trust-fabric',     icon: Shield },
       { label: 'CoreOS',           href: '/coreos',           icon: Cpu },
       { label: 'Policies',         href: '/policies',         icon: FileText },
@@ -53,9 +54,9 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Remediation',      href: '/remediation',      icon: ShieldAlert,      tag: 'Auto-Fix' },
       { label: 'Run History',      href: '/runs',             icon: Activity,         tag: 'Replay' },
       { label: 'Aegis',            href: '/aegis',            icon: Sparkles,         tag: 'Workflow' },
-      { label: 'External Agents',  href: '/external-agents',  icon: Globe,            tag: 'OpenClaw' },
+      { label: 'External Agents',  href: '/external-agents',  icon: Globe,            tag: 'External' },
       { label: 'Model Router',     href: '/model-router',     icon: Cpu,              tag: 'LLM Sec' },
-      { label: 'ModelClaw',        href: '/modelclaw',        icon: Sparkles,         tag: 'Profiles' },
+      { label: 'Model Cortex',     href: '/model-cortex',     icon: Sparkles,         tag: 'Profiles' },
       { label: 'Memory',           href: '/memory',           icon: Layers,           tag: 'State' },
       { label: 'Skill Packs',      href: '/skill-packs',      icon: Package,          tag: 'Skills' },
       { label: 'Connector Health', href: '/connectors/health',icon: Activity,         tag: 'Monitor' },
@@ -65,65 +66,65 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: 'Open Automation',
+    label: 'Capability Studio',
     defaultOpen: true,
     items: [
-      { label: 'Custom Claw',  href: '/customclaw',   icon: Plug,    tag: 'Builder' },
+      { label: 'Custom Capability', href: '/capabilities/custom', icon: Plug, tag: 'Builder' },
     ],
   },
   {
-    label: 'Core Security',
+    label: 'Protection Arm',
     defaultOpen: true,
     items: [
-      { label: 'ArcClaw',      href: '/arcclaw',      icon: Zap,     tag: 'AI' },
-      { label: 'CloudClaw',    href: '/cloudclaw',    icon: Cloud,   tag: 'Cloud' },
-      { label: 'IdentityClaw', href: '/identityclaw', icon: Users,   tag: 'Identity' },
-      { label: 'AccessClaw',   href: '/accessclaw',   icon: Key,     tag: 'PAM' },
-      { label: 'EndpointClaw', href: '/endpointclaw', icon: Monitor, tag: 'Endpoint' },
-      { label: 'NetClaw',      href: '/netclaw',      icon: Network, tag: 'Network' },
-      { label: 'DataClaw',     href: '/dataclaw',     icon: Database,tag: 'Data' },
-      { label: 'AppClaw',      href: '/appclaw',      icon: Code,    tag: 'App/API' },
-      { label: 'SaaSClaw',     href: '/saasclaw',     icon: Package, tag: 'SaaS' },
+      { label: 'AI Security',          href: '/capabilities/ai-security',          icon: Zap,      tag: 'AI' },
+      { label: 'Cloud Security',       href: '/capabilities/cloud-security',       icon: Cloud,    tag: 'Cloud' },
+      { label: 'Identity Security',    href: '/capabilities/identity-security',    icon: Users,    tag: 'Identity' },
+      { label: 'Privileged Access',    href: '/capabilities/privileged-access',    icon: Key,      tag: 'PAM' },
+      { label: 'Endpoint Security',    href: '/capabilities/endpoint-security',    icon: Monitor,  tag: 'Endpoint' },
+      { label: 'Network Security',     href: '/capabilities/network-security',     icon: Network,  tag: 'Network' },
+      { label: 'Data Security',        href: '/capabilities/data-security',        icon: Database, tag: 'Data' },
+      { label: 'Application Security', href: '/capabilities/application-security', icon: Code,     tag: 'App/API' },
+      { label: 'SaaS Security',        href: '/capabilities/saas-security',        icon: Package,  tag: 'SaaS' },
     ],
   },
   {
-    label: 'Detection',
+    label: 'Detection Arm',
     defaultOpen: false,
     items: [
-      { label: 'ThreatClaw',  href: '/threatclaw',  icon: Target,    tag: 'D&R' },
-      { label: 'LogClaw',     href: '/logclaw',     icon: BookOpen,  tag: 'SIEM' },
-      { label: 'IntelClaw',   href: '/intelclaw',   icon: Eye,       tag: 'Intel' },
-      { label: 'UserClaw',    href: '/userclaw',    icon: UserCheck, tag: 'UBA' },
-      { label: 'InsiderClaw', href: '/insiderclaw', icon: UserX,     tag: 'Insider' },
+      { label: 'Threat Analysis',       href: '/capabilities/threat-analysis',      icon: Target,    tag: 'D&R' },
+      { label: 'Security Telemetry',    href: '/capabilities/security-telemetry',   icon: BookOpen,  tag: 'SIEM' },
+      { label: 'Threat Intelligence',   href: '/capabilities/threat-intelligence',  icon: Eye,       tag: 'Intel' },
+      { label: 'User Risk',             href: '/capabilities/user-risk',            icon: UserCheck, tag: 'UBA' },
+      { label: 'Insider Risk',          href: '/capabilities/insider-risk',         icon: UserX,     tag: 'Insider' },
     ],
   },
   {
-    label: 'SecOps',
+    label: 'Response Arm',
     defaultOpen: false,
     items: [
-      { label: 'AutomationClaw',  href: '/automationclaw',  icon: Bot,      tag: 'SOAR' },
-      { label: 'AttackPathClaw',  href: '/attackpathclaw',  icon: GitMerge, tag: 'Paths' },
-      { label: 'ExposureClaw',    href: '/exposureclaw',    icon: Radar,    tag: 'ASM' },
+      { label: 'Security Automation', href: '/capabilities/security-automation', icon: Bot,      tag: 'SOAR' },
+      { label: 'Attack Path Analysis', href: '/capabilities/attack-path-analysis', icon: GitMerge, tag: 'Paths' },
+      { label: 'Exposure Management', href: '/capabilities/exposure-management', icon: Radar,    tag: 'ASM' },
     ],
   },
   {
-    label: 'Governance',
+    label: 'Governance Arm',
     defaultOpen: false,
     items: [
-      { label: 'ComplianceClaw', href: '/complianceclaw', icon: ClipboardCheck, tag: 'GRC' },
-      { label: 'PrivacyClaw',    href: '/privacyclaw',    icon: Lock,           tag: 'Privacy' },
-      { label: 'VendorClaw',     href: '/vendorclaw',     icon: Handshake,      tag: 'Vendor' },
+      { label: 'Compliance Assurance', href: '/capabilities/compliance-assurance', icon: ClipboardCheck, tag: 'GRC' },
+      { label: 'Privacy Governance',   href: '/capabilities/privacy-governance',   icon: Lock,           tag: 'Privacy' },
+      { label: 'Vendor Risk',          href: '/capabilities/vendor-risk',          icon: Handshake,      tag: 'Vendor' },
     ],
   },
   {
-    label: 'Infrastructure',
+    label: 'Engineering Arm',
     defaultOpen: false,
     items: [
-      { label: 'TerraClaw',    href: '/terraclaw',    icon: Container, tag: 'IaC Sec' },
-      { label: 'DevClaw',      href: '/devclaw',      icon: GitBranch, tag: 'DevSecOps' },
-      { label: 'ConfigClaw',   href: '/configclaw',   icon: Settings,  tag: 'Hardening' },
-      { label: 'ReleaseClaw',  href: '/releaseclaw',  icon: Rocket,    tag: 'Deploy' },
-      { label: 'RecoveryClaw', href: '/recoveryclaw', icon: RefreshCcw,tag: 'Resilience' },
+      { label: 'Terraform Governance', href: '/capabilities/terraform-governance', icon: Container, tag: 'IaC Sec' },
+      { label: 'Developer Security',   href: '/capabilities/developer-security', icon: GitBranch, tag: 'DevSecOps' },
+      { label: 'Configuration Security', href: '/capabilities/configuration-security', icon: Settings, tag: 'Hardening' },
+      { label: 'Release Governance',   href: '/capabilities/release-governance', icon: Rocket, tag: 'Deploy' },
+      { label: 'Recovery Readiness',   href: '/capabilities/recovery-readiness', icon: RefreshCcw,tag: 'Resilience' },
     ],
   },
 ];
@@ -226,6 +227,22 @@ export default function Sidebar() {
   const { theme, toggle } = useTheme();
   const isLight   = theme === 'light';
   const [collapsed, setCollapsed] = useState(false);
+  const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/runtime-info', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('version unavailable')))
+      .then(payload => {
+        if (active && typeof payload.version === 'string') {
+          setRuntimeVersion(payload.version.replace(/^v/i, ''));
+        }
+      })
+      .catch(() => {
+        if (active) setRuntimeVersion(null);
+      });
+    return () => { active = false; };
+  }, []);
 
   return (
     <aside
@@ -245,7 +262,7 @@ export default function Sidebar() {
           /* Collapsed — just the icon centred */
           <button onClick={() => setCollapsed(false)} className="mx-auto" title="Expand sidebar">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/favicon.png" alt="RegentClaw" width={40} height={40} style={{ display: 'block' }} />
+            <img src="/favicon.png" alt="Marcellus" width={40} height={40} style={{ display: 'block' }} />
           </button>
         ) : (
           /* Expanded — logo centred on top, text below, collapse button top-right */
@@ -262,13 +279,13 @@ export default function Sidebar() {
             </div>
             <div className="flex flex-col items-center gap-2 pb-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/favicon.png" alt="RegentClaw" width={104} height={104} style={{ display: 'block' }} />
+              <img src="/favicon.png" alt="Marcellus" width={104} height={104} style={{ display: 'block' }} />
               <div className="text-center">
                 <h1 className="font-bold text-sm leading-tight" style={{ color: 'var(--rc-text-1)' }}>
-                  RegentClaw
+                  Marcellus
                 </h1>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--rc-text-3)' }}>
-                  Zero Trust Ecosystem
+                  Distributed Security OS
                 </p>
               </div>
             </div>
@@ -322,7 +339,7 @@ export default function Sidebar() {
               </div>
             </button>
             <p className="text-xs px-1" style={{ color: 'var(--rc-text-3)' }}>
-              v0.2.0 · {NAV_GROUPS.reduce((s, g) => s + g.items.length, 0)} modules
+              {runtimeVersion ? `v${runtimeVersion}` : 'version unavailable'} · {NAV_GROUPS.reduce((s, g) => s + g.items.length, 0)} modules
             </p>
           </>
         )}

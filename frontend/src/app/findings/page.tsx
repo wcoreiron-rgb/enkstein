@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { createSwarmJob, getFindings, getFindingsStats, updateFinding } from '@/lib/api';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -115,7 +116,7 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
     };
     try {
       const job = await createSwarmJob({
-        name: `${finding.provider || finding.claw} Finding Investigation Swarm`,
+        name: `${finding.provider || capabilityName(finding.claw)} Finding Investigation Swarm`,
         profile: 'DEEP_INVESTIGATION',
         requested_by: 'portal-user',
         trigger_type: 'finding_context',
@@ -160,7 +161,7 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
                 borderColor: clawColor(finding.claw) + '40',
                 background: clawColor(finding.claw) + '10',
               }}>
-                {finding.claw}
+                {capabilityName(finding.claw)}
               </span>
             </div>
             <h2 className="text-sm font-semibold leading-snug" style={{ color: 'var(--rc-text-1)' }}>{finding.title}</h2>
@@ -349,7 +350,7 @@ export default function FindingsPage() {
             <Bug className="text-orange-500" /> Findings
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
-            All security findings across every Claw — unified, filterable, and actionable.
+            Security findings across every Capability Node — unified, filterable, and actionable.
           </p>
         </div>
         <button onClick={() => fetchAll(buildParams())}
@@ -428,7 +429,7 @@ export default function FindingsPage() {
           <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full border" style={{
             color: clawColor(claw), borderColor: clawColor(claw) + '50', background: clawColor(claw) + '15',
           }}>
-            {claw} <button onClick={() => setClaw('')}><X className="w-3 h-3" /></button>
+            {capabilityName(claw)} <button onClick={() => setClaw('')}><X className="w-3 h-3" /></button>
           </span>
         )}
         {status && (
@@ -483,7 +484,7 @@ export default function FindingsPage() {
 
           {knownClaws.length > 0 && (
             <div>
-              <label className="text-xs block mb-1.5" style={{ color: 'var(--rc-text-3)' }}>Claw</label>
+              <label className="text-xs block mb-1.5" style={{ color: 'var(--rc-text-3)' }}>Capability</label>
               <div className="flex gap-1.5 flex-wrap">
                 <button onClick={() => setClaw('')}
                   className="text-xs px-2.5 py-1 rounded-lg border transition-colors"
@@ -498,7 +499,7 @@ export default function FindingsPage() {
                       borderColor: claw === c ? clawColor(c) : clawColor(c) + '40',
                       background: claw === c ? clawColor(c) + '30' : 'transparent',
                     }}>
-                    {c}
+                    {capabilityName(c)}
                   </button>
                 ))}
               </div>
@@ -512,7 +513,7 @@ export default function FindingsPage() {
         {/* Table header */}
         <div className="grid text-xs font-semibold uppercase tracking-wide px-4 py-2.5 border-b"
           style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)', gridTemplateColumns: '28px 1fr 100px 80px 60px 90px 80px 20px' }}>
-          <span /><span>Finding</span><span>Claw</span><span>Status</span>
+          <span /><span>Finding</span><span>Capability</span><span>Status</span>
           <span>Risk</span><span>{sort === 'recent' ? 'Created' : sort === 'last_seen' ? 'Last Seen' : 'First Seen'}</span><span>KEV</span><span />
         </div>
 
@@ -524,7 +525,7 @@ export default function FindingsPage() {
           <div className="text-center py-20" style={{ color: 'var(--rc-text-3)' }}>
             <Bug className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No findings match your filters.</p>
-            <p className="text-xs mt-1">Run a scan on any Claw to populate findings.</p>
+            <p className="text-xs mt-1">Run a scan on any Capability Node to populate findings.</p>
           </div>
         ) : (
           <div className="divide-y overflow-y-auto" style={{ borderColor: 'var(--rc-border)', maxHeight: 'calc(100vh - 340px)' }}>
@@ -546,8 +547,8 @@ export default function FindingsPage() {
                     </p>
                   </div>
 
-                  {/* Claw */}
-                  <span className="text-xs font-medium truncate" style={{ color: clawColor(f.claw) }}>{f.claw}</span>
+                  {/* Capability */}
+                  <span className="text-xs font-medium truncate" style={{ color: clawColor(f.claw) }}>{capabilityName(f.claw)}</span>
 
                   {/* Status */}
                   <span className={`text-xs px-2 py-0.5 rounded-full border inline-block w-fit ${STATUS_STYLE[f.status] ?? ''}`}>

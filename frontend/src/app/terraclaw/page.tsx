@@ -327,7 +327,7 @@ function GenerateTab() {
     {
       id: 'welcome',
       role: 'agent',
-      text: 'Describe the infrastructure you want. TerraClaw will choose a secure Terraform module, run Trust Fabric, review the HCL, and return artifacts you can send to plan analysis.',
+      text: 'Describe the infrastructure you want. Terraform Governance will choose a secure module, run Trust Fabric, review the HCL, and return artifacts you can send to plan analysis.',
     },
   ]);
 
@@ -428,7 +428,7 @@ function GenerateTab() {
           <div className="border-b border-white/10 px-4 py-3 flex items-center gap-2">
             <Bot className="w-4 h-4 text-orange-300" />
             <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>TerraClaw Agent</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Terraform Governance Agent</p>
               <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>Terraform MCP · Trust Fabric · secure module generation</p>
             </div>
           </div>
@@ -448,7 +448,7 @@ function GenerateTab() {
             ))}
             {loading && (
               <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}>
-                <RefreshCw className="w-4 h-4 animate-spin" /> TerraClaw is selecting module, applying policy, and reviewing HCL…
+                <RefreshCw className="w-4 h-4 animate-spin" /> Terraform Governance is selecting a module, applying policy, and reviewing HCL…
               </div>
             )}
           </div>
@@ -548,7 +548,7 @@ function GenerateTab() {
                 <Network className="w-4 h-4" /> MCP Mode
               </div>
               <p className="mt-1 text-sm font-semibold text-orange-300">{result.mcp?.mode ?? 'local_guarded_fallback'}</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{result.mcp?.server ?? 'regentclaw-mcp'} · {result.mcp?.tool ?? 'generate'}</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{result.mcp?.server ?? 'marcellus-mcp'} · {result.mcp?.tool ?? 'generate'}</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wide" style={{ color: 'var(--rc-text-3)' }}>
@@ -668,7 +668,7 @@ function GenerateTab() {
           <Wand2 className="w-8 h-8 mx-auto text-orange-300" />
           <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Generated Terraform will appear here</p>
           <p className="mt-1 text-xs max-w-md mx-auto" style={{ color: 'var(--rc-text-3)' }}>
-            TerraClaw returns the module, Trust Fabric decision, controls, MCP trace, review findings, and plan-ready artifacts.
+            Terraform Governance returns the module, Trust Fabric decision, controls, MCP trace, review findings, and plan-ready artifacts.
           </p>
         </div>
       )}
@@ -1072,7 +1072,7 @@ function ComplianceTab() {
             <tr className="border-b border-white/10" style={{ background: 'var(--rc-bg-elevated)' }}>
               <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'var(--rc-text-2)' }}>Control ID</th>
               <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'var(--rc-text-2)' }}>Control Name</th>
-              <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'var(--rc-text-2)' }}>TerraClaw Rules</th>
+              <th className="text-left px-4 py-2.5 font-medium" style={{ color: 'var(--rc-text-2)' }}>Governance Rules</th>
             </tr>
           </thead>
           <tbody>
@@ -1095,9 +1095,9 @@ function ComplianceTab() {
 
       <div className="p-4 rounded-lg bg-blue-900/10 border border-blue-900/40">
         <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>
-          Compliance coverage is based on TerraClaw security rules mapped to framework controls.
+          Compliance coverage is based on infrastructure-governance rules mapped to framework controls.
           Run a <span className="font-semibold" style={{ color: 'var(--rc-text-1)' }}>Review</span> or <span className="font-semibold" style={{ color: 'var(--rc-text-1)' }}>Scan</span> to generate evidence against these controls.
-          For a full evidence export, use <span className="font-semibold text-green-400">ComplianceClaw → Evidence Export</span>.
+          For a full evidence export, use <span className="font-semibold text-green-400">Compliance Assurance → Evidence Export</span>.
         </p>
       </div>
     </div>
@@ -1134,7 +1134,7 @@ export default function TerraClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Container className="text-orange-400" /> TerraClaw
+            <Container className="text-orange-400" /> Terraform Governance
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Terraform security governance — review, generate, and gate IaC with APPROVE / WARN / BLOCK decisions.

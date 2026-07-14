@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import AuthBoundary from '@/components/AuthBoundary';
 
 export const metadata: Metadata = {
-  title: 'RegentClaw — Zero Trust Security Ecosystem',
-  description: 'Modular, governed security ecosystem with Zero Trust enforcement',
+  title: 'Marcellus Architecture Lab',
+  description: 'Distributed Zero Trust security architecture with Cortex, Hearts, Arms, and Capability Nodes',
   icons: {
     icon: [
       { url: '/favicon.png', type: 'image/png', sizes: '512x512' },
@@ -28,12 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen" style={{ background: 'var(--rc-bg-base)', color: 'var(--rc-text-1)' }}>
         <ThemeProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-auto p-8">
-              {children}
-            </main>
-          </div>
+          <AuthBoundary>{children}</AuthBoundary>
         </ThemeProvider>
       </body>
     </html>

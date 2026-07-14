@@ -67,7 +67,7 @@ export default function ComplianceClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <ClipboardCheck className="text-green-400" /> ComplianceClaw
+            <ClipboardCheck className="text-green-400" /> Compliance Assurance
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Compliance posture monitoring - CIS Benchmarks, SOC 2, PCI DSS, HIPAA, and NIST framework control drift.

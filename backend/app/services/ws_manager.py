@@ -33,8 +33,8 @@ class ConnectionManager:
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
+    async def connect(self, ws: WebSocket, subprotocol: str | None = None) -> None:
+        await ws.accept(subprotocol=subprotocol)
         async with self._lock:
             self._connections.append(ws)
         logger.info("WS client connected — total=%d", len(self._connections))

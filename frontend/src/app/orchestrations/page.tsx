@@ -126,7 +126,7 @@ function StepRow({ step, idx, onChange, onRemove, onMoveUp, onMoveDown, isFirst,
         <input
           value={step.config?.label ?? ''}
           onChange={e => onChange({ ...step, config: { ...step.config, label: e.target.value } })}
-          placeholder="Agent label (e.g. IdentityClaw Auditor)"
+          placeholder="Agent label (e.g. Identity Security Auditor)"
           className="w-full px-2 py-1 text-xs rounded border focus:outline-none"
           style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}
         />

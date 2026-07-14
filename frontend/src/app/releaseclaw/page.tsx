@@ -113,7 +113,7 @@ export default function ReleaseClawPage() {
       setDeployments(deploymentData);
       setSelected((current: any) => current || deploymentData?.[0] || null);
     } catch (e: any) {
-      setError(e?.message || 'Failed to load ReleaseClaw');
+      setError(e?.message || 'Failed to load Release Governance');
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export default function ReleaseClawPage() {
     if (!selected?.id) return;
     setBusy(true);
     try {
-      const result = await approveRelease(selected.id, { note: 'Approved from ReleaseClaw UI' });
+      const result = await approveRelease(selected.id, { note: 'Approved from Release Governance UI' });
       setSelected(result);
       await load();
     } catch (e: any) {
@@ -186,7 +186,7 @@ export default function ReleaseClawPage() {
   }
 
   if (loading) {
-    return <div className="h-64 flex items-center justify-center" style={{ color: 'var(--rc-text-2)' }}>Loading ReleaseClaw…</div>;
+    return <div className="h-64 flex items-center justify-center" style={{ color: 'var(--rc-text-2)' }}>Loading Release Governance…</div>;
   }
 
   return (
@@ -195,7 +195,7 @@ export default function ReleaseClawPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
             <Rocket className="w-7 h-7 text-cyan-400" />
-            ReleaseClaw
+            Release Governance
           </h1>
           <p className="mt-1 text-sm max-w-4xl" style={{ color: 'var(--rc-text-2)' }}>
             Zero Trust deployment preflight for CI/CD, GitOps, cloud SDKs, CLIs, scripts, full-stack releases, and AI service stacks.
@@ -356,7 +356,7 @@ export default function ReleaseClawPage() {
 
                 <div className="rounded-lg border p-4" style={{ borderColor: 'var(--rc-border)' }}>
                   <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--rc-text-1)' }}>
-                    <GitBranch className="w-4 h-4 text-cyan-400" /> Claw Preflight Coverage
+                    <GitBranch className="w-4 h-4 text-cyan-400" /> Capability Preflight Coverage
                   </h3>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selected.required_claws.map((claw: string) => (

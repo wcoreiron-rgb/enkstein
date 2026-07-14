@@ -3,19 +3,19 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 
-internal static class RegentClawLauncher
+internal static class MarcellusLauncher
 {
     [STAThread]
     private static void Main()
     {
         string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string launchScript = Path.Combine(appDirectory, "runtime", "Start-RegentClaw.ps1");
+        string launchScript = Path.Combine(appDirectory, "runtime", "Start-Marcellus.ps1");
 
         if (!File.Exists(launchScript))
         {
             MessageBox.Show(
-                "The RegentClaw runtime is missing. Reinstall RegentClaw.",
-                "RegentClaw",
+                "The Marcellus runtime is missing. Reinstall Marcellus.",
+                "Marcellus",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             );
@@ -37,8 +37,8 @@ internal static class RegentClawLauncher
         catch (Exception exception)
         {
             MessageBox.Show(
-                "RegentClaw could not start: " + exception.Message,
-                "RegentClaw",
+                "Marcellus could not start: " + exception.Message,
+                "Marcellus",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             );

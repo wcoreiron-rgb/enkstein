@@ -123,7 +123,7 @@ function SecretModal({ secret, onClose }: { secret: string; onClose: () => void 
         {/* Warning box */}
         <div className="bg-yellow-950/50 border border-yellow-800/60 rounded-xl px-4 py-3 mb-4 text-sm text-yellow-300 leading-relaxed">
           Copy this secret and set it as <code className="font-mono bg-yellow-900/40 px-1 rounded text-yellow-200">REGENTCLAW_SIGNING_SECRET</code> in your
-          OpenClaw agent's environment. RegentClaw stores only a hashed preview — the full secret cannot be retrieved after you close this dialog.
+          external agent environment. Marcellus stores only a hashed preview — the full secret cannot be retrieved after you close this dialog.
         </div>
 
         {/* Secret box */}
@@ -313,7 +313,7 @@ function RegisterForm({ onRegistered }: { onRegistered: (secret: string) => void
   return (
     <div className="rounded-2xl p-6 mb-6" style={{ background: '#0f172a', border: '1px solid #164e63' }}>
       <h2 className="text-white font-bold text-base mb-4 flex items-center gap-2">
-        <Globe className="w-4 h-4 text-cyan-400" /> Register External OpenClaw Agent
+        <Globe className="w-4 h-4 text-cyan-400" /> Register External Agent
       </h2>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -658,7 +658,7 @@ export default function ExternalAgentsPage() {
           <Globe className="text-cyan-400" /> External Agents
         </h1>
         <p className="text-gray-400 mt-1 text-sm">
-          Register and govern your own OpenClaw agents under RegentClaw's Zero Trust architecture.
+          Register and govern external agents under Marcellus Zero Trust architecture.
           Every call is HMAC-signed, SSRF-protected, scope-enforced, and runs through Trust Fabric.
         </p>
       </div>
@@ -668,10 +668,10 @@ export default function ExternalAgentsPage() {
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">How external agents work</p>
         <div className="flex items-start gap-3 overflow-x-auto pb-1">
           {[
-            { icon: Globe,    color: 'text-cyan-400',   title: '1. Register',  body: 'Provide your HTTPS endpoint + declare scopes. RegentClaw generates a signing secret.' },
+            { icon: Globe,    color: 'text-cyan-400',   title: '1. Register',  body: 'Provide your HTTPS endpoint and declare scopes. Marcellus generates a signing secret.' },
             { icon: Key,      color: 'text-yellow-400', title: '2. Configure', body: 'Set REGENTCLAW_SIGNING_SECRET on your agent so it can verify inbound calls and sign responses.' },
-            { icon: Shield,   color: 'text-purple-400', title: '3. Dispatch',  body: 'When run, RegentClaw signs the payload with HMAC-SHA256 and calls your endpoint.' },
-            { icon: Lock,     color: 'text-green-400',  title: '4. Verify',    body: 'RegentClaw verifies X-Agent-Signature. Invalid signatures abort the run immediately.' },
+            { icon: Shield,   color: 'text-purple-400', title: '3. Dispatch',  body: 'When run, Marcellus signs the payload with HMAC-SHA256 and calls your endpoint.' },
+            { icon: Lock,     color: 'text-green-400',  title: '4. Verify',    body: 'Marcellus verifies X-Agent-Signature. Invalid signatures abort the run immediately.' },
             { icon: Activity, color: 'text-blue-400',   title: '5. Govern',    body: 'Findings and actions flow through Trust Fabric, autonomy modes, approval gates, and audit trail.' },
           ].map(({ icon: Icon, color, title, body }) => (
             <div key={title} className="flex-shrink-0 w-44 rounded-xl p-3" style={{ background: 'rgba(30,41,59,0.6)' }}>
@@ -695,7 +695,7 @@ export default function ExternalAgentsPage() {
         <div className="text-center py-16" style={{ color: '#374151' }}>
           <Globe className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No external agents registered yet.</p>
-          <p className="text-xs mt-1">Register your first OpenClaw agent above.</p>
+          <p className="text-xs mt-1">Register your first external agent above.</p>
         </div>
       ) : (
         <div className="space-y-3">

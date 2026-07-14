@@ -38,6 +38,14 @@ async def db_session():
     from app.models.entity_profile import EntityProfile, BehaviorEvent  # noqa
     from app.models.customclaw import CustomClawDefinition  # noqa
     from app.models.audit import AuditLog  # noqa
+    from app.models.marcellus import (  # noqa
+        CapabilityNodeRuntime,
+        NodeCheckpoint,
+        PlexusMessage,
+        ReflexDefinition,
+        ReflexExecution,
+        RegenerationRun,
+    )
     from app.claws.arcclaw.models import AIEvent  # noqa
     from app.claws.identityclaw.models import IdentityRiskEvent, PrivilegedAction  # noqa
 

@@ -1,7 +1,4 @@
-"""
-RegentClaw — Zero Trust Security Ecosystem
-FastAPI Backend Entrypoint
-"""
+"""Marcellus distributed Zero Trust security backend."""
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -19,7 +16,7 @@ from app.core.deps import get_current_user
 limiter = Limiter(key_func=get_remote_address)
 from app.core.database import engine, Base, AsyncSessionLocal
 
-logger = logging.getLogger("regentclaw")
+logger = logging.getLogger("marcellus")
 
 # Import all models so Alembic/SQLAlchemy discovers them
 import app.models  # noqa: F401
@@ -39,6 +36,14 @@ from app.models.entity_profile import EntityProfile, BehaviorEvent  # noqa: F401
 from app.models.customclaw import CustomClawDefinition  # noqa: F401
 from app.models.remediation import RemediationAction, RemediationPlaybook  # noqa: F401
 from app.models.swarm import SwarmJob, SwarmTask  # noqa: F401
+from app.models.marcellus import (  # noqa: F401
+    CapabilityNodeRuntime,
+    NodeCheckpoint,
+    PlexusMessage,
+    ReflexDefinition,
+    ReflexExecution,
+    RegenerationRun,
+)
 
 # Routers
 from app.api.routes.dashboard import router as dashboard_router
@@ -95,6 +100,8 @@ from app.claws.terraclaw.routes import router as terraclaw_router
 from app.api.routes.remediation import router as remediation_router
 from app.core.swarm.routes import router as swarm_router
 from app.core.modelclaw.routes import router as modelclaw_router
+from app.core.marcellus.routes import router as marcellus_router
+from app.core.marcellus.runtime_routes import router as marcellus_runtime_router
 
 
 @asynccontextmanager
@@ -125,8 +132,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="RegentClaw API",
-    description="Zero Trust Security Ecosystem — CoreOS, Trust Fabric, ArcClaw, IdentityClaw, Agent Scheduler",
+    title=f"{settings.APP_NAME} API",
+    description="Distributed Zero Trust security with Cortex, Trust Fabric, Security Arms, and Capability Nodes",
     version=settings.APP_VERSION,
     lifespan=lifespan,
     dependencies=[Depends(get_current_user)],
@@ -220,6 +227,8 @@ app.include_router(terraclaw_router, prefix=PREFIX)
 app.include_router(remediation_router, prefix=PREFIX)
 app.include_router(swarm_router, prefix=PREFIX)
 app.include_router(modelclaw_router, prefix=PREFIX)
+app.include_router(marcellus_router, prefix=PREFIX)
+app.include_router(marcellus_runtime_router, prefix=PREFIX)
 
 
 @app.get("/health")

@@ -11,6 +11,7 @@ import {
   previewSkillPackUpdate, upgradeSkillPack, rollbackSkillPack,
   ApiError,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Skill = {
@@ -362,7 +363,7 @@ function PackCard({ pack, onAction }: { pack: SkillPack; onAction: () => void })
                     <div className="min-w-0">
                       <p className="text-white text-xs font-medium">{s.name}</p>
                       {s.description && <p className="text-gray-400 text-xs">{s.description}</p>}
-                      <p className="text-gray-500 text-xs">{s.claw} · {s.action}</p>
+                      <p className="text-gray-500 text-xs">{capabilityName(s.claw)} · {s.action}</p>
                     </div>
                   </div>
                 ))}

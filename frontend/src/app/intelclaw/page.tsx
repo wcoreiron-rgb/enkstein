@@ -67,7 +67,7 @@ export default function IntelClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Eye className="text-purple-400" /> IntelClaw
+            <Eye className="text-purple-400" /> Threat Intelligence
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Threat intelligence - IOCs, CISA KEV matches, dark web exposure, and active vulnerability exploitation data.

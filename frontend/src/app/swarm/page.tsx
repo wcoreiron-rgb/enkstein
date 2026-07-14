@@ -156,7 +156,7 @@ export default function SwarmPage() {
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Users2 className="text-cyan-400" /> Swarm
           </h1>
-          <p className="text-gray-400 mt-1">Parallel Claw orchestration jobs and live task execution status.</p>
+          <p className="text-gray-400 mt-1">Parallel Capability Node orchestration and live task execution status.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={load} className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-900 text-gray-200 text-sm hover:bg-gray-800">

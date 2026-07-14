@@ -431,14 +431,31 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
           )}
 
           {step === 'done' && testResult && (
-            <div className={`p-4 rounded-xl border space-y-3 ${testResult.success ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
+            <div className={`p-4 rounded-xl border space-y-3 ${
+              !testResult.success
+                ? 'bg-red-900/20 border-red-800'
+                : ['credential', 'service'].includes(testResult.verification_level)
+                  ? 'bg-green-900/20 border-green-800'
+                  : 'bg-amber-900/20 border-amber-800'
+            }`}>
               <div className="flex items-center gap-2">
-                {testResult.success ? <CheckCircle className="w-5 h-5 text-green-400" /> : <AlertTriangle className="w-5 h-5 text-red-400" />}
+                {testResult.success && ['credential', 'service'].includes(testResult.verification_level)
+                  ? <CheckCircle className="w-5 h-5 text-green-400" />
+                  : <AlertTriangle className={`w-5 h-5 ${testResult.success ? 'text-amber-400' : 'text-red-400'}`} />}
                 <p className="font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-                  {testResult.success ? 'Connection successful' : 'Connection failed'}
+                  {!testResult.success
+                    ? 'Connection failed'
+                    : ['credential', 'service'].includes(testResult.verification_level)
+                      ? 'Connection verified'
+                      : 'Endpoint reachable, trust not verified'}
                 </p>
               </div>
               <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>{testResult.message}</p>
+              {testResult.success && !['credential', 'service'].includes(testResult.verification_level) && (
+                <p className="text-xs p-2 rounded border text-amber-300 bg-amber-950/30 border-amber-800">
+                  Marcellus will not auto-approve this connector until a provider-specific credential check succeeds.
+                </p>
+              )}
               {!testResult.success && (
                 <p className="text-xs p-2 rounded border" style={{ color: 'var(--rc-text-3)', borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
                   Credentials are saved but the test failed. Check your credentials and try again, or approve manually if you're confident they're correct.

@@ -10,6 +10,7 @@ import {
 import RiskBadge from '@/components/RiskBadge';
 import { getRunReplayById } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Step type icons ──────────────────────────────────────────────────────────
 const STEP_TYPE_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
@@ -245,7 +246,7 @@ export default function RunReplayPage() {
                               <Bot className="w-4 h-4 text-blue-400" />
                               <div>
                                 <p className="text-white text-xs font-medium">{step.agent_info.name}</p>
-                                <p className="text-gray-400 text-xs">{step.agent_info.claw} · {step.agent_info.execution_mode} · risk: {step.agent_info.risk_level}</p>
+                                <p className="text-gray-400 text-xs">{capabilityName(step.agent_info.claw)} · {step.agent_info.execution_mode} · risk: {step.agent_info.risk_level}</p>
                               </div>
                             </div>
                           </div>

@@ -1,3 +1,5 @@
+import { clearAuthToken, getAuthToken } from '@/lib/auth';
+
 const BASE = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1`
   : '/api/v1';
@@ -15,13 +17,17 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('rc_token') : null;
+  const token = getAuthToken();
   const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json', ...authHeader, ...options?.headers },
     ...options,
   });
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== 'undefined') {
+      clearAuthToken();
+      window.location.replace('/login');
+    }
     // Read body once as text, then try to parse as JSON.
     // Never call both .json() and .text() — the second call throws "body stream already read".
     let data: unknown;
@@ -37,6 +43,229 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 // Dashboard
 export const getDashboard = () => apiFetch<any>('/dashboard');
 export const getControlCenterSummary = () => apiFetch<any>('/dashboard/control-center-summary');
+
+// Marcellus architecture discovery
+export type MarcellusImplementationState = 'existing' | 'partial' | 'contract_only';
+
+export interface MarcellusCortexComponent {
+  id: string;
+  name: string;
+  purpose: string;
+  implementation_state: MarcellusImplementationState;
+  legacy_components: string[];
+}
+
+export interface MarcellusHeart {
+  id: string;
+  name: string;
+  purpose: string;
+  implementation_state: MarcellusImplementationState;
+  components: string[];
+}
+
+export interface MarcellusCapabilityNode {
+  id: string;
+  name: string;
+  arm_id: string;
+  purpose: string;
+  legacy_module: string;
+  legacy_route: string;
+  task_route: string;
+  capabilities: string[];
+  authority_ceiling: 'observe' | 'recommend' | 'approval_gated_action';
+  supports_focused_task: boolean;
+  plexus_ready: boolean;
+  implementation_state: MarcellusImplementationState;
+}
+
+export interface MarcellusSecurityArm {
+  id: string;
+  name: string;
+  purpose: string;
+  node_ids: string[];
+  implementation_state: MarcellusImplementationState;
+}
+
+export interface MarcellusArchitecture {
+  name: string;
+  version: string;
+  working_name: boolean;
+  source_lineage: string;
+  compatibility_mode: string;
+  thesis: string;
+  cortex: MarcellusCortexComponent[];
+  hearts: MarcellusHeart[];
+  arms: MarcellusSecurityArm[];
+  capability_nodes: MarcellusCapabilityNode[];
+  reflexes: {
+    implementation_state: MarcellusImplementationState;
+    purpose: string;
+    existing_foundation: string[];
+    invariants: string[];
+  };
+  plexus: {
+    implementation_state: MarcellusImplementationState;
+    purpose: string;
+    current_transport: string;
+    target_transport: string;
+    invariants: string[];
+  };
+  regeneration: {
+    implementation_state: MarcellusImplementationState;
+    purpose: string;
+    recovery_sequence: string[];
+    invariants: string[];
+  };
+  invariants: string[];
+}
+
+export const getMarcellusArchitecture = () =>
+  apiFetch<MarcellusArchitecture>('/marcellus/architecture');
+
+export interface MarcellusPlexusMessage {
+  id: string;
+  tenant_id: string;
+  sender_node_id: string;
+  recipient_node_id: string;
+  message_type: string;
+  classification: string;
+  correlation_id: string;
+  trace_id: string;
+  payload_digest: string;
+  payload: Record<string, unknown> | null;
+  signature_algorithm: string;
+  key_id: string;
+  status: string;
+  policy_outcome: string;
+  policy_reason: string;
+  risk_score: number;
+  created_by: string;
+  approved_by: string | null;
+  created_at: string;
+  expires_at: string;
+  processed_at: string | null;
+}
+
+export interface MarcellusReflexDefinition {
+  id: string;
+  tenant_id: string;
+  name: string;
+  node_id: string;
+  event_type: string;
+  conditions_json: string;
+  action_kind: 'record_signal' | 'plexus_notify';
+  action_config_json: string;
+  authority: 'observe' | 'recommend' | 'approval_gated_action';
+  classification: string;
+  is_active: boolean;
+  max_runs_per_hour: number;
+  cooldown_seconds: number;
+  run_count: number;
+  last_run_at: string | null;
+  expires_at: string | null;
+}
+
+export interface MarcellusReflexExecution {
+  id: string;
+  tenant_id: string;
+  reflex_id: string;
+  event_id: string;
+  event_type: string;
+  status: string;
+  requested_by: string;
+  approved_by: string | null;
+  policy_outcome: string;
+  policy_reason: string;
+  risk_score: number;
+  result_json: string | null;
+  error_message: string | null;
+  plexus_message_id: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface MarcellusCheckpoint {
+  id: string;
+  tenant_id: string;
+  node_id: string;
+  version: number;
+  state_digest: string;
+  manifest: Record<string, unknown>;
+  manifest_digest: string;
+  signature_algorithm: string;
+  key_id: string;
+  status: string;
+  created_by: string;
+  created_at: string;
+  verified_at: string | null;
+}
+
+export interface MarcellusRegenerationRun {
+  id: string;
+  tenant_id: string;
+  node_id: string;
+  checkpoint_id: string;
+  requested_by: string;
+  approved_by: string | null;
+  status: string;
+  policy_outcome: string;
+  policy_reason: string;
+  risk_score: number;
+  stages_json: string;
+  verification_json: string | null;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface MarcellusNodeRuntime {
+  id: string;
+  tenant_id: string;
+  node_id: string;
+  instance_id: string;
+  generation: number;
+  status: string;
+  state_digest: string;
+  checkpoint_id: string;
+  health_json: string;
+  regenerated_at: string;
+  last_health_at: string | null;
+}
+
+export const getMarcellusPlexusMessages = (tenantId: string) =>
+  apiFetch<MarcellusPlexusMessage[]>(`/marcellus/plexus/messages?tenant_id=${encodeURIComponent(tenantId)}`);
+export const sendMarcellusPlexusMessage = (body: Record<string, unknown>) =>
+  apiFetch<MarcellusPlexusMessage>('/marcellus/plexus/messages', { method: 'POST', body: JSON.stringify(body) });
+export const acknowledgeMarcellusPlexusMessage = (id: string, body: Record<string, unknown>) =>
+  apiFetch<MarcellusPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/ack`, { method: 'POST', body: JSON.stringify(body) });
+export const approveMarcellusPlexusMessage = (id: string, tenantId: string) =>
+  apiFetch<MarcellusPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+
+export const getMarcellusReflexes = (tenantId: string) =>
+  apiFetch<MarcellusReflexDefinition[]>(`/marcellus/reflexes?tenant_id=${encodeURIComponent(tenantId)}`);
+export const createMarcellusReflex = (body: Record<string, unknown>) =>
+  apiFetch<MarcellusReflexDefinition>('/marcellus/reflexes', { method: 'POST', body: JSON.stringify(body) });
+export const evaluateMarcellusReflexes = (body: Record<string, unknown>) =>
+  apiFetch<MarcellusReflexExecution[]>('/marcellus/reflexes/evaluate', { method: 'POST', body: JSON.stringify(body) });
+export const getMarcellusReflexExecutions = (tenantId: string) =>
+  apiFetch<MarcellusReflexExecution[]>(`/marcellus/reflexes/executions?tenant_id=${encodeURIComponent(tenantId)}`);
+export const approveMarcellusReflexExecution = (id: string, tenantId: string) =>
+  apiFetch<MarcellusReflexExecution>(`/marcellus/reflexes/executions/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+
+export const getMarcellusCheckpoints = (tenantId: string) =>
+  apiFetch<MarcellusCheckpoint[]>(`/marcellus/regeneration/checkpoints?tenant_id=${encodeURIComponent(tenantId)}`);
+export const createMarcellusCheckpoint = (body: Record<string, unknown>) =>
+  apiFetch<MarcellusCheckpoint>('/marcellus/regeneration/checkpoints', { method: 'POST', body: JSON.stringify(body) });
+export const verifyMarcellusCheckpoint = (id: string, tenantId: string) =>
+  apiFetch<{ checkpoint_id: string; verified: boolean; checks: Record<string, boolean>; failures: string[] }>(`/marcellus/regeneration/checkpoints/${encodeURIComponent(id)}/verify`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+export const startMarcellusRegeneration = (tenantId: string, checkpointId: string) =>
+  apiFetch<MarcellusRegenerationRun>('/marcellus/regeneration/runs', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, checkpoint_id: checkpointId }) });
+export const getMarcellusRegenerationRuns = (tenantId: string) =>
+  apiFetch<MarcellusRegenerationRun[]>(`/marcellus/regeneration/runs?tenant_id=${encodeURIComponent(tenantId)}`);
+export const approveMarcellusRegeneration = (id: string, tenantId: string) =>
+  apiFetch<MarcellusRegenerationRun>(`/marcellus/regeneration/runs/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+export const getMarcellusNodeRuntimes = (tenantId: string) =>
+  apiFetch<MarcellusNodeRuntime[]>(`/marcellus/regeneration/runtimes?tenant_id=${encodeURIComponent(tenantId)}`);
 
 // ArcClaw
 export const getArcStats = () => apiFetch<any>('/arcclaw/stats');
@@ -289,6 +518,11 @@ export const routeModelClawCall = (body: object) =>
   apiFetch<any>('/modelclaw/route', { method: 'POST', body: JSON.stringify(body) });
 export const getModelClawCalls = (limit = 50) =>
   apiFetch<any[]>(`/modelclaw/calls?limit=${limit}`);
+export const getBrainStatuses = () => apiFetch<any[]>('/modelclaw/brains/status');
+export const invokeSubscriptionBrain = (body: object) =>
+  apiFetch<any>('/modelclaw/brains/invoke', { method: 'POST', body: JSON.stringify(body) });
+export const routeBrainConsensus = (body: object) =>
+  apiFetch<any>('/modelclaw/consensus', { method: 'POST', body: JSON.stringify(body) });
 
 // Memory / State Layer
 export const getMemorySummary = () => apiFetch<any>('/memory/summary');

@@ -538,7 +538,7 @@ export default function TriggersPage() {
               {/* Target claw (if fire_scan) */}
               {form.action_type === 'fire_scan' && (
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1.5">Target Claw</label>
+                  <label className="block text-xs text-gray-400 mb-1.5">Target Capability</label>
                   <input
                     value={form.target_claw}
                     onChange={e => setForm(f => ({ ...f, target_claw: e.target.value }))}

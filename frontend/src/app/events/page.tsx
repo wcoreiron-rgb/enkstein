@@ -24,7 +24,7 @@ export default function EventsPage() {
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
           <Activity className="text-green-400" /> Events
         </h1>
-        <p className="text-gray-400 mt-1">CoreOS Telemetry Bus — Unified event stream across all Claw modules</p>
+        <p className="text-gray-400 mt-1">CoreOS Telemetry Bus — unified event stream across all Capability Nodes</p>
       </div>
 
       <div className="flex gap-2 border-b border-gray-800 pb-2">

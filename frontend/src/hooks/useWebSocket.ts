@@ -1,5 +1,5 @@
 /**
- * RegentClaw — useWebSocket hook
+ * Marcellus useWebSocket hook
  *
  * Maintains a persistent WebSocket connection to the backend live feed.
  * Features:
@@ -31,6 +31,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { getAuthToken } from '@/lib/auth';
 
 type WSEvent = { type: string; timestamp: string; data: Record<string, unknown> };
 type Handler = (data: Record<string, unknown>) => void;
@@ -39,11 +40,17 @@ export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'failed';
 // The backend WebSocket URL.
 // In local dev the Next.js proxy doesn't forward WS upgrades, so we hit the
 // backend port directly.  For production, point this at your load balancer.
-const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ||
-  (typeof window !== 'undefined'
-    ? `ws://${window.location.hostname}:8000/api/v1/ws`
-    : 'ws://localhost:8000/api/v1/ws');
+const getWebSocketConnection = (): { url: string; protocols?: string[] } => {
+  const url = process.env.NEXT_PUBLIC_WS_URL ||
+    (typeof window !== 'undefined'
+      ? `ws://${window.location.hostname}:8000/api/v1/ws`
+      : 'ws://localhost:8000/api/v1/ws');
+  if (typeof window === 'undefined') return { url };
+  const token = getAuthToken();
+  return token
+    ? { url, protocols: ['marcellus-auth', token] }
+    : { url };
+};
 
 const INITIAL_DELAY    = 1_000;   // 1 s first retry
 const MAX_DELAY        = 30_000;  // 30 s cap
@@ -111,7 +118,10 @@ export function useWebSocket(): UseWebSocketReturn {
     setStatus('connecting');
 
     try {
-      const ws = new WebSocket(WS_URL);
+      const connection = getWebSocketConnection();
+      const ws = connection.protocols
+        ? new WebSocket(connection.url, connection.protocols)
+        : new WebSocket(connection.url);
       wsRef.current = ws;
       intentionalRef.current = false;
 

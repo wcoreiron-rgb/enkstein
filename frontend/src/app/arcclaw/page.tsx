@@ -8,6 +8,7 @@ import {
 import StatCard from '@/components/StatCard';
 import RiskBadge from '@/components/RiskBadge';
 import { getArcStats, getArcEvents, apiFetch } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ const TOOL_META: Record<string, { label: string; icon: typeof Search; color: str
   get_security_posture:        { label: "Security Posture",    icon: Shield,        color: "#22c55e" },
   get_findings:                { label: "Findings Query",      icon: Eye,           color: "#3b82f6" },
   run_claw_scan:               { label: "Trigger Scan",        icon: Zap,           color: "#f59e0b" },
+  run_identity_detection:      { label: "Identity Detection",  icon: Shield,        color: "#06b6d4" },
   trigger_workflow:            { label: "Run Workflow",        icon: Play,          color: "#10b981" },
   send_security_alert:         { label: "Send Alert",          icon: Bell,          color: "#ef4444" },
   get_recent_events:           { label: "Recent Events",       icon: Clock,         color: "#6b7280" },
@@ -65,8 +67,9 @@ function toolInputSummary(tool: string, input: Record<string, unknown>): string 
   if (tool === "search_mitre_attack") return `"${input.query}"`;
   if (tool === "get_security_posture") return "all domains";
   if (tool === "get_findings")
-    return `${input.claw}${input.severity ? ` · ${input.severity}` : ""}`;
-  if (tool === "run_claw_scan") return String(input.claw ?? "");
+    return `${capabilityName(String(input.claw ?? ''))}${input.severity ? ` · ${input.severity}` : ""}`;
+  if (tool === "run_claw_scan") return capabilityName(String(input.claw ?? ""));
+  if (tool === "run_identity_detection") return "governed read-only detection";
   if (tool === "trigger_workflow") return String(input.workflow_name ?? "");
   if (tool === "send_security_alert")
     return `${input.severity?.toString().toUpperCase()} · "${input.title}"`;
@@ -106,6 +109,16 @@ function toolResultSummary(tool: string, result: Record<string, unknown>): strin
   if (tool === "run_claw_scan") {
     const r = result as any;
     return r.status ?? "scan triggered";
+  }
+  if (tool === "run_identity_detection") {
+    const r = result as any;
+    if (r.data_source === "live_connector") {
+      return `Live · ${r.findings?.length ?? 0} findings · risk ${r.risk_score ?? 0}`;
+    }
+    if (r.data_source === "persisted_db") {
+      return `Stored evidence · ${r.findings?.length ?? 0} findings`;
+    }
+    return "Connector required · no environment scanned";
   }
   if (tool === "trigger_workflow") {
     const r = result as any;
@@ -613,7 +626,7 @@ export default function ArcClawPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3"
             style={{ color: "var(--rc-text-1)" }}>
-            <Shield className="text-regent-400" /> ArcClaw
+            <Shield className="text-regent-400" /> AI Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--rc-text-2)" }}>
             AI Security &amp; Governance — Security Copilot with live tool calling + AI Governance
@@ -1044,7 +1057,7 @@ export default function ArcClawPage() {
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {[
                 { label: 'Prompt submitted',              color: 'border-gray-700 text-gray-300'   },
-                { label: 'ArcClaw inspects it',           color: 'border-yellow-700 text-yellow-300' },
+                { label: 'AI Security inspects it',       color: 'border-yellow-700 text-yellow-300' },
                 { label: 'AGT injection scan',            color: 'border-blue-700 text-blue-300'   },
                 { label: 'Pattern detection',             color: 'border-yellow-700 text-yellow-300' },
                 { label: 'Policy check',                  color: 'border-regent-700 text-regent-300' },

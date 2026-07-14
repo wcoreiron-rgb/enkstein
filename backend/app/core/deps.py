@@ -35,6 +35,18 @@ _DEV_USER = {
 _PUBLIC_PATHS: frozenset[str] = frozenset({
     "/api/v1/auth/token",
     "/api/v1/auth/register",
+    "/api/v1/auth/email/status",
+    "/api/v1/auth/email/request",
+    "/api/v1/auth/email/verify",
+    "/api/v1/auth/owner/status",
+    "/api/v1/auth/owner/setup",
+    "/api/v1/auth/owner/setup/confirm",
+    "/api/v1/auth/owner/login",
+    "/api/v1/auth/owner/recovery",
+    # The WebSocket route performs its own JWT validation and protocol-level
+    # rejection. Letting the global HTTP dependency reject it produces an
+    # incomplete ASGI handshake instead of a clean WebSocket close.
+    "/api/v1/ws",
     "/health",
     "/",
     "/docs",
@@ -71,11 +83,6 @@ async def get_current_user(
     if auth_header.lower().startswith("bearer "):
         token = auth_header[7:].strip()
 
-    # WebSocket clients can pass ?token=<jwt>, because browser WebSocket
-    # constructors cannot set arbitrary Authorization headers.
-    if not token:
-        token = connection.query_params.get("token", "")
-
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -88,6 +95,13 @@ async def get_current_user(
         sub: str = payload.get("sub", "")
         if not sub:
             raise ValueError("empty sub")
+        if payload.get("role") == "viewer" and connection.scope.get("type") == "http":
+            method = str(connection.scope.get("method", "GET")).upper()
+            if method not in {"GET", "HEAD", "OPTIONS"}:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Verified email sessions are read-only; owner approval is required for changes",
+                )
         return payload
     except (JWTError, ValueError):
         raise HTTPException(

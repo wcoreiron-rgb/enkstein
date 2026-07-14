@@ -10,8 +10,12 @@ Every test is read-only — no writes, no side effects.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
+import smtplib
+import socket
+import ssl
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import urlparse
@@ -77,6 +81,7 @@ class TestResult:
     success: bool
     message: str
     detail: Optional[str] = None
+    verification_level: str = "none"
 
 
 # ── Per-connector test implementations ────────────────────────────────────────
@@ -93,7 +98,11 @@ async def _test_openai(creds: dict) -> TestResult:
             )
             if resp.status_code == 200:
                 models = resp.json().get("data", [])
-                return TestResult(True, f"Connected — {len(models)} models available")
+                return TestResult(
+                    True,
+                    f"Connected — {len(models)} models available",
+                    verification_level="credential",
+                )
             elif resp.status_code == 401:
                 return TestResult(False, "Invalid API key — check your OpenAI key")
             else:
@@ -124,7 +133,11 @@ async def _test_anthropic(creds: dict) -> TestResult:
                 },
             )
             if resp.status_code == 200:
-                return TestResult(True, "Connected — Anthropic API responding")
+                return TestResult(
+                    True,
+                    "Connected — Anthropic API responding",
+                    verification_level="credential",
+                )
             elif resp.status_code == 401:
                 return TestResult(False, "Invalid API key — check your Anthropic key")
             else:
@@ -150,7 +163,11 @@ async def _test_ollama(creds: dict) -> TestResult:
             if resp.status_code == 200:
                 models = resp.json().get("models", [])
                 names = [m["name"] for m in models[:5]]
-                return TestResult(True, f"Connected — {len(models)} models: {', '.join(names) or 'none pulled yet'}")
+                return TestResult(
+                    True,
+                    f"Connected — {len(models)} models: {', '.join(names) or 'none pulled yet'}",
+                    verification_level="service",
+                )
             else:
                 return TestResult(False, f"Ollama responded HTTP {resp.status_code}")
         except httpx.ConnectError:
@@ -171,7 +188,11 @@ async def _test_slack(creds: dict) -> TestResult:
             )
             data = resp.json()
             if data.get("ok"):
-                return TestResult(True, f"Connected as @{data.get('user', 'unknown')} in {data.get('team', 'unknown')}")
+                return TestResult(
+                    True,
+                    f"Connected as @{data.get('user', 'unknown')} in {data.get('team', 'unknown')}",
+                    verification_level="credential",
+                )
             else:
                 return TestResult(False, f"Slack error: {data.get('error', 'unknown')}")
         except Exception as e:
@@ -190,7 +211,11 @@ async def _test_github(creds: dict) -> TestResult:
             )
             if resp.status_code == 200:
                 user = resp.json()
-                return TestResult(True, f"Connected as @{user.get('login')} — {user.get('public_repos', 0)} repos")
+                return TestResult(
+                    True,
+                    f"Connected as @{user.get('login')} — {user.get('public_repos', 0)} repos",
+                    verification_level="credential",
+                )
             elif resp.status_code == 401:
                 return TestResult(False, "Invalid token — check your GitHub PAT")
             else:
@@ -211,7 +236,11 @@ async def _test_crowdstrike(creds: dict) -> TestResult:
                 data={"client_id": client_id, "client_secret": client_secret},
             )
             if resp.status_code == 201:
-                return TestResult(True, "Connected — OAuth token obtained successfully")
+                return TestResult(
+                    True,
+                    "Connected — OAuth token obtained successfully",
+                    verification_level="credential",
+                )
             elif resp.status_code == 401:
                 return TestResult(False, "Invalid credentials — check Client ID and Secret")
             else:
@@ -227,7 +256,118 @@ async def _test_pagerduty(creds: dict) -> TestResult:
     # PagerDuty doesn't have a ping endpoint — validate format
     if len(routing_key) < 20:
         return TestResult(False, "Routing key appears invalid (too short)")
-    return TestResult(True, "Routing key format valid — send a test event to fully verify")
+    return TestResult(
+        True,
+        "Routing key format valid — send a test event to fully verify",
+        verification_level="format",
+    )
+
+
+async def _test_nvidia_nim(creds: dict) -> TestResult:
+    """Validate a hosted NVIDIA NIM key with a minimal authenticated inference."""
+    api_key = creds.get("api_key", "").strip()
+    if not api_key:
+        return TestResult(False, "NVIDIA API key not provided")
+
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            resp = await client.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "meta/llama-3.2-1b-instruct",
+                    "messages": [{"role": "user", "content": "Reply OK."}],
+                    "max_tokens": 1,
+                    "temperature": 0,
+                },
+            )
+            if resp.status_code == 200:
+                payload = resp.json()
+                choices = payload.get("choices") if isinstance(payload, dict) else None
+                if not isinstance(choices, list) or not choices:
+                    return TestResult(False, "NVIDIA returned an invalid inference response")
+                return TestResult(
+                    True,
+                    "Connected — NVIDIA accepted the key and completed a minimal inference",
+                    verification_level="credential",
+                )
+            if resp.status_code in (401, 403):
+                return TestResult(False, "NVIDIA rejected the API key")
+            if resp.status_code == 429:
+                return TestResult(False, "NVIDIA rate-limited the verification request — try again later")
+            return TestResult(False, f"NVIDIA verification failed with HTTP {resp.status_code}")
+        except httpx.ConnectError:
+            return TestResult(False, "Cannot reach integrate.api.nvidia.com — check network")
+        except httpx.TimeoutException:
+            return TestResult(False, "NVIDIA verification timed out — try again")
+        except (TypeError, ValueError):
+            return TestResult(False, "NVIDIA returned an invalid verification response")
+        except Exception as exc:
+            logger.warning("NVIDIA connector verification failed: %s", type(exc).__name__)
+            return TestResult(False, "NVIDIA verification could not be completed")
+
+
+async def _test_email(creds: dict) -> TestResult:
+    """Verify a TLS SMTP connection and credentials without sending mail."""
+    host = str(creds.get("smtp_host", "")).strip()
+    username = str(creds.get("username", "")).strip()
+    password = str(creds.get("password", ""))
+    from_addr = str(creds.get("from_addr", "")).strip()
+    try:
+        port = int(creds.get("smtp_port") or 587)
+    except (TypeError, ValueError):
+        return TestResult(False, "SMTP port must be a number")
+
+    if not host or not from_addr:
+        return TestResult(False, "SMTP host and From Address are required")
+    if not 1 <= port <= 65535:
+        return TestResult(False, "SMTP port is outside the valid range")
+    if bool(username) != bool(password):
+        return TestResult(False, "SMTP username and password must be provided together")
+
+    def verify() -> TestResult:
+        try:
+            addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+            for address in addresses:
+                ip = ipaddress.ip_address(address[4][0])
+                if any(ip in network for network in _SSRF_BLOCKED_NETWORKS):
+                    return TestResult(False, "SMTP host resolves to a private or reserved address")
+
+            context = ssl.create_default_context()
+            if port == 465:
+                client: smtplib.SMTP = smtplib.SMTP_SSL(host, port, timeout=TIMEOUT, context=context)
+            else:
+                client = smtplib.SMTP(host, port, timeout=TIMEOUT)
+                client.ehlo()
+                if not client.has_extn("starttls"):
+                    client.quit()
+                    return TestResult(False, "SMTP server does not offer STARTTLS")
+                client.starttls(context=context)
+                client.ehlo()
+
+            try:
+                if username:
+                    client.login(username, password)
+                client.noop()
+            finally:
+                try:
+                    client.quit()
+                except smtplib.SMTPException:
+                    client.close()
+            return TestResult(
+                True,
+                "Connected securely — SMTP accepted the configured credentials",
+                verification_level="credential" if username else "tls_connectivity",
+            )
+        except smtplib.SMTPAuthenticationError:
+            return TestResult(False, "SMTP rejected the username or app-specific password")
+        except (socket.gaierror, ConnectionError, OSError, smtplib.SMTPException):
+            return TestResult(False, "Could not establish a secure SMTP connection")
+
+    return await asyncio.to_thread(verify)
 
 
 async def _test_generic(creds: dict, endpoint: str) -> TestResult:
@@ -240,10 +380,13 @@ async def _test_generic(creds: dict, endpoint: str) -> TestResult:
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
             resp = await client.get(safe_endpoint)
-            return TestResult(
-                resp.status_code < 500,
-                f"Endpoint reachable — HTTP {resp.status_code}",
-            )
+            if 200 <= resp.status_code < 400:
+                return TestResult(
+                    True,
+                    f"Endpoint reachable — HTTP {resp.status_code}; credentials were not verified",
+                    verification_level="reachability",
+                )
+            return TestResult(False, f"Endpoint rejected the request — HTTP {resp.status_code}")
         except httpx.ConnectError:
             return TestResult(False, f"Cannot reach {safe_endpoint}")
         except Exception as e:
@@ -260,6 +403,9 @@ TEST_MAP = {
     "github":      _test_github,
     "crowdstrike": _test_crowdstrike,
     "pagerduty":   _test_pagerduty,
+    "nvidia":      _test_nvidia_nim,
+    "nvidia_nim":  _test_nvidia_nim,
+    "email":       _test_email,
 }
 
 

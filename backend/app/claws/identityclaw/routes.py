@@ -15,7 +15,7 @@ from app.claws.identityclaw.models import IdentityRiskEvent, PrivilegedAction, I
 from app.services.risk_scoring import calculate_event_risk
 from app.services.audit_service import log_action
 from app.services.secrets_manager import get_credential
-from app.models.connector import Connector
+from app.models.connector import Connector, ConnectorStatus
 from app.claws.accessclaw.providers import entra as entra_adapter
 
 router = APIRouter(prefix="/identityclaw", tags=["IdentityClaw — Identity Security"])
@@ -88,7 +88,12 @@ IDENTITY_PROVIDER_CONFIG = [
 
 
 async def _get_identity_provider_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
-    result = await db.execute(select(Connector).where(Connector.connector_type == connector_type))
+    result = await db.execute(
+        select(Connector).where(
+            Connector.connector_type == connector_type,
+            Connector.status == ConnectorStatus.APPROVED,
+        )
+    )
     connector = result.scalar_one_or_none()
     if not connector:
         return None
@@ -307,39 +312,34 @@ async def get_identity_providers(db: AsyncSession = Depends(get_db)):
 @router.post("/task", summary="Execute focused IdentityClaw swarm task")
 async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
-    connector_result = await db.execute(
-        select(Connector).where(
-            Connector.connector_type.in_(["okta", "entra_id", "cyberark"])
-        )
-    )
-    connector_state = "configured" if connector_result.scalars().first() else "unconfigured"
+    connector_state = "unconfigured"
     identities = await db.execute(select(Identity).order_by(desc(Identity.risk_score)).limit(5))
     top = identities.scalars().all()
     live_rows = []
     live_risks = []
     live_providers = []
-    if not top:
-        for cfg in IDENTITY_PROVIDER_CONFIG:
-            creds = await _get_identity_provider_credentials(db, cfg["connector_type"])
-            if not creds:
-                continue
-            connector_state = "configured"
-            try:
-                raw_findings = await cfg["adapter"].get_findings(credentials=creds)
-            except Exception:
-                continue
-            for row in raw_findings[:3]:
-                live_rows.append(
-                    {
-                        "title": row.get("title") or f"{cfg['label']} identity finding",
-                        "detail": (row.get("description") or "Connector-backed identity task finding")[:240],
-                        "provider": cfg["provider"],
-                    }
-                )
-                live_risks.append(float(row.get("risk_score") or 0.0))
-            if live_rows:
-                live_providers.append(cfg["provider"])
-                break
+    connector_errors = []
+    for cfg in IDENTITY_PROVIDER_CONFIG:
+        creds = await _get_identity_provider_credentials(db, cfg["connector_type"])
+        if not creds:
+            continue
+        connector_state = "approved"
+        try:
+            raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+        except Exception as exc:
+            connector_errors.append({"provider": cfg["provider"], "error": type(exc).__name__})
+            continue
+        for row in raw_findings[:3]:
+            live_rows.append(
+                {
+                    "title": row.get("title") or f"{cfg['label']} identity finding",
+                    "detail": (row.get("description") or "Connector-backed identity task finding")[:240],
+                    "provider": cfg["provider"],
+                }
+            )
+            live_risks.append(float(row.get("risk_score") or 0.0))
+        live_providers.append(cfg["provider"])
+        break
     high = [i for i in top if (i.risk_score or 0) >= 70]
     max_risk = max([float(i.risk_score or 0.0) for i in top], default=0.0)
     if live_risks:
@@ -357,8 +357,10 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
         }
         for i in high[:3]
     ]
-    if not findings:
+    if not findings and (top or live_providers):
         findings = [{"title": "No high-risk identity found", "detail": "Top identities are below high-risk threshold."}]
+    elif not findings:
+        findings = []
     if live_rows:
         findings = live_rows
 
@@ -380,7 +382,13 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
         "policy_decisions": [],
         "compliance_mappings": ["NIST AC-2", "ISO27001 A.5.16"],
         "execution_time_ms": elapsed_ms,
-        "data_source": "live_connector" if live_rows else ("persisted_db" if top else "seeded_fallback"),
+        "data_source": "live_connector" if live_providers else ("persisted_db" if top else "no_data_source"),
         "connector_state": connector_state,
         "providers_used": live_providers,
+        "connector_errors": connector_errors,
+        "execution_outcome": (
+            "live_detection_completed" if live_providers
+            else "persisted_evidence_analyzed" if top
+            else "identity_connector_required"
+        ),
     }

@@ -102,6 +102,54 @@ async def test_identity_task_uses_entra_connector_backed_path_when_available(cli
 
 
 @pytest.mark.asyncio
+async def test_identity_task_is_honest_when_no_identity_source_exists(client, monkeypatch):
+    async def _no_creds(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(identity_routes, "_get_identity_provider_credentials", _no_creds)
+
+    response = await client.post(
+        "/api/v1/identityclaw/task",
+        json={"task_type": "investigate_identity_risk", "classification": "confidential"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["data_source"] == "no_data_source"
+    assert body["connector_state"] == "unconfigured"
+    assert body["execution_outcome"] == "identity_connector_required"
+    assert body["providers_used"] == []
+    assert body["findings"] == []
+
+
+@pytest.mark.asyncio
+async def test_identity_task_records_live_detection_with_zero_findings(client, monkeypatch):
+    class _Adapter:
+        @staticmethod
+        async def get_findings(credentials=None):
+            return []
+
+    async def _creds(*args, **kwargs):
+        return {"tenant_id": "t", "client_id": "c", "client_secret": "s"}
+
+    monkeypatch.setattr(identity_routes, "_get_identity_provider_credentials", _creds)
+    monkeypatch.setattr(
+        identity_routes,
+        "IDENTITY_PROVIDER_CONFIG",
+        [{"provider": "entra_id", "connector_type": "entra_id", "label": "Microsoft Entra ID", "adapter": _Adapter}],
+    )
+
+    response = await client.post(
+        "/api/v1/identityclaw/task",
+        json={"task_type": "investigate_identity_risk", "classification": "confidential"},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["data_source"] == "live_connector"
+    assert body["execution_outcome"] == "live_detection_completed"
+    assert body["providers_used"] == ["entra_id"]
+
+
+@pytest.mark.asyncio
 async def test_endpoint_task_uses_connector_backed_path_when_available(client, monkeypatch):
     class _Adapter:
         @staticmethod

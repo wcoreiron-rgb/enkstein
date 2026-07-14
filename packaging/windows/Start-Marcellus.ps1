@@ -3,15 +3,19 @@ $ErrorActionPreference = "Stop"
 $RuntimeDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $EnvFile = Join-Path $RuntimeDir ".env"
 $ComposeFile = Join-Path $RuntimeDir "compose.yaml"
-$LogDir = Join-Path $env:LOCALAPPDATA "RegentClaw\logs"
+$LogDir = Join-Path $env:LOCALAPPDATA "Marcellus\logs"
 $LogFile = Join-Path $LogDir "launcher.log"
+$BridgeScript = Join-Path $RuntimeDir "BrainBridge.ps1"
+$BridgeSecretFile = Join-Path $env:LOCALAPPDATA "Marcellus\brain-bridge.secret"
+$BridgePidFile = Join-Path $env:LOCALAPPDATA "Marcellus\brain-bridge.pid"
+$BridgePort = 47831
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 function Show-Error([string]$Message) {
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show(
-        "RegentClaw could not start. $Message",
-        "RegentClaw",
+        "Marcellus could not start. $Message",
+        "Marcellus",
         "OK",
         "Error"
     ) | Out-Null
@@ -27,8 +31,34 @@ function New-HexSecret([int]$ByteCount) {
 function Set-EnvValue([string]$Key, [string]$Value) {
     $content = Get-Content -Raw -Path $EnvFile
     $pattern = "(?m)^" + [regex]::Escape($Key) + "=.*$"
-    $content = [regex]::Replace($content, $pattern, "$Key=$Value")
+    if ([regex]::IsMatch($content, $pattern)) {
+        $content = [regex]::Replace($content, $pattern, "$Key=$Value")
+    }
+    else {
+        $content = $content.TrimEnd() + [Environment]::NewLine + "$Key=$Value" + [Environment]::NewLine
+    }
     [System.IO.File]::WriteAllText($EnvFile, $content, [System.Text.UTF8Encoding]::new($false))
+}
+
+function Start-BrainBridge {
+    if (-not (Test-Path $BridgeScript)) { return }
+    if (-not (Test-Path $BridgeSecretFile)) {
+        [System.IO.File]::WriteAllText($BridgeSecretFile, (New-HexSecret 32), [System.Text.UTF8Encoding]::new($false))
+    }
+    $bridgeSecret = (Get-Content -Raw -Path $BridgeSecretFile).Trim()
+    Set-EnvValue "BRAIN_BRIDGE_URL" "http://host.docker.internal:$BridgePort"
+    Set-EnvValue "BRAIN_BRIDGE_SECRET" $bridgeSecret
+    Set-EnvValue "BRAIN_BRIDGE_TIMEOUT_SECONDS" "180"
+
+    if (Test-Path $BridgePidFile) {
+        $oldPid = [int](Get-Content -Raw -Path $BridgePidFile)
+        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+    }
+    $process = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ('"' + $BridgeScript + '"'),
+        "-Port", "$BridgePort", "-SecretFile", ('"' + $BridgeSecretFile + '"')
+    )
+    [System.IO.File]::WriteAllText($BridgePidFile, [string]$process.Id)
 }
 
 try {
@@ -39,7 +69,7 @@ try {
     }
 
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Show-Error "Docker Desktop is required. Install it, then start RegentClaw again."
+        Show-Error "Docker Desktop is required. Install it, then start Marcellus again."
         Start-Process "https://www.docker.com/products/docker-desktop/"
         exit 1
     }
@@ -71,7 +101,9 @@ try {
         Set-EnvValue "DEBUG" "false"
     }
 
-    "[$([DateTime]::UtcNow.ToString('o'))] Starting RegentClaw" | Out-File -Append -FilePath $LogFile
+    Start-BrainBridge
+
+    "[$([DateTime]::UtcNow.ToString('o'))] Starting Marcellus" | Out-File -Append -FilePath $LogFile
     & docker compose --env-file $EnvFile -f $ComposeFile config --quiet *>> $LogFile
     if ($LASTEXITCODE -ne 0) { throw "Docker Compose validation failed. See $LogFile." }
     & docker compose --env-file $EnvFile -f $ComposeFile up -d --build *>> $LogFile

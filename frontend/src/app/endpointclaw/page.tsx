@@ -67,7 +67,7 @@ export default function EndpointClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Monitor className="text-orange-400" /> EndpointClaw
+            <Monitor className="text-orange-400" /> Endpoint Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Endpoint detection and response - malware, missing EDR agents, outdated OS, and unencrypted disks across your device fleet.

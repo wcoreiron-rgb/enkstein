@@ -67,7 +67,7 @@ export default function AppClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Code className="text-blue-400" /> AppClaw
+            <Code className="text-blue-400" /> Application Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Application security - SAST/DAST findings, vulnerable dependencies, secrets in code, and insecure API configurations.

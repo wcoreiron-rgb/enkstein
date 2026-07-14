@@ -67,7 +67,7 @@ export default function UserClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <UserCheck className="text-pink-400" /> UserClaw
+            <UserCheck className="text-pink-400" /> User Risk
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             User behavior analytics - anomalous login patterns, impossible travel, privilege escalation, and account compromise indicators.

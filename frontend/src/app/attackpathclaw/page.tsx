@@ -67,7 +67,7 @@ export default function AttackPathClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <GitMerge className="text-red-400" /> AttackPathClaw
+            <GitMerge className="text-red-400" /> Attack Path Analysis
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Attack path analysis - lateral movement paths, choke points, and the shortest routes from exposure to crown jewels.

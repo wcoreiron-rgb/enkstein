@@ -17,7 +17,9 @@ Connection lifecycle:
 
 Authentication:
   In DEBUG mode all connections are allowed.
-  In production a valid JWT must be passed as ?token=<jwt> query parameter.
+  In production a valid JWT is passed as the second WebSocket subprotocol,
+  after the fixed ``marcellus-auth`` protocol marker. This keeps credentials
+  out of request URLs and access logs.
 """
 import asyncio
 import logging
@@ -32,14 +34,27 @@ logger = logging.getLogger("regentclaw.ws_route")
 router = APIRouter(tags=["WebSocket"])
 
 PING_INTERVAL = 30  # seconds
+AUTH_SUBPROTOCOL = "marcellus-auth"
+
+
+def _subprotocol_token(ws: WebSocket) -> tuple[str | None, bool]:
+    offered = [
+        value.strip()
+        for value in ws.headers.get("sec-websocket-protocol", "").split(",")
+        if value.strip()
+    ]
+    if len(offered) >= 2 and offered[0] == AUTH_SUBPROTOCOL:
+        return offered[1], True
+    return None, False
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, token: str | None = None) -> None:
+async def websocket_endpoint(ws: WebSocket) -> None:
     # ── Auth check ────────────────────────────────────────────────────────────
+    token, uses_auth_subprotocol = _subprotocol_token(ws)
     if not settings.DEBUG:
         if not token:
-            await ws.close(code=4401, reason="Authentication required: pass ?token=<jwt>")
+            await ws.close(code=4401, reason="Authentication required")
             return
         try:
             payload = decode_access_token(token)
@@ -51,7 +66,10 @@ async def websocket_endpoint(ws: WebSocket, token: str | None = None) -> None:
             await ws.close(code=4401, reason="Invalid or expired token")
             return
 
-    await ws_manager.connect(ws)
+    await ws_manager.connect(
+        ws,
+        subprotocol=AUTH_SUBPROTOCOL if uses_auth_subprotocol else None,
+    )
 
     # Send welcome so the client knows the connection is live
     await ws.send_json({

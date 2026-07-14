@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RegentClaw — Documentation</title>
+  <title>Marcellus — Documentation</title>
   <meta name="description" content="Technical documentation for the RegentClaw zero-trust security platform." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -397,8 +397,8 @@
 <!-- TOP BAR -->
 <header class="topbar">
   <a href="index.html" class="topbar-logo">
-    <div class="logo-icon"><img src="logo.png" alt="RegentClaw"></div>
-    RegentClaw
+    <div class="logo-icon"><img src="logo.png" alt="Marcellus"></div>
+    Marcellus
   </a>
   <span class="topbar-sep">/</span>
   <span class="topbar-title">Documentation</span>
@@ -407,7 +407,7 @@
     <a href="changelog.html">Changelog</a>
     <a href="owasp-agentic.html">OWASP</a>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">☀️ Light</button>
-    <a href="https://github.com/wcoreiron-rgb/regentclaw" target="_blank" rel="noopener" class="topbar-github">
+    <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener" class="topbar-github">
       <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.1.82-.26.82-.58v-2.04c-3.34.72-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.72.08-.72 1.2.08 1.83 1.23 1.83 1.23 1.06 1.82 2.8 1.3 3.48.99.1-.77.41-1.3.75-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.004 2.04.14 3 .4 2.28-1.55 3.28-1.23 3.28-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58A12 12 0 0 0 24 12C24 5.37 18.63 0 12 0z"/></svg>
       GitHub
     </a>
@@ -469,7 +469,7 @@
 
     <!-- ─── OVERVIEW ─── -->
     <div id="sec-overview" class="doc-section active">
-      <h1>RegentClaw</h1>
+      <h1>Marcellus</h1>
       <p class="lead">A modular zero-trust security ecosystem built to govern every security action — from AI prompt evaluation to cloud posture remediation — through a single, auditable enforcement layer.</p>
 
       <h2>What is RegentClaw?</h2>
@@ -518,7 +518,7 @@ cd regentclaw-VERSION
 ./install.sh</code></pre>
 
       <h2>Native Installers</h2>
-      <p>Desktop users can install <code>RegentClaw-VERSION-macos.pkg</code> or <code>RegentClaw-VERSION-windows-x64-setup.exe</code>. These packages create a native launcher that starts Docker Desktop, initializes secrets, starts the RegentClaw stack, and opens the dashboard. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
+      <p>Desktop users can install <code>Marcellus-VERSION-macos.pkg</code> or <code>Marcellus-VERSION-windows-x64-setup.exe</code>. These packages create a Marcellus launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Marcellus in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
 
       <h2>Prerequisites</h2>
       <ul>
@@ -534,7 +534,7 @@ cd regentclaw-VERSION
       </div>
 
       <h2>1. Clone and Configure</h2>
-      <pre><span class="c-cmd">git clone</span> <span class="c-str">https://github.com/wcoreiron-rgb/regentclaw</span>
+      <pre><span class="c-cmd">git clone</span> <span class="c-str">https://github.com/wcoreiron-rgb/marcellus</span>
 <span class="c-cmd">cd</span> regentclaw
 <span class="c-cmd">cp</span> .env.example .env   <span class="c-comment"># Set SECRET_KEY and DB password</span></pre>
 

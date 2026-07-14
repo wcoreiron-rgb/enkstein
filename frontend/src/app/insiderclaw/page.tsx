@@ -67,7 +67,7 @@ export default function InsiderClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <UserX className="text-rose-400" /> InsiderClaw
+            <UserX className="text-rose-400" /> Insider Risk
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Insider threat detection - bulk data exfiltration, policy violations, anomalous file access, and off-boarding risks.

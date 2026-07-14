@@ -11,6 +11,7 @@ import {
   getPendingCommands, approvePendingCommand, rejectPendingCommand, bulkReviewPendingCommands, getCommandTimeline, getCommandStatus, updateCommandApprovalPolicy,
   ingestChannelCli, ingestChannelEmail, ingestChannelWebhook,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -167,7 +168,7 @@ function MessageRow({ msg }: { msg: Message }) {
           {msg.detected_claws?.length > 0 && (
             <div className="flex gap-1 mt-1">
               {msg.detected_claws.slice(0, 3).map(c => (
-                <span key={c} className="text-xs px-1.5 py-0.5 bg-gray-800 rounded text-gray-500">{c}</span>
+                <span key={c} className="text-xs px-1.5 py-0.5 bg-gray-800 rounded text-gray-500">{capabilityName(c)}</span>
               ))}
             </div>
           )}
@@ -232,7 +233,7 @@ function MessageRow({ msg }: { msg: Message }) {
                 )}
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-400 mb-2">RegentClaw Response</p>
+                <p className="text-xs font-semibold text-gray-400 mb-2">Marcellus Response</p>
                 <pre className="text-xs text-gray-300 bg-gray-900 rounded-lg p-3 whitespace-pre-wrap">
                   {msg.response_text}
                 </pre>
@@ -299,8 +300,8 @@ function SimulatePanel({ onResult }: { onResult: (r: any) => void }) {
 
   const EXAMPLES = [
     'Scan all cloud connectors for misconfigurations',
-    'Block the IP 192.168.1.100 in NetClaw',
-    'Rotate all expired credentials in AccessClaw',
+    'Block the IP 192.168.1.100 through Network Security',
+    'Rotate all expired credentials through Privileged Access',
     'Run the ransomware containment workflow',
     'Give me a security status report',
     'Disable the account for redacted_user',
@@ -510,8 +511,8 @@ function SimResult({ result }: { result: any }) {
           <p className="text-gray-300">{result.detected_intent || 'none'}</p>
         </div>
         <div>
-          <p className="text-gray-500 mb-0.5">Detected Claws</p>
-          <p className="text-gray-300">{result.detected_claws?.join(', ') || 'none'}</p>
+          <p className="text-gray-500 mb-0.5">Detected Capabilities</p>
+          <p className="text-gray-300">{result.detected_claws?.map(capabilityName).join(', ') || 'none'}</p>
         </div>
         <div>
           <p className="text-gray-500 mb-0.5">Policy Flags</p>
@@ -925,7 +926,7 @@ export default function ChannelGatewayPage() {
             { label: '→', color: '' },
             { label: 'Intent Parsing', color: 'bg-cyan-900/30 border border-cyan-800 text-cyan-300' },
             { label: '→', color: '' },
-            { label: 'Claw Dispatch', color: 'bg-green-900/30 border border-green-800 text-green-300' },
+            { label: 'Capability Dispatch', color: 'bg-green-900/30 border border-green-800 text-green-300' },
             { label: '→', color: '' },
             { label: 'Respond to Channel', color: 'bg-yellow-900/30 border border-yellow-800 text-yellow-300' },
           ].map((step, i) =>
@@ -1040,7 +1041,7 @@ export default function ChannelGatewayPage() {
               <h3 className="text-white font-semibold text-sm flex items-center gap-2">
                 <Clock className="w-4 h-4 text-yellow-400" /> Pending Command Approvals
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">Commands requiring approval from CommandClaw policy outcomes.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Commands requiring approval from Command Cortex policy outcomes.</p>
             </div>
             <span className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300 border border-gray-700">
               {pendingCommands.length} pending
@@ -1277,7 +1278,7 @@ export default function ChannelGatewayPage() {
             <User className="w-4 h-4 text-cyan-400" /> Channel Identity Registry
           </h3>
           <p className="text-xs text-gray-500 mb-4">
-            Register Slack/Teams users with their RegentClaw roles and trust levels. Unregistered users will be blocked.
+            Register Slack/Teams users with their Marcellus roles and trust levels. Unregistered users will be blocked.
           </p>
           <IdentityEditor identities={identities} onSaved={load} />
         </div>

@@ -70,7 +70,7 @@ export default function AccessClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Key className="text-amber-400" /> AccessClaw
+            <Key className="text-amber-400" /> Privileged Access
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Privileged access management - over-permissioned accounts, MFA gaps, and stale credentials across your identity stack.

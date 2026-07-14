@@ -67,7 +67,7 @@ export default function DataClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Database className="text-emerald-400" /> DataClaw
+            <Database className="text-emerald-400" /> Data Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Data security and DLP - unencrypted stores, exposed PII, DLP policy gaps, and data residency violations.

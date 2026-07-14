@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# RegentClaw startup entrypoint — migrations → seeds → uvicorn
+# Marcellus startup entrypoint — migrations → seeds → uvicorn
 # Seeds are best-effort: a failure is logged but won't block startup.
 
 echo "╔══════════════════════════════════════════════════════╗"
-echo "║         RegentClaw — startup initialisation          ║"
+echo "║          Marcellus — startup initialisation          ║"
 echo "╚══════════════════════════════════════════════════════╝"
 
 # ── Wait for Postgres ─────────────────────────────────────────────────────────
@@ -27,13 +27,39 @@ echo "✅  Database is ready."
 # ── Alembic migrations ────────────────────────────────────────────────────────
 echo ""
 echo "📦  Running Alembic migrations…"
+
+schema_is_materialized() {
+  python - <<'PYEOF'
+import os
+import sys
+
+import psycopg2
+
+url = os.environ.get("DATABASE_URL_SYNC") or os.environ["DATABASE_URL"].replace("+asyncpg", "")
+required_tables = (
+    "customclaw_definitions",
+    "remediation_actions",
+    "remediation_playbooks",
+)
+with psycopg2.connect(url) as connection:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT to_regclass(%s) IS NOT NULL, "
+            "to_regclass(%s) IS NOT NULL, "
+            "to_regclass(%s) IS NOT NULL",
+            tuple(f"public.{table}" for table in required_tables),
+        )
+        sys.exit(0 if all(cursor.fetchone()) else 1)
+PYEOF
+}
+
 if alembic current 2>&1 | grep -q "(head)"; then
   echo "    Already at head — skipping."
+elif schema_is_materialized; then
+  echo "    Existing schema is complete — reconciling migration revision."
+  alembic stamp head
 else
-  alembic upgrade head 2>&1 || {
-    echo "    Tables exist but no alembic_version — stamping baseline…"
-    alembic stamp 0001 && alembic upgrade head
-  }
+  alembic upgrade head
 fi
 echo "✅  Migrations done."
 
@@ -105,7 +131,7 @@ echo "✅  Seeds done."
 
 # ── Start API ─────────────────────────────────────────────────────────────────
 echo ""
-echo "🚀  Starting RegentClaw API on :8000"
+echo "🚀  Starting Marcellus API on :8000"
 echo ""
 
 uvicorn_args=(main:app --host 0.0.0.0 --port 8000)

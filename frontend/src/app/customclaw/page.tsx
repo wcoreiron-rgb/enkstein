@@ -212,7 +212,7 @@ export default function CustomClawPage() {
             🔌
           </div>
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Custom Claw Builder</h1>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Capability Builder</h1>
             <p className="text-sm" style={{ color: 'var(--rc-text-3)' }}>
               Connect any REST API as a governed workflow step
             </p>
@@ -223,7 +223,7 @@ export default function CustomClawPage() {
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
           style={{ background: 'var(--rc-accent-violet)', color: '#fff' }}
         >
-          <Plus size={16} /> New Claw
+          <Plus size={16} /> New Capability
         </button>
       </div>
 
@@ -252,7 +252,7 @@ export default function CustomClawPage() {
             className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium"
             style={{ background: 'var(--rc-accent-violet)', color: '#fff' }}
           >
-            <Plus size={16} /> Create Your First Claw
+            <Plus size={16} /> Create Your First Capability
           </button>
         </div>
       )}
@@ -386,7 +386,7 @@ export default function CustomClawPage() {
           {/* Form header */}
           <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--rc-border)' }}>
             <h2 className="text-lg font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-              {editId ? 'Edit Claw' : 'New Custom Claw'}
+              {editId ? 'Edit Capability' : 'New Custom Capability'}
             </h2>
             <button onClick={closeForm} style={{ color: 'var(--rc-text-3)' }}>
               <X size={20} />
@@ -399,7 +399,7 @@ export default function CustomClawPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--rc-text-2)' }}>
-                  Claw Name *
+                  Capability Name *
                 </label>
                 <input
                   className="w-full px-3 py-2 rounded-lg text-sm border"
@@ -703,7 +703,7 @@ export default function CustomClawPage() {
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium disabled:opacity-50"
                 style={{ background: 'var(--rc-accent-violet)', color: '#fff' }}
               >
-                {saving ? 'Saving…' : <><Save size={14} /> {editId ? 'Update Claw' : 'Create Claw'}</>}
+                {saving ? 'Saving…' : <><Save size={14} /> {editId ? 'Update Capability' : 'Create Capability'}</>}
               </button>
               <button
                 onClick={closeForm}

@@ -9,6 +9,7 @@ import {
   GitBranch, Settings, RefreshCcw, Network,
 } from 'lucide-react';
 import { getPolicies, updatePolicy, deletePolicy } from '@/lib/api';
+import { capabilityName, marcellusText } from '@/lib/capability-names';
 
 // ── Layer metadata ─────────────────────────────────────────────────────────────
 
@@ -83,7 +84,12 @@ function getLayer(desc: string): string {
 
 function getDescription(desc: string): string {
   if (!desc) return '';
-  return desc.replace(/^[^|]+\|/, '').trim();
+  return marcellusText(desc.replace(/^[^|]+\|/, '').trim());
+}
+
+function layerDisplayName(layer: string): string {
+  const meta = LAYER_META[layer];
+  return layer.endsWith('CLAW') ? capabilityName(layer) : (meta?.label ?? layer);
 }
 
 function conditionLabel(json: string): string {
@@ -153,12 +159,12 @@ function EditModal({ policy, onSave, onClose }: {
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               {meta && (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium ${meta.color} ${meta.bg} ${meta.border}`}>
-                  <Icon className="w-3 h-3" /> {meta.label}
+                  <Icon className="w-3 h-3" /> {layerDisplayName(layer)}
                 </span>
               )}
               <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>Priority {policy.priority}</span>
             </div>
-            <h2 className="font-semibold text-base" style={{ color: 'var(--rc-text-1)' }}>{policy.name}</h2>
+            <h2 className="font-semibold text-base" style={{ color: 'var(--rc-text-1)' }}>{marcellusText(policy.name)}</h2>
             <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--rc-text-2)' }}>
               {getDescription(policy.description)}
             </p>
@@ -404,7 +410,7 @@ export default function PoliciesPage() {
                   }`}
                   style={isActive ? {} : { color: 'var(--rc-text-3)', borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
                   <Icon className="w-3 h-3" />
-                  {meta?.label ?? l} <span className="opacity-60">({cnt})</span>
+                  {layerDisplayName(l)} <span className="opacity-60">({cnt})</span>
                 </button>
               );
             })}
@@ -460,10 +466,10 @@ export default function PoliciesPage() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <h3 className="font-semibold text-sm" style={{ color: 'var(--rc-text-1)' }}>{p.name}</h3>
+                        <h3 className="font-semibold text-sm" style={{ color: 'var(--rc-text-1)' }}>{marcellusText(p.name)}</h3>
                         {meta && (
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-medium ${meta.color} ${meta.bg} ${meta.border}`}>
-                            <Icon className="w-3 h-3" /> {meta.label}
+                            <Icon className="w-3 h-3" /> {layerDisplayName(l)}
                           </span>
                         )}
                         {p.scope_target && (

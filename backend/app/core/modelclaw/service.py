@@ -23,7 +23,7 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "name": "nim_fast_reasoning",
         "provider": "nvidia_nim",
         "model": "meta/llama-3.3-70b-instruct",
-        "allowed_claws": ["threatclaw", "identityclaw", "cloudclaw", "arcclaw"],
+        "allowed_claws": ["executive", "threatclaw", "identityclaw", "cloudclaw", "arcclaw"],
         "allowed_data_classes": ["public", "internal", "confidential"],
         "temperature": 0.2,
         "max_tokens": 4000,
@@ -37,8 +37,8 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "name": "ollama_local_fallback",
         "provider": "ollama",
         "model": "qwen2.5:14b-instruct",
-        "allowed_claws": ["arcclaw", "threatclaw"],
-        "allowed_data_classes": ["public", "internal"],
+        "allowed_claws": ["executive", "arcclaw", "threatclaw"],
+        "allowed_data_classes": ["public", "internal", "confidential", "restricted", "top_secret"],
         "temperature": 0.2,
         "max_tokens": 3000,
         "tool_calling": True,
@@ -123,6 +123,14 @@ def _load_state() -> None:
 
 
 _load_state()
+for _executive_profile in ("nim_fast_reasoning", "ollama_local_fallback"):
+    _allowed = _PROFILES.get(_executive_profile, {}).setdefault("allowed_claws", [])
+    if "executive" not in _allowed:
+        _allowed.append("executive")
+_local_classes = _PROFILES.get("ollama_local_fallback", {}).setdefault("allowed_data_classes", [])
+for _data_class in ("confidential", "restricted", "top_secret"):
+    if _data_class not in _local_classes:
+        _local_classes.append(_data_class)
 
 
 def list_providers() -> list[dict[str, Any]]:

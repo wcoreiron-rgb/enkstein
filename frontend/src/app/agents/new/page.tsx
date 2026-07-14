@@ -7,6 +7,7 @@ import {
   Plug, Settings, CalendarClock, Info,
 } from 'lucide-react';
 import { createAgent, createSchedule } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ const FREQUENCIES = [
   { value: 'monthly',      label: 'Monthly' },
 ];
 
-const STEPS = ['Claw & Identity', 'Connectors & Actions', 'Governance', 'Schedule & Review'];
+const STEPS = ['Capability & Identity', 'Connectors & Actions', 'Governance', 'Schedule & Review'];
 
 // ─── Step 1: Claw & Identity ─────────────────────────────────────────────────
 
@@ -148,7 +149,7 @@ function Step1({ form, set }: { form: any; set: (k: string, v: any) => void }) {
 
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>
-          Select Claw Module *
+          Select Capability Node *
         </label>
         {categories.map(cat => (
           <div key={cat} className="space-y-1">
@@ -166,7 +167,7 @@ function Step1({ form, set }: { form: any; set: (k: string, v: any) => void }) {
                   }}
                 >
                   <span>{claw.icon}</span>
-                  {claw.label}
+                  {capabilityName(claw.value)}
                 </button>
               ))}
             </div>
@@ -179,7 +180,7 @@ function Step1({ form, set }: { form: any; set: (k: string, v: any) => void }) {
           style={{ background: 'var(--rc-bg-elevated)', borderColor: 'var(--rc-border)' }}>
           <span className="text-2xl">{selected.icon}</span>
           <div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{selected.label}</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{capabilityName(selected.value)}</p>
             <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{selected.category}</p>
           </div>
           <Check className="w-4 h-4 ml-auto" style={{ color: selected.color }} />
@@ -441,7 +442,7 @@ function Step4({ form, set }: { form: any; set: (k: string, v: any) => void }) {
         <div className="rounded-xl border divide-y" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
           {[
             { label: 'Agent Name',      value: form.name || '(unnamed)' },
-            { label: 'Claw Module',     value: claw ? `${claw.icon} ${claw.label}` : '—' },
+            { label: 'Capability Node', value: claw ? `${claw.icon} ${capabilityName(claw.value)}` : '—' },
             { label: 'Category',        value: form.category || '—' },
             { label: 'Execution Mode',  value: form.execution_mode.toUpperCase() },
             { label: 'Risk Level',      value: form.risk_level.toUpperCase() },

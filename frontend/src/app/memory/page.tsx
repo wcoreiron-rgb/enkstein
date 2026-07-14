@@ -16,6 +16,7 @@ import {
   logBehaviorEvent, getBehaviorEvents, getMemoryProposals,
   approveMemoryProposal, rejectMemoryProposal, rollbackMemoryIncident,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type IncidentStatus = 'open' | 'investigating' | 'contained' | 'remediated' | 'closed' | 'false_positive';
@@ -219,12 +220,12 @@ function NewIncidentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Source Claw</label>
+              <label className="text-xs text-gray-400 mb-1 block">Source Capability</label>
               <input
                 value={form.source_claw}
                 onChange={e => setForm(f => ({ ...f, source_claw: e.target.value }))}
                 className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 outline-none"
-                placeholder="identityclaw"
+                placeholder="Identity Security"
               />
             </div>
           </div>
@@ -471,7 +472,7 @@ function ProfileDrawer({ entityId, onClose }: { entityId: string; onClose: () =>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono text-orange-400">{ev.action}</span>
-                          <span className="text-xs text-gray-600">via {ev.claw}</span>
+                          <span className="text-xs text-gray-600">via {capabilityName(ev.claw)}</span>
                         </div>
                         <span className="text-xs text-gray-500">
                           {ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : '—'}
@@ -494,7 +495,7 @@ function ProfileDrawer({ entityId, onClose }: { entityId: string; onClose: () =>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[
                   { label: 'Action', key: 'action', placeholder: 'e.g. login' },
-                  { label: 'Claw', key: 'claw', placeholder: 'e.g. identityclaw' },
+                  { label: 'Capability', key: 'claw', placeholder: 'e.g. Identity Security' },
                   { label: 'Resource', key: 'resource', placeholder: 'optional' },
                 ].map(f => (
                   <div key={f.key}>
@@ -804,7 +805,7 @@ export default function MemoryPage() {
   const riskScores = trends.map(t => t.risk_score);
   const openFindingsTrend = trends.map(t => t.open_findings);
   const reviewMemory = async (id: string, decision: 'approve' | 'reject' | 'rollback') => {
-    const body = { reviewer: 'memory_ui', reason: `${decision} from MemoryClaw UI` };
+    const body = { reviewer: 'memory_ui', reason: `${decision} from Memory Cortex UI` };
     if (decision === 'approve') await approveMemoryProposal(id, body);
     if (decision === 'reject') await rejectMemoryProposal(id, body);
     if (decision === 'rollback') await rollbackMemoryIncident(id, body);
@@ -874,7 +875,7 @@ export default function MemoryPage() {
             {
               label: 'Open Findings',
               value: summary.open_findings,
-              sub: 'across all claws',
+              sub: 'across all capabilities',
               color: summary.open_findings > 10 ? 'text-orange-400' : 'text-white',
               trend: openFindingsTrend, trendColor: 'yellow' as const,
             },
@@ -945,7 +946,7 @@ export default function MemoryPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{proposal.title}</p>
                       <p className="text-xs text-yellow-200/70 mt-0.5">
-                        {proposal.severity} · {proposal.source_claw || 'memoryclaw'} · {proposal.affected_users?.join(', ') || 'no user scope'}
+                        {proposal.severity} · {capabilityName(proposal.source_claw || 'memoryclaw')} · {proposal.affected_users?.join(', ') || 'no user scope'}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -993,7 +994,7 @@ export default function MemoryPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">{inc.title}</p>
                     <div className="flex gap-3 mt-0.5 text-xs text-gray-500">
-                      {inc.source_claw && <span>{inc.source_claw}</span>}
+                      {inc.source_claw && <span>{capabilityName(inc.source_claw)}</span>}
                       <span>{inc.affected_assets_count} asset(s)</span>
                       <span>{inc.timeline_count} events</span>
                       {inc.mitre_tactics && <span>MITRE: {inc.mitre_tactics}</span>}

@@ -108,6 +108,28 @@ TOOLS = [
         },
     },
     {
+        "name": "run_identity_detection",
+        "description": (
+            "Run a focused identity-risk detection now using the approved identity connector "
+            "and persisted identity evidence. Use this whenever the user asks to detect, "
+            "investigate, monitor, or automate identity risk. Returns an execution receipt, "
+            "connector state, data provenance, findings, and recommended actions."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "focus": {
+                    "type": "string",
+                    "description": "Redacted identity or investigation focus; never include raw secrets or PII.",
+                },
+                "classification": {
+                    "type": "string",
+                    "enum": ["public", "internal", "confidential", "restricted"],
+                },
+            },
+        },
+    },
+    {
         "name": "trigger_workflow",
         "description": "Trigger a security workflow/orchestration by name.",
         "input_schema": {
@@ -120,7 +142,7 @@ TOOLS = [
     },
     {
         "name": "send_security_alert",
-        "description": "Create a security alert event in RegentClaw (routable to Slack/Teams/PagerDuty).",
+        "description": "Create a security alert event in Marcellus (routable to Slack/Teams/PagerDuty).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -136,7 +158,7 @@ TOOLS = [
     },
     {
         "name": "get_recent_events",
-        "description": "Get recent security events and alerts from RegentClaw.",
+        "description": "Get recent security events and alerts from Marcellus.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -447,6 +469,19 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 result["data_source"] = "real" if has_real else "simulation"
                 return result
 
+        elif name == "run_identity_detection":
+            # Call the focused worker directly. This avoids a loopback HTTP request and
+            # preserves the request transaction/audit boundary.
+            from app.claws.identityclaw.routes import IdentityTaskRequest, run_identity_task
+
+            task = IdentityTaskRequest(
+                task_type="investigate_identity_risk",
+                input={"focus": inputs.get("focus", "identity risk detection")},
+                classification=inputs.get("classification", "confidential"),
+                allowed_actions=["read", "analyze", "recommend"],
+            )
+            return await run_identity_task(task, db)
+
         elif name == "trigger_workflow":
             from sqlalchemy import select as sa_select
             from app.models.workflow import Workflow
@@ -533,7 +568,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 "severity": severity_str,
                 "alerts_routed": alerts_sent,
                 "note": (
-                    f"Alert created in RegentClaw. "
+                    f"Alert created in Marcellus. "
                     f"{'Routed to ' + str(alerts_sent) + ' external channel(s).' if alerts_sent > 0 else 'No alert channels configured — add Slack/Teams/PagerDuty connector to route externally.'}"
                 ),
             }
@@ -574,7 +609,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
 
 # ── Agent loop ────────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are RegentClaw Copilot — an expert AI analyst for security AND general automation.
+SYSTEM_PROMPT = """You are Marcellus Security Copilot — an expert AI analyst for security AND general automation.
 
 You have two types of tools:
 
@@ -583,7 +618,8 @@ TYPE 1 — PUBLIC INTELLIGENCE (always live, no setup needed):
   These connect to NVD, CISA KEV, and MITRE ATT&CK. Use them freely for any CVE or threat question.
 
 TYPE 2 — ORGANIZATION DATA:
-  list_connected_claws, get_security_posture, get_findings, run_claw_scan, trigger_workflow
+  list_connected_claws, get_security_posture, get_findings, run_claw_scan,
+  run_identity_detection, trigger_workflow
   These always return data. Tool results include a "data_source" field: "real" means a live connector
   is configured; "simulation" means illustrative demo data (no real connector yet).
 
@@ -597,6 +633,12 @@ HANDLING REAL vs SIMULATION DATA:
 
 HONESTY RULES:
   - Only report what tool results actually contain. Never invent data.
+  - Never say a scan, detection, workflow, alert, or connector action happened unless a tool
+    result in this turn confirms it. Instructions or YAML are not execution receipts.
+  - For identity detection/investigation/automation requests, call run_identity_detection.
+    State whether its data_source is live_connector, persisted_db, or no_data_source.
+    If a governed execution receipt is already present in the conversation, summarize that
+    receipt and do not invoke run_identity_detection a second time.
   - Clearly distinguish real findings from simulation/demo findings in your response.
   - CVE data from public tools is always real — report it fully and accurately.
   - If the user asks to run a compliance sweep or any workflow — run it. If claws are on simulation
@@ -606,7 +648,7 @@ When data is a mix of real and simulation: summarize real findings first, then n
 are still on demo data and what connectors would make them real.
 
 GENERAL AUTOMATION (non-security):
-  RegentClaw is not limited to security. Users can also orchestrate ANY business automation:
+  Marcellus is not limited to security. Users can also orchestrate ANY business automation:
   - Sending Slack/Teams messages via webhook steps
   - Creating Jira/GitHub issues via http_request steps
   - Calling any REST API (CRM, billing, HR, monitoring) via http_request or webhook_call steps
@@ -642,6 +684,39 @@ async def run_security_agent(
     tool_calls_log: list[dict] = []
     agent_messages = list(messages)  # copy to avoid mutation
 
+    # Explicit identity-operation requests must produce an execution receipt even when a
+    # provider ignores tool-choice guidance. The model only summarizes the governed result.
+    latest_user = next(
+        (str(m.get("content", "")) for m in reversed(agent_messages) if m.get("role") == "user"),
+        "",
+    )
+    normalized = latest_user.lower()
+    identity_operation = "identity" in normalized and any(
+        word in normalized
+        for word in ("detect", "investigat", "monitor", "scan", "automate", "risk")
+    )
+    if identity_operation:
+        t_start = asyncio.get_event_loop().time()
+        execution = await _execute_tool(
+            "run_identity_detection",
+            {"focus": latest_user, "classification": "confidential"},
+            db,
+        )
+        tool_calls_log.append({
+            "tool": "run_identity_detection",
+            "input": {"focus": "[REDACTED REQUEST CONTEXT]", "classification": "confidential"},
+            "result": execution,
+            "duration_ms": int((asyncio.get_event_loop().time() - t_start) * 1000),
+        })
+        agent_messages.append({
+            "role": "user",
+            "content": (
+                "A governed identity detection was executed for this request. Summarize this "
+                "execution receipt accurately. Do not claim live coverage when data_source is "
+                f"not live_connector. Receipt: {json.dumps(execution, default=str)}"
+            ),
+        })
+
     if provider == "anthropic":
         return await _run_anthropic_agent(
             agent_messages, api_key, SYSTEM_PROMPT, tool_calls_log, db, max_steps,
@@ -662,7 +737,7 @@ async def run_security_agent(
     else:
         # Ollama — use specified model; tool injection provides live data
         return await _run_simple_agent(agent_messages, provider, api_key, SYSTEM_PROMPT,
-                                       model=model, db=db)
+                                       model=model, db=db, initial_tool_calls=tool_calls_log)
 
 
 # ── Anthropic agent loop ──────────────────────────────────────────────────────
@@ -887,6 +962,7 @@ async def _run_simple_agent(
     system: str,
     model: str = None,
     db=None,
+    initial_tool_calls: list[dict] | None = None,
 ) -> dict:
     """
     Ollama fallback — no native tool calling.
@@ -898,13 +974,19 @@ async def _run_simple_agent(
     from datetime import datetime as dt
     from app.claws.arcclaw.llm_proxy import call_llm
 
+    user_turns = [m["content"] for m in messages if m["role"] == "user"]
     last_user = next(
-        (m["content"] for m in reversed(messages) if m["role"] == "user"),
+        (m for m in reversed(user_turns) if not m.startswith("A governed identity detection was executed")),
         "Hello",
     )
     last_lower = last_user.lower()
-    tool_calls_log: list[dict] = []
+    tool_calls_log: list[dict] = list(initial_tool_calls or [])
     context_blocks: list[str] = []
+    for call in tool_calls_log:
+        context_blocks.append(
+            "## Governed execution receipt\n"
+            f"```json\n{json.dumps(call.get('result', {}), indent=2, default=str)}\n```"
+        )
 
     # ── Intent detection → pre-call tools ─────────────────────────────────────
     # Separate public-intel queries (CVE/MITRE) from org-data queries (findings/posture).

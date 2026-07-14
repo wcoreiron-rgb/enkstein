@@ -247,6 +247,7 @@ class TestResponse(BaseModel):
     success: bool
     message: str
     detail: Optional[str] = None
+    verification_level: str = "none"
 
 
 @router.post("/{connector_id}/test", response_model=TestResponse)
@@ -278,9 +279,11 @@ async def test_connector_connection(
         endpoint=connector.endpoint or "",
     )
 
-    # If test passes and connector is pending → auto-approve (all risk levels)
+    # Only provider-specific credential or local-service verification can establish
+    # connector trust. Generic endpoint reachability and format checks cannot.
     was_pending = connector.status == ConnectorStatus.PENDING
-    if result_obj.success and was_pending:
+    establishes_trust = result_obj.verification_level in {"credential", "service"}
+    if result_obj.success and establishes_trust and was_pending:
         connector.status = ConnectorStatus.APPROVED
         await db.commit()
         logger.info("Connector %s auto-approved after successful test", connector.connector_type)
@@ -308,6 +311,7 @@ async def test_connector_connection(
         success=result_obj.success,
         message=result_obj.message,
         detail=result_obj.detail,
+        verification_level=result_obj.verification_level,
     )
 
 
@@ -482,6 +486,13 @@ CREDENTIAL_FIELDS: dict[str, list[dict]] = {
         {"name": "webhook_url", "label": "Webhook URL", "type": "text",   "hint": "https://hooks.slack.com/... (optional)"},
     ],
     "ms_teams":    [{"name": "webhook_url", "label": "Incoming Webhook URL", "type": "text", "hint": "https://yourorg.webhook.office.com/..."}],
+    "email": [
+        {"name": "smtp_host", "label": "SMTP Host", "type": "text", "hint": "smtp.example.com"},
+        {"name": "smtp_port", "label": "SMTP Port", "type": "number", "hint": "587"},
+        {"name": "username", "label": "SMTP Username", "type": "text", "hint": "mailer@example.com"},
+        {"name": "password", "label": "SMTP Password", "type": "secret", "hint": "App-specific password"},
+        {"name": "from_addr", "label": "From Address", "type": "text", "hint": "security@example.com"},
+    ],
     "jira": [
         {"name": "domain",    "label": "Jira Domain", "type": "text",   "hint": "yourorg.atlassian.net"},
         {"name": "email",     "label": "Email",       "type": "text",   "hint": "redacted_user"},

@@ -7,5 +7,5 @@ if [ -z "$console_user" ] || [ "$console_user" = "root" ] || [ "$console_user" =
 fi
 
 console_uid=$(id -u "$console_user")
-/bin/launchctl asuser "$console_uid" /usr/bin/open -a /Applications/RegentClaw.app >/dev/null 2>&1 || true
+/bin/launchctl asuser "$console_uid" /usr/bin/open -a /Applications/Marcellus.app >/dev/null 2>&1 || true
 exit 0

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $false)]
-    [string]$Version = "0.7.0"
+    [string]$Version = "0.2.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,10 +32,12 @@ Copy-Item (Join-Path $Root "packaging\compose.release.yaml") (Join-Path $Runtime
 Copy-Item (Join-Path $Root ".env.example") (Join-Path $Runtime ".env.example")
 Copy-Item (Join-Path $Root "README.md") (Join-Path $Runtime "README.md")
 Copy-Item (Join-Path $Root "LICENSE") (Join-Path $Runtime "LICENSE")
-Copy-Item (Join-Path $Root "packaging\windows\Start-RegentClaw.ps1") (Join-Path $Runtime "Start-RegentClaw.ps1")
+Copy-Item (Join-Path $Root "packaging\windows\Start-Marcellus.ps1") (Join-Path $Runtime "Start-Marcellus.ps1")
+Copy-Item (Join-Path $Root "packaging\windows\BrainBridge.ps1") (Join-Path $Runtime "BrainBridge.ps1")
 New-Item -ItemType Directory -Force -Path (Join-Path $Runtime "docs") | Out-Null
 Copy-Item (Join-Path $Root "docs\installation.md") (Join-Path $Runtime "docs\installation.md")
 Copy-Item (Join-Path $Root "docs\native-installers.md") (Join-Path $Runtime "docs\native-installers.md")
+Copy-Item (Join-Path $Root "docs\brain-bridges.md") (Join-Path $Runtime "docs\brain-bridges.md")
 Copy-Item (Join-Path $Root "docs\production-deployment.md") (Join-Path $Runtime "docs\production-deployment.md")
 Set-Content -NoNewline -Path (Join-Path $Runtime "VERSION") -Value "v$Version"
 
@@ -46,12 +48,12 @@ if (-not (Test-Path $Compiler)) {
 if (-not (Get-Command magick -ErrorAction SilentlyContinue)) {
     throw "ImageMagick is required to generate the Windows application icon."
 }
-$Icon = Join-Path $Stage "RegentClaw.ico"
+$Icon = Join-Path $Stage "Marcellus.ico"
 & magick (Join-Path $Root "frontend\public\logo.png") -define icon:auto-resize=256,128,64,48,32,16 $Icon
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Icon)) { throw "Windows icon generation failed." }
 
-& $Compiler /nologo /target:winexe /platform:anycpu /reference:System.Windows.Forms.dll /win32icon:"$Icon" /out:"$Stage\RegentClaw.exe" "$Root\packaging\windows\RegentClawLauncher.cs"
-if ($LASTEXITCODE -ne 0) { throw "RegentClaw launcher compilation failed." }
+& $Compiler /nologo /target:winexe /platform:anycpu /reference:System.Windows.Forms.dll /win32icon:"$Icon" /out:"$Stage\Marcellus.exe" "$Root\packaging\windows\MarcellusLauncher.cs"
+if ($LASTEXITCODE -ne 0) { throw "Marcellus launcher compilation failed." }
 
 $InnoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 if (-not (Test-Path $InnoCompiler)) {
@@ -59,9 +61,9 @@ if (-not (Test-Path $InnoCompiler)) {
 }
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
-& $InnoCompiler "/DVersion=$Version" "/DStageDir=$Stage" "/DOutputDir=$Dist" "$Root\packaging\windows\RegentClaw.iss"
+& $InnoCompiler "/DVersion=$Version" "/DStageDir=$Stage" "/DOutputDir=$Dist" "$Root\packaging\windows\Marcellus.iss"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
 
-$Output = Join-Path $Dist "RegentClaw-$Version-windows-x64-setup.exe"
+$Output = Join-Path $Dist "Marcellus-$Version-windows-x64-setup.exe"
 if (-not (Test-Path $Output)) { throw "Expected installer was not created: $Output" }
 Write-Host "Built: $Output"

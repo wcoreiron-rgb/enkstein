@@ -41,6 +41,8 @@ services:
       # Bind to loopback — access via Next.js proxy, not direct.
       # The frontend container reaches backend via Docker DNS (http://backend:8000).
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD:-regentclaw}@db:5432/${POSTGRES_DB:-regentclaw}
       DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD:-regentclaw}@db:5432/${POSTGRES_DB:-regentclaw}
@@ -48,6 +50,10 @@ services:
       # REQUIRED: Set SECRET_KEY in .env — never use the default in production.
       # Generate: python -c "import secrets; print(secrets.token_hex(32))"
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      APP_VERSION: ${APP_VERSION:-0.0.0-dev}
+      BRAIN_BRIDGE_URL: ${BRAIN_BRIDGE_URL:-}
+      BRAIN_BRIDGE_SECRET: ${BRAIN_BRIDGE_SECRET:-}
+      BRAIN_BRIDGE_TIMEOUT_SECONDS: ${BRAIN_BRIDGE_TIMEOUT_SECONDS:-180}
       # DEBUG=true bypasses all JWT authentication — NEVER enable in production.
       DEBUG: ${DEBUG:-false}
       AGT_ENABLE_MCP_GATEWAY: "true"

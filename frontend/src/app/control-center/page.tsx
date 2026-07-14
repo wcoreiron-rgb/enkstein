@@ -166,7 +166,7 @@ export default function ControlCenterPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64" style={{ color: 'var(--rc-text-2)' }}>
-        Loading Regent Control Center…
+        Loading Marcellus Control Center…
       </div>
     );
   }
@@ -177,7 +177,7 @@ export default function ControlCenterPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
             <Shield className="w-7 h-7 text-cyan-400" />
-            Regent Control Center
+            Marcellus Control Center
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Command, channel, swarm, remote-agent, and execution control plane.

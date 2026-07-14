@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { getDashboard, getConnectors, getPolicies, getEvents, getFindingsStats } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── All 23 Claw modules ──────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ const SHARED_SERVICES = [
     name: 'Finding Pipeline',
     icon: Database,
     color: 'text-cyan-400',
-    desc: 'Central upsert/dedup engine. All 23 claw scan results flow through here — deduplicates by (claw, external_id), tracks first_seen/last_seen, triggers policy eval and alerting.',
+    desc: 'Central upsert/dedup engine. All Capability Node scan results flow through here, with deduplication, lifecycle tracking, policy evaluation, and alerting.',
     status: 'active',
   },
   {
@@ -69,7 +70,7 @@ const SHARED_SERVICES = [
     name: 'Auto-Scanner',
     icon: RefreshCw,
     color: 'text-green-400',
-    desc: 'Fires claw scans automatically when connectors are configured or tested. Background scheduler sweeps all 23 claws every 6 hours — priority claws first, secondary in parallel.',
+    desc: 'Fires Capability Node scans automatically when connectors are configured or tested. The scheduler runs priority capabilities first and secondary capabilities in parallel.',
     status: 'active',
   },
   {
@@ -83,7 +84,7 @@ const SHARED_SERVICES = [
     name: 'Security Copilot',
     icon: Radio,
     color: 'text-pink-400',
-    desc: 'AI security analyst backed by real findings, live events, and connector context. Can send alerts, query the event bus, and explain risk posture across all claws.',
+    desc: 'AI security analyst backed by real findings, live events, and connector context. It can send alerts, query the event bus, and explain risk posture across every capability.',
     status: 'active',
   },
 ];
@@ -163,7 +164,7 @@ export default function CoreOSPage() {
             <Cpu className="text-cyan-400" /> CoreOS
           </h1>
           <p className="text-gray-400 mt-1">
-            Platform foundation — shared intelligence layer powering all 23 Claw modules
+            Platform foundation — shared intelligence layer powering every Capability Node
           </p>
         </div>
         <button
@@ -188,7 +189,7 @@ export default function CoreOSPage() {
         <StatCard
           label="Total Findings"
           value={String(totalFindings)}
-          sub="across all claws"
+          sub="across all capabilities"
           icon={<AlertTriangle className="w-5 h-5 text-orange-400" />}
           valueClass="text-orange-400"
         />
@@ -234,7 +235,7 @@ export default function CoreOSPage() {
         <StatCard
           label="Registered Modules"
           value={String(MODULES.length)}
-          sub={`CoreOS + ${clawCount} claws`}
+          sub={`CoreOS + ${clawCount} capability nodes`}
           icon={<Activity className="w-5 h-5 text-green-400" />}
           valueClass="text-green-400"
         />
@@ -246,7 +247,7 @@ export default function CoreOSPage() {
           <h2 className="font-semibold text-white flex items-center gap-2">
             <Cpu className="w-4 h-4 text-cyan-400" /> Module Registry
           </h2>
-          <span className="text-xs text-gray-500">CoreOS + {clawCount} claws registered</span>
+          <span className="text-xs text-gray-500">CoreOS + {clawCount} capability nodes registered</span>
         </div>
 
         {/* Phase 1 */}
@@ -261,7 +262,7 @@ export default function CoreOSPage() {
           <h2 className="font-semibold text-white flex items-center gap-2">
             <Zap className="w-4 h-4 text-orange-400" /> Shared Services
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">Cross-cutting services wired to all 23 claw scan endpoints</p>
+          <p className="text-xs text-gray-500 mt-0.5">Cross-cutting services wired to every Capability Node endpoint</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-gray-800">
           {SHARED_SERVICES.map(svc => {
@@ -366,7 +367,7 @@ export default function CoreOSPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Trust Fabric</span>
               <span className="flex items-center gap-1 text-xs text-green-400">
-                <CheckCircle className="w-3.5 h-3.5" /> wired to all claws
+                <CheckCircle className="w-3.5 h-3.5" /> wired to all capabilities
               </span>
             </div>
             {policies.slice(0, 3).map((p: any) => (
@@ -445,8 +446,8 @@ export default function CoreOSPage() {
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Execution Order</p>
-            <p className="text-xs text-gray-400">Priority claws first (cloudclaw, exposureclaw, threatclaw, endpointclaw, accessclaw, logclaw, netclaw)</p>
-            <p className="text-xs text-gray-500 mt-1">Secondary claws in parallel via asyncio.gather</p>
+            <p className="text-xs text-gray-400">Priority capabilities first: cloud, exposure, threat, endpoint, access, telemetry, and network</p>
+            <p className="text-xs text-gray-500 mt-1">Secondary capabilities execute in bounded parallel groups</p>
           </div>
         </div>
       </div>
@@ -462,7 +463,7 @@ export default function CoreOSPage() {
           </span>
         </div>
         {events.length === 0 ? (
-          <p className="px-6 py-6 text-gray-500 text-sm">No events yet — events appear here as claws scan and policies evaluate.</p>
+          <p className="px-6 py-6 text-gray-500 text-sm">No events yet — events appear here as capabilities scan and policies evaluate.</p>
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
@@ -532,8 +533,8 @@ function PhaseGroup({ phase, label, modules }: { phase: number; label: string; m
           <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium">
-              {m.name}
-              <span className="text-xs text-gray-500 ml-2 font-normal">{m.claw}</span>
+              {m.claw === 'coreos' ? m.name : capabilityName(m.claw)}
+              <span className="text-xs text-gray-500 ml-2 font-normal">{m.claw === 'coreos' ? 'Cortex' : 'Capability Node'}</span>
             </p>
             <p className="text-xs text-gray-400 mt-0.5 truncate">{m.desc}</p>
           </div>

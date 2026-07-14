@@ -1,6 +1,6 @@
 """
-RegentClaw — Alembic env.py
-Supports both synchronous (alembic CLI) and async SQLAlchemy engines.
+Marcellus — Alembic env.py
+Uses the synchronous PostgreSQL driver for migration execution.
 
 Running migrations:
   # Inside docker:
@@ -9,13 +9,11 @@ Running migrations:
   # Locally (with DB accessible on localhost:5432):
   cd backend && alembic upgrade head
 """
-import asyncio
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
@@ -52,13 +50,13 @@ from app.models.entity_profile import EntityProfile, BehaviorEvent  # noqa: F401
 target_metadata = Base.metadata
 
 # ── Database URL ──────────────────────────────────────────────────────────────
-# Use sync URL for Alembic (psycopg2 / asyncpg both OK but Alembic CLI needs sync)
+# Alembic runs synchronously even though the application uses asyncpg.
 _db_url = (
     os.getenv("DATABASE_URL_SYNC")
     or os.getenv("DATABASE_URL", "postgresql://regentclaw:regentclaw@db:5432/regentclaw")
 )
 
-# If using asyncpg URL, convert to sync for Alembic CLI
+# Convert the application URL to the synchronous psycopg2 URL when needed.
 if "+asyncpg" in _db_url:
     _db_url = _db_url.replace("+asyncpg", "")
 
@@ -95,20 +93,16 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    """Create an async engine and run migrations via a sync connection wrapper."""
-    connectable = async_engine_from_config(
+def run_migrations_online() -> None:
+    """Run migrations through Alembic's synchronous engine."""
+    connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
+    connectable.dispose()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

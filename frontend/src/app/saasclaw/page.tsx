@@ -67,7 +67,7 @@ export default function SaaSClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Package className="text-violet-400" /> SaaSClaw
+            <Package className="text-violet-400" /> SaaS Security
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             SaaS security posture management - misconfigurations, excessive OAuth grants, and shadow IT across your SaaS estate.

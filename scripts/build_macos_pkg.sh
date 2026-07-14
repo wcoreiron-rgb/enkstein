@@ -3,22 +3,25 @@ set -euo pipefail
 export COPYFILE_DISABLE=1
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  echo "macOS is required to build the RegentClaw .pkg." >&2
+  echo "macOS is required to build the Marcellus .pkg." >&2
   exit 1
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=${1:-0.7.0}
+VERSION=${1:-0.2.0}
 VERSION=${VERSION#v}
 DIST_DIR="$ROOT_DIR/dist"
 WORK_DIR="$DIST_DIR/macos-$VERSION"
-APP_DIR="$WORK_DIR/pkgroot/Applications/RegentClaw.app"
+APP_DIR="$WORK_DIR/pkgroot/Applications/Marcellus.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
-OUTPUT_PKG="$DIST_DIR/RegentClaw-$VERSION-macos.pkg"
+OUTPUT_PKG="$DIST_DIR/Marcellus-$VERSION-macos.pkg"
 
-for command in pkgbuild productbuild codesign iconutil sips; do
+mkdir -p "$DIST_DIR"
+touch "$DIST_DIR/.metadata_never_index"
+
+for command in pkgbuild productbuild codesign iconutil sips swiftc lipo; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "Missing required macOS build tool: $command" >&2
     exit 1
@@ -27,14 +30,42 @@ done
 
 "$ROOT_DIR/scripts/build_release_bundle.sh" "v$VERSION"
 
+# Staged .app bundles are discoverable by Spotlight and can appear as duplicate
+# applications in Launchpad. They are disposable build products, not releases.
+while IFS= read -r stale_work_dir; do
+  if ! rm -rf "$stale_work_dir" 2>/dev/null; then
+    echo "Warning: could not remove root-owned staging directory: $stale_work_dir" >&2
+  fi
+done < <(find "$DIST_DIR" -maxdepth 1 -type d -name 'macos-*' -print)
+find "$DIST_DIR" -maxdepth 1 -type f -name 'Marcellus-*-macos.pkg' ! -name "$(basename "$OUTPUT_PKG")" -delete
 rm -rf "$WORK_DIR" "$OUTPUT_PKG"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
-cp "$ROOT_DIR/packaging/macos/launcher.sh" "$MACOS_DIR/RegentClaw"
-chmod +x "$MACOS_DIR/RegentClaw"
+cp "$ROOT_DIR/packaging/macos/launcher.sh" "$RESOURCES_DIR/launcher.sh"
+chmod +x "$RESOURCES_DIR/launcher.sh"
 sed "s/__VERSION__/$VERSION/g" "$ROOT_DIR/packaging/macos/Info.plist.in" > "$CONTENTS_DIR/Info.plist"
-/usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/regentclaw-$VERSION" "$RESOURCES_DIR/runtime"
+/usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/marcellus-$VERSION" "$RESOURCES_DIR/runtime"
 
-ICONSET="$WORK_DIR/RegentClaw.iconset"
+SWIFT_SOURCE="$ROOT_DIR/packaging/macos/MarcellusApp.swift"
+ARM_BINARY="$WORK_DIR/Marcellus-arm64"
+INTEL_BINARY="$WORK_DIR/Marcellus-x86_64"
+xcrun swiftc "$SWIFT_SOURCE" -O -target arm64-apple-macos12.0 \
+  -framework Cocoa -framework WebKit -o "$ARM_BINARY"
+xcrun swiftc "$SWIFT_SOURCE" -O -target x86_64-apple-macos12.0 \
+  -framework Cocoa -framework WebKit -o "$INTEL_BINARY"
+lipo -create "$ARM_BINARY" "$INTEL_BINARY" -output "$MACOS_DIR/Marcellus"
+chmod +x "$MACOS_DIR/Marcellus"
+
+BRIDGE_SOURCE="$ROOT_DIR/packaging/macos/MarcellusBrainBridge.swift"
+BRIDGE_ARM_BINARY="$WORK_DIR/MarcellusBrainBridge-arm64"
+BRIDGE_INTEL_BINARY="$WORK_DIR/MarcellusBrainBridge-x86_64"
+xcrun swiftc "$BRIDGE_SOURCE" -O -target arm64-apple-macos12.0 \
+  -framework Network -o "$BRIDGE_ARM_BINARY"
+xcrun swiftc "$BRIDGE_SOURCE" -O -target x86_64-apple-macos12.0 \
+  -framework Network -o "$BRIDGE_INTEL_BINARY"
+lipo -create "$BRIDGE_ARM_BINARY" "$BRIDGE_INTEL_BINARY" -output "$RESOURCES_DIR/MarcellusBrainBridge"
+chmod +x "$RESOURCES_DIR/MarcellusBrainBridge"
+
+ICONSET="$WORK_DIR/Marcellus.iconset"
 mkdir -p "$ICONSET"
 ICON_SOURCE="$ROOT_DIR/frontend/public/logo.png"
 for size in 16 32 128 256 512; do
@@ -42,23 +73,30 @@ for size in 16 32 128 256 512; do
   retina=$((size * 2))
   sips -z "$retina" "$retina" "$ICON_SOURCE" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/RegentClaw.icns"
+iconutil -c icns "$ICONSET" -o "$RESOURCES_DIR/Marcellus.icns"
 xattr -cr "$APP_DIR"
 
 if [ -n "${APPLE_APPLICATION_SIGNING_IDENTITY:-}" ]; then
+  # Executables stored directly under Resources are not reliably discovered by
+  # --deep. Sign the host bridge explicitly before sealing the app bundle.
+  codesign --force --options runtime --timestamp \
+    --sign "$APPLE_APPLICATION_SIGNING_IDENTITY" "$RESOURCES_DIR/MarcellusBrainBridge"
   codesign --force --deep --options runtime --timestamp \
     --sign "$APPLE_APPLICATION_SIGNING_IDENTITY" "$APP_DIR"
+  codesign --verify --strict --verbose=2 "$RESOURCES_DIR/MarcellusBrainBridge"
   codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 else
+  codesign --force --sign - "$RESOURCES_DIR/MarcellusBrainBridge"
   codesign --force --deep --sign - "$APP_DIR"
   echo "Built with ad-hoc app signing for local validation."
 fi
 
-COMPONENT_PKG="$WORK_DIR/RegentClaw-component.pkg"
+COMPONENT_PKG="$WORK_DIR/Marcellus-component.pkg"
 pkgbuild --root "$WORK_DIR/pkgroot" \
-  --identifier com.regentclaw.desktop \
+  --identifier com.marcellus.desktop \
   --version "$VERSION" \
   --install-location / \
+  --component-plist "$ROOT_DIR/packaging/macos/component.plist" \
   --scripts "$ROOT_DIR/packaging/macos/pkg-scripts" \
   "$COMPONENT_PKG"
 
@@ -71,5 +109,6 @@ else
   echo "Built an unsigned installer for local validation."
 fi
 
-pkgutil --payload-files "$OUTPUT_PKG" | grep -q 'Applications/RegentClaw.app'
+pkgutil --payload-files "$OUTPUT_PKG" | grep -F 'Applications/Marcellus.app' >/dev/null
+rm -rf "$WORK_DIR"
 echo "Built: $OUTPUT_PKG"

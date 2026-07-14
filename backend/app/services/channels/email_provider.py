@@ -61,14 +61,14 @@ def _send_email_sync(
                 server.login(username, password)
             server.sendmail(from_addr, to_addrs, msg.as_string())
 
-        logger.info("Email sent to %s via %s:%d", to_addrs, smtp_host, smtp_port)
+        logger.info("Email sent to %d recipient(s) via %s:%d", len(to_addrs), smtp_host, smtp_port)
         return True
 
     except smtplib.SMTPAuthenticationError:
         logger.error("SMTP authentication failed for %s@%s", username, smtp_host)
         return False
-    except smtplib.SMTPRecipientsRefused as exc:
-        logger.error("SMTP recipients refused: %s", exc)
+    except smtplib.SMTPRecipientsRefused:
+        logger.error("SMTP rejected one or more recipients")
         return False
     except smtplib.SMTPException as exc:
         logger.error("SMTP error sending email: %s", exc)

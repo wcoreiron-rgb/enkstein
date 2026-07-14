@@ -9,6 +9,7 @@ import {
   getExchangePackages, getFeaturedPackages, searchExchangePackages,
   getExchangePublishers, getExchangeStats, installExchangePackage,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -186,7 +187,7 @@ function PackageCard({
                   <Zap className="w-3 h-3 text-cyan-500 flex-shrink-0" />
                   <span className="text-xs text-gray-300 flex-1">{s.name}</span>
                   {s.claw && (
-                    <span className="text-xs text-gray-600 flex-shrink-0">{s.claw}</span>
+                    <span className="text-xs text-gray-600 flex-shrink-0">{capabilityName(s.claw)}</span>
                   )}
                 </div>
               ))}

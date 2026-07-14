@@ -1,0 +1,371 @@
+import Cocoa
+import WebKit
+
+private let defaultURL = URL(string: "http://127.0.0.1:3000/marcellus")!
+
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+    private var window: NSWindow!
+    private var webView: WKWebView!
+    private var loadingView: NSView!
+    private var statusLabel: NSTextField!
+    private var spinner: NSProgressIndicator!
+    private var launcher: Process?
+    private var outputBuffer = Data()
+    private var updateCheck: URLSessionDataTask?
+    private var statusItem: NSStatusItem?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        configureMenu()
+        configureStatusItem()
+        configureWindow()
+        startRuntime()
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openConsole(nil)
+        return true
+    }
+
+    private func configureMenu() {
+        let mainMenu = NSMenu()
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "About Marcellus", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Relaunch Marcellus", action: #selector(relaunchApplication(_:)), keyEquivalent: "r")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Lock Console", action: #selector(lockConsole(_:)), keyEquivalent: "l")
+        appMenu.addItem(withTitle: "Quit Console (Runtime Continues)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        NSApp.mainMenu = mainMenu
+    }
+
+    private func configureStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        item.button?.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "Marcellus")
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Open Marcellus", action: #selector(openConsole(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Lock Console", action: #selector(lockConsole(_:)), keyEquivalent: "")
+        menu.addItem(NSMenuItem.separator())
+        let runtime = NSMenuItem(title: "Runtime active in background", action: nil, keyEquivalent: "")
+        runtime.isEnabled = false
+        menu.addItem(runtime)
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "Quit Console (Runtime Continues)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func openConsole(_ sender: Any?) {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func lockConsole(_ sender: Any?) {
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('marcellus:lock'))")
+        openConsole(nil)
+    }
+
+    @objc private func relaunchApplication(_ sender: Any?) {
+        let script = "sleep 1; /usr/bin/open -n \"$1\""
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", script, "marcellus-relaunch", Bundle.main.bundlePath]
+        do {
+            try process.run()
+            NSApp.terminate(nil)
+        } catch {
+            showAlert(
+                title: "Relaunch failed",
+                message: "Marcellus could not relaunch: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    @objc private func checkForUpdates(_ sender: Any?) {
+        guard updateCheck == nil else { return }
+        guard let repository = Bundle.main.object(forInfoDictionaryKey: "MarcellusGitHubRepository") as? String,
+              repository.split(separator: "/").count == 2,
+              let url = URL(string: "https://api.github.com/repos/\(repository)/releases/latest") else {
+            showAlert(title: "Update feed unavailable", message: "This build does not have a valid GitHub release feed.")
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("Marcellus-Desktop", forHTTPHeaderField: "User-Agent")
+
+        updateCheck = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.updateCheck = nil
+                if let error {
+                    self.showAlert(title: "Could not check for updates", message: error.localizedDescription)
+                    return
+                }
+                let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                guard (200...299).contains(status),
+                      let data,
+                      let release = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let tag = release["tag_name"] as? String else {
+                    self.showAlert(
+                        title: "No published release feed",
+                        message: "Marcellus could not find a public GitHub Release. Publish a signed release in the configured repository and try again."
+                    )
+                    return
+                }
+                self.presentUpdate(release: release, tag: tag)
+            }
+        }
+        updateCheck?.resume()
+    }
+
+    private func presentUpdate(release: [String: Any], tag: String) {
+        let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+        guard latest.compare(current, options: .numeric) == .orderedDescending else {
+            showAlert(title: "Marcellus is up to date", message: "Version \(current) is the newest published release.")
+            return
+        }
+
+        let expectedNames = [
+            "Marcellus-\(latest)-macos.pkg",
+            "Marcellus-\(tag)-macos.pkg",
+        ]
+        let assets = release["assets"] as? [[String: Any]] ?? []
+        let packageURL = assets.first { asset in
+            guard let name = asset["name"] as? String else { return false }
+            return expectedNames.contains(name)
+        }?["browser_download_url"] as? String
+        let releaseURL = release["html_url"] as? String
+
+        let alert = NSAlert()
+        alert.messageText = "Marcellus \(latest) is available"
+        alert.informativeText = packageURL == nil
+            ? "The release exists, but it does not contain the expected signed macOS installer."
+            : "Download the notarized installer from GitHub. Installing it replaces the current app and preserves your local data."
+        if packageURL != nil { alert.addButton(withTitle: "Download Update") }
+        if releaseURL != nil { alert.addButton(withTitle: "View Release") }
+        alert.addButton(withTitle: "Later")
+
+        let response = alert.runModal()
+        if packageURL != nil, response == .alertFirstButtonReturn, let packageURL, let url = URL(string: packageURL) {
+            NSWorkspace.shared.open(url)
+        } else if let releaseURL,
+                  let url = URL(string: releaseURL),
+                  (packageURL == nil ? response == .alertFirstButtonReturn : response == .alertSecondButtonReturn) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func showAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func configureWindow() {
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1380, height: 880),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Marcellus"
+        window.titlebarAppearsTransparent = true
+        window.minSize = NSSize(width: 960, height: 640)
+        window.center()
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = self
+        webView.autoresizingMask = [.width, .height]
+
+        loadingView = NSView(frame: window.contentView!.bounds)
+        loadingView.autoresizingMask = [.width, .height]
+        loadingView.wantsLayer = true
+        loadingView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
+        let icon = NSImageView()
+        icon.image = NSApp.applicationIconImage
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let title = NSTextField(labelWithString: "Marcellus")
+        title.font = .systemFont(ofSize: 30, weight: .semibold)
+        title.alignment = .center
+
+        statusLabel = NSTextField(labelWithString: "Preparing the governed runtime...")
+        statusLabel.font = .systemFont(ofSize: 14)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.alignment = .center
+        statusLabel.maximumNumberOfLines = 2
+
+        spinner = NSProgressIndicator()
+        spinner.style = .spinning
+        spinner.controlSize = .regular
+        spinner.startAnimation(nil)
+
+        let stack = NSStackView(views: [icon, title, statusLabel, spinner])
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 14
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        loadingView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            icon.widthAnchor.constraint(equalToConstant: 112),
+            icon.heightAnchor.constraint(equalToConstant: 112),
+            statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+            stack.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor)
+        ])
+
+        window.contentView = loadingView
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func startRuntime() {
+        guard let helper = Bundle.main.resourceURL?.appendingPathComponent("launcher.sh") else {
+            showFailure("The desktop launcher is missing. Reinstall Marcellus.")
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [helper.path]
+        var environment = ProcessInfo.processInfo.environment
+        environment["MARCELLUS_EMBEDDED"] = "1"
+        process.environment = environment
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            DispatchQueue.main.async { self?.consumeOutput(data) }
+        }
+
+        process.terminationHandler = { [weak self] completed in
+            pipe.fileHandleForReading.readabilityHandler = nil
+            DispatchQueue.main.async {
+                if completed.terminationStatus == 0 {
+                    self?.waitForDesktop()
+                } else {
+                    self?.showFailure("Marcellus could not start. Open Help > Startup Log for details.")
+                }
+            }
+        }
+
+        do {
+            launcher = process
+            try process.run()
+        } catch {
+            showFailure("Marcellus could not launch its local runtime: \(error.localizedDescription)")
+        }
+    }
+
+    private func consumeOutput(_ data: Data) {
+        outputBuffer.append(data)
+        while let newline = outputBuffer.firstIndex(of: 0x0A) {
+            let lineData = outputBuffer.prefix(upTo: newline)
+            outputBuffer.removeSubrange(...newline)
+            guard let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !line.isEmpty else { continue }
+            statusLabel.stringValue = line.replacingOccurrences(of: "ERROR: ", with: "")
+        }
+    }
+
+    private func waitForDesktop(attempt: Int = 0) {
+        let endpoint = desktopURL()
+        var request = URLRequest(url: endpoint)
+        request.timeoutInterval = 3
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
+            let ready = (response as? HTTPURLResponse).map { (200...499).contains($0.statusCode) } ?? false
+            DispatchQueue.main.async {
+                if ready {
+                    self?.showLogin(from: endpoint)
+                } else if attempt < 180 {
+                    self?.statusLabel.stringValue = "Waiting for the Marcellus desktop..."
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                        self?.waitForDesktop(attempt: attempt + 1)
+                    }
+                } else {
+                    self?.showFailure("The local Marcellus desktop did not become ready.")
+                }
+            }
+        }.resume()
+    }
+
+    private func desktopURL() -> URL {
+        let endpointFile = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Marcellus/ui-url")
+        guard let value = try? String(contentsOf: endpointFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+              let url = URL(string: value) else {
+            return defaultURL
+        }
+        return url
+    }
+
+    private func showLogin(from desktopURL: URL) {
+        var components = URLComponents(url: desktopURL, resolvingAgainstBaseURL: false)
+        components?.path = "/login"
+        components?.query = nil
+        components?.fragment = nil
+        showDesktop(components?.url ?? desktopURL)
+    }
+
+    private func showDesktop(_ url: URL) {
+        spinner.stopAnimation(nil)
+        window.contentView = webView
+        webView.frame = window.contentView!.bounds
+        webView.load(URLRequest(url: url))
+    }
+
+    private func showFailure(_ message: String) {
+        spinner.stopAnimation(nil)
+        statusLabel.textColor = .systemRed
+        statusLabel.stringValue = message
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+        let localHosts = Set(["127.0.0.1", "localhost"])
+        if let host = url.host, !localHosts.contains(host) {
+            NSWorkspace.shared.open(url)
+            decisionHandler(.cancel)
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        showFailure("The desktop view could not load: \(error.localizedDescription)")
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        showFailure("The desktop view could not connect: \(error.localizedDescription)")
+    }
+}
+
+let application = NSApplication.shared
+let delegate = AppDelegate()
+application.delegate = delegate
+application.setActivationPolicy(.regular)
+application.run()

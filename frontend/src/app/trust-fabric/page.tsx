@@ -150,7 +150,7 @@ export default function TrustFabricPage() {
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">
             <Shield className="text-regent-400" /> Trust Fabric
           </h1>
-          <p className="text-gray-400 mt-1">Zero Trust Enforcement Layer — Two-layer architecture: Microsoft AGT + RegentClaw</p>
+          <p className="text-gray-400 mt-1">Zero Trust Enforcement Layer — Microsoft AGT plus the Marcellus runtime</p>
         </div>
         <button
           onClick={loadStatus}
@@ -184,7 +184,7 @@ export default function TrustFabricPage() {
           <p className="text-xs text-gray-400 mb-3">Compliance, scanning, and audit intelligence layer</p>
           <div className="space-y-1.5">
             {[
-              { label: 'Prompt Defense Evaluator', sub: '12-vector injection audit → ArcClaw', key: 'prompt_defense' },
+              { label: 'Prompt Defense Evaluator', sub: '12-vector injection audit → AI Security', key: 'prompt_defense' },
               { label: 'Supply Chain Guard', sub: 'Typosquatting + drift → module registration', key: 'supply_chain_guard' },
               { label: 'Security Scanner', sub: 'Directory scanning → skill/module trust', key: 'security_scanner' },
             ].map(({ label, sub, key }) => (
@@ -199,11 +199,11 @@ export default function TrustFabricPage() {
           </div>
         </div>
 
-        {/* RegentClaw Runtime Layer */}
+        {/* Marcellus runtime layer */}
         <div className="bg-regent-900/20 border border-regent-700/40 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
             <Brain className="w-5 h-5 text-regent-400" />
-            <h2 className="font-semibold text-regent-300">RegentClaw Trust Fabric</h2>
+            <h2 className="font-semibold text-regent-300">Marcellus Trust Fabric</h2>
             <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-medium bg-green-900/50 text-green-400">Active</span>
           </div>
           <p className="text-xs text-gray-400 mb-3">Runtime enforcement — handles what AGT Python does not</p>
@@ -367,7 +367,7 @@ export default function TrustFabricPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-semibold text-white">Prompt Defense Check</h2>
-                  <p className="text-xs text-gray-500 mt-1">Calls AGT prompt audit and RegentClaw fallback detection.</p>
+                  <p className="text-xs text-gray-500 mt-1">Calls AGT prompt audit and Marcellus fallback detection.</p>
                 </div>
                 <button
                   onClick={runPromptAudit}
@@ -592,7 +592,7 @@ export default function TrustFabricPage() {
             </span>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-3">Blue steps = Microsoft AGT · Gray steps = RegentClaw Trust Fabric</p>
+        <p className="text-xs text-gray-500 mt-3">Blue steps = Microsoft AGT · Gray steps = Marcellus Trust Fabric</p>
       </div>
     </div>
   );

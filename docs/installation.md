@@ -1,17 +1,19 @@
-# Install RegentClaw
+# Install Marcellus
 
 ## Native installers
 
 For the simplest desktop experience, download the installer for your operating
 system from GitHub Releases:
 
-- macOS: `RegentClaw-VERSION-macos.pkg`
-- Windows x64: `RegentClaw-VERSION-windows-x64-setup.exe`
+- macOS: `Marcellus-VERSION-macos.pkg`
+- Windows x64: `Marcellus-VERSION-windows-x64-setup.exe`
 
-Both installers create a clickable RegentClaw launcher. The launcher starts
-Docker Desktop when needed, initializes unique secrets, starts the platform,
-and opens the dashboard. Docker Desktop remains required because RegentClaw
-includes multiple services and persistent PostgreSQL/Redis data.
+Both installers create a clickable Marcellus launcher. The launcher starts
+Docker Desktop when needed, initializes unique secrets, and starts the
+platform. On macOS, a universal native application displays startup progress,
+waits for backend/frontend health, and embeds Marcellus in its own desktop
+window. Docker Desktop remains required because Marcellus includes multiple
+services and persistent PostgreSQL/Redis data.
 
 The macOS package is signed and notarized by Apple. Tagged public Windows
 installers require Authenticode signing.
@@ -33,14 +35,14 @@ Requirements:
 Installation:
 
 ```bash
-tar -xzf regentclaw-VERSION.tar.gz
-cd regentclaw-VERSION
+tar -xzf marcellus-VERSION.tar.gz
+cd marcellus-VERSION
 ./install.sh
 ```
 
 The installer creates `.env` with unique random values for `SECRET_KEY`,
 `POSTGRES_PASSWORD`, and `REDIS_PASSWORD`, validates the Compose model, builds
-the containers, and starts RegentClaw. Existing `.env` files are never
+the containers, and starts Marcellus. Existing `.env` files are never
 overwritten.
 
 Open:
@@ -73,7 +75,7 @@ Install a downloaded wheel with `pipx` or `pip`:
 pipx install ./regentclaw_cli-VERSION-py3-none-any.whl
 ```
 
-The CLI and MCP packages connect to a running RegentClaw server; they do not
+The compatibility CLI and MCP packages connect to a running Marcellus server; they do not
 replace the self-hosted platform.
 
 ## Integrity verification

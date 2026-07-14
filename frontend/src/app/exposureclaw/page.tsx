@@ -67,7 +67,7 @@ export default function ExposureClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Radar className="text-yellow-400" /> ExposureClaw
+            <Radar className="text-yellow-400" /> Exposure Management
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Vulnerability exposure management - CVEs prioritized by EPSS, CVSS, and CISA KEV status across your asset inventory.

@@ -70,3 +70,73 @@ class ModelRouteResponse(BaseModel):
     response: str | None = None
     latency_ms: int | None = None
     token_count: int | None = None
+
+
+class BrainStatusRead(BaseModel):
+    brain: str
+    kind: str
+    available: bool
+    authenticated: bool
+    runtime: str | None = None
+    account_type: str | None = None
+    detail: str | None = None
+
+
+class BrainInvokeRequest(BaseModel):
+    brain: str = Field(..., pattern="^(codex_subscription|claude_subscription)$")
+    prompt: str = Field(..., min_length=1, max_length=24000)
+    model: str | None = Field(default=None, max_length=128)
+    claw: str = Field(default="executive", min_length=2, max_length=64)
+    data_classification: str = Field(default="internal", max_length=64)
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class BrainVoteRead(BaseModel):
+    source: str
+    kind: str
+    available: bool
+    counted: bool
+    provider: str | None = None
+    model: str | None = None
+    response: str | None = None
+    reason: str | None = None
+    latency_ms: int | None = None
+    token_count: int | None = None
+    policy_outcome: str | None = None
+    audit_id: str | None = None
+
+
+class BrainInvokeResponse(BrainVoteRead):
+    pass
+
+
+class ConsensusRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=24000)
+    sources: list[str] = Field(
+        default_factory=lambda: [
+            "codex_subscription",
+            "claude_subscription",
+            "profile:nim_fast_reasoning",
+            "profile:ollama_local_fallback",
+        ],
+        min_length=1,
+        max_length=8,
+    )
+    claw: str = Field(default="executive", min_length=2, max_length=64)
+    data_classification: str = Field(default="internal", max_length=64)
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    minimum_votes: int = Field(default=2, ge=1, le=8)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConsensusResponse(BaseModel):
+    status: str
+    consensus: str | None = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    agreement: str
+    counted_votes: int
+    requested_votes: int
+    votes: list[BrainVoteRead]
+    policy_outcome: str
+    synthesis_source: str

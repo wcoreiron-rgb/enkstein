@@ -13,7 +13,7 @@ _INSECURE_DEFAULTS = frozenset({
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "RegentClaw"
+    APP_NAME: str = "Marcellus"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = False
 
@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    OWNER_SETUP_TTL_SECONDS: int = 900
+    EMAIL_AUTH_ENABLED: bool = True
+    EMAIL_AUTH_CODE_TTL_SECONDS: int = 600
+    EMAIL_AUTH_MAX_ATTEMPTS: int = 5
+    EMAIL_AUTH_SMTP_HOST: str = ""
+    EMAIL_AUTH_SMTP_PORT: int = 587
+    EMAIL_AUTH_SMTP_USERNAME: str = ""
+    EMAIL_AUTH_SMTP_PASSWORD: str = ""
+    EMAIL_AUTH_FROM: str = ""
+
+    # Native host Brain Bridge. The bridge owns vendor subscription sessions;
+    # containers receive only a short-lived invocation surface and never tokens.
+    BRAIN_BRIDGE_URL: str = ""
+    BRAIN_BRIDGE_SECRET: str = ""
+    BRAIN_BRIDGE_TIMEOUT_SECONDS: int = 180
 
     def validate_security(self) -> None:
         """Call at startup. Raises if running in production with insecure defaults."""

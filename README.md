@@ -1,10 +1,13 @@
+> [!IMPORTANT]
+> **Marcellus architecture working copy.** This repository is an independent, compatibility-first evolution of RegentClaw. RegentClaw remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md). Existing RegentClaw names and routes remain available while the new runtime is implemented and verified.
+
 <p align="center">
-  <img src="frontend/public/logo.png" alt="RegentClaw" width="120" />
+  <img src="frontend/public/logo.png" alt="Marcellus" width="120" />
 </p>
 
-<h1 align="center">RegentClaw — Zero Trust Security Ecosystem</h1>
+<h1 align="center">Marcellus Architecture Lab</h1>
 
-<p align="center">Modular, governed security ecosystem with Zero Trust enforcement across every module, agent, and workflow.</p>
+<p align="center">Distributed, organism-inspired security automation with Zero Trust enforcement across every Cortex, Heart, Arm, Node, and action.</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-v0.x%20preview-f59e0b?style=flat-square" alt="v0.x preview" />
@@ -14,18 +17,58 @@
 </p>
 
 > [!NOTE]
-> **Project status — early preview (v0.x).** RegentClaw is a self-hosted, open-source platform under active development.
+> **Project status — early preview (v0.x).** Marcellus is a self-hosted, open-source architecture working copy under active development.
 > It runs on **realistic simulated findings out of the box** — connect your own API credentials to enable live integrations.
 > Security hardening is ongoing and the platform has **not yet had an independent third-party audit**. It is built for
 > evaluation, self-hosted testing, and community feedback — not yet for unmonitored production or multi-tenant SaaS use.
-> See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/regentclaw/owasp-agentic.html) and
+> See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and
 > [Maturity Matrix](docs/maturity-matrix.md) for exactly what's shipped vs. in progress.
 
+## Marcellus Distributed Runtime
+
+Marcellus `0.2.0` adds three governed runtime paths on top of the compatibility platform:
+
+| Layer | Shipped behavior | Maturity |
+|---|---|---|
+| **Plexus** | Tenant-scoped peer mailboxes, Fernet-encrypted payloads, Ed25519-signed envelopes, TTL, idempotency, acknowledgements, and Trust Fabric decisions | Shipped |
+| **Reflexes** | Typed conditions, owner/tenant binding, authority ceilings, cooldowns, hourly budgets, Trust Fabric and Ring Policy evaluation, and independent approval for action Reflexes | Shipped |
+| **Regeneration** | Signed encrypted checkpoints, manifest/state verification, secret rejection, quarantine, six-stage restoration, health verification, and approval-gated rejoin | Partial |
+
+The Regeneration implementation recreates the persisted logical Capability Node runtime. A host, process, container, or remote worker adapter is still required before it can replace an external runtime instance.
+
+The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
+
+### Governed Brain Bridges and consensus
+
+Marcellus `0.2.13` can use supported model runtimes already authenticated on
+the desktop without copying subscription tokens into Docker:
+
+- **Codex Subscription Bridge:** detects the official Codex runtime, verifies
+  that it is authenticated with ChatGPT, and runs ephemeral, read-only,
+  reasoning-only invocations.
+- **Claude Agent SDK Bridge:** detects an authenticated Claude Code/Agent SDK
+  host runtime and invokes it with tools disabled. It remains unavailable until
+  the official host runtime is installed and authenticated.
+- **Brain Consensus:** consults selected subscription, approved API, and local
+  model profiles concurrently. Unavailable, policy-denied, failed, and
+  simulated responses never count as votes.
+
+Every invocation is evaluated by Trust Fabric, tenant/profile constraints are
+rechecked, model output is rescanned and redacted, and call provenance is
+written to the Model Cortex audit. The host bridge uses a random per-install
+secret, accepts only local/private peers, and never returns vendor credentials.
+It deliberately exposes no unrestricted terminal or tool execution path.
+
+Endpoints are `GET /api/v1/modelclaw/brains/status`, `POST
+/api/v1/modelclaw/brains/invoke`, and `POST /api/v1/modelclaw/consensus`. See
+[Brain Bridges](docs/brain-bridges.md) for setup, trust boundaries, and vendor
+account limitations.
+
 <p align="center">
-  <a href="https://wcoreiron-rgb.github.io/regentclaw/">
+  <a href="https://wcoreiron-rgb.github.io/marcellus/">
     <img src="https://img.shields.io/badge/Documentation-1f2937?style=for-the-badge&logo=gitbook&logoColor=white" alt="Documentation" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/regentclaw/docs.html">
+  <a href="https://wcoreiron-rgb.github.io/marcellus/docs.html">
     <img src="https://img.shields.io/badge/Technical%20Docs-2563eb?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Technical Docs" />
   </a>
   <a href="http://localhost:3000">
@@ -34,22 +77,22 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/regentclaw/projects">
+  <a href="https://github.com/wcoreiron-rgb/marcellus/projects">
     <img src="https://img.shields.io/badge/Roadmap%202026-7c3aed?style=for-the-badge&logo=githubprojects&logoColor=white" alt="Roadmap 2026" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/regentclaw/issues/new?labels=bug&title=%5BBug%5D+">
+  <a href="https://github.com/wcoreiron-rgb/marcellus/issues/new?labels=bug&title=%5BBug%5D+">
     <img src="https://img.shields.io/badge/Report%20Bug-dc2626?style=for-the-badge&logo=github&logoColor=white" alt="Report Bug" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/regentclaw/issues/new?labels=enhancement&title=%5BFeature%5D+">
+  <a href="https://github.com/wcoreiron-rgb/marcellus/issues/new?labels=enhancement&title=%5BFeature%5D+">
     <img src="https://img.shields.io/badge/Request%20Feature-2563eb?style=for-the-badge&logo=github&logoColor=white" alt="Request Feature" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/regentclaw/discussions">
+  <a href="https://github.com/wcoreiron-rgb/marcellus/discussions">
     <img src="https://img.shields.io/badge/GitHub%20Discussions-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Discussions" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/regentclaw/actions/workflows/ci.yml">
+  <a href="https://github.com/wcoreiron-rgb/marcellus/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/wcoreiron-rgb/regentclaw/ci.yml?branch=main&label=Build%20and%20Test%20(Unit%20%2B%20E2E)" alt="Build and Test (Unit + E2E)" />
   </a>
   <a href="https://codecov.io/gh/wcoreiron-rgb/regentclaw">
@@ -59,13 +102,13 @@
 
 <p align="center"><strong>Full Documentation</strong></p>
 <p align="center">
-  <a href="https://wcoreiron-rgb.github.io/regentclaw/">
+  <a href="https://wcoreiron-rgb.github.io/marcellus/">
     <img src="https://img.shields.io/badge/Quick%20Start-f59e0b?style=for-the-badge&logo=rocket&logoColor=white" alt="Quick Start" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/regentclaw/docs.html#architecture">
+  <a href="https://wcoreiron-rgb.github.io/marcellus/docs.html#architecture">
     <img src="https://img.shields.io/badge/Specifications-0891b2?style=for-the-badge&logo=bookstack&logoColor=white" alt="Specifications" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/regentclaw/changelog.html">
+  <a href="https://wcoreiron-rgb.github.io/marcellus/changelog.html">
     <img src="https://img.shields.io/badge/Changelog-4f46e5?style=for-the-badge&logo=readme&logoColor=white" alt="Changelog" />
   </a>
 </p>
@@ -133,7 +176,7 @@ RegentClaw sits at the intersection of three tool categories — and is the only
 | Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
 | Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
 
-<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/regentclaw/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
+<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
 
 **In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, RegentClaw gives you **autonomous capability that is governed by default.**
 
@@ -152,7 +195,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 
 | Document | Format |
 |---|---|
-| [OWASP Evidence Matrix (Interactive)](https://wcoreiron-rgb.github.io/regentclaw/owasp-agentic.html) | Interactive HTML |
+| [OWASP Evidence Matrix (Interactive)](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) | Interactive HTML |
 | [LLM Top 10 Mapping (Markdown)](docs/owasp-agentic-mapping.md) | Markdown |
 | [Agentic ASI Top 10 Mapping (Markdown)](docs/owasp-asi-mapping.md) | Markdown |
 | [Platform Maturity Matrix (Markdown)](docs/maturity-matrix.md) | Markdown |
@@ -184,34 +227,55 @@ ComplianceClaw now exposes a Trust Fabric-governed evidence bundle export at `PO
 ### Download a release package
 
 The easiest installation path is a versioned bundle from
-[GitHub Releases](https://github.com/wcoreiron-rgb/regentclaw/releases). Each
+[GitHub Releases](https://github.com/wcoreiron-rgb/marcellus/releases). Each
 release includes `.tar.gz` and `.zip` self-hosted bundles, Python package
 artifacts, and `SHA256SUMS` integrity checks.
 
 ```bash
-tar -xzf regentclaw-VERSION.tar.gz
-cd regentclaw-VERSION
+tar -xzf marcellus-VERSION.tar.gz
+cd marcellus-VERSION
 ./install.sh
 ```
 
 The installer validates Docker Compose, creates a private `.env` with unique
-random secrets, builds the containers, and starts RegentClaw. It never
+random secrets, builds the containers, and starts Marcellus. It never
 overwrites an existing `.env`. See [installation details](docs/installation.md).
 
 ### One-click desktop installers
 
 GitHub Releases also provide native launchers:
 
-- **macOS:** install `RegentClaw-VERSION-macos.pkg`, then RegentClaw launches
-  from `/Applications`.
-- **Windows x64:** run `RegentClaw-VERSION-windows-x64-setup.exe`; setup creates
-  Start Menu and optional desktop shortcuts and launches RegentClaw.
+- **macOS:** install `Marcellus-VERSION-macos.pkg`; setup creates
+  `/Applications/Marcellus.app` and launches a native Intel/Apple Silicon
+  desktop window after installation.
+- **Windows x64:** run `Marcellus-VERSION-windows-x64-setup.exe`; setup creates
+  Start Menu and optional desktop shortcuts and launches `Marcellus.exe`.
 
 Both launchers start Docker Desktop when necessary, generate unique local
-secrets, start the RegentClaw services, and open the dashboard. Docker Desktop
-is still required. Connector credentials are added afterward through the
-Connectors UI and remain encrypted in persistent local volumes. See
+secrets, and start the Marcellus services. The macOS app displays startup
+progress, waits for the Cortex and UI health checks, and embeds the governed UI
+inside its own WebKit window instead of opening the browser. Docker Desktop is
+still required, and the first launch can take several minutes while local
+images build. Connector credentials are added afterward through the Connectors
+UI and remain encrypted in persistent local volumes. See
 [native installer details](docs/native-installers.md).
+
+### Local owner authentication and background runtime
+
+The first desktop launch requires creation of a local owner password and TOTP
+enrollment with an RFC-compatible Authenticator application. Marcellus displays
+the QR secret only during enrollment and returns ten one-time recovery codes.
+Later owner sessions require both the password and current Authenticator code;
+email-code viewer access remains optional after an Email/SMTP connector is
+configured.
+
+The operator console locks after 30 minutes without interaction. Locking,
+closing, or quitting the console does not stop the Compose runtime: monitoring,
+schedules, active Swarms, and policy-authorized Reflexes continue, while actions
+that require human approval remain queued. On macOS, the menu-bar control can
+reopen or lock the console. Authentication endpoints are under
+`/api/v1/auth/owner/*`; TOTP secrets and recovery-code hashes are encrypted in
+the persistent local secret volume.
 
 ### Prerequisites
 - Docker + Docker Compose installed

@@ -704,6 +704,20 @@ CONNECTORS = [
         "network_access": True,
     },
     {
+        "name": "Email / SMTP",
+        "connector_type": "email",
+        "category": "Dev & Collaboration",
+        "description": (
+            "SMTP delivery for verified email sign-in codes, security alerts, and approval notifications. "
+            "Credentials are encrypted locally and outbound delivery is enabled only after connector approval."
+        ),
+        "status": "pending", "risk_level": "medium",
+        "requested_scopes": json.dumps(["email:send"]),
+        "approved_scopes": json.dumps([]),
+        "endpoint": "smtp://configured-by-owner",
+        "network_access": True,
+    },
+    {
         "name": "Jira",
         "connector_type": "jira",
         "category": "Dev & Collaboration",

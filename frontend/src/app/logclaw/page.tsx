@@ -67,7 +67,7 @@ export default function LogClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <BookOpen className="text-cyan-400" /> LogClaw
+            <BookOpen className="text-cyan-400" /> Security Telemetry
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Log management and SIEM coverage - ingestion gaps, retention compliance, and unmonitored critical log sources.

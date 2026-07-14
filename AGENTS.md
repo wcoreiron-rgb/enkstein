@@ -1,7 +1,12 @@
-# RegentClaw Agent Operating Guide
+# Marcellus Agent Operating Guide
+
+## Repository Boundary
+- This is the independent Marcellus architecture repository at `/Users/wcoreiron/Desktop/Marcellus`.
+- The sibling `/Users/wcoreiron/Desktop/RegentClaw` repository is a stable source and must not be modified from this project.
+- Legacy RegentClaw names and routes remain compatibility contracts until a versioned migration explicitly replaces them.
 
 ## Project Purpose
-RegentClaw is a Zero Trust security action engine for detection triage, policy-governed orchestration, and remediation workflows across modular Claw services.
+Marcellus is an octopus-inspired distributed security action engine built from the RegentClaw compatibility baseline. It organizes governed capabilities into a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration workflows.
 
 ## Stack
 - Backend: FastAPI, SQLAlchemy async, PostgreSQL, Redis
@@ -11,6 +16,7 @@ RegentClaw is a Zero Trust security action engine for detection triage, policy-g
 ## Architecture Overview
 - `backend/app/trust_fabric/`: policy enforcement, anomaly scoring, containment
 - `backend/app/core/swarm/`: parallel swarm orchestration, aggregation, judging
+- `backend/app/core/marcellus/`: Cortex/Heart/Arm/Node registry plus Plexus, Reflex, and Regeneration runtimes
 - `backend/app/claws/*/`: Claw modules with routes/providers
 - `backend/app/api/routes/`: platform APIs
 - `frontend/src/app/`: platform pages and module views
@@ -32,6 +38,8 @@ RegentClaw is a Zero Trust security action engine for detection triage, policy-g
 ## Security Requirements
 - Route security-sensitive actions through Trust Fabric checks.
 - No bypass of policy evaluation for model, connector, or remediation actions.
+- Local autonomy and peer communication never bypass Trust Fabric.
+- Skills and Connectors cannot expand a Capability Node's authority implicitly.
 - Preserve auditability for decisions and containment outcomes.
 - Do not log raw secrets, tokens, or sensitive tenant payloads.
 
@@ -59,4 +67,3 @@ RegentClaw is a Zero Trust security action engine for detection triage, policy-g
 - Include what changed, why, and verification steps.
 - Call out limitations, TODOs, and risk areas explicitly.
 - Keep unrelated churn out of the diff.
-

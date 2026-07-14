@@ -1,16 +1,16 @@
-name: regentclaw
+name: marcellus
 
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-regentclaw}
+      POSTGRES_USER: ${POSTGRES_USER:-marcellus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-regentclaw}
+      POSTGRES_DB: ${POSTGRES_DB:-marcellus}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-regentclaw}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-marcellus}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,11 +35,28 @@ services:
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-regentclaw}
-      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-regentclaw}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-regentclaw}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-marcellus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-marcellus}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-marcellus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-marcellus}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      APP_VERSION: ${APP_VERSION:-0.0.0}
+      EMAIL_AUTH_ENABLED: ${EMAIL_AUTH_ENABLED:-true}
+      EMAIL_AUTH_CODE_TTL_SECONDS: ${EMAIL_AUTH_CODE_TTL_SECONDS:-600}
+      EMAIL_AUTH_MAX_ATTEMPTS: ${EMAIL_AUTH_MAX_ATTEMPTS:-5}
+      EMAIL_AUTH_SMTP_HOST: ${EMAIL_AUTH_SMTP_HOST:-}
+      EMAIL_AUTH_SMTP_PORT: ${EMAIL_AUTH_SMTP_PORT:-587}
+      EMAIL_AUTH_SMTP_USERNAME: ${EMAIL_AUTH_SMTP_USERNAME:-}
+      EMAIL_AUTH_SMTP_PASSWORD: ${EMAIL_AUTH_SMTP_PASSWORD:-}
+      EMAIL_AUTH_FROM: ${EMAIL_AUTH_FROM:-}
+      BRAIN_BRIDGE_URL: ${BRAIN_BRIDGE_URL:-}
+      BRAIN_BRIDGE_SECRET: ${BRAIN_BRIDGE_SECRET:-}
+      BRAIN_BRIDGE_TIMEOUT_SECONDS: ${BRAIN_BRIDGE_TIMEOUT_SECONDS:-180}
       DEBUG: "false"
       UVICORN_RELOAD: "false"
       AGT_ENABLE_AGENT_MESH: ${AGT_ENABLE_AGENT_MESH:-false}
@@ -55,6 +72,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 15s
     restart: unless-stopped
 
   frontend:
@@ -66,7 +89,8 @@ services:
     environment:
       INTERNAL_API_URL: http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

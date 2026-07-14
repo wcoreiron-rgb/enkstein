@@ -67,7 +67,7 @@ export default function VendorClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <Handshake className="text-teal-400" /> VendorClaw
+            <Handshake className="text-teal-400" /> Vendor Risk
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Third-party and vendor risk - security questionnaire scores, SLA breaches, and supply chain risk indicators.

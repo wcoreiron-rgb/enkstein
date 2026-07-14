@@ -40,7 +40,7 @@ it" moment is the whole pitch.
 
 ```
 RegentClaw — AI security automation, governed by default.
-github.com/wcoreiron-rgb/regentclaw
+github.com/wcoreiron-rgb/marcellus
 ```
 
 ## Export settings

@@ -69,7 +69,7 @@ export default function ClawComingSoon({ meta }: { meta: ClawMeta }) {
         <div>
           <p className="font-semibold text-sm" style={{ color: '#facc15' }}>Coming Soon — In Development</p>
           <p className="text-sm mt-1" style={{ color: 'var(--rc-text-2)' }}>
-            This Claw module is scoped and policies are loaded. The full detection engine, data fetchers,
+            This Capability Node is scoped and policies are loaded. The full detection engine, data fetchers,
             and dashboards are being built. Policies are already enforced through the Trust Fabric
             even before the dedicated UI is ready.
           </p>

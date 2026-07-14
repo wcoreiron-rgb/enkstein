@@ -35,7 +35,7 @@ export default function IdentityClawPage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-          <Users className="text-blue-400" /> IdentityClaw
+          <Users className="text-blue-400" /> Identity Security
         </h1>
         <p className="text-gray-400 mt-1">Identity Security — Govern every human and non-human identity</p>
       </div>

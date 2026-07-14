@@ -67,7 +67,7 @@ export default function RecoveryClawPage() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
-            <RefreshCcw className="text-emerald-400" /> RecoveryClaw
+            <RefreshCcw className="text-emerald-400" /> Recovery Readiness
           </h1>
           <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
             Business continuity and disaster recovery - backup failures, RTO/RPO gaps, and recovery readiness assessment.

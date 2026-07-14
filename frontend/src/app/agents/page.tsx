@@ -9,6 +9,7 @@ import {
 import Link from 'next/link';
 import { getAgents, updateAgent, triggerAgent, getAgentRuns } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -266,7 +267,7 @@ function AgentCard({ agent, onModeChange, onRun }: {
               </span>
               <span className="text-xs px-1.5 py-0.5 rounded"
                 style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-3)', fontSize: '10px' }}>
-                {agent.claw}
+                {capabilityName(agent.claw)}
               </span>
             </div>
             <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--rc-text-2)' }}>

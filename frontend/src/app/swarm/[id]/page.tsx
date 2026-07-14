@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, Clock, RefreshCw, ShieldAlert, StopCircle, XCircle, Sparkles, Ban, RotateCcw, AlertTriangle, Activity, Copy } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, getSwarmJob, getSwarmTasks, triggerRemediationAction, type SwarmTask } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
+import { getAuthToken } from '@/lib/auth';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -43,7 +45,7 @@ function executionMeta(outputJson?: string | null): { mode: string; fallbackReas
 function judgeModelMeta(summary: any): { label: string; detail?: string; blocked?: boolean } {
   const jm = summary?.judge_model;
   if (!jm) return { label: 'deterministic fallback' };
-  if (jm.blocked) return { label: 'blocked by policy', detail: jm.reason || jm.policy_name || 'ModelClaw denied', blocked: true };
+  if (jm.blocked) return { label: 'blocked by policy', detail: jm.reason || jm.policy_name || 'Model Cortex denied', blocked: true };
   if (jm.provider || jm.profile) {
     return {
       label: `${jm.provider || 'model'} / ${jm.profile || 'profile'}`,
@@ -65,7 +67,7 @@ function judgeBadgeMeta(judgeMeta: { blocked?: boolean; label: string }) {
 }
 
 function eventText(type: string, data: any): string {
-  const claw = data?.claw ? ` ${data.claw}` : '';
+  const claw = data?.claw ? ` ${capabilityName(data.claw)}` : '';
   if (type === 'job_started') return `Swarm job started.`;
   if (type === 'job_completed') return `Swarm job completed with status ${data?.status || 'unknown'}.`;
   if (type === 'task_started') return `Task started for${claw}.`;
@@ -182,7 +184,7 @@ function buildTicketDraft(job: any, summary: any, tasks: any[]): string {
   const complianceLines = compliance.slice(0, 8).map((c, i) => `${i + 1}. ${c.key} (${c.count})`);
 
   return [
-    `Title: [RegentClaw] Suspicious Identity Investigation - ${job?.name || 'Swarm Job'}`,
+    `Title: [Marcellus] Suspicious Identity Investigation - ${job?.name || 'Swarm Job'}`,
     `Generated: ${now}`,
     `Job ID: ${job?.id || ''}`,
     `Profile: ${job?.profile || ''}`,
@@ -285,7 +287,7 @@ export default function SwarmJobDetailPage() {
     if (terminal) return;
 
     const controller = new AbortController();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('rc_token') : null;
+    const token = getAuthToken();
 
     (async () => {
       try {
@@ -489,7 +491,7 @@ export default function SwarmJobDetailPage() {
     setTicketHandoffMsg(null);
     try {
       const complianceSummary = complianceRollup.map((c) => ({ control: c.key, count: c.count }));
-      const title = `[RegentClaw] ${job?.name || 'Swarm Incident'} (${(job?.overall_severity || 'info').toUpperCase()})`;
+      const title = `[Marcellus] ${job?.name || 'Swarm Incident'} (${(job?.overall_severity || 'info').toUpperCase()})`;
       const response = await triggerRemediationAction({
         triggered_by: `swarm:${id}`,
         action_spec: {
@@ -503,7 +505,7 @@ export default function SwarmJobDetailPage() {
             summary: title,
             description: ticketDraft,
             priority: String(job?.overall_severity || 'medium').toUpperCase(),
-            labels: ['regentclaw', 'swarm', 'incident-response'],
+            labels: ['marcellus', 'swarm', 'incident-response'],
             compliance_impact: complianceSummary,
             metadata: {
               swarm_job_id: job?.id,
@@ -846,7 +848,7 @@ export default function SwarmJobDetailPage() {
             <table className="w-full min-w-[920px] text-sm">
               <thead className="text-xs text-gray-500 border-b border-gray-800">
                 <tr>
-                  <th className="px-5 py-3 text-left">Claw</th>
+                  <th className="px-5 py-3 text-left">Capability</th>
                   <th className="px-5 py-3 text-left">Task Type</th>
                   <th className="px-5 py-3 text-left">Status</th>
                   <th className="px-5 py-3 text-left">Severity</th>
@@ -866,7 +868,7 @@ export default function SwarmJobDetailPage() {
                   const simulated = exec.mode === 'simulated_fallback';
                   return (
                     <tr key={task.id} className="hover:bg-gray-800/40">
-                      <td className="px-5 py-3 text-white">{task.claw}</td>
+                      <td className="px-5 py-3 text-white">{capabilityName(task.claw)}</td>
                       <td className="px-5 py-3 text-gray-400">{task.task_type}</td>
                       <td className="px-5 py-3"><span className={`inline-flex items-center gap-1 ${tMeta.color}`}><TIcon className="w-4 h-4" /> {task.status}</span></td>
                       <td className="px-5 py-3"><RiskBadge value={task.severity || 'info'} /></td>

@@ -1,6 +1,7 @@
 name: Native Package Validation
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths:
@@ -8,6 +9,8 @@ on:
       - "scripts/build_release_bundle.sh"
       - "scripts/build_macos_pkg.sh"
       - "scripts/build_windows_installer.ps1"
+      - "frontend/public/logo.png"
+      - "frontend/public/favicon.png"
       - ".github/workflows/native-package-check.yml"
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
@@ -20,6 +23,8 @@ on:
       - "scripts/build_release_bundle.sh"
       - "scripts/build_macos_pkg.sh"
       - "scripts/build_windows_installer.ps1"
+      - "frontend/public/logo.png"
+      - "frontend/public/favicon.png"
       - ".github/workflows/native-package-check.yml"
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
@@ -50,19 +55,23 @@ jobs:
 
       - name: Validate package payload
         run: |
-          rm -rf "$RUNNER_TEMP/regentclaw-pkg"
-          pkgutil --expand-full "dist/RegentClaw-$VERSION-macos.pkg" "$RUNNER_TEMP/regentclaw-pkg"
-          payload="$RUNNER_TEMP/regentclaw-pkg/RegentClaw-component.pkg/Payload/Applications/RegentClaw.app"
-          test -x "$payload/Contents/MacOS/RegentClaw"
+          rm -rf "$RUNNER_TEMP/marcellus-pkg"
+          pkgutil --expand-full "dist/Marcellus-$VERSION-macos.pkg" "$RUNNER_TEMP/marcellus-pkg"
+          payload="$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Payload/Applications/Marcellus.app"
+          test -x "$payload/Contents/MacOS/Marcellus"
+          test -x "$payload/Contents/Resources/launcher.sh"
+          test -x "$payload/Contents/Resources/MarcellusBrainBridge"
           test -f "$payload/Contents/Resources/runtime/compose.yaml"
+          test -f "$payload/Contents/Resources/runtime/docs/brain-bridges.md"
           test -f "$payload/Contents/Resources/runtime/VERSION"
-          test -x "$RUNNER_TEMP/regentclaw-pkg/RegentClaw-component.pkg/Scripts/postinstall"
+          test ! -e "$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Payload/Users"
+          test -x "$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Scripts/postinstall"
           codesign --verify --deep --strict --verbose=2 "$payload"
 
       - uses: actions/upload-artifact@v4
         with:
           name: macos-unsigned-preview
-          path: dist/RegentClaw-${{ env.VERSION }}-macos.pkg
+          path: dist/Marcellus-${{ env.VERSION }}-macos.pkg
           retention-days: 7
 
   windows-package:
@@ -92,12 +101,18 @@ jobs:
       - name: Validate installer
         shell: pwsh
         run: |
-          $installer = "dist\RegentClaw-$env:VERSION-windows-x64-setup.exe"
+          $installer = "dist\Marcellus-$env:VERSION-windows-x64-setup.exe"
           if (-not (Test-Path $installer)) { throw "Installer missing: $installer" }
           if ((Get-Item $installer).Length -lt 1MB) { throw "Installer is unexpectedly small" }
+          $extract = Join-Path $env:RUNNER_TEMP "marcellus-windows"
+          Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
+          Start-Process -FilePath $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$extract" -Wait
+          if (-not (Test-Path (Join-Path $extract "runtime\BrainBridge.ps1"))) { throw "Brain bridge missing from installer" }
+          if (-not (Test-Path (Join-Path $extract "runtime\Start-Marcellus.ps1"))) { throw "Runtime launcher missing from installer" }
+          if (-not (Test-Path (Join-Path $extract "runtime\docs\brain-bridges.md"))) { throw "Brain bridge docs missing from installer" }
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned-preview
-          path: dist/RegentClaw-${{ env.VERSION }}-windows-x64-setup.exe
+          path: dist/Marcellus-${{ env.VERSION }}-windows-x64-setup.exe
           retention-days: 7

@@ -46,7 +46,7 @@ jobs:
       - name: Build and validate self-hosted bundles
         run: |
           ./scripts/build_release_bundle.sh "${GITHUB_REF_NAME}"
-          bundle_dir="dist/regentclaw-${GITHUB_REF_NAME#v}"
+          bundle_dir="dist/marcellus-${GITHUB_REF_NAME#v}"
           test -x "$bundle_dir/install.sh"
           test -f "$bundle_dir/compose.yaml"
           test -f "$bundle_dir/.env.example"
@@ -91,7 +91,7 @@ jobs:
           INSTALLER_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
           INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
         run: |
-          keychain="$RUNNER_TEMP/regentclaw-signing.keychain-db"
+          keychain="$RUNNER_TEMP/marcellus-signing.keychain-db"
           keychain_password=$(openssl rand -hex 24)
           echo "$keychain_password" > "$RUNNER_TEMP/keychain-password"
           echo "$APP_CERT" | /usr/bin/base64 -D > "$RUNNER_TEMP/application.p12"
@@ -116,7 +116,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          package="dist/RegentClaw-${GITHUB_REF_NAME#v}-macos.pkg"
+          package="dist/Marcellus-${GITHUB_REF_NAME#v}-macos.pkg"
           xcrun notarytool submit "$package" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
@@ -130,13 +130,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-assets
-          path: dist/RegentClaw-*-macos.pkg
+          path: dist/Marcellus-*-macos.pkg
           if-no-files-found: error
 
       - name: Remove temporary signing keychain
         if: always()
         run: |
-          security delete-keychain "$RUNNER_TEMP/regentclaw-signing.keychain-db" 2>/dev/null || true
+          security delete-keychain "$RUNNER_TEMP/marcellus-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/application.p12" "$RUNNER_TEMP/installer.p12" "$RUNNER_TEMP/keychain-password"
 
   windows:
@@ -171,7 +171,7 @@ jobs:
           WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
-          $installer = "dist\RegentClaw-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
+          $installer = "dist\Marcellus-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
           $certificate = Join-Path $env:RUNNER_TEMP "windows-signing.pfx"
           [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERT))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
@@ -191,7 +191,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-assets
-          path: dist/RegentClaw-*-windows-x64-setup.exe
+          path: dist/Marcellus-*-windows-x64-setup.exe
           if-no-files-found: error
 
   publish:
@@ -225,5 +225,5 @@ jobs:
             gh release create "${GITHUB_REF_NAME}" release-assets/* \
               --verify-tag \
               --generate-notes \
-              --title "RegentClaw ${GITHUB_REF_NAME}"
+              --title "Marcellus ${GITHUB_REF_NAME}"
           fi
