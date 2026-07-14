@@ -64,6 +64,30 @@ The circular elements along each visual Arm represent Capability Nodes. They may
 
 The Cortex owns system-level intent and arbitration, not every operational decision.
 
+### Cortex Gateway
+
+`POST /api/v1/modelclaw/gateway` is the common reasoning boundary for the
+Marcellus Chat and Cowork workspaces and for Swarm Judge synthesis. Its request
+contract carries the work mode, conversation, Brain source, data classification,
+tenant, capability, and optional workspace context. Before inference it:
+
+1. treats the conversation and attached text as untrusted input;
+2. performs DLP redaction and prompt-injection auditing;
+3. obtains a Trust Fabric decision independently for each candidate Brain;
+4. prevents restricted or top-secret data from reaching subscription Brains;
+5. records model-call outcome metadata without logging raw prompts; and
+6. scans provider output before returning it to the workspace.
+
+Automatic routing currently prefers an authenticated Codex subscription bridge,
+then an authenticated Claude bridge, a configured NVIDIA NIM profile, and the
+local profile. Consensus mode invokes multiple independently governed sources
+and reports vote availability, confidence, and agreement.
+
+The legacy Arc tool agent still uses its specialized provider/tool loop. It is
+already protected by DLP and Trust Fabric, but is not yet implemented through
+the Cortex Gateway because the subscription bridge intentionally runs without
+host tools. This is a compatibility boundary, not a policy bypass.
+
 | Component | Current foundation | Responsibility |
 |---|---|---|
 | CoreOS | CoreOS, workflows, schedules, triggers | Platform state and coordination |

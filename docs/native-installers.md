@@ -84,11 +84,11 @@ unauthenticated runtimes appear as unavailable in Model Cortex. See
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh v0.2.13
-open dist/Marcellus-0.2.13-macos.pkg
+./scripts/build_macos_pkg.sh v0.2.14
+open dist/Marcellus-0.2.14-macos.pkg
 ```
 
-The output is `dist/Marcellus-0.2.13-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Marcellus-0.2.14-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 

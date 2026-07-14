@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import re
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.marcellus.runtime_security import resolve_tenant
 from app.core.modelclaw.schemas import (
     BrainInvokeRequest,
     BrainInvokeResponse,
@@ -13,6 +13,8 @@ from app.core.modelclaw.schemas import (
     BrainVoteRead,
     ConsensusRequest,
     ConsensusResponse,
+    CortexGatewayRequest,
+    CortexGatewayResponse,
     ModelCallRead,
     ModelProfileCreate,
     ModelProfileRead,
@@ -23,8 +25,10 @@ from app.core.modelclaw.schemas import (
 from app.core.modelclaw.brain_bridge import (
     bridge_status,
     collect_votes,
+    deterministic_consensus,
     invoke_subscription_brain,
 )
+from app.core.modelclaw.gateway import execute_cortex_gateway
 from app.core.modelclaw.service import (
     get_profile,
     list_model_calls,
@@ -58,11 +62,11 @@ async def _enforce_brain_call(
             target=source,
             target_type="brain",
             context={
+                **context,
                 "action_type": "BRAIN_CALL",
                 "claw": claw,
                 "data_classification": classification,
                 "tenant_id": tenant_id,
-                **context,
             },
         ),
     )
@@ -213,7 +217,7 @@ async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(
 
     all_votes = votes + denied_votes
     counted = [vote for vote in all_votes if vote.get("counted") and vote.get("response")]
-    consensus, confidence, agreement = _deterministic_consensus(counted, payload.minimum_votes)
+    consensus, confidence, agreement = deterministic_consensus(counted, payload.minimum_votes)
     status = "completed" if len(counted) >= payload.minimum_votes else "insufficient_votes"
     return ConsensusResponse(
         status=status,
@@ -229,30 +233,18 @@ async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(
 
 
 def _deterministic_consensus(votes: list[dict], minimum_votes: int) -> tuple[str | None, float, str]:
-    if not votes:
-        return None, 0.0, "none"
-    if len(votes) < minimum_votes:
-        return votes[0]["response"], 0.35, "insufficient"
-
-    token_sets = [_meaningful_tokens(vote["response"]) for vote in votes]
-    similarities: list[float] = []
-    for index, left in enumerate(token_sets):
-        for right in token_sets[index + 1 :]:
-            union = left | right
-            similarities.append(len(left & right) / len(union) if union else 0.0)
-    overlap = sum(similarities) / len(similarities) if similarities else 1.0
-    agreement = "high" if overlap >= 0.42 else "moderate" if overlap >= 0.22 else "low"
-    vote_factor = min(1.0, len(votes) / max(minimum_votes, 3))
-    confidence = round(min(0.95, 0.45 + (0.35 * overlap) + (0.15 * vote_factor)), 2)
-
-    source_priority = {"codex_subscription": 0, "claude_subscription": 1}
-    primary = min(votes, key=lambda vote: source_priority.get(vote["source"], 2))
-    return primary["response"], confidence, agreement
+    """Compatibility wrapper retained for existing callers and tests."""
+    return deterministic_consensus(votes, minimum_votes)
 
 
-def _meaningful_tokens(text: str) -> set[str]:
-    stop = {"that", "this", "with", "from", "have", "will", "your", "into", "should", "would", "about"}
-    return {token for token in re.findall(r"[a-z0-9_-]{4,}", text.lower()) if token not in stop}
+@router.post("/gateway", response_model=CortexGatewayResponse, summary="Governed universal Cortex gateway")
+async def route_cortex_gateway(
+    payload: CortexGatewayRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await execute_cortex_gateway(db, payload.model_copy(update={"tenant_id": tenant_id}))
 
 
 @router.post("/route", response_model=ModelRouteResponse, summary="Route a model call through Trust Fabric")

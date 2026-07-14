@@ -523,6 +523,31 @@ export const invokeSubscriptionBrain = (body: object) =>
   apiFetch<any>('/modelclaw/brains/invoke', { method: 'POST', body: JSON.stringify(body) });
 export const routeBrainConsensus = (body: object) =>
   apiFetch<any>('/modelclaw/consensus', { method: 'POST', body: JSON.stringify(body) });
+export type CortexGatewayResponse = {
+  status: string;
+  response?: string;
+  source?: string;
+  provider?: string;
+  model?: string;
+  mode: string;
+  governance: {
+    outcome: string;
+    policy_name: string;
+    reason: string;
+    risk_score: number;
+    data_classification: string;
+    input_redacted: boolean;
+    output_redacted: boolean;
+    injection_risk: boolean;
+    injection_vectors: string[];
+  };
+  votes: any[];
+  confidence?: number;
+  agreement?: string;
+  latency_ms?: number;
+};
+export const routeCortexGateway = (body: object) =>
+  apiFetch<CortexGatewayResponse>('/modelclaw/gateway', { method: 'POST', body: JSON.stringify(body) });
 
 // Memory / State Layer
 export const getMemorySummary = () => apiFetch<any>('/memory/summary');

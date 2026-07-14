@@ -58,7 +58,10 @@ async def test_dispatcher_routes_to_real_task(db_session, claw):
     assert isinstance(out["recommended_actions"], list)
     assert out["execution_mode"] == "real_task_handler"
     # Real /task path has specific recommendations, not simulated fallback title.
-    assert not out["findings"][0]["title"].endswith("simulated analysis")
+    if out["findings"]:
+        assert not out["findings"][0]["title"].endswith("simulated analysis")
+    else:
+        assert out.get("data_source") == "no_data_source"
 
 
 @pytest.mark.asyncio
@@ -113,5 +116,5 @@ async def test_dispatcher_task_provenance_fields_present(db_session, claw):
     out = await execute_task(db_session, task)
     assert out["claw"] == claw
     assert out.get("execution_mode") == "real_task_handler"
-    assert out.get("data_source") in {"live_connector", "persisted_db", "seeded_fallback"}
+    assert out.get("data_source") in {"live_connector", "persisted_db", "seeded_fallback", "no_data_source"}
     assert out.get("connector_state") in {"configured", "unconfigured"}

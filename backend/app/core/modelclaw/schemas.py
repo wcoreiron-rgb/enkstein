@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ModelProviderRead(BaseModel):
@@ -140,3 +140,65 @@ class ConsensusResponse(BaseModel):
     votes: list[BrainVoteRead]
     policy_outcome: str
     synthesis_source: str
+
+
+class CortexMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=12000)
+
+
+class CortexGatewayRequest(BaseModel):
+    mode: Literal["chat", "cowork", "security"] = "chat"
+    messages: list[CortexMessage] = Field(..., min_length=1, max_length=24)
+    source: str = Field(default="auto", min_length=2, max_length=128)
+    consensus_sources: list[str] = Field(
+        default_factory=lambda: [
+            "codex_subscription",
+            "claude_subscription",
+            "profile:nim_fast_reasoning",
+            "profile:ollama_local_fallback",
+        ],
+        min_length=1,
+        max_length=8,
+    )
+    minimum_votes: int = Field(default=2, ge=1, le=8)
+    data_classification: str = Field(default="internal", max_length=64)
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    capability: str = Field(default="executive", min_length=2, max_length=64)
+    workspace_id: str | None = Field(default=None, max_length=128)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_total_context(self):
+        if sum(len(message.content) for message in self.messages) > 24000:
+            raise ValueError("Conversation context exceeds 24000 characters")
+        valid_source = self.source in {"auto", "consensus", "codex_subscription", "claude_subscription"}
+        if not valid_source and not self.source.startswith("profile:"):
+            raise ValueError("Unsupported Cortex source")
+        return self
+
+
+class CortexGovernanceRead(BaseModel):
+    outcome: str
+    policy_name: str
+    reason: str
+    risk_score: float = Field(ge=0.0, le=100.0)
+    data_classification: str
+    input_redacted: bool = False
+    output_redacted: bool = False
+    injection_risk: bool = False
+    injection_vectors: list[str] = Field(default_factory=list)
+
+
+class CortexGatewayResponse(BaseModel):
+    status: str
+    response: str | None = None
+    source: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    mode: str
+    governance: CortexGovernanceRead
+    votes: list[BrainVoteRead] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    agreement: str | None = None
+    latency_ms: int | None = None

@@ -323,7 +323,7 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
         creds = await _get_identity_provider_credentials(db, cfg["connector_type"])
         if not creds:
             continue
-        connector_state = "approved"
+        connector_state = "configured"
         try:
             raw_findings = await cfg["adapter"].get_findings(credentials=creds)
         except Exception as exc:

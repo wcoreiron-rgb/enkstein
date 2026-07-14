@@ -3,11 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.modelclaw.routes import route_model_call
-from app.core.modelclaw.schemas import ModelRouteRequest
+from app.core.modelclaw.gateway import execute_cortex_gateway
+from app.core.modelclaw.schemas import CortexGatewayRequest, CortexMessage
 
 def judge_swarm_result(job_name: str, aggregate: dict[str, Any], task_count: int) -> dict[str, Any]:
     severity = aggregate.get("overall_severity", "info")
@@ -59,37 +58,39 @@ async def judge_swarm_result_with_modelclaw(
         f"task_count={task_count}\n"
     )
     try:
-        routed = await route_model_call(
-            ModelRouteRequest(
-                claw="swarm_judge",
-                action_type="MODEL_CALL",
-                prompt=prompt,
+        routed = await execute_cortex_gateway(
+            db,
+            CortexGatewayRequest(
+                mode="security",
+                messages=[CortexMessage(role="user", content=prompt[:12000])],
+                source="profile:swarm_judge_profile",
+                capability="swarm_judge",
                 data_classification=classification,
-                model_profile="swarm_judge_profile",
-                swarm_job_id=swarm_job_id,
+                workspace_id=swarm_job_id,
                 context={"purpose": "swarm_summary_synthesis"},
             ),
-            db=db,
         )
-        if routed.allowed and routed.response:
-            judged["executive_summary"] = routed.response
+        if routed["status"] == "completed" and routed.get("response"):
+            judged["executive_summary"] = routed["response"]
             judged["next_steps"] = [
-                "Review ModelClaw-generated synthesis",
+                "Review Cortex Gateway synthesis",
                 "Validate top findings and recommended actions",
             ]
             judged["judge_model"] = {
-                "provider": routed.provider,
-                "model": routed.model,
-                "profile": routed.model_profile,
+                "provider": routed.get("provider"),
+                "model": routed.get("model"),
+                "profile": str(routed.get("source") or "").removeprefix("profile:"),
+                "policy_outcome": routed["governance"]["outcome"],
             }
         else:
-            judged["judge_model"] = {"blocked": True, "policy_name": routed.policy_name, "reason": routed.reason}
-    except HTTPException as exc:
-        judged["judge_model"] = {
-            "blocked": True,
-            "policy_name": "modelclaw_profile_guard",
-            "reason": str(exc.detail),
-        }
+            judged["judge_model"] = {
+                "blocked": True,
+                "policy_name": routed["governance"]["policy_name"],
+                "reason": routed["governance"]["reason"],
+            }
     except Exception as exc:  # pragma: no cover - defensive fallback
-        judged["judge_model"] = {"error": str(exc)}
+        judged["judge_model"] = {
+            "error": "Cortex Gateway synthesis unavailable",
+            "error_type": type(exc).__name__,
+        }
     return judged

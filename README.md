@@ -38,9 +38,30 @@ The Regeneration implementation recreates the persisted logical Capability Node 
 
 The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
 
+### Governed AI workspace
+
+The `/marcellus` console now presents three first-class work modes:
+
+- **Chat** for general governed conversation.
+- **Cowork** for file-assisted planning, analysis, writing, and review.
+- **Security** for the Cortex, Three Hearts, Arms, Plexus, Reflex, and Regeneration controls.
+
+Chat and Cowork call `POST /api/v1/modelclaw/gateway`. The Cortex Gateway scans
+the complete conversation, redacts detected sensitive values, audits prompt
+injection risk, obtains a Trust Fabric decision for each Brain, invokes only an
+allowed source, scans the output, and writes model-call audit metadata. Users
+can select automatic routing, Codex or Claude subscription bridges, a configured
+NVIDIA NIM profile, a local Brain, or multi-Brain consensus. `restricted` and
+`top_secret` automatic requests are forced to the local profile.
+
+The Swarm Judge uses the same gateway with `swarm_judge_profile`. Existing Arc
+tool sessions retain their specialized tool adapter and their established DLP
+and Trust Fabric checks; migrating tool-session execution into the shared
+gateway is tracked separately so tool capability is not silently reduced.
+
 ### Governed Brain Bridges and consensus
 
-Marcellus `0.2.13` can use supported model runtimes already authenticated on
+Marcellus `0.2.14` can use supported model runtimes already authenticated on
 the desktop without copying subscription tokens into Docker:
 
 - **Codex Subscription Bridge:** detects the official Codex runtime, verifies

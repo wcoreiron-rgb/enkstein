@@ -1,10 +1,22 @@
 import pytest
 
+from app.core.swarm import judge as judge_module
 from app.core.swarm.judge import judge_swarm_result_with_modelclaw
 
 
 @pytest.mark.asyncio
-async def test_swarm_judge_uses_modelclaw_summary_when_allowed(db_session):
+async def test_swarm_judge_uses_modelclaw_summary_when_allowed(db_session, monkeypatch):
+    async def fake_gateway(db, payload):
+        return {
+            "status": "completed",
+            "response": "Governed Cortex synthesis",
+            "source": "profile:swarm_judge_profile",
+            "provider": "nvidia_nim",
+            "model": "meta/llama-3.3-70b-instruct",
+            "governance": {"outcome": "allowed", "policy_name": "Swarm policy", "reason": "Allowed"},
+        }
+
+    monkeypatch.setattr(judge_module, "execute_cortex_gateway", fake_gateway)
     aggregate = {
         "overall_severity": "high",
         "confidence": 0.84,
@@ -22,7 +34,7 @@ async def test_swarm_judge_uses_modelclaw_summary_when_allowed(db_session):
     )
     assert "judge_model" in judged
     assert judged["judge_model"]["profile"] == "swarm_judge_profile"
-    assert judged["executive_summary"].startswith("ModelClaw response from")
+    assert judged["executive_summary"] == "Governed Cortex synthesis"
 
 
 @pytest.mark.asyncio

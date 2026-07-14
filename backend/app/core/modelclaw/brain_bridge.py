@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import socket
+import re
 from time import perf_counter
 from typing import Any
 from urllib.parse import urlparse
@@ -268,3 +269,30 @@ def _redaction_reason(input_redacted: bool, output_redacted: bool) -> str | None
     if output_redacted:
         return "Output was redacted by Marcellus."
     return None
+
+
+def deterministic_consensus(votes: list[dict], minimum_votes: int) -> tuple[str | None, float, str]:
+    if not votes:
+        return None, 0.0, "none"
+    if len(votes) < minimum_votes:
+        return votes[0]["response"], 0.35, "insufficient"
+
+    token_sets = [_meaningful_tokens(vote["response"]) for vote in votes]
+    similarities: list[float] = []
+    for index, left in enumerate(token_sets):
+        for right in token_sets[index + 1 :]:
+            union = left | right
+            similarities.append(len(left & right) / len(union) if union else 0.0)
+    overlap = sum(similarities) / len(similarities) if similarities else 1.0
+    agreement = "high" if overlap >= 0.42 else "moderate" if overlap >= 0.22 else "low"
+    vote_factor = min(1.0, len(votes) / max(minimum_votes, 3))
+    confidence = round(min(0.95, 0.45 + (0.35 * overlap) + (0.15 * vote_factor)), 2)
+
+    source_priority = {"codex_subscription": 0, "claude_subscription": 1}
+    primary = min(votes, key=lambda vote: source_priority.get(vote["source"], 2))
+    return primary["response"], confidence, agreement
+
+
+def _meaningful_tokens(text: str) -> set[str]:
+    stop = {"that", "this", "with", "from", "have", "will", "your", "into", "should", "would", "about"}
+    return {token for token in re.findall(r"[a-z0-9_-]{4,}", text.lower()) if token not in stop}
