@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.claws.arcclaw.scanner import classify_prompt, scan_text
 from app.core.modelclaw.brain_bridge import (
     collect_votes,
+    derive_brain_session_id,
     deterministic_consensus,
     invoke_profile_brain,
     invoke_subscription_brain,
@@ -60,6 +61,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     prompt_audit = audit_prompt(latest_user)
     classification = classify_prompt(latest_user)
     risk_score = max(prompt_audit.risk_score, _scan_risk(scan.findings))
+    session_id = derive_brain_session_id(payload.tenant_id, payload.context)
 
     if prompt_audit.is_injection_risk and prompt_audit.risk_score >= 50:
         governance = _governance(
@@ -108,6 +110,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
             claw=payload.capability,
             data_classification=payload.data_classification,
             model=payload.model,
+            session_id=session_id,
             subscription_invoker=invoke_subscription_brain,
         )
         vote_by_source = {vote["source"]: vote for vote in parallel_votes}
@@ -141,7 +144,10 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
             if not decision.allowed:
                 vote = _blocked_vote(source, decision.reason, decision.outcome.value)
             elif source in _SUBSCRIPTION_BRAINS:
-                vote = await invoke_subscription_brain(source, prompt, model=payload.model)
+                invocation_kwargs: dict[str, Any] = {"model": payload.model}
+                if session_id:
+                    invocation_kwargs["session_id"] = session_id
+                vote = await invoke_subscription_brain(source, prompt, **invocation_kwargs)
                 vote["policy_outcome"] = decision.outcome.value
             elif source.startswith("profile:"):
                 vote = await invoke_profile_brain(

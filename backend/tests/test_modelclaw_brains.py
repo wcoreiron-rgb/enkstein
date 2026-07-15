@@ -208,6 +208,18 @@ def test_deterministic_consensus_reports_agreement_without_hidden_reasoning():
     assert agreement in {"low", "moderate", "high"}
 
 
+def test_browser_session_affinity_is_opaque_and_tenant_scoped():
+    context = {"conversation_id": "conversation-123"}
+    first = brain_bridge.derive_brain_session_id("tenant-a", context)
+    repeated = brain_bridge.derive_brain_session_id("tenant-a", context)
+    other_tenant = brain_bridge.derive_brain_session_id("tenant-b", context)
+
+    assert first == repeated
+    assert first != other_tenant
+    assert len(first or "") == 64
+    assert "conversation-123" not in (first or "")
+
+
 @pytest.mark.asyncio
 async def test_subscription_bridge_redacts_sensitive_input(monkeypatch):
     captured = {}

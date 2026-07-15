@@ -334,6 +334,34 @@
     </div>
   </div>
 
+  <!-- Marcellus v0.2.24 — Persistent Browser Conversations -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Persistent Browser Conversations</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.2.24</span>
+          <span class="tag tag-feat">Thread affinity</span>
+          <span class="tag tag-sec">Tenant scoped</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.24</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Browser Brains now continue in the same ChatGPT, Claude, or Gemini provider thread for every turn in a Marcellus conversation.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Conversation affinity:</strong> the first turn opens a provider tab and subsequent turns reuse that exact tab.</li>
+          <li><strong>Clear boundaries:</strong> new and branched Marcellus conversations receive separate provider threads.</li>
+          <li><strong>Opaque identity:</strong> tenant and conversation identifiers are hashed before reaching the native bridge or companion.</li>
+          <li><strong>Recovery:</strong> closing a bound provider tab clears its mapping and the next turn opens a replacement thread.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Marcellus v0.2.23 — Governed Browser Brains -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

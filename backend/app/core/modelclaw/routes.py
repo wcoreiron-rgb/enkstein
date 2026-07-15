@@ -26,6 +26,7 @@ from app.core.modelclaw.brain_bridge import (
     bridge_status,
     collect_votes,
     create_browser_brain_pairing,
+    derive_brain_session_id,
     deterministic_consensus,
     invoke_subscription_brain,
     open_browser_companion_folder,
@@ -149,7 +150,11 @@ async def invoke_brain(payload: BrainInvokeRequest, db: AsyncSession = Depends(g
             policy_outcome=decision.outcome.value,
         )
 
-    vote = await invoke_subscription_brain(payload.brain, payload.prompt, model=payload.model)
+    invocation_kwargs = {"model": payload.model}
+    session_id = derive_brain_session_id(payload.tenant_id, payload.context)
+    if session_id:
+        invocation_kwargs["session_id"] = session_id
+    vote = await invoke_subscription_brain(payload.brain, payload.prompt, **invocation_kwargs)
     vote["policy_outcome"] = decision.outcome.value
     record_model_call(
         {
@@ -215,14 +220,15 @@ async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(
                 }
             )
 
-    votes = await collect_votes(
-        db,
-        allowed_sources,
-        payload.prompt,
-        tenant_id=payload.tenant_id,
-        claw=payload.claw,
-        data_classification=payload.data_classification,
-    )
+    collection_kwargs = {
+        "tenant_id": payload.tenant_id,
+        "claw": payload.claw,
+        "data_classification": payload.data_classification,
+    }
+    session_id = derive_brain_session_id(payload.tenant_id, payload.context)
+    if session_id:
+        collection_kwargs["session_id"] = session_id
+    votes = await collect_votes(db, allowed_sources, payload.prompt, **collection_kwargs)
     for vote in votes:
         decision = allowed_decisions[vote["source"]]
         vote["policy_outcome"] = decision.outcome.value

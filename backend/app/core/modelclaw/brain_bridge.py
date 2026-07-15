@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from hashlib import sha256
 import logging
 import os
 import socket
@@ -163,6 +164,7 @@ async def invoke_subscription_brain(
     prompt: str,
     *,
     model: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     if brain not in _SUBSCRIPTION_BRAINS:
         raise ValueError("Unknown subscription Brain")
@@ -176,7 +178,7 @@ async def invoke_subscription_brain(
         body = await _bridge_request(
             "POST",
             "/v1/invoke",
-            {"brain": brain, "prompt": transmitted_prompt, "model": model},
+            {"brain": brain, "prompt": transmitted_prompt, "model": model, "session_id": session_id},
         )
     except Exception as exc:
         logger.warning("Subscription Brain invocation failed: brain=%s error=%s", brain, type(exc).__name__)
@@ -341,6 +343,7 @@ async def collect_votes(
     claw: str,
     data_classification: str,
     model: str | None = None,
+    session_id: str | None = None,
     subscription_invoker=None,
 ) -> list[dict[str, Any]]:
     prepared: dict[str, dict[str, Any]] = {}
@@ -358,7 +361,10 @@ async def collect_votes(
     async def invoke(source: str) -> dict[str, Any]:
         if source in _SUBSCRIPTION_BRAINS:
             invoker = subscription_invoker or invoke_subscription_brain
-            return await invoker(source, prompt, model=model)
+            kwargs: dict[str, Any] = {"model": model}
+            if session_id:
+                kwargs["session_id"] = session_id
+            return await invoker(source, prompt, **kwargs)
         if source.startswith("profile:"):
             profile_call = prepared[source]
             if "unavailable_vote" in profile_call:
@@ -367,6 +373,14 @@ async def collect_votes(
         return _unavailable_vote(source, "unknown", "Unsupported Brain source.")
 
     return list(await asyncio.gather(*(invoke(source) for source in sources)))
+
+
+def derive_brain_session_id(tenant_id: str, context: dict[str, Any]) -> str | None:
+    """Return an opaque tenant-scoped key for provider conversation affinity."""
+    conversation_id = str(context.get("conversation_id") or "").strip()
+    if not conversation_id or len(conversation_id) > 128:
+        return None
+    return sha256(f"{tenant_id}\x00{conversation_id}".encode()).hexdigest()
 
 
 async def _resolve_provider_key(db: AsyncSession, provider: str) -> str | None:

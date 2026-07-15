@@ -105,6 +105,13 @@ changes can temporarily break a selector; Marcellus fails closed and leaves
 CLI, API, and local Brains available. Provider plan limits and account terms
 continue to apply.
 
+Each Marcellus conversation receives an opaque tenant-scoped browser session
+key. The companion opens one provider tab for the first turn and reuses that
+same tab for later turns in the conversation. Starting or branching a
+Marcellus conversation creates a separate provider thread. Closing the
+provider tab safely clears the local binding and causes the next turn to open
+a replacement thread.
+
 ## Consensus routing
 
 `POST /api/v1/modelclaw/consensus` accepts up to eight unique sources:

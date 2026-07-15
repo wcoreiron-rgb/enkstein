@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Marcellus Browser Companion",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Connects visible signed-in AI browser sessions to the governed Marcellus Brain Bridge.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [

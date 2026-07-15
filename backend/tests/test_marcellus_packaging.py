@@ -99,12 +99,16 @@ def test_browser_companion_is_scoped_paired_and_packaged() -> None:
     assert '"cookies"' not in manifest
     assert '"tabs"' not in manifest
     assert "X-Marcellus-Browser-Token" in background
+    assert "marcellusSessionTabs" in background
+    assert "task.session_id" in background
+    assert "chrome.tabs.onRemoved" in background
     assert "document.cookie" not in content
     assert '"/v1/browser/exchange"' in bridge
     assert '"/v1/browser/poll"' in bridge
     assert '"/v1/browser/complete"' in bridge
     assert "pairingCodes" in bridge
     assert "pendingTaskIDs" in bridge
+    assert 'task["session_id"]' in bridge
     assert "queuedTasks.removeAll" in bridge
     assert "browser-bridge.token" in bridge
     assert 'cp -R "$ROOT_DIR/browser-extension"' in mac_build

@@ -107,7 +107,7 @@ private final class BrowserSessionBroker {
         condition.broadcast()
     }
 
-    func invoke(brain: String, prompt: String, timeout: TimeInterval) throws -> [String: Any] {
+    func invoke(brain: String, prompt: String, sessionID: String?, timeout: TimeInterval) throws -> [String: Any] {
         let provider = Self.provider(for: brain)
         condition.lock()
         let live = lastSeen.map { Date().timeIntervalSince($0) < 15 && providers.contains(provider) } ?? false
@@ -119,7 +119,14 @@ private final class BrowserSessionBroker {
         }
         let taskID = UUID().uuidString.lowercased()
         pendingTaskIDs.insert(taskID)
-        queuedTasks.append(["task_id": taskID, "brain": brain, "provider": provider, "prompt": prompt])
+        var task: [String: Any] = [
+            "task_id": taskID,
+            "brain": brain,
+            "provider": provider,
+            "prompt": prompt,
+        ]
+        if let sessionID { task["session_id"] = sessionID }
+        queuedTasks.append(task)
         condition.broadcast()
         let deadline = Date().addingTimeInterval(timeout)
         while completedTasks[taskID] == nil && condition.wait(until: deadline) && Date() < deadline {}
@@ -323,10 +330,16 @@ private final class BrainBridge {
                 return
             }
             let model = payload["model"] as? String
+            let sessionID = payload["session_id"] as? String
+            if let sessionID,
+               sessionID.range(of: "^[a-f0-9]{64}$", options: .regularExpression) == nil {
+                send(connection, status: 400, body: ["detail": "Invalid session identifier"])
+                return
+            }
             queue.async { [weak self] in
                 guard let self else { return }
                 do {
-                    let result = try self.invoke(brain: brain, prompt: prompt, model: model)
+                    let result = try self.invoke(brain: brain, prompt: prompt, model: model, sessionID: sessionID)
                     self.send(connection, status: 200, body: result)
                 } catch BridgeError.runtimeUnavailable(let detail) {
                     self.send(connection, status: 200, body: ["success": false, "detail": detail])
@@ -612,7 +625,7 @@ private final class BrainBridge {
         return ["sonnet", "opus", "haiku"]
     }
 
-    private func invoke(brain: String, prompt: String, model: String?) throws -> [String: Any] {
+    private func invoke(brain: String, prompt: String, model: String?, sessionID: String?) throws -> [String: Any] {
         switch brain {
         case "codex_subscription":
             return try invokeCodex(prompt: prompt, model: model)
@@ -635,13 +648,13 @@ private final class BrainBridge {
                 provider: "anthropic_claude_desktop"
             )
         case "chatgpt_browser", "claude_browser", "gemini_browser":
-            return try invokeBrowser(brain: brain, prompt: prompt, model: model)
+            return try invokeBrowser(brain: brain, prompt: prompt, model: model, sessionID: sessionID)
         default:
             throw BridgeError.invalidRequest
         }
     }
 
-    private func invokeBrowser(brain: String, prompt: String, model: String?) throws -> [String: Any] {
+    private func invokeBrowser(brain: String, prompt: String, model: String?, sessionID: String?) throws -> [String: Any] {
         guard model == nil || model?.isEmpty == true else { throw BridgeError.invalidRequest }
         let started = Date()
         let governedPrompt = """
@@ -650,7 +663,12 @@ private final class BrainBridge {
         QUESTION:
         \(prompt)
         """
-        let result = try browserBroker.invoke(brain: brain, prompt: governedPrompt, timeout: 180)
+        let result = try browserBroker.invoke(
+            brain: brain,
+            prompt: governedPrompt,
+            sessionID: sessionID,
+            timeout: 180
+        )
         guard result["success"] as? Bool == true,
               let response = result["response"] as? String,
               !response.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

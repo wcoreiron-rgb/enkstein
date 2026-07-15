@@ -9,6 +9,7 @@ const tabsGet = (tabId) => new Promise((resolve, reject) => chrome.tabs.get(tabI
   else resolve(tab);
 }));
 const tabsCreate = (create) => new Promise((resolve) => chrome.tabs.create(create, resolve));
+const tabsUpdate = (tabId, update) => new Promise((resolve) => chrome.tabs.update(tabId, update, resolve));
 const sendToTab = (tabId, message) => new Promise((resolve, reject) => {
   chrome.tabs.sendMessage(tabId, message, (response) => {
     if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
@@ -76,10 +77,49 @@ async function waitForTab(tabId, timeoutMs = 30000) {
   throw new Error('Provider page did not finish loading');
 }
 
+async function waitForProviderReady(tabId, timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const status = await sendToTab(tabId, { type: 'marcellus-status' });
+      if (status?.ready) return true;
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error('Provider page did not expose a compatible signed-in message field');
+}
+
+async function sessionTab(task) {
+  const sessionKey = task.session_id ? `${task.provider}:${task.session_id}` : null;
+  const stored = await storageGet('marcellusSessionTabs');
+  const mappings = stored.marcellusSessionTabs || {};
+  if (sessionKey && mappings[sessionKey]) {
+    try {
+      const existing = await tabsGet(mappings[sessionKey]);
+      if (existing?.id && providerForUrl(existing.url) === task.provider) {
+        await tabsUpdate(existing.id, { active: true });
+        await waitForTab(existing.id);
+        await waitForProviderReady(existing.id);
+        return existing;
+      }
+    } catch {}
+    delete mappings[sessionKey];
+    await storageSet({ marcellusSessionTabs: mappings });
+  }
+
+  const created = await tabsCreate({ url: providerUrl(task.provider), active: true });
+  await waitForTab(created.id);
+  await waitForProviderReady(created.id);
+  if (sessionKey) {
+    mappings[sessionKey] = created.id;
+    await storageSet({ marcellusSessionTabs: mappings });
+  }
+  return created;
+}
+
 async function executeTask(task) {
-  const tab = await tabsCreate({ url: providerUrl(task.provider), active: true });
-  await waitForTab(tab.id);
-  chrome.tabs.update(tab.id, { active: true });
+  const tab = await sessionTab(task);
+  await tabsUpdate(tab.id, { active: true });
   try {
     const result = await sendToTab(tab.id, { type: 'marcellus-execute', task });
     return result || { success: false, detail: 'Provider page returned no result.' };
@@ -132,5 +172,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('marcellus-poll', { periodInMinutes: 0.5 }));
 chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === 'marcellus-poll') void poll(); });
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const stored = await storageGet('marcellusSessionTabs');
+  const mappings = stored.marcellusSessionTabs || {};
+  let changed = false;
+  for (const [key, value] of Object.entries(mappings)) {
+    if (value === tabId) {
+      delete mappings[key];
+      changed = true;
+    }
+  }
+  if (changed) await storageSet({ marcellusSessionTabs: mappings });
+});
 setInterval(poll, 1500);
 void poll();

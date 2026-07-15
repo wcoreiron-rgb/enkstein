@@ -67,6 +67,31 @@ async def test_gateway_passes_selected_subscription_model(client, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_gateway_passes_opaque_conversation_affinity_to_browser_brain(client, monkeypatch):
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        captured.update(source=source, session_id=session_id)
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "chat",
+            "source": "chatgpt_browser",
+            "tenant_id": "tenant-a",
+            "context": {"conversation_id": "conversation-123"},
+            "messages": [{"role": "user", "content": "Continue this discussion"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert captured["source"] == "chatgpt_browser"
+    assert len(captured["session_id"]) == 64
+    assert "conversation-123" not in captured["session_id"]
+
+
+@pytest.mark.asyncio
 async def test_gateway_redacts_sensitive_context_before_brain(client, monkeypatch):
     captured = {}
 

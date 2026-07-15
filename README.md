@@ -114,7 +114,8 @@ the desktop without copying subscription tokens into Docker:
 - **Browser Session Bridge:** pairs the narrowly scoped Marcellus Browser
   Companion with visible signed-in ChatGPT, Claude, or Gemini tabs. It never
   reads cookies or account tokens and is selected explicitly rather than by
-  silent automatic routing.
+  silent automatic routing. Tenant-scoped conversation affinity reuses one
+  provider tab per Marcellus chat instead of creating a new thread per turn.
 - **Brain Consensus:** consults selected subscription, approved API, and local
   model profiles concurrently. Unavailable, policy-denied, failed, and
   simulated responses never count as votes.
