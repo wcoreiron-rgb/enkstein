@@ -78,10 +78,27 @@ tenant, capability, and optional workspace context. Before inference it:
 5. records model-call outcome metadata without logging raw prompts; and
 6. scans provider output before returning it to the workspace.
 
-Automatic routing currently prefers an authenticated Codex subscription bridge,
-then an authenticated Claude bridge, a configured NVIDIA NIM profile, and the
-local profile. Consensus mode invokes multiple independently governed sources
-and reports vote availability, confidence, and agreement.
+Automatic routing is mode-aware. Cowork prioritizes the Codex and Claude host
+bridges before approved Gemini/NVIDIA profiles and local fallback. Security
+prioritizes the governed security reasoning profile. Restricted and top-secret
+work remains pinned to the approved local profile. Every result records the
+candidate order, attempted sources, selected source, and routing reason.
+Consensus mode invokes multiple independently governed sources and reports vote
+availability, confidence, and agreement.
+
+Encrypted tenant-scoped Projects hold persistent Chat/Cowork conversations and
+versioned text artifacts. Folder access is explicit. In the desktop shell, the
+operator grants a local folder and the native bridge stores its path behind an
+opaque grant token. The container can list, create, edit, rename, move, and send
+bounded text files to `.marcellus-trash`, but never receives the host path.
+Symlink traversal, protected directories, oversized files, unsupported file
+types, and cross-project access are rejected. Browser Cowork imports a bounded
+copy instead. Active project files remain bounded Cowork context by default;
+every mutation is tenant-scoped and Trust Fabric authorized. Conversation
+branches preserve provenance. A Cortex conversation can be
+handed to Security as a real approval-gated Swarm job; the handoff stores only
+the tenant-bound source reference and digest. The dispatcher decrypts and
+redacts bounded context in memory when the Security tasks execute.
 
 The legacy Arc tool agent still uses its specialized provider/tool loop. It is
 already protected by DLP and Trust Fabric, but is not yet implemented through
@@ -166,6 +183,58 @@ contain -> checkpoint -> recreate -> verify -> rehydrate -> rejoin
 Only signed manifests and governed state are restored. Checkpoints containing credential-like fields are rejected and credentials are never copied. The recovered logical Node runtime remains quarantined until signature, digest, identity, state-integrity, and tenant-binding checks pass.
 
 The current implementation restores a persisted logical Capability Node runtime. Recreating a process, container, or remote worker requires a future Runtime Heart adapter, so Regeneration remains marked `partial`.
+
+## Persistent Missions and governed Memory
+
+A Mission is a long-lived security objective owned by one tenant and operator.
+It is not a free-running remediation agent. Each run creates a bounded-parallel
+Swarm with a fixed `read`, `analyze`, and `recommend` action envelope. Trust
+Fabric evaluates Mission creation, updates, launches, memory proposals, and
+memory review decisions.
+
+Supported cadences are `manual`, `hourly`, `every_6h`, `daily`, and `weekly`.
+The background scheduler claims at most ten due Missions per cycle and advances
+their next-run time even when policy blocks execution. A failed scheduler cycle
+does not expose Mission payloads in logs.
+
+Mission objectives, observation summaries, and generated overnight briefs are
+encrypted at rest. Swarm jobs persist only an authenticated Mission reference
+and objective digest; the dispatcher resolves and redacts the objective in
+memory after tenant and integrity validation. A completed run creates a reviewable observation only after
+sensitive-data scanning, prompt-injection auditing, and a Trust Fabric decision.
+`proposed` observations are excluded from runtime context. Only `approved`
+observations from the same tenant and Mission can be loaded by participating
+Capability Nodes. Operators can reject proposals without deleting their audit
+history.
+
+The overnight brief is an encrypted point-in-time report containing:
+
+- active Missions and their next run
+- material approved or proposed changes
+- pending memory decisions
+- currently running Arms
+- policy/result metadata for recent Reflexes
+- blocked or failed Mission activity
+- Security Twin health derived from approved observations
+
+The brief deliberately excludes decrypted Reflex event bodies. It is an
+operator summary, not an independent compliance attestation.
+
+### Mission API
+
+```text
+POST  /api/v1/marcellus/missions
+GET   /api/v1/marcellus/missions
+PATCH /api/v1/marcellus/missions/{mission_id}
+POST  /api/v1/marcellus/missions/{mission_id}/run
+GET   /api/v1/marcellus/missions/memory/observations
+POST  /api/v1/marcellus/missions/memory/observations/{observation_id}/review
+POST  /api/v1/marcellus/missions/overnight-brief
+```
+
+Non-administrative users see only their own Missions and observations. Tenant
+claims remain authoritative. Approval identity is derived from the authenticated
+session and Mission memory cannot self-approve.
 
 ## Migration Rules
 

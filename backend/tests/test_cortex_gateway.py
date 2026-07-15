@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.core.modelclaw import gateway
@@ -39,6 +41,29 @@ async def test_gateway_auto_uses_first_available_governed_brain(client, monkeypa
     assert body["source"] == "codex_subscription"
     assert called == ["codex_subscription"]
     assert body["governance"]["policy_name"]
+
+
+@pytest.mark.asyncio
+async def test_gateway_passes_selected_subscription_model(client, monkeypatch):
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None):
+        captured["source"] = source
+        captured["model"] = model
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "chat",
+            "source": "codex_subscription",
+            "model": "gpt-test-model",
+            "messages": [{"role": "user", "content": "Explain this design"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert captured == {"source": "codex_subscription", "model": "gpt-test-model"}
 
 
 @pytest.mark.asyncio
@@ -112,6 +137,32 @@ async def test_gateway_forces_restricted_auto_context_to_local_profile(client, m
     assert response.status_code == 200, response.text
     assert captured["source"] == "profile:ollama_local_fallback"
     assert response.json()["provider"] == "test-provider"
+    assert response.json()["routing"]["strategy"] == "adaptive"
+    assert "local Brain" in response.json()["routing"]["reason"]
+
+
+@pytest.mark.asyncio
+async def test_gateway_security_auto_prioritizes_governed_security_profile(client, monkeypatch):
+    captured = {}
+
+    async def fake_profile(db, source, prompt, **kwargs):
+        captured["source"] = source
+        return _vote(source, "Security profile response")
+
+    monkeypatch.setattr(gateway, "invoke_profile_brain", fake_profile)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "security",
+            "source": "auto",
+            "messages": [{"role": "user", "content": "Assess this security architecture"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert captured["source"] == "profile:nim_fast_reasoning"
+    assert body["routing"]["selected_source"] == "profile:nim_fast_reasoning"
+    assert body["routing"]["strategy"] == "adaptive"
 
 
 @pytest.mark.asyncio
@@ -136,6 +187,35 @@ async def test_gateway_consensus_reports_independent_votes(client, monkeypatch):
     assert len(body["votes"]) == 2
     assert body["confidence"] > 0
     assert body["agreement"] in {"low", "moderate", "high"}
+
+
+@pytest.mark.asyncio
+async def test_gateway_consensus_invokes_subscription_brains_concurrently(client, monkeypatch):
+    active = 0
+    peak = 0
+
+    async def fake_subscription(source, prompt, *, model=None):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.03)
+        active -= 1
+        return _vote(source, f"Independent evidence from {source}")
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "consensus",
+            "consensus_sources": ["codex_subscription", "claude_subscription"],
+            "minimum_votes": 2,
+            "messages": [{"role": "user", "content": "Review this implementation in parallel"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert peak == 2
+    assert len(response.json()["votes"]) == 2
 
 
 @pytest.mark.asyncio

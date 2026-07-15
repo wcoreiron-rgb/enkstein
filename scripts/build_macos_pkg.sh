@@ -42,6 +42,7 @@ rm -rf "$WORK_DIR" "$OUTPUT_PKG"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/packaging/macos/launcher.sh" "$RESOURCES_DIR/launcher.sh"
 chmod +x "$RESOURCES_DIR/launcher.sh"
+cp -R "$ROOT_DIR/browser-extension" "$RESOURCES_DIR/browser-extension"
 sed "s/__VERSION__/$VERSION/g" "$ROOT_DIR/packaging/macos/Info.plist.in" > "$CONTENTS_DIR/Info.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/marcellus-$VERSION" "$RESOURCES_DIR/runtime"
 
@@ -59,9 +60,9 @@ BRIDGE_SOURCE="$ROOT_DIR/packaging/macos/MarcellusBrainBridge.swift"
 BRIDGE_ARM_BINARY="$WORK_DIR/MarcellusBrainBridge-arm64"
 BRIDGE_INTEL_BINARY="$WORK_DIR/MarcellusBrainBridge-x86_64"
 xcrun swiftc "$BRIDGE_SOURCE" -O -target arm64-apple-macos12.0 \
-  -framework Network -o "$BRIDGE_ARM_BINARY"
+  -framework Network -framework AppKit -framework ApplicationServices -o "$BRIDGE_ARM_BINARY"
 xcrun swiftc "$BRIDGE_SOURCE" -O -target x86_64-apple-macos12.0 \
-  -framework Network -o "$BRIDGE_INTEL_BINARY"
+  -framework Network -framework AppKit -framework ApplicationServices -o "$BRIDGE_INTEL_BINARY"
 lipo -create "$BRIDGE_ARM_BINARY" "$BRIDGE_INTEL_BINARY" -output "$RESOURCES_DIR/MarcellusBrainBridge"
 chmod +x "$RESOURCES_DIR/MarcellusBrainBridge"
 

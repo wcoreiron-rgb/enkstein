@@ -61,6 +61,7 @@ const BRAND_LOGOS: Record<string, { slug: string; color: string; bg: string; loc
   anthropic:      { slug: 'anthropic',         color: 'd4a27f', bg: '#3d2510' },
   ollama:         { slug: 'ollama',            color: 'ffffff', bg: '#1a1a2e' },
   nvidia_nim:     { slug: 'nvidia',            color: '76b900', bg: '#162408' },
+  gemini:         { slug: 'googlegemini',       color: '8e75ff', bg: '#ffffff' },
 
   // Dev & Collaboration
   github:         { slug: 'github',            color: 'ffffff', bg: '#1a1a2e' },
@@ -111,6 +112,7 @@ function resolveBrandKey(type: string, name: string): string | null {
     ['azure openai', 'azure_openai'],
     ['openai', 'openai'],
     ['anthropic', 'anthropic'],
+    ['gemini', 'gemini'],
     ['ollama', 'ollama'],
     ['okta', 'okta'],
     ['crowdstrike', 'crowdstrike'],

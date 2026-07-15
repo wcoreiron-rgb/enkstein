@@ -38,6 +38,28 @@ The Regeneration implementation recreates the persisted logical Capability Node 
 
 The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
 
+### Persistent Missions and governed Memory
+
+Security mode now opens with **Mission Control**, where an operator can create,
+pause, resume, and run persistent security Missions. Each Mission launches the
+existing bounded-parallel Swarm runtime on a manual, hourly, six-hour, daily,
+or weekly cadence. Mission tasks have a fixed `read`, `analyze`, and `recommend`
+authority ceiling; they cannot silently gain remediation privileges.
+
+Mission objectives, observations, and overnight briefs are encrypted at rest;
+Swarm records hold only a tenant-bound Mission reference and integrity digest.
+Completed runs produce tenant-scoped memory proposals that are scanned for
+sensitive content and prompt-injection risk, evaluated by Trust Fabric, and
+held for an independent approve/reject decision. Only approved observations are
+loaded into later tasks for that same tenant and Mission. The 12-hour overnight
+brief summarizes active Missions, material changes, decisions needed, running
+Arms, recent Reflex metadata, blocked activity, and Security Twin health without
+copying raw Reflex event bodies into the report.
+
+The API is under `/api/v1/marcellus/missions`; see
+[Marcellus Architecture](docs/marcellus-architecture.md#persistent-missions-and-governed-memory)
+for the route list and current limitations.
+
 ### Governed AI workspace
 
 The `/marcellus` console now presents three first-class work modes:
@@ -51,8 +73,24 @@ the complete conversation, redacts detected sensitive values, audits prompt
 injection risk, obtains a Trust Fabric decision for each Brain, invokes only an
 allowed source, scans the output, and writes model-call audit metadata. Users
 can select automatic routing, Codex or Claude subscription bridges, a configured
-NVIDIA NIM profile, a local Brain, or multi-Brain consensus. `restricted` and
+NVIDIA NIM or Gemini API profile, a local Brain, or multi-Brain consensus. Auto
+routing is mode-aware, records its candidate order and selection reason, and
+falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
+
+Chat and Cowork now persist encrypted, tenant-scoped conversation history.
+Cowork adds named Projects, encrypted versioned text artifacts, searchable
+history, persistent project-file context, conversation organization, and a
+real desktop folder bridge. A macOS operator can explicitly grant one local
+folder to a project; Marcellus receives an opaque grant, synchronizes bounded
+text files, and can create, edit, rename, move, or recoverably trash files in
+that folder. Browser Cowork retains an import-copy fallback. Raw host paths are
+never exposed to the container or web UI. Content is path-bounded, DLP-scanned,
+treated as untrusted context, and every mutation is tenant-scoped and authorized
+through Trust Fabric. The
+**Investigate** action creates an approval-gated Security
+Swarm from an encrypted conversation reference and digest. Bounded context is
+decrypted and redacted only in memory when Security tasks execute.
 
 The Swarm Judge uses the same gateway with `swarm_judge_profile`. Existing Arc
 tool sessions retain their specialized tool adapter and their established DLP
@@ -61,7 +99,7 @@ gateway is tracked separately so tool capability is not silently reduced.
 
 ### Governed Brain Bridges and consensus
 
-Marcellus `0.2.14` can use supported model runtimes already authenticated on
+Marcellus `0.2.15` can use supported model runtimes already authenticated on
 the desktop without copying subscription tokens into Docker:
 
 - **Codex Subscription Bridge:** detects the official Codex runtime, verifies
@@ -70,6 +108,13 @@ the desktop without copying subscription tokens into Docker:
 - **Claude Agent SDK Bridge:** detects an authenticated Claude Code/Agent SDK
   host runtime and invokes it with tools disabled. It remains unavailable until
   the official host runtime is installed and authenticated.
+- **Desktop Session Bridge:** can use a compatible visible ChatGPT or Claude
+  macOS app after explicit Accessibility permission and a live message-field
+  compatibility check. Incompatible vendor builds fail closed.
+- **Browser Session Bridge:** pairs the narrowly scoped Marcellus Browser
+  Companion with visible signed-in ChatGPT, Claude, or Gemini tabs. It never
+  reads cookies or account tokens and is selected explicitly rather than by
+  silent automatic routing.
 - **Brain Consensus:** consults selected subscription, approved API, and local
   model profiles concurrently. Unavailable, policy-denied, failed, and
   simulated responses never count as votes.
@@ -80,8 +125,9 @@ written to the Model Cortex audit. The host bridge uses a random per-install
 secret, accepts only local/private peers, and never returns vendor credentials.
 It deliberately exposes no unrestricted terminal or tool execution path.
 
-Endpoints are `GET /api/v1/modelclaw/brains/status`, `POST
-/api/v1/modelclaw/brains/invoke`, and `POST /api/v1/modelclaw/consensus`. See
+Endpoints include `GET /api/v1/modelclaw/brains/status`, `POST
+/api/v1/modelclaw/brains/invoke`, `POST /api/v1/modelclaw/consensus`, and the
+authenticated desktop/browser setup routes under `/api/v1/modelclaw/brains/`. See
 [Brain Bridges](docs/brain-bridges.md) for setup, trust boundaries, and vendor
 account limitations.
 

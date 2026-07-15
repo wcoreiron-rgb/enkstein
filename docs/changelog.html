@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Changelog — Marcellus</title>
-  <meta name="description" content="What's new in RegentClaw — features shipped, integrations added, and fixes landed." />
+  <meta name="description" content="What's new in Marcellus — features shipped, integrations added, and fixes landed." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -334,6 +334,262 @@
     </div>
   </div>
 
+  <!-- Marcellus v0.2.23 — Governed Browser Brains -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Governed Browser Brains</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.2.23</span>
+          <span class="tag tag-feat">Browser Companion</span>
+          <span class="tag tag-sec">Trust Fabric</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.23</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Marcellus can now route explicit governed requests through visible signed-in ChatGPT, Claude, and Gemini browser sessions when a compatible desktop or CLI runtime is unavailable.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Browser companion:</strong> one-time loopback pairing, exact provider-origin access, visible page controls, and no cookie or account-token extraction.</li>
+          <li><strong>Honest readiness:</strong> only an open signed-in tab with a compatible message field is reported ready; changed or unsupported provider pages fail closed.</li>
+          <li><strong>Governed routing:</strong> Trust Fabric decisions, data-classification blocking, prompt redaction, output scanning, tenant checks, and model-call audit remain mandatory.</li>
+          <li><strong>Multiple paths:</strong> Codex CLI, Claude host runtime, compatible desktop sessions, browser sessions, approved APIs, and local Ollama Brains can participate in explicit consensus.</li>
+          <li><strong>Resilient broker:</strong> browser work is serialized by provider, pairing rotates the local token, and timed-out work is removed without accepting stale completions.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.22 — Automatic Local Brain Selection -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Automatic Local Brain Selection</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.2.22</span>
+          <span class="tag tag-feat">Ollama</span>
+          <span class="tag tag-sec">Verified model</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.22</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Marcellus now detects installed Ollama models and chooses a real available local Brain when a profile default is absent.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Live selection:</strong> profile defaults, preferred models, security-tuned models, and general fallbacks are matched against Ollama's live inventory.</li>
+          <li><strong>Alias support:</strong> names such as <code>llama3.2</code> correctly match an installed <code>llama3.2:latest</code> tag.</li>
+          <li><strong>Fail closed:</strong> an explicit missing model is rejected rather than silently replaced.</li>
+          <li><strong>Provenance:</strong> the actual local model used remains visible in the governed response.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.21 — Governed Intelligence Workspace -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Governed Intelligence Workspace</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.21</span>
+          <span class="tag tag-feat">Missions</span>
+          <span class="tag tag-sec">Governed memory</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.21</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Chat, Cowork, and Security now share a governed intelligence runtime with research, multi-Brain execution, and persistent Mission operations.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Tool-using Cortex:</strong> streaming turns, review-before-write proposals, and parallel multi-Brain consensus.</li>
+          <li><strong>Governed research:</strong> bounded browser and workspace tools, injection and sensitive-data scans, citations, and encrypted artifacts.</li>
+          <li><strong>Persistent Missions:</strong> scheduled bounded Swarms with pause, resume, run-now, fixed read/analyze/recommend authority, and Trust Fabric enforcement.</li>
+          <li><strong>Memory Heart:</strong> encrypted Mission intent and observations, operator approval before reuse, tenant isolation, and overnight intelligence.</li>
+          <li><strong>Mission Control:</strong> Cortex health, active Missions, material changes, decisions, running Arms, Reflex metadata, and blocked activity.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.20 — Native Cowork Workspace -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Native Cowork Workspace</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.20</span>
+          <span class="tag tag-fix">Chat controls</span>
+          <span class="tag tag-sec">Scoped folder grant</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.20</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Cowork now operates on an explicitly approved local folder while keeping host paths outside the container and web UI.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Reliable organization:</strong> in-app archive and move dialogs replace unsupported browser confirmations in the desktop shell.</li>
+          <li><strong>Native folder grants:</strong> the macOS picker creates a protected opaque grant and synchronizes only bounded text files.</li>
+          <li><strong>Real file operations:</strong> create, edit, rename, move, resync, and recoverably trash files in the approved folder.</li>
+          <li><strong>Defense in depth:</strong> Trust Fabric authorization, encrypted bindings, tenant checks, traversal and symlink rejection, and a recoverable `.marcellus-trash` path.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.19 — Governed Cowork Files and Chat Management -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Governed Cowork Files and Chat Management</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.19</span>
+          <span class="tag tag-fix">Cowork context</span>
+          <span class="tag tag-sec">Trust Fabric</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.19</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Imported Cowork folders now remain readable project context, while project files and conversations gain governed lifecycle controls.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Persistent file context:</strong> up to 20 active project files are automatically attached to bounded Cowork turns unless the operator clears them.</li>
+          <li><strong>Project editor:</strong> create files by path, edit encrypted content, save new versions, and delete active files from the Cowork pane.</li>
+          <li><strong>Conversation organization:</strong> delete active chats or move them into a selected Cowork project from the header or left blade.</li>
+          <li><strong>Policy enforcement:</strong> file writes, file deletes, chat deletes, and project moves are tenant-scoped and Trust Fabric authorized.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.18 — Live Brain Models and Native Cowork Folders -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Live Brain Models and Native Cowork Folders</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.18</span>
+          <span class="tag tag-feat">Brain inventory</span>
+          <span class="tag tag-fix">Cowork</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.18</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Chat and Cowork now expose real available Brain/model choices, native macOS folder import, and a quieter edge-free conversation canvas.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Codex models:</strong> model choices are read from the authenticated host Codex model cache and passed through the governed subscription bridge.</li>
+          <li><strong>Claude models:</strong> subscription-default, Sonnet, Opus, and Haiku choices appear when the Claude host runtime is installed and authenticated.</li>
+          <li><strong>Provider readiness:</strong> unavailable subscription, API, and local Brains are visibly disabled instead of failing only after submission.</li>
+          <li><strong>Provider models:</strong> verified NVIDIA, Gemini, and installed Ollama model inventories drive the model picker.</li>
+          <li><strong>Native folders:</strong> Cowork uses the macOS folder panel and explicitly imports selected text files into its encrypted artifact store.</li>
+          <li><strong>Quieter workspace:</strong> outer frames, response borders, and composer edges were removed from Chat and Cowork.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.17 — Mode-Aware Workspace Blade -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Mode-Aware Workspace Blade</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.17</span>
+          <span class="tag tag-feat">Chat + Cowork</span>
+          <span class="tag tag-sec">Security isolation</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.17</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The persistent left blade now represents the selected workspace instead of mixing security navigation into Chat and Cowork.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Chat blade:</strong> new conversation, search, encrypted history, message counts, and active-chat selection.</li>
+          <li><strong>Cowork blade:</strong> project creation and selection, project-scoped conversations, search, and active-work indicators.</li>
+          <li><strong>Security blade:</strong> Cortex &amp; Hearts, Capability Studio, and every Security Arm remain isolated to Security mode.</li>
+          <li><strong>Unified workspace:</strong> the duplicate nested conversation rail was removed so the main canvas has more room.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.16 — Persistent Workspace Switch and Reliable Updates -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Persistent Workspace Switch and Reliable Updates</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.2.16</span>
+          <span class="tag tag-feat">Desktop</span>
+          <span class="tag tag-sec">Runtime integrity</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.16</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Chat, Cowork, and Security now remain directly beneath the Marcellus brand, and desktop updates can no longer retain a stale same-version runtime.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Persistent mode switch:</strong> direct Chat, Cowork, and Security destinations remain visible beneath the logo, including collapsed-sidebar mode.</li>
+          <li><strong>Runtime fingerprint:</strong> the desktop launcher compares packaged content as well as the version before reusing an installed runtime.</li>
+          <li><strong>Reliable relaunch:</strong> package updates close the stale desktop process and open the newly installed application automatically.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Marcellus v0.2.15 — Persistent Projects and Adaptive Brains -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Persistent Projects and Adaptive Brains</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">v0.2.15</span>
+          <span class="tag tag-feat">Projects</span>
+          <span class="tag tag-sec">Governed routing</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.15</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Chat and Cowork are now persistent workspaces with encrypted project context, adaptive Brain routing, and a direct Security Swarm handoff.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Persistent workspace:</strong> encrypted tenant-scoped conversations, search, archive, branching, and redacted titles.</li>
+          <li><strong>Cowork Projects:</strong> explicit folder/file import into an encrypted, versioned, path-bounded artifact store.</li>
+          <li><strong>Adaptive Brains:</strong> mode-aware routing with candidate, attempt, selection, and policy provenance.</li>
+          <li><strong>Gemini:</strong> approved Gemini API connector/profile with real credential verification; no desktop OAuth extraction.</li>
+          <li><strong>Security handoff:</strong> approval-gated Swarm creation from a tenant-bound encrypted conversation reference; bounded context is decrypted and redacted only during task execution.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Marcellus v0.2.14 — Cortex Gateway and Unified AI Workspace -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
@@ -385,6 +641,7 @@
         <ul class="change-list">
           <li><strong>Codex Subscription Bridge:</strong> official ChatGPT login detection and ephemeral read-only reasoning invocation through a signed native host helper.</li>
           <li><strong>Claude host bridge:</strong> explicit official runtime and account status with tool-disabled prompt execution when available.</li>
+          <li><strong>Browser Session Bridge:</strong> explicit ChatGPT, Claude, and Gemini browser-session routing through a narrowly scoped companion that uses visible page controls, never reads cookies or account tokens, and fails closed when a provider page is incompatible.</li>
           <li><strong>Consensus:</strong> concurrent subscription, API, and local votes with unavailable and policy-denied sources excluded from confidence.</li>
           <li><strong>Zero Trust boundary:</strong> per-install bridge secret, local peer restriction, Trust Fabric decision per source, tenant/profile checks, output re-scan, and call audit.</li>
           <li><strong>Operator UI:</strong> Model Cortex now shows native Brain readiness, source selection, agreement, confidence, provenance, and fallback reasons.</li>

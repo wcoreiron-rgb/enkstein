@@ -472,8 +472,8 @@
       <h1>Marcellus</h1>
       <p class="lead">A modular zero-trust security ecosystem built to govern every security action — from AI prompt evaluation to cloud posture remediation — through a single, auditable enforcement layer.</p>
 
-      <h2>What is RegentClaw?</h2>
-      <p>RegentClaw is a comprehensive security operations platform organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
+      <h2>What is Marcellus?</h2>
+      <p>Marcellus is a distributed security and AI workspace organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
         <li><strong>25 Security Claws + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. ModelClaw, CommandClaw, and ReleaseClaw sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
@@ -519,6 +519,14 @@ cd regentclaw-VERSION
 
       <h2>Native Installers</h2>
       <p>Desktop users can install <code>Marcellus-VERSION-macos.pkg</code> or <code>Marcellus-VERSION-windows-x64-setup.exe</code>. These packages create a Marcellus launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Marcellus in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
+
+      <h2>Persistent Chat and Cowork</h2>
+      <p>Marcellus provides encrypted tenant-scoped conversations, searchable history, branches, and Cowork Projects. The desktop shell can grant a project access to one selected local folder through an opaque native token; raw host paths never enter the container or web UI. Bounded text files become persistent Cowork context and can be created, edited, renamed, moved, synchronized, or sent to recoverable project trash. Browser Cowork keeps an import-copy fallback. Mutations are tenant-scoped and Trust Fabric authorized, with traversal and symlink defenses at the native boundary. Auto Brain routing records its candidates, attempts, selected source, and policy reason. A conversation can be handed to an approval-gated Security Swarm without copying plaintext conversation content into the Swarm record.</p>
+      <pre><code>POST /api/v1/marcellus/workspace/projects
+POST /api/v1/marcellus/workspace/conversations
+POST /api/v1/marcellus/workspace/conversations/{id}/turns
+POST /api/v1/marcellus/workspace/conversations/{id}/branches
+POST /api/v1/marcellus/workspace/conversations/{id}/security-investigation</code></pre>
 
       <h2>Prerequisites</h2>
       <ul>
@@ -615,7 +623,7 @@ cd regentclaw-VERSION
           <tr><td>CloudClaw</td><td>AWS, Azure, GCP</td><td>Access key + secret / Service principal / Service account JSON</td></tr>
           <tr><td>EndpointClaw</td><td>CrowdStrike, Defender, SentinelOne</td><td>Client ID + secret / API token</td></tr>
           <tr><td>AccessClaw</td><td>Okta, Microsoft Entra ID, AWS IAM</td><td>API token / Client credentials</td></tr>
-          <tr><td>ArcClaw / Copilot</td><td>Anthropic, OpenAI, Azure OpenAI, Ollama</td><td>API key (or local — no key needed for Ollama)</td></tr>
+          <tr><td>Model Cortex</td><td>Codex/Claude host bridges, NVIDIA NIM, Gemini, Anthropic, OpenAI, Azure OpenAI, Ollama</td><td>Approved bridge, API key, or local runtime</td></tr>
           <tr><td>DevClaw</td><td>GitHub</td><td>Personal access token (read: security_events, code)</td></tr>
           <tr><td>LogClaw</td><td>Splunk</td><td>HEC token + host</td></tr>
           <tr><td>CustomClaw</td><td>Any REST API</td><td>Bearer token, API key header, or none</td></tr>

@@ -62,6 +62,55 @@ def test_native_launchers_use_isolated_runtime_paths() -> None:
     assert "RegentClaw" not in windows_launcher
 
 
+def test_native_brain_bridge_restricts_subscription_model_overrides() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert "!codexModels().contains(model)" in bridge
+    assert "!claudeModels().contains(model)" in bridge
+    assert '"supports_custom_model": false' in bridge
+
+
+def test_macos_bridge_exposes_opt_in_desktop_app_sessions() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+    build = _read("scripts/build_macos_pkg.sh")
+
+    assert '"chatgpt_desktop"' in bridge
+    assert '"claude_desktop"' in bridge
+    assert '"/v1/accessibility/request"' in bridge
+    assert "AXIsProcessTrustedWithOptions" in bridge
+    assert "AXUIElementSetAttributeValue" in bridge
+    assert "desktopInvocationLock" in bridge
+    assert "frontmostApplication?.processIdentifier" in bridge
+    assert "ApplicationServices" in build
+    assert "browser cookies" not in bridge.lower()
+
+
+def test_browser_companion_is_scoped_paired_and_packaged() -> None:
+    manifest = _read("browser-extension/manifest.json")
+    background = _read("browser-extension/background.js")
+    content = _read("browser-extension/content.js")
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+    mac_build = _read("scripts/build_macos_pkg.sh")
+    bundle_build = _read("scripts/build_release_bundle.sh")
+
+    assert '"https://chatgpt.com/*"' in manifest
+    assert '"https://claude.ai/*"' in manifest
+    assert '"https://gemini.google.com/*"' in manifest
+    assert '"cookies"' not in manifest
+    assert '"tabs"' not in manifest
+    assert "X-Marcellus-Browser-Token" in background
+    assert "document.cookie" not in content
+    assert '"/v1/browser/exchange"' in bridge
+    assert '"/v1/browser/poll"' in bridge
+    assert '"/v1/browser/complete"' in bridge
+    assert "pairingCodes" in bridge
+    assert "pendingTaskIDs" in bridge
+    assert "queuedTasks.removeAll" in bridge
+    assert "browser-bridge.token" in bridge
+    assert 'cp -R "$ROOT_DIR/browser-extension"' in mac_build
+    assert 'cp -R "$ROOT_DIR/browser-extension"' in bundle_build
+
+
 def test_macos_app_supports_github_updates_and_relaunch() -> None:
     mac_app = _read("packaging/macos/MarcellusApp.swift")
     mac_plist = _read("packaging/macos/Info.plist.in")
@@ -212,6 +261,28 @@ def test_native_packages_include_authenticated_brain_bridges() -> None:
     assert 'Copy-Item (Join-Path $Root "packaging\\windows\\BrainBridge.ps1")' in windows_build
     assert "Start-BrainBridge" in windows_launcher
     assert "BRAIN_BRIDGE_SECRET" in windows_launcher
+
+
+def test_macos_shell_exposes_native_cowork_folder_picker() -> None:
+    mac_app = _read("packaging/macos/MarcellusApp.swift")
+
+    assert "WKUIDelegate" in mac_app
+    assert "runOpenPanelWith parameters" in mac_app
+    assert "parameters.allowsDirectories" in mac_app
+    assert "panel.urls" in mac_app
+    assert "marcellusWorkspace" in mac_app
+    assert "workspace-roots.json" in mac_app
+
+
+def test_native_bridge_scopes_cowork_file_operations() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert '"/v1/workspace/list"' in bridge
+    assert '"/v1/workspace/write"' in bridge
+    assert '"/v1/workspace/trash"' in bridge
+    assert ".marcellus-trash" in bridge
+    assert "resolvingSymlinksInPath" in bridge
+    assert "candidate.path.hasPrefix(root.path" in bridge
 
 
 def test_container_runtime_can_reach_only_configured_host_brain_bridge() -> None:

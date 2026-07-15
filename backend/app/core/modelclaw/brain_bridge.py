@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import socket
 import re
 from time import perf_counter
@@ -12,7 +13,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.claws.arcclaw.llm_proxy import call_llm
+from app.claws.arcclaw.llm_proxy import call_llm, fetch_ollama_models
 from app.claws.arcclaw.scanner import scan_text
 from app.core.config import settings
 from app.core.modelclaw.service import get_profile
@@ -21,8 +22,55 @@ from app.services import secrets_manager
 
 logger = logging.getLogger(__name__)
 
-_SUBSCRIPTION_BRAINS = {"codex_subscription", "claude_subscription"}
+_SUBSCRIPTION_BRAINS = {
+    "codex_subscription",
+    "claude_subscription",
+    "chatgpt_desktop",
+    "claude_desktop",
+    "chatgpt_browser",
+    "claude_browser",
+    "gemini_browser",
+}
 _PROVIDER_ALIASES = {"nvidia_nim": "nvidia"}
+_LOCAL_MODEL_PREFERENCES = (
+    "regent-aegis:bc",
+    "qwen2.5:7b",
+    "llama3.2",
+    "phi3",
+)
+
+
+def _brain_kind(name: str) -> str:
+    if name.endswith("_desktop"):
+        return "desktop_session"
+    if name.endswith("_browser"):
+        return "browser_session"
+    return "subscription"
+
+
+def _installed_ollama_model(requested: str, installed: list[str]) -> str | None:
+    requested_name = requested.strip().lower()
+    requested_canonical = requested_name if ":" in requested_name else f"{requested_name}:latest"
+    for installed_name in installed:
+        candidate = installed_name.strip().lower()
+        candidate_canonical = candidate if ":" in candidate else f"{candidate}:latest"
+        if candidate == requested_name or candidate_canonical == requested_canonical:
+            return installed_name
+    return None
+
+
+def _select_ollama_model(profile_model: str, installed: list[str], requested: str | None) -> str | None:
+    if requested:
+        return _installed_ollama_model(requested, installed)
+    configured = os.getenv("MARCELLUS_OLLAMA_MODEL", "").strip()
+    candidates = [configured, profile_model, *_LOCAL_MODEL_PREFERENCES]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        resolved = _installed_ollama_model(candidate, installed)
+        if resolved:
+            return resolved
+    return installed[0] if installed else None
 
 
 def bridge_configured() -> bool:
@@ -35,7 +83,7 @@ async def bridge_status() -> list[dict[str, Any]]:
         return [
             {
                 "brain": name,
-                "kind": "subscription",
+                "kind": _brain_kind(name),
                 "available": False,
                 "authenticated": False,
                 "detail": detail,
@@ -51,13 +99,63 @@ async def bridge_status() -> list[dict[str, Any]]:
         return [
             {
                 "brain": name,
-                "kind": "subscription",
+                "kind": _brain_kind(name),
                 "available": False,
                 "authenticated": False,
                 "detail": "Native Brain Bridge is unreachable.",
             }
             for name in sorted(_SUBSCRIPTION_BRAINS)
         ]
+
+
+async def request_desktop_brain_access() -> dict[str, Any]:
+    if not bridge_configured():
+        return {
+            "granted": False,
+            "detail": "Native Brain Bridge is not configured for this runtime.",
+        }
+    try:
+        body = await _bridge_request("POST", "/v1/accessibility/request", {})
+        return {
+            "granted": bool(body.get("granted")),
+            "detail": str(body.get("detail") or "Accessibility permission request completed."),
+        }
+    except Exception as exc:
+        logger.warning("Desktop Brain access request failed: %s", type(exc).__name__)
+        return {
+            "granted": False,
+            "detail": "Marcellus could not request desktop app access.",
+        }
+
+
+async def create_browser_brain_pairing() -> dict[str, Any]:
+    if not bridge_configured():
+        return {"available": False, "detail": "Native Brain Bridge is not configured for this runtime."}
+    try:
+        body = await _bridge_request("POST", "/v1/browser/pair", {})
+        setup_url = str(body.get("setup_url") or "")
+        if not setup_url.startswith("http://127.0.0.1:"):
+            raise ValueError("Invalid browser pairing URL")
+        return {
+            "available": True,
+            "setup_url": setup_url,
+            "opened": bool(body.get("opened")),
+            "expires_in_seconds": int(body.get("expires_in_seconds") or 300),
+        }
+    except Exception as exc:
+        logger.warning("Browser Brain pairing failed: %s", type(exc).__name__)
+        return {"available": False, "detail": "Marcellus could not start browser pairing."}
+
+
+async def open_browser_companion_folder() -> dict[str, Any]:
+    if not bridge_configured():
+        return {"opened": False, "detail": "Native Brain Bridge is not configured for this runtime."}
+    try:
+        body = await _bridge_request("POST", "/v1/browser/open-extension", {})
+        return {"opened": bool(body.get("opened")), "detail": body.get("detail")}
+    except Exception as exc:
+        logger.warning("Browser companion folder open failed: %s", type(exc).__name__)
+        return {"opened": False, "detail": "Marcellus could not open the browser companion folder."}
 
 
 async def invoke_subscription_brain(
@@ -69,7 +167,7 @@ async def invoke_subscription_brain(
     if brain not in _SUBSCRIPTION_BRAINS:
         raise ValueError("Unknown subscription Brain")
     if not bridge_configured():
-        return _unavailable_vote(brain, "subscription", "Native Brain Bridge is not configured.")
+        return _unavailable_vote(brain, _brain_kind(brain), "Native Brain Bridge is not configured.")
 
     input_scan = scan_text(prompt, redact=True)
     transmitted_prompt = input_scan.redacted if input_scan.is_sensitive else prompt
@@ -82,20 +180,20 @@ async def invoke_subscription_brain(
         )
     except Exception as exc:
         logger.warning("Subscription Brain invocation failed: brain=%s error=%s", brain, type(exc).__name__)
-        return _unavailable_vote(brain, "subscription", "Native Brain invocation failed.")
+        return _unavailable_vote(brain, _brain_kind(brain), "Native Brain invocation failed.")
 
     response = str(body.get("response") or "")
     if not body.get("success") or not response:
         return _unavailable_vote(
             brain,
-            "subscription",
+            _brain_kind(brain),
             str(body.get("detail") or "Subscription Brain returned no response."),
         )
 
     output_scan = scan_text(response, redact=True)
     return {
         "source": brain,
-        "kind": "subscription",
+        "kind": _brain_kind(brain),
         "available": True,
         "counted": True,
         "provider": str(body.get("provider") or brain),
@@ -107,6 +205,15 @@ async def invoke_subscription_brain(
     }
 
 
+async def invoke_native_workspace(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Invoke a folder-scoped native workspace operation through the authenticated host bridge."""
+    if operation not in {"list", "write", "trash"}:
+        raise ValueError("Unsupported native workspace operation")
+    if not bridge_configured():
+        raise RuntimeError("Native workspace bridge is not configured")
+    return await _bridge_request("POST", f"/v1/workspace/{operation}", payload)
+
+
 async def invoke_profile_brain(
     db: AsyncSession,
     source: str,
@@ -115,22 +222,75 @@ async def invoke_profile_brain(
     tenant_id: str,
     claw: str,
     data_classification: str,
+    model: str | None = None,
 ) -> dict[str, Any]:
+    prepared = await _prepare_profile_brain(
+        db,
+        source,
+        tenant_id=tenant_id,
+        claw=claw,
+        data_classification=data_classification,
+        model=model,
+    )
+    if "unavailable_vote" in prepared:
+        return prepared["unavailable_vote"]
+    return await _invoke_prepared_profile(prepared, prompt)
+
+
+async def _prepare_profile_brain(
+    db: AsyncSession,
+    source: str,
+    *,
+    tenant_id: str,
+    claw: str,
+    data_classification: str,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Resolve profile policy and credentials before parallel provider I/O begins."""
     profile_name = source.removeprefix("profile:")
     profile = get_profile(profile_name, tenant_id=tenant_id)
     if not profile:
-        return _unavailable_vote(source, "profile", "Model profile was not found for this tenant.")
+        return {"unavailable_vote": _unavailable_vote(source, "profile", "Model profile was not found for this tenant.")}
     if profile["allowed_claws"] and claw not in profile["allowed_claws"]:
-        return _unavailable_vote(source, "profile", "The requesting capability is not allowed by this profile.")
+        return {"unavailable_vote": _unavailable_vote(source, "profile", "The requesting capability is not allowed by this profile.")}
     if data_classification not in profile["allowed_data_classes"]:
-        return _unavailable_vote(source, "profile", "The data classification is not allowed by this profile.")
+        return {"unavailable_vote": _unavailable_vote(source, "profile", "The data classification is not allowed by this profile.")}
 
     provider = _PROVIDER_ALIASES.get(profile["provider"], profile["provider"])
+    resolved_model = model or profile["model"]
+    allowed_models = profile.get("allowed_models")
+    if provider == "ollama":
+        installed_models, runtime_ready = await fetch_ollama_models()
+        if not runtime_ready:
+            return {"unavailable_vote": _unavailable_vote(source, "local", "The local model runtime is not available.")}
+        selected_model = _select_ollama_model(profile["model"], installed_models, model)
+        if not selected_model:
+            return {"unavailable_vote": _unavailable_vote(source, "local", "The requested model is not installed locally.")}
+        resolved_model = selected_model
+    elif resolved_model not in (allowed_models or [profile["model"]]):
+        return {"unavailable_vote": _unavailable_vote(source, "api", "The requested model is not allowed by this model profile.")}
+
     api_key: str | None = None
     if provider != "ollama":
         api_key = await _resolve_provider_key(db, profile["provider"])
         if not api_key:
-            return _unavailable_vote(source, "api", "The approved provider connector is not configured.")
+            return {"unavailable_vote": _unavailable_vote(source, "api", "The approved provider connector is not configured.")}
+
+    return {
+        "source": source,
+        "profile": profile,
+        "provider": provider,
+        "model": resolved_model,
+        "api_key": api_key,
+    }
+
+
+async def _invoke_prepared_profile(prepared: dict[str, Any], prompt: str) -> dict[str, Any]:
+    source = prepared["source"]
+    profile = prepared["profile"]
+    provider = prepared["provider"]
+    resolved_model = prepared["model"]
+    api_key = prepared["api_key"]
 
     input_scan = scan_text(prompt, redact=True)
     transmitted_prompt = (
@@ -142,7 +302,7 @@ async def invoke_profile_brain(
     result = await call_llm(
         provider,
         transmitted_prompt,
-        model=profile["model"],
+        model=resolved_model,
         system=(
             "You are a reasoning-only Brain inside Marcellus. Return a concise, evidence-aware answer. "
             "Do not claim to have executed tools or changed systems."
@@ -180,19 +340,30 @@ async def collect_votes(
     tenant_id: str,
     claw: str,
     data_classification: str,
+    model: str | None = None,
+    subscription_invoker=None,
 ) -> list[dict[str, Any]]:
-    async def invoke(source: str) -> dict[str, Any]:
-        if source in _SUBSCRIPTION_BRAINS:
-            return await invoke_subscription_brain(source, prompt)
+    prepared: dict[str, dict[str, Any]] = {}
+    for source in sources:
         if source.startswith("profile:"):
-            return await invoke_profile_brain(
+            prepared[source] = await _prepare_profile_brain(
                 db,
                 source,
-                prompt,
                 tenant_id=tenant_id,
                 claw=claw,
                 data_classification=data_classification,
+                model=model,
             )
+
+    async def invoke(source: str) -> dict[str, Any]:
+        if source in _SUBSCRIPTION_BRAINS:
+            invoker = subscription_invoker or invoke_subscription_brain
+            return await invoker(source, prompt, model=model)
+        if source.startswith("profile:"):
+            profile_call = prepared[source]
+            if "unavailable_vote" in profile_call:
+                return profile_call["unavailable_vote"]
+            return await _invoke_prepared_profile(profile_call, prompt)
         return _unavailable_vote(source, "unknown", "Unsupported Brain source.")
 
     return list(await asyncio.gather(*(invoke(source) for source in sources)))

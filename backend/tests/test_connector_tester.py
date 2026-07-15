@@ -62,6 +62,28 @@ async def test_nvidia_requires_authenticated_model_response(monkeypatch: pytest.
 
 
 @pytest.mark.asyncio
+async def test_gemini_rejects_fake_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _Client.response = _Response(403)
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+
+    result = await connector_tester.test_connector("gemini", {"api_key": "fake-key"})
+
+    assert result.success is False
+    assert "rejected" in result.message.lower()
+
+
+@pytest.mark.asyncio
+async def test_gemini_requires_authenticated_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    _Client.response = _Response(200, {"candidates": [{"content": {"parts": [{"text": "OK"}]}}]})
+    monkeypatch.setattr(httpx, "AsyncClient", _Client)
+
+    result = await connector_tester.test_connector("gemini", {"api_key": "valid-test-key"})
+
+    assert result.success is True
+    assert result.verification_level == "credential"
+
+
+@pytest.mark.asyncio
 async def test_generic_reachability_does_not_establish_trust(monkeypatch: pytest.MonkeyPatch) -> None:
     _Client.response = _Response(200)
     monkeypatch.setattr(httpx, "AsyncClient", _Client)

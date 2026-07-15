@@ -546,7 +546,7 @@ CONNECTORS = [
     },
 
     # ══════════════════════════════════════════════════════════════════
-    # AI / LLM PROVIDERS  (3)
+    # AI / LLM PROVIDERS
     # ══════════════════════════════════════════════════════════════════
 
     {
@@ -613,6 +613,25 @@ CONNECTORS = [
         "credential_fields": json.dumps([
             {"key": "api_key", "label": "NVIDIA API Key", "type": "password",
              "help": "Get a free key at https://build.nvidia.com/models — click any model → Get API Key"}
+        ]),
+    },
+    {
+        "name": "Google Gemini",
+        "connector_type": "gemini",
+        "category": "AI / LLM",
+        "description": (
+            "Google Gemini Developer API for governed Chat and Cowork reasoning. "
+            "Marcellus validates the credential with a minimal inference and routes "
+            "every request through Trust Fabric, prompt defense, and DLP redaction."
+        ),
+        "status": "pending", "risk_level": "medium",
+        "requested_scopes": json.dumps(["generateContent"]),
+        "approved_scopes": json.dumps(["generateContent"]),
+        "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+        "network_access": True,
+        "credential_fields": json.dumps([
+            {"key": "api_key", "label": "Gemini API Key", "type": "password",
+             "help": "Create a key in Google AI Studio; desktop OAuth sessions are not imported."}
         ]),
     },
     {

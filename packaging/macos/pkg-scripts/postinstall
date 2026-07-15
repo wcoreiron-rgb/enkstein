@@ -7,5 +7,10 @@ if [ -z "$console_user" ] || [ "$console_user" = "root" ] || [ "$console_user" =
 fi
 
 console_uid=$(id -u "$console_user")
+# Installing over a running app otherwise leaves its WebView and launcher using
+# the pre-update runtime until the operator manually quits it.
+/bin/launchctl asuser "$console_uid" /usr/bin/osascript \
+  -e 'tell application id "com.marcellus.desktop" to quit' >/dev/null 2>&1 || true
+/bin/sleep 1
 /bin/launchctl asuser "$console_uid" /usr/bin/open -a /Applications/Marcellus.app >/dev/null 2>&1 || true
 exit 0

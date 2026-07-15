@@ -1,0 +1,326 @@
+'use client';
+
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ArrowLeft,
+  BrainCircuit,
+  CheckCircle2,
+  Cloud,
+  Cpu,
+  ExternalLink,
+  HardDrive,
+  Loader2,
+  Plug,
+  RefreshCw,
+  ShieldCheck,
+  TerminalSquare,
+  XCircle,
+} from 'lucide-react';
+import {
+  getArcModels,
+  getArcProviders,
+  getBrainStatuses,
+  getModelClawProfiles,
+  openBrowserCompanionFolder,
+  requestDesktopBrainAccess,
+  startBrowserBrainPairing,
+} from '@/lib/api';
+
+type BrainStatus = {
+  brain: string;
+  available: boolean;
+  authenticated: boolean;
+  runtime?: string | null;
+  account_type?: string | null;
+  detail?: string | null;
+  models?: string[];
+};
+
+type ProviderStatus = {
+  provider: string;
+  label: string;
+  models?: string[];
+  ready: boolean;
+  setup?: string;
+  cost?: string;
+};
+
+type ModelProfile = {
+  name: string;
+  provider: string;
+  model: string;
+  allowed_data_classes?: string[];
+};
+
+function Status({ ready }: { ready: boolean }) {
+  return ready ? (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600"><CheckCircle2 className="h-4 w-4" />Ready</span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600"><XCircle className="h-4 w-4" />Needs setup</span>
+  );
+}
+
+export default function BrainConnectionsPage() {
+  const [loading, setLoading] = useState(true);
+  const [brains, setBrains] = useState<BrainStatus[]>([]);
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
+  const [models, setModels] = useState<Record<string, Array<{ id: string; name: string }>>>({});
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [pairingBrowser, setPairingBrowser] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<'chat' | 'cowork'>('chat');
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    const remembered = window.localStorage.getItem('marcellus-workspace-mode');
+    setWorkspaceMode(hash === 'cowork' || remembered === 'cowork' ? 'cowork' : 'chat');
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const results = await Promise.allSettled([
+      getBrainStatuses(),
+      getArcProviders(),
+      getModelClawProfiles(),
+      getArcModels(),
+    ]);
+    const nextWarnings: string[] = [];
+    if (results[0].status === 'fulfilled') setBrains(results[0].value || []);
+    else nextWarnings.push('Desktop subscription status is unavailable.');
+    if (results[1].status === 'fulfilled') setProviders(results[1].value || []);
+    else nextWarnings.push('Provider status is unavailable.');
+    if (results[2].status === 'fulfilled') setProfiles(results[2].value || []);
+    else nextWarnings.push('Model profiles are unavailable.');
+    if (results[3].status === 'fulfilled') setModels(results[3].value || {});
+    else nextWarnings.push('Live model discovery is unavailable.');
+    setWarnings(nextWarnings);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const subscriptionBrains = useMemo(() => [
+    {
+      id: 'codex_subscription',
+      name: 'Codex Subscription',
+      icon: TerminalSquare,
+      instruction: 'Install Codex, run codex login, then relaunch Marcellus.',
+    },
+    {
+      id: 'claude_subscription',
+      name: 'Claude Subscription',
+      icon: BrainCircuit,
+      instruction: 'Install Claude Code, run claude and sign in, then relaunch Marcellus.',
+    },
+    {
+      id: 'chatgpt_desktop',
+      name: 'ChatGPT Desktop Session',
+      icon: BrainCircuit,
+      instruction: 'Install and sign in to ChatGPT, then grant Marcellus Accessibility access.',
+    },
+    {
+      id: 'claude_desktop',
+      name: 'Claude Desktop Session',
+      icon: BrainCircuit,
+      instruction: 'Install and sign in to Claude, then grant Marcellus Accessibility access.',
+    },
+    {
+      id: 'chatgpt_browser',
+      name: 'ChatGPT Browser Session',
+      icon: Cloud,
+      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in ChatGPT tab open.',
+    },
+    {
+      id: 'claude_browser',
+      name: 'Claude Browser Session',
+      icon: Cloud,
+      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in Claude tab open.',
+    },
+    {
+      id: 'gemini_browser',
+      name: 'Gemini Browser Session',
+      icon: Cloud,
+      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in Gemini tab open.',
+    },
+  ].map((entry) => ({ ...entry, status: brains.find((brain) => brain.brain === entry.id) })), [brains]);
+
+  const requestDesktopAccess = async () => {
+    setRequestingAccess(true);
+    try {
+      const result = await requestDesktopBrainAccess();
+      setWarnings(result.granted ? [] : [result.detail]);
+      await load();
+    } catch (accessError) {
+      setWarnings([accessError instanceof Error ? accessError.message : 'Desktop access could not be requested.']);
+    } finally {
+      setRequestingAccess(false);
+    }
+  };
+
+  const pairBrowser = async () => {
+    setPairingBrowser(true);
+    try {
+      const result = await startBrowserBrainPairing();
+      if (!result.available || !result.setup_url) throw new Error(result.detail || 'Browser pairing is unavailable.');
+      if (!result.opened) window.open(result.setup_url, '_blank', 'noopener,noreferrer');
+      setWarnings(['Complete pairing in the browser, keep a supported signed-in AI tab open, then refresh.']);
+    } catch (pairingError) {
+      setWarnings([pairingError instanceof Error ? pairingError.message : 'Browser pairing could not start.']);
+    } finally {
+      setPairingBrowser(false);
+    }
+  };
+
+  const openCompanion = async () => {
+    try {
+      const result = await openBrowserCompanionFolder();
+      if (!result.opened) throw new Error(result.detail || 'Browser companion folder could not be opened.');
+      setWarnings(['In Chrome or Edge Extensions, enable Developer mode, choose Load unpacked, and select the opened browser-extension folder.']);
+    } catch (openError) {
+      setWarnings([openError instanceof Error ? openError.message : 'Browser companion folder could not be opened.']);
+    }
+  };
+
+  const ollama = providers.find((provider) => provider.provider === 'ollama');
+  const apiProviders = providers.filter((provider) => provider.provider !== 'ollama');
+  const readyCount = subscriptionBrains.filter((brain) => brain.status?.available && brain.status.authenticated).length
+    + providers.filter((provider) => provider.ready).length;
+
+  return (
+    <main className="min-h-[calc(100vh-4rem)] px-4 py-5 md:px-7" style={{ background: 'var(--rc-bg-base)' }}>
+      <div className="mx-auto max-w-6xl">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--rc-border)' }}>
+          <div>
+            <Link href={`/marcellus#${workspaceMode}`} className="mb-3 inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--rc-text-3)' }}>
+              <ArrowLeft className="h-3.5 w-3.5" />Back to {workspaceMode === 'cowork' ? 'Cowork' : 'Chat'}
+            </Link>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-600 text-white"><BrainCircuit className="h-5 w-5" /></div>
+              <div>
+                <h1 className="text-xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>Brain Connections</h1>
+                <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-3)' }}>Choose how Marcellus reasons. Every request still passes through Trust Fabric.</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/connectors" className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-xs"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
+              <Plug className="h-4 w-4" />API Connectors
+            </Link>
+            <button type="button" onClick={() => void load()} disabled={loading} title="Refresh connections"
+              className="flex h-9 w-9 items-center justify-center rounded-md border disabled:opacity-50"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </button>
+          </div>
+        </header>
+
+        <section className="grid gap-3 py-5 sm:grid-cols-3">
+          {[
+            ['Ready Brains', String(readyCount), BrainCircuit],
+            ['Approved Profiles', String(profiles.length), ShieldCheck],
+            ['Discovered Models', String(Object.values(models).reduce((total, rows) => total + rows.length, 0)), Cpu],
+          ].map(([label, value, Icon]) => (
+            <div key={String(label)} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+              <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4 text-red-500" /></div>
+              <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{String(value)}</p>
+            </div>
+          ))}
+        </section>
+
+        {warnings.length > 0 && (
+          <div className="mb-5 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
+            {warnings.join(' ')} Refresh after the Marcellus runtime is available.
+          </div>
+        )}
+
+        <section className="mb-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Desktop subscriptions</h2>
+              <p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>Use a vendor CLI or the visible signed-in desktop app. Marcellus never copies credentials or browser sessions.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void requestDesktopAccess()}
+              disabled={requestingAccess}
+              className="inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs disabled:opacity-50"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+            >
+              {requestingAccess ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+              Allow desktop apps
+            </button>
+            <button
+              type="button"
+              onClick={() => void openCompanion()}
+              className="inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Install companion
+            </button>
+            <button
+              type="button"
+              onClick={() => void pairBrowser()}
+              disabled={pairingBrowser}
+              className="inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs disabled:opacity-50"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+            >
+              {pairingBrowser ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />}
+              Pair browser
+            </button>
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {subscriptionBrains.map(({ id, name, icon: Icon, instruction, status }) => {
+              const ready = Boolean(status?.available && status.authenticated);
+              return (
+                <article key={id} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3"><Icon className="h-5 w-5 text-red-500" /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{name}</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status?.runtime || 'Desktop runtime'}</p></div></div>
+                    <Status ready={ready} />
+                  </div>
+                  <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{status?.detail || instruction}</p>
+                  {id.endsWith('_desktop') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option visibly opens the vendor app and remains subject to its normal plan and usage limits.</p>}
+                  {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Marcellus.</p>}
+                  {(status?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status!.models!.join(' · ')}</p>}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mb-6">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Local Brain</h2>
+          <article className="mt-3 rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-center gap-3"><HardDrive className="h-5 w-5 text-red-500" /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Ollama</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Private models running on this computer</p></div></div>
+              <Status ready={Boolean(ollama?.ready)} />
+            </div>
+            <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{ollama?.setup || 'Install Ollama and run: ollama pull llama3.2'}</p>
+            {(ollama?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Models: {ollama!.models!.join(' · ')}</p>}
+          </article>
+        </section>
+
+        <section>
+          <div className="flex items-end justify-between gap-3">
+            <div><h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>API Brains</h2><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>Keys are verified through connector setup before a provider becomes ready.</p></div>
+            <Link href="/modelclaw" className="inline-flex items-center gap-1 text-xs text-red-500">Advanced profiles <ExternalLink className="h-3.5 w-3.5" /></Link>
+          </div>
+          <div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+            {apiProviders.map((provider) => (
+              <div key={provider.provider} className="flex flex-wrap items-center gap-4 px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+                <Cloud className="h-4 w-4 shrink-0 text-red-500" />
+                <div className="min-w-0 flex-1"><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{provider.label}</p><p className="mt-0.5 truncate text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.setup}</p></div>
+                <span className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.models?.length || 0} models</span>
+                <Status ready={provider.ready} />
+              </div>
+            ))}
+            {!loading && apiProviders.length === 0 && <p className="p-4 text-xs" style={{ color: 'var(--rc-text-3)' }}>No API providers were returned by the runtime.</p>}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}

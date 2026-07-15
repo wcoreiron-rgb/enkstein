@@ -1,6 +1,6 @@
 {
   "name": "marcellus-frontend",
-  "version": "0.2.14",
+  "version": "0.2.23",
   "private": true,
   "scripts": {
     "dev": "next dev",

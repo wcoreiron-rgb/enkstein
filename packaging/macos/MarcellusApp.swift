@@ -3,7 +3,7 @@ import WebKit
 
 private let defaultURL = URL(string: "http://127.0.0.1:3000/marcellus")!
 
-final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow!
     private var webView: WKWebView!
     private var loadingView: NSView!
@@ -188,8 +188,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
+        configuration.userContentController.add(self, name: "marcellusWorkspace")
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: """
+            window.marcellusNativeWorkspace = {
+              selectFolder: function() {
+                window.webkit.messageHandlers.marcellusWorkspace.postMessage({ action: 'selectFolder' });
+              }
+            };
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = self
+        webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
 
         loadingView = NSView(frame: window.contentView!.bounds)
@@ -235,6 +248,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         window.contentView = loadingView
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        runOpenPanelWith parameters: WKOpenPanelParameters,
+        initiatedByFrame frame: WKFrameInfo,
+        completionHandler: @escaping ([URL]?) -> Void
+    ) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        panel.canChooseDirectories = parameters.allowsDirectories
+        panel.canChooseFiles = !parameters.allowsDirectories
+        panel.canCreateDirectories = false
+        panel.resolvesAliases = true
+        panel.beginSheetModal(for: window) { response in
+            completionHandler(response == .OK ? panel.urls : nil)
+        }
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "marcellusWorkspace",
+              let body = message.body as? [String: Any],
+              body["action"] as? String == "selectFolder" else { return }
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.resolvesAliases = true
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.grantWorkspace(url)
+        }
+    }
+
+    private func grantWorkspace(_ url: URL) {
+        let token = UUID().uuidString.lowercased()
+        let support = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Marcellus", isDirectory: true)
+        let registry = support.appendingPathComponent("workspace-roots.json")
+        do {
+            try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
+            var roots: [String: [String: String]] = [:]
+            if let data = try? Data(contentsOf: registry),
+               let stored = try? JSONSerialization.jsonObject(with: data) as? [String: [String: String]] {
+                roots = stored
+            }
+            roots[token] = ["path": url.resolvingSymlinksInPath().path, "name": url.lastPathComponent]
+            let data = try JSONSerialization.data(withJSONObject: roots, options: [.sortedKeys])
+            try data.write(to: registry, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: registry.path)
+            let payload = try JSONSerialization.data(withJSONObject: ["token": token, "name": url.lastPathComponent])
+            let json = String(data: payload, encoding: .utf8) ?? "{}"
+            webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('marcellus:native-workspace-selected', { detail: \(json) }));")
+        } catch {
+            showAlert(title: "Folder access failed", message: "Marcellus could not create a protected workspace grant.")
+        }
     }
 
     private func startRuntime() {

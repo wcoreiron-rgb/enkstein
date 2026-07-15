@@ -54,8 +54,17 @@ installed_version=""
 if [ -f "$RUNTIME_DIR/VERSION" ]; then
   installed_version=$(tr -d '\r\n' < "$RUNTIME_DIR/VERSION")
 fi
+source_digest=""
+installed_digest=""
+if [ -f "$SOURCE_RUNTIME/RUNTIME_DIGEST" ]; then
+  source_digest=$(tr -d '\r\n' < "$SOURCE_RUNTIME/RUNTIME_DIGEST")
+fi
+if [ -f "$RUNTIME_DIR/RUNTIME_DIGEST" ]; then
+  installed_digest=$(tr -d '\r\n' < "$RUNTIME_DIR/RUNTIME_DIGEST")
+fi
 
-if [ "$source_version" != "$installed_version" ]; then
+if [ "$source_version" != "$installed_version" ] || \
+   { [ -n "$source_digest" ] && [ "$source_digest" != "$installed_digest" ]; }; then
   temp_runtime="$USER_ROOT/runtime.new"
   saved_env="$USER_ROOT/.env.saved"
   rm -rf "$temp_runtime" "$saved_env"

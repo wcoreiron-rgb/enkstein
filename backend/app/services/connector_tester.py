@@ -310,6 +310,37 @@ async def _test_nvidia_nim(creds: dict) -> TestResult:
             return TestResult(False, "NVIDIA verification could not be completed")
 
 
+async def _test_gemini(creds: dict) -> TestResult:
+    api_key = str(creds.get("api_key") or "").strip()
+    if not api_key:
+        return TestResult(False, "Gemini API key not provided")
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            response = await client.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
+                json={
+                    "contents": [{"role": "user", "parts": [{"text": "Reply OK."}]}],
+                    "generationConfig": {"maxOutputTokens": 2, "temperature": 0},
+                },
+            )
+            if response.status_code == 200:
+                candidates = response.json().get("candidates") or []
+                if candidates:
+                    return TestResult(True, "Connected — Gemini accepted the key", verification_level="credential")
+                return TestResult(False, "Gemini returned an invalid verification response")
+            if response.status_code in {401, 403}:
+                return TestResult(False, "Gemini rejected the API key")
+            if response.status_code == 429:
+                return TestResult(False, "Gemini rate-limited the verification request — try again later")
+            return TestResult(False, f"Gemini verification failed with HTTP {response.status_code}")
+        except (httpx.ConnectError, httpx.TimeoutException):
+            return TestResult(False, "Gemini verification could not reach Google AI")
+        except Exception as exc:
+            logger.warning("Gemini connector verification failed: %s", type(exc).__name__)
+            return TestResult(False, "Gemini verification could not be completed")
+
+
 async def _test_email(creds: dict) -> TestResult:
     """Verify a TLS SMTP connection and credentials without sending mail."""
     host = str(creds.get("smtp_host", "")).strip()
@@ -405,6 +436,7 @@ TEST_MAP = {
     "pagerduty":   _test_pagerduty,
     "nvidia":      _test_nvidia_nim,
     "nvidia_nim":  _test_nvidia_nim,
+    "gemini":      _test_gemini,
     "email":       _test_email,
 }
 

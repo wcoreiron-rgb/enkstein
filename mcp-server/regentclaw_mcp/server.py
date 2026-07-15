@@ -185,6 +185,56 @@ async def run_swarm_investigation(prompt: str, window: str = "24h") -> str:
 
 
 @mcp.tool()
+async def marcellus_browser_fetch(project_id: str, url: str, classification: str = "internal") -> str:
+    """
+    Retrieve one public HTTPS text source through Marcellus. The backend applies
+    Trust Fabric policy, SSRF/private-network blocking, size/content limits, and
+    prompt-injection scanning. This tool cannot browse local or private hosts.
+    """
+    try:
+        r = await _post("/marcellus/workspace/tools/invoke", {
+            "project_id": project_id,
+            "tool": "browser.fetch",
+            "arguments": {"url": url},
+            "data_classification": classification,
+        })
+        result = r.get("result") or {}
+        return (
+            f"Title: {result.get('title', '?')}\n"
+            f"URL: {result.get('url', url)}\n"
+            f"SHA-256: {result.get('content_digest', '?')}\n"
+            f"Policy: {(r.get('policy') or {}).get('outcome', '?')}\n\n"
+            f"{result.get('excerpt', '')}"
+        )
+    except Exception as e:  # noqa: BLE001
+        return _safe(str(e))
+
+
+@mcp.tool()
+async def marcellus_workspace_search(project_id: str, query: str, classification: str = "internal") -> str:
+    """
+    Search active encrypted artifacts inside one authorized Cowork project.
+    Tenant and project ownership are enforced by the backend; this tool cannot
+    search arbitrary desktop folders or another user's project.
+    """
+    try:
+        r = await _post("/marcellus/workspace/tools/invoke", {
+            "project_id": project_id,
+            "tool": "workspace.search",
+            "arguments": {"query": query},
+            "data_classification": classification,
+        })
+        matches = (r.get("result") or {}).get("matches") or []
+        if not matches:
+            return "No project artifacts matched the query."
+        return "\n\n".join(
+            f"{item.get('path', '?')}\n{item.get('excerpt', '')}" for item in matches
+        )
+    except Exception as e:  # noqa: BLE001
+        return _safe(str(e))
+
+
+@mcp.tool()
 async def terraclaw_generate_secure_terraform(
     description: str,
     cloud: str = "azure",

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import secrets
 import time
 from datetime import datetime
 from typing import Any
@@ -12,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
+from app.claws.arcclaw.scanner import scan_text
 from app.claws.arcclaw.routes import ArcTaskRequest, run_arc_task
 from app.claws.accessclaw.routes import AccessTaskRequest, run_access_task
 from app.claws.attackpathclaw.routes import AttackPathTaskRequest, run_attackpath_task
@@ -40,6 +43,8 @@ from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
 from app.claws.vendorclaw.routes import VendorTaskRequest, run_vendor_task
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.swarm import SwarmTask, SwarmTaskStatus
+from app.models.marcellus import CortexConversation, CortexConversationMessage, CortexMission
+from app.core.marcellus.crypto import decrypt_json
 from app.services.memory_runtime import build_swarm_memory_context
 
 logger = logging.getLogger("swarm_dispatcher")
@@ -164,6 +169,20 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         task_input = json.loads(task.input_json) if task.input_json else {}
     except Exception:
         task_input = {}
+    task_input = await _hydrate_cortex_context(db, task_input)
+    if task_input.get("source") == "marcellus_cortex" and task_input.get("cortex_context_status") != "loaded":
+        task.status = SwarmTaskStatus.BLOCKED
+        task.error_message = "Cortex context integrity or tenant validation failed"
+        task.completed_at = datetime.utcnow()
+        await db.commit()
+        raise RuntimeError(task.error_message)
+    task_input = await _hydrate_mission_context(db, task_input)
+    if task_input.get("source") == "marcellus_mission" and task_input.get("mission_context_status") != "loaded":
+        task.status = SwarmTaskStatus.BLOCKED
+        task.error_message = "Mission context integrity or tenant validation failed"
+        task.completed_at = datetime.utcnow()
+        await db.commit()
+        raise RuntimeError(task.error_message)
     selected_finding = _selected_finding_context(task_input)
     if selected_finding:
         task_input = {**task_input, "selected_finding": selected_finding, "investigation_scope": "selected_finding"}
@@ -253,6 +272,85 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
     return output
 
 
+async def _hydrate_cortex_context(db: AsyncSession, task_input: dict[str, Any]) -> dict[str, Any]:
+    """Resolve encrypted Cortex context in memory without copying it into Swarm storage."""
+    if task_input.get("source") != "marcellus_cortex":
+        return task_input
+    tenant_id = str(task_input.get("tenant_id") or "")
+    conversation_id = task_input.get("conversation_id")
+    try:
+        conversation_uuid = UUID(str(conversation_id))
+    except (TypeError, ValueError):
+        return {**task_input, "cortex_context_status": "invalid_reference"}
+    conversation_result = await db.execute(
+        select(CortexConversation).where(
+            CortexConversation.tenant_id == tenant_id,
+            CortexConversation.id == conversation_uuid,
+        )
+    )
+    if conversation_result.scalar_one_or_none() is None:
+        return {**task_input, "cortex_context_status": "not_found"}
+    message_result = await db.execute(
+        select(CortexConversationMessage)
+        .where(
+            CortexConversationMessage.tenant_id == tenant_id,
+            CortexConversationMessage.conversation_id == conversation_uuid,
+        )
+        .order_by(CortexConversationMessage.created_at.desc(), CortexConversationMessage.id.desc())
+        .limit(8)
+    )
+    rows = list(reversed(message_result.scalars().all()))
+    text = "\n".join(
+        f"{row.role}: {decrypt_json(row.content_ciphertext, row.content_digest)['content']}"
+        for row in rows
+    )
+    expected_digest = str(task_input.get("context_digest") or "")
+    actual_digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if not expected_digest or not secrets.compare_digest(expected_digest, actual_digest):
+        return {**task_input, "cortex_context_status": "digest_mismatch"}
+    scan = scan_text(text[:12000], redact=True)
+    return {
+        **task_input,
+        "cortex_context": scan.redacted if scan.is_sensitive else text[:12000],
+        "cortex_context_status": "loaded",
+        "cortex_context_redacted": scan.is_sensitive,
+    }
+
+
+async def _hydrate_mission_context(db: AsyncSession, task_input: dict[str, Any]) -> dict[str, Any]:
+    """Resolve encrypted Mission intent in memory without copying it into Swarm storage."""
+    if task_input.get("source") != "marcellus_mission":
+        return task_input
+    tenant_id = str(task_input.get("tenant_id") or "")
+    try:
+        mission_id = UUID(str(task_input.get("mission_id")))
+    except (TypeError, ValueError):
+        return {**task_input, "mission_context_status": "invalid_reference"}
+    result = await db.execute(
+        select(CortexMission).where(
+            CortexMission.tenant_id == tenant_id,
+            CortexMission.id == mission_id,
+        )
+    )
+    mission = result.scalar_one_or_none()
+    if mission is None:
+        return {**task_input, "mission_context_status": "not_found"}
+    expected_digest = str(task_input.get("objective_digest") or "")
+    if not expected_digest or not secrets.compare_digest(expected_digest, mission.objective_digest):
+        return {**task_input, "mission_context_status": "digest_mismatch"}
+    try:
+        objective = str(decrypt_json(mission.objective_ciphertext, mission.objective_digest)["objective"])
+    except (KeyError, TypeError, ValueError):
+        return {**task_input, "mission_context_status": "decrypt_failed"}
+    scan = scan_text(objective[:4000], redact=True)
+    return {
+        **task_input,
+        "objective": scan.redacted if scan.is_sensitive else objective[:4000],
+        "mission_context_status": "loaded",
+        "mission_context_redacted": scan.is_sensitive,
+    }
+
+
 async def _execute_real_task_if_supported(
     db: AsyncSession,
     claw: str,
@@ -266,7 +364,7 @@ async def _execute_real_task_if_supported(
         "swarm_job_id": swarm_job_id,
         "task_type": task_type,
         "input": task_input,
-        "classification": "internal",
+        "classification": str(task_input.get("classification") or "internal"),
         "model_profile": model_profile,
         "allowed_actions": ["read", "analyze", "recommend"],
     }

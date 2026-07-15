@@ -456,7 +456,13 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
     openai_key    = await _resolve_llm_key(db, "openai")
     anthropic_key = await _resolve_llm_key(db, "anthropic")
     nvidia_key    = await _resolve_llm_key(db, "nvidia")
-    return await available_providers(openai_key=openai_key, anthropic_key=anthropic_key, nvidia_key=nvidia_key)
+    gemini_key    = await _resolve_llm_key(db, "gemini")
+    return await available_providers(
+        openai_key=openai_key,
+        anthropic_key=anthropic_key,
+        nvidia_key=nvidia_key,
+        gemini_key=gemini_key,
+    )
 
 
 # ── Security Copilot Agent endpoints ─────────────────────────────────────────
@@ -728,6 +734,11 @@ async def get_agent_models(db: AsyncSession = Depends(get_db)):
         {"id": "gpt-3.5-turbo",      "name": "GPT-3.5 Turbo", "tag": "Legacy Fast",     "tier": "fast"},
     ]
 
+    GEMINI_MODELS = [
+        {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "tag": "Fast", "tier": "fast"},
+        {"id": "gemini-2.5-pro",   "name": "Gemini 2.5 Pro",   "tag": "Deep reasoning", "tier": "top"},
+    ]
+
     # Query Ollama for locally installed models
     ollama_models = []
     try:
@@ -794,6 +805,7 @@ async def get_agent_models(db: AsyncSession = Depends(get_db)):
         "anthropic": ANTHROPIC_MODELS,
         "openai":    OPENAI_MODELS,
         "nvidia":    nvidia_models,
+        "gemini":    GEMINI_MODELS,
         "ollama":    ollama_models,
     }
 

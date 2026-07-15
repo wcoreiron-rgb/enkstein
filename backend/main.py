@@ -38,6 +38,13 @@ from app.models.remediation import RemediationAction, RemediationPlaybook  # noq
 from app.models.swarm import SwarmJob, SwarmTask  # noqa: F401
 from app.models.marcellus import (  # noqa: F401
     CapabilityNodeRuntime,
+    CortexArtifact,
+    CortexConversation,
+    CortexConversationMessage,
+    CortexMission,
+    CortexMissionObservation,
+    CortexOvernightBrief,
+    CortexProject,
     NodeCheckpoint,
     PlexusMessage,
     ReflexDefinition,
@@ -102,6 +109,8 @@ from app.core.swarm.routes import router as swarm_router
 from app.core.modelclaw.routes import router as modelclaw_router
 from app.core.marcellus.routes import router as marcellus_router
 from app.core.marcellus.runtime_routes import router as marcellus_runtime_router
+from app.core.marcellus.workspace_routes import router as marcellus_workspace_router
+from app.core.marcellus.mission_routes import router as marcellus_mission_router
 
 
 @asynccontextmanager
@@ -121,14 +130,22 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Background scan scheduler started")
 
+    from app.core.marcellus.missions import mission_scheduler_loop
+    mission_task = asyncio.create_task(
+        mission_scheduler_loop(AsyncSessionLocal),
+        name="marcellus-mission-scheduler",
+    )
+    logger.info("Mission scheduler started")
+
     yield
 
     # Shutdown — cancel the scheduler
     scheduler_task.cancel()
+    mission_task.cancel()
     try:
-        await scheduler_task
+        await asyncio.gather(scheduler_task, mission_task)
     except asyncio.CancelledError:
-        logger.info("Background scan scheduler stopped")
+        logger.info("Background schedulers stopped")
 
 
 app = FastAPI(
@@ -229,6 +246,8 @@ app.include_router(swarm_router, prefix=PREFIX)
 app.include_router(modelclaw_router, prefix=PREFIX)
 app.include_router(marcellus_router, prefix=PREFIX)
 app.include_router(marcellus_runtime_router, prefix=PREFIX)
+app.include_router(marcellus_workspace_router, prefix=PREFIX)
+app.include_router(marcellus_mission_router, prefix=PREFIX)
 
 
 @app.get("/health")

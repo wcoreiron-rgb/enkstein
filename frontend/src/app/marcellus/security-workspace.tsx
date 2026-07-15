@@ -26,6 +26,7 @@ import {
   MarcellusSecurityArm,
 } from '@/lib/api';
 import MarcellusRuntimeConsole from './runtime-console';
+import MissionControl from './mission-control';
 
 const ARM_COLORS: Record<string, string> = {
   threat_exposure: '#dc2626',
@@ -182,6 +183,9 @@ export default function SecurityWorkspace() {
 
   return (
     <div className="space-y-8">
+      <MissionControl />
+
+      <div className="border-t pt-8" style={{ borderColor: 'var(--rc-border)' }}>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
@@ -349,6 +353,7 @@ export default function SecurityWorkspace() {
           ))}
         </div>
       </section>
+      </div>
     </div>
   );
 }

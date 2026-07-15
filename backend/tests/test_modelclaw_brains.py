@@ -28,6 +28,34 @@ async def test_subscription_brain_status_is_explicit(client, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_desktop_brain_access_request_is_explicit(client, monkeypatch):
+    async def fake_request():
+        return {"granted": True, "detail": "Desktop Brain access is ready."}
+
+    monkeypatch.setattr(routes, "request_desktop_brain_access", fake_request)
+    response = await client.post(f"{BASE}/brains/desktop-access")
+    assert response.status_code == 200
+    assert response.json() == {"granted": True, "detail": "Desktop Brain access is ready."}
+
+
+@pytest.mark.asyncio
+async def test_browser_brain_pairing_is_started_by_authenticated_api(client, monkeypatch):
+    async def fake_pairing():
+        return {
+            "available": True,
+            "setup_url": "http://127.0.0.1:47831/v1/browser/setup?code=one-time",
+            "opened": True,
+            "expires_in_seconds": 300,
+        }
+
+    monkeypatch.setattr(routes, "create_browser_brain_pairing", fake_pairing)
+    response = await client.post(f"{BASE}/brains/browser-pair")
+    assert response.status_code == 200
+    assert response.json()["available"] is True
+    assert response.json()["setup_url"].startswith("http://127.0.0.1:")
+
+
+@pytest.mark.asyncio
 async def test_subscription_brain_invocation_is_audited(client, monkeypatch):
     async def fake_invoke(brain, prompt, *, model=None):
         return {
@@ -59,6 +87,37 @@ async def test_subscription_brain_invocation_is_audited(client, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_chatgpt_desktop_invocation_uses_same_governed_audit_path(client, monkeypatch):
+    async def fake_invoke(brain, prompt, *, model=None):
+        assert brain == "chatgpt_desktop"
+        return {
+            "source": brain,
+            "kind": "desktop_session",
+            "available": True,
+            "counted": True,
+            "provider": "openai_chatgpt_desktop",
+            "model": "desktop-selected",
+            "response": "Visible desktop response",
+            "latency_ms": 40,
+        }
+
+    monkeypatch.setattr(routes, "invoke_subscription_brain", fake_invoke)
+    response = await client.post(
+        f"{BASE}/brains/invoke",
+        json={
+            "brain": "chatgpt_desktop",
+            "prompt": "Review this architecture",
+            "claw": "executive",
+            "data_classification": "internal",
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["provider"] == "openai_chatgpt_desktop"
+    calls = await client.get(f"{BASE}/calls")
+    assert any(row["model_profile"] == "chatgpt_desktop" for row in calls.json())
+
+
+@pytest.mark.asyncio
 async def test_subscription_brain_rejects_restricted_data(client):
     response = await client.post(
         f"{BASE}/brains/invoke",
@@ -71,6 +130,28 @@ async def test_subscription_brain_rejects_restricted_data(client):
     )
     assert response.status_code == 403
     assert "approved local profile" in response.json()["detail"]
+
+    desktop = await client.post(
+        f"{BASE}/brains/invoke",
+        json={
+            "brain": "claude_desktop",
+            "prompt": "Analyze restricted material",
+            "claw": "executive",
+            "data_classification": "restricted",
+        },
+    )
+    assert desktop.status_code == 403
+
+    browser = await client.post(
+        f"{BASE}/brains/invoke",
+        json={
+            "brain": "chatgpt_browser",
+            "prompt": "Analyze restricted material",
+            "claw": "executive",
+            "data_classification": "restricted",
+        },
+    )
+    assert browser.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -163,6 +244,7 @@ async def test_profile_brain_redacts_sensitive_input_when_required(monkeypatch):
             "name": name,
             "provider": "ollama",
             "model": "local-test",
+            "allowed_models": [],
             "allowed_claws": ["executive"],
             "allowed_data_classes": ["internal"],
             "requires_redaction": True,
@@ -178,6 +260,10 @@ async def test_profile_brain_redacts_sensitive_input_when_required(monkeypatch):
         )()
 
     monkeypatch.setattr(brain_bridge, "call_llm", fake_call)
+    async def fake_ollama_models():
+        return ["local-test"], True
+
+    monkeypatch.setattr(brain_bridge, "fetch_ollama_models", fake_ollama_models)
     vote = await brain_bridge.invoke_profile_brain(
         object(),
         "profile:local-test",
@@ -189,3 +275,122 @@ async def test_profile_brain_redacts_sensitive_input_when_required(monkeypatch):
     assert "owner@example.com" not in captured["prompt"]
     assert vote["counted"] is True
     assert "input was redacted" in vote["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_ollama_profile_selects_an_installed_fallback_when_default_is_missing(monkeypatch):
+    captured = {}
+    monkeypatch.delenv("MARCELLUS_OLLAMA_MODEL", raising=False)
+    monkeypatch.setattr(
+        brain_bridge,
+        "get_profile",
+        lambda name, tenant_id: {
+            "name": name,
+            "provider": "ollama",
+            "model": "qwen2.5:14b-instruct",
+            "allowed_models": [],
+            "allowed_claws": ["executive"],
+            "allowed_data_classes": ["internal"],
+            "requires_redaction": True,
+        },
+    )
+
+    async def fake_models():
+        return ["llama3.2:latest", "qwen2.5:7b", "regent-aegis:bc"], True
+
+    async def fake_call(provider, prompt, **kwargs):
+        captured.update(provider=provider, model=kwargs["model"])
+        return type("Result", (), {"success": True, "content": "Local answer", "model": kwargs["model"], "tokens_used": 4})()
+
+    monkeypatch.setattr(brain_bridge, "fetch_ollama_models", fake_models)
+    monkeypatch.setattr(brain_bridge, "call_llm", fake_call)
+    vote = await brain_bridge.invoke_profile_brain(
+        object(),
+        "profile:ollama_local_fallback",
+        "Review this policy",
+        tenant_id="global",
+        claw="executive",
+        data_classification="internal",
+    )
+    assert captured == {"provider": "ollama", "model": "regent-aegis:bc"}
+    assert vote["counted"] is True
+
+
+@pytest.mark.asyncio
+async def test_ollama_profile_accepts_latest_alias_but_rejects_missing_explicit_model(monkeypatch):
+    async def fake_models():
+        return ["llama3.2:latest"], True
+
+    monkeypatch.setattr(brain_bridge, "fetch_ollama_models", fake_models)
+    monkeypatch.setattr(
+        brain_bridge,
+        "get_profile",
+        lambda name, tenant_id: {
+            "name": name,
+            "provider": "ollama",
+            "model": "llama3.2",
+            "allowed_models": [],
+            "allowed_claws": ["executive"],
+            "allowed_data_classes": ["internal"],
+            "requires_redaction": True,
+        },
+    )
+    prepared = await brain_bridge._prepare_profile_brain(
+        object(),
+        "profile:ollama_local_fallback",
+        tenant_id="global",
+        claw="executive",
+        data_classification="internal",
+        model="llama3.2",
+    )
+    assert prepared["model"] == "llama3.2:latest"
+
+    denied = await brain_bridge._prepare_profile_brain(
+        object(),
+        "profile:ollama_local_fallback",
+        tenant_id="global",
+        claw="executive",
+        data_classification="internal",
+        model="missing-model",
+    )
+    assert denied["unavailable_vote"]["counted"] is False
+    assert "not installed" in denied["unavailable_vote"]["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_profile_brain_rejects_model_outside_profile_allowlist(monkeypatch):
+    called = False
+
+    monkeypatch.setattr(
+        brain_bridge,
+        "get_profile",
+        lambda name, tenant_id: {
+            "name": name,
+            "provider": "gemini",
+            "model": "approved-model",
+            "allowed_models": ["approved-model"],
+            "allowed_claws": ["executive"],
+            "allowed_data_classes": ["internal"],
+            "requires_redaction": True,
+        },
+    )
+
+    async def fake_call(*args, **kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("Provider must not be called for a denied model")
+
+    monkeypatch.setattr(brain_bridge, "call_llm", fake_call)
+    vote = await brain_bridge.invoke_profile_brain(
+        object(),
+        "profile:restricted-profile",
+        "Review this finding",
+        tenant_id="global",
+        claw="executive",
+        data_classification="internal",
+        model="unapproved-model",
+    )
+
+    assert vote["counted"] is False
+    assert "not allowed" in vote["reason"].lower()
+    assert called is False

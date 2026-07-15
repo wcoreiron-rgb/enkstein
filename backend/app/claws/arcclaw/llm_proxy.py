@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 NVIDIA_API_KEY    = os.getenv("NVIDIA_API_KEY", "")
+GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
 OLLAMA_BASE_URL   = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
 # NVIDIA NIM — OpenAI-compatible endpoint
@@ -269,6 +270,65 @@ async def call_nvidia(
             return LLMResponse(provider="nvidia", model=model, content="", error=str(e), success=False)
 
 
+# ── Google Gemini ─────────────────────────────────────────────────────────────
+
+async def call_gemini(
+    prompt: str,
+    model: str = "gemini-2.5-flash",
+    system: str = "You are a helpful assistant.",
+    api_key: Optional[str] = None,
+) -> LLMResponse:
+    """Call the supported Gemini Developer API with an approved API key."""
+    resolved_key = api_key or GEMINI_API_KEY
+    if not resolved_key:
+        return LLMResponse(
+            provider="gemini",
+            model=model,
+            content="",
+            error="Gemini API key not configured. Add an approved Gemini connector.",
+            success=False,
+        )
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        try:
+            response = await client.post(
+                endpoint,
+                headers={"x-goog-api-key": resolved_key, "Content-Type": "application/json"},
+                json={
+                    "systemInstruction": {"parts": [{"text": system}]},
+                    "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048},
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            candidates = data.get("candidates") or []
+            parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+            content = "".join(str(part.get("text") or "") for part in parts).strip()
+            if not content:
+                return LLMResponse(
+                    provider="gemini", model=model, content="", error="Gemini returned no text output.", success=False
+                )
+            usage = data.get("usageMetadata") or {}
+            return LLMResponse(
+                provider="gemini",
+                model=model,
+                content=content,
+                tokens_used=int(usage.get("totalTokenCount") or 0),
+            )
+        except httpx.HTTPStatusError as exc:
+            status_code = exc.response.status_code
+            detail = (
+                "Gemini rejected the API key."
+                if status_code in {401, 403}
+                else f"Gemini API request failed with HTTP {status_code}."
+            )
+            return LLMResponse(provider="gemini", model=model, content="", error=detail, success=False)
+        except Exception as exc:
+            logger.warning("Gemini invocation failed: %s", type(exc).__name__)
+            return LLMResponse(provider="gemini", model=model, content="", error="Gemini invocation failed.", success=False)
+
+
 # ── Router ────────────────────────────────────────────────────────────────────
 
 PROVIDER_MAP = {
@@ -276,6 +336,7 @@ PROVIDER_MAP = {
     "anthropic": call_anthropic,
     "ollama":    call_ollama,
     "nvidia":    call_nvidia,
+    "gemini":    call_gemini,
 }
 
 MODEL_DEFAULTS = {
@@ -283,6 +344,7 @@ MODEL_DEFAULTS = {
     "anthropic": "claude-3-haiku-20240307",
     "ollama":    "llama3.2",
     "nvidia":    "nvidia/nemotron-4-340b-instruct",
+    "gemini":    "gemini-2.5-flash",
 }
 
 
@@ -298,7 +360,7 @@ async def call_llm(
     if not handler:
         return LLMResponse(
             provider=provider, model=model or "unknown", content="",
-            error=f"Unknown provider '{provider}'. Use: openai, anthropic, ollama",
+            error=f"Unknown provider '{provider}'. Use: openai, anthropic, ollama, nvidia, gemini",
             success=False,
         )
     resolved_model = model or MODEL_DEFAULTS.get(provider, "")
@@ -327,6 +389,7 @@ async def available_providers(
     openai_key: Optional[str] = None,
     anthropic_key: Optional[str] = None,
     nvidia_key: Optional[str] = None,
+    gemini_key: Optional[str] = None,
 ) -> list[dict]:
     """
     Return which providers are configured and ready, with live Ollama model list.
@@ -339,6 +402,7 @@ async def available_providers(
     has_openai    = bool(openai_key    or OPENAI_API_KEY)
     has_anthropic = bool(anthropic_key or ANTHROPIC_API_KEY)
     has_nvidia    = bool(nvidia_key    or NVIDIA_API_KEY)
+    has_gemini    = bool(gemini_key    or GEMINI_API_KEY)
 
     return [
         {
@@ -385,6 +449,17 @@ async def available_providers(
             ),
             "cost": "free_tier",
             "info": "Free access to 80+ frontier models via NVIDIA NIM. No credit card required.",
+        },
+        {
+            "provider": "gemini",
+            "label": "Google Gemini",
+            "models": ["gemini-2.5-flash", "gemini-2.5-pro"],
+            "ready": has_gemini,
+            "setup": (
+                "Connected via Connector Marketplace" if has_gemini
+                else "Add a verified Gemini API key via Connector Marketplace"
+            ),
+            "cost": "paid",
         },
         {
             "provider": "ollama",

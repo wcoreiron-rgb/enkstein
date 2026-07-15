@@ -25,8 +25,11 @@ from app.core.modelclaw.schemas import (
 from app.core.modelclaw.brain_bridge import (
     bridge_status,
     collect_votes,
+    create_browser_brain_pairing,
     deterministic_consensus,
     invoke_subscription_brain,
+    open_browser_companion_folder,
+    request_desktop_brain_access,
 )
 from app.core.modelclaw.gateway import execute_cortex_gateway
 from app.core.modelclaw.service import (
@@ -40,6 +43,15 @@ from app.core.modelclaw.service import (
 from app.trust_fabric import ActionRequest, enforce
 
 router = APIRouter(prefix="/modelclaw", tags=["ModelClaw"])
+_EXTERNAL_BRAINS = {
+    "codex_subscription",
+    "claude_subscription",
+    "chatgpt_desktop",
+    "claude_desktop",
+    "chatgpt_browser",
+    "claude_browser",
+    "gemini_browser",
+}
 
 
 async def _enforce_brain_call(
@@ -97,6 +109,21 @@ async def get_brain_status():
     return await bridge_status()
 
 
+@router.post("/brains/desktop-access", summary="Request desktop Brain accessibility permission")
+async def request_desktop_access():
+    return await request_desktop_brain_access()
+
+
+@router.post("/brains/browser-pair", summary="Start browser companion pairing")
+async def start_browser_pairing():
+    return await create_browser_brain_pairing()
+
+
+@router.post("/brains/browser-companion", summary="Open browser companion installation folder")
+async def open_browser_companion():
+    return await open_browser_companion_folder()
+
+
 @router.post("/brains/invoke", response_model=BrainInvokeResponse, summary="Invoke a subscription Brain")
 async def invoke_brain(payload: BrainInvokeRequest, db: AsyncSession = Depends(get_db)):
     if payload.data_classification in {"restricted", "top_secret"}:
@@ -115,7 +142,7 @@ async def invoke_brain(payload: BrainInvokeRequest, db: AsyncSession = Depends(g
     if not decision.allowed:
         return BrainInvokeResponse(
             source=payload.brain,
-            kind="subscription",
+            kind="desktop_session" if payload.brain.endswith("_desktop") else "browser_session" if payload.brain.endswith("_browser") else "subscription",
             available=True,
             counted=False,
             reason=decision.reason,
@@ -151,7 +178,7 @@ async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(
     policy_outcomes: list[str] = []
 
     for source in unique_sources:
-        if source.endswith("_subscription") and payload.data_classification in {"restricted", "top_secret"}:
+        if source in _EXTERNAL_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
             policy_outcomes.append("blocked")
             denied_votes.append(
                 {
@@ -180,7 +207,7 @@ async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(
             denied_votes.append(
                 {
                     "source": source,
-                    "kind": "subscription" if source.endswith("_subscription") else "profile",
+                    "kind": "desktop_session" if source.endswith("_desktop") else "browser_session" if source.endswith("_browser") else "subscription" if source in _EXTERNAL_BRAINS else "profile",
                     "available": True,
                     "counted": False,
                     "reason": decision.reason,

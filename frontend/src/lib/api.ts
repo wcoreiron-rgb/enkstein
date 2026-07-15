@@ -122,6 +122,91 @@ export interface MarcellusArchitecture {
 export const getMarcellusArchitecture = () =>
   apiFetch<MarcellusArchitecture>('/marcellus/architecture');
 
+export type CortexMissionCadence = 'manual' | 'hourly' | 'every_6h' | 'daily' | 'weekly';
+export type CortexMissionMode = 'monitor' | 'assist' | 'approval';
+
+export interface CortexMission {
+  id: string;
+  tenant_id: string;
+  owner_id: string;
+  name: string;
+  objective: string;
+  status: 'active' | 'paused' | 'archived';
+  cadence: CortexMissionCadence;
+  autonomy_mode: CortexMissionMode;
+  profile: string;
+  classification: string;
+  participants: string[];
+  parallelism: number;
+  model_profile: string | null;
+  run_count: number;
+  latest_job_id: string | null;
+  latest_status: string | null;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CortexMissionObservation {
+  id: string;
+  mission_id: string;
+  job_id: string;
+  status: 'proposed' | 'approved' | 'rejected' | 'blocked';
+  severity: string;
+  summary: string;
+  evidence: Record<string, unknown>;
+  proposed_by: string;
+  reviewed_by: string | null;
+  review_reason: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+export interface CortexOvernightBrief {
+  id: string;
+  generated_at: string;
+  window_start: string;
+  window_end: string;
+  headline: string;
+  active_missions: Array<Record<string, unknown>>;
+  material_changes: Array<Record<string, unknown>>;
+  decisions_needed: Array<Record<string, unknown>>;
+  running_arms: string[];
+  recent_reflex_actions: Array<Record<string, unknown>>;
+  blocked_actions: Array<Record<string, unknown>>;
+  security_twin_health: Record<string, unknown>;
+}
+
+export const getCortexMissions = () =>
+  apiFetch<CortexMission[]>('/marcellus/missions');
+export const createCortexMission = (body: object) =>
+  apiFetch<CortexMission>('/marcellus/missions', { method: 'POST', body: JSON.stringify(body) });
+export const updateCortexMission = (missionId: string, body: object) =>
+  apiFetch<CortexMission>(`/marcellus/missions/${encodeURIComponent(missionId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+export const runCortexMission = (missionId: string) =>
+  apiFetch<{ mission_id: string; job_id: string; status: string; message: string }>(
+    `/marcellus/missions/${encodeURIComponent(missionId)}/run`,
+    { method: 'POST' },
+  );
+export const getCortexMissionObservations = (status?: string) => {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch<CortexMissionObservation[]>(`/marcellus/missions/memory/observations${query}`);
+};
+export const reviewCortexMissionObservation = (
+  observationId: string,
+  decision: 'approve' | 'reject',
+  reason = '',
+) => apiFetch<CortexMissionObservation>(
+  `/marcellus/missions/memory/observations/${encodeURIComponent(observationId)}/review`,
+  { method: 'POST', body: JSON.stringify({ decision, reason }) },
+);
+export const generateCortexOvernightBrief = (hours = 12) =>
+  apiFetch<CortexOvernightBrief>(`/marcellus/missions/overnight-brief?hours=${hours}`, { method: 'POST' });
+
 export interface MarcellusPlexusMessage {
   id: string;
   tenant_id: string;
@@ -270,6 +355,8 @@ export const getMarcellusNodeRuntimes = (tenantId: string) =>
 // ArcClaw
 export const getArcStats = () => apiFetch<any>('/arcclaw/stats');
 export const getArcEvents = (limit = 50) => apiFetch<any[]>(`/arcclaw/events?limit=${limit}`);
+export const getArcProviders = () => apiFetch<any[]>('/arcclaw/providers');
+export const getArcModels = () => apiFetch<Record<string, Array<{ id: string; name: string; tag?: string }>>>('/arcclaw/agent/models');
 export const submitArcEvent = (body: object) =>
   apiFetch<any>('/arcclaw/events', { method: 'POST', body: JSON.stringify(body) });
 
@@ -519,6 +606,15 @@ export const routeModelClawCall = (body: object) =>
 export const getModelClawCalls = (limit = 50) =>
   apiFetch<any[]>(`/modelclaw/calls?limit=${limit}`);
 export const getBrainStatuses = () => apiFetch<any[]>('/modelclaw/brains/status');
+export const requestDesktopBrainAccess = () =>
+  apiFetch<{ granted: boolean; detail: string }>('/modelclaw/brains/desktop-access', { method: 'POST' });
+export const startBrowserBrainPairing = () =>
+  apiFetch<{ available: boolean; setup_url?: string; opened?: boolean; expires_in_seconds?: number; detail?: string }>(
+    '/modelclaw/brains/browser-pair',
+    { method: 'POST' },
+  );
+export const openBrowserCompanionFolder = () =>
+  apiFetch<{ opened: boolean; detail?: string }>('/modelclaw/brains/browser-companion', { method: 'POST' });
 export const invokeSubscriptionBrain = (body: object) =>
   apiFetch<any>('/modelclaw/brains/invoke', { method: 'POST', body: JSON.stringify(body) });
 export const routeBrainConsensus = (body: object) =>
@@ -544,10 +640,248 @@ export type CortexGatewayResponse = {
   votes: any[];
   confidence?: number;
   agreement?: string;
+  routing?: {
+    strategy: string;
+    reason: string;
+    candidate_sources: string[];
+    selected_source?: string;
+    attempted_sources?: string[];
+  };
   latency_ms?: number;
 };
 export const routeCortexGateway = (body: object) =>
   apiFetch<CortexGatewayResponse>('/modelclaw/gateway', { method: 'POST', body: JSON.stringify(body) });
+
+export type CortexProject = {
+  id: string;
+  tenant_id: string;
+  owner_id: string;
+  name: string;
+  description: string;
+  classification: string;
+  default_source: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CortexNativeWorkspace = {
+  connected: boolean;
+  name?: string;
+  file_count: number;
+  synced_files: number;
+};
+
+export type CortexConversation = {
+  id: string;
+  tenant_id: string;
+  owner_id: string;
+  project_id?: string;
+  title: string;
+  mode: 'chat' | 'cowork' | 'security';
+  classification: string;
+  selected_source: string;
+  status: string;
+  branch_of_id?: string;
+  branch_message_id?: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CortexMessageRecord = {
+  id: string;
+  tenant_id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  classification: string;
+  source?: string;
+  provider?: string;
+  model?: string;
+  governance: Record<string, any>;
+  parent_message_id?: string;
+  created_at: string;
+};
+
+export type CortexConversationDetail = CortexConversation & { messages: CortexMessageRecord[] };
+
+export type CortexArtifact = {
+  id: string;
+  tenant_id: string;
+  project_id: string;
+  conversation_id?: string;
+  path: string;
+  mime_type: string;
+  size_bytes: number;
+  content_digest: string;
+  classification: string;
+  version: number;
+  status: string;
+  created_by: string;
+  created_at: string;
+  content?: string;
+};
+
+export type CortexTurn = {
+  conversation: CortexConversation;
+  user_message: CortexMessageRecord;
+  assistant_message?: CortexMessageRecord;
+  gateway: CortexGatewayResponse;
+};
+
+export type CortexStreamEvent = { event: string; data: any };
+
+export type CortexChangeProposal = {
+  id: string;
+  project_id: string;
+  conversation_id?: string;
+  operation: 'create' | 'update' | 'delete';
+  path: string;
+  status: string;
+  proposed_content?: string;
+  current_content?: string;
+  base_digest?: string;
+  created_by: string;
+  created_at: string;
+};
+
+export type CortexCitation = {
+  id: number;
+  url: string;
+  title: string;
+  retrieved_at: string;
+  content_type: string;
+  content_digest: string;
+  excerpt: string;
+};
+
+export type CortexResearchResult = {
+  status: string;
+  turn: CortexTurn;
+  source_artifact: CortexArtifact;
+  report_artifact: CortexArtifact;
+  citations: CortexCitation[];
+  tool_trace: Array<Record<string, any>>;
+};
+
+export const getCortexProjects = () => apiFetch<CortexProject[]>('/marcellus/workspace/projects');
+export const createCortexProject = (body: object) =>
+  apiFetch<CortexProject>('/marcellus/workspace/projects', { method: 'POST', body: JSON.stringify(body) });
+export const getCortexNativeWorkspace = (projectId: string) =>
+  apiFetch<CortexNativeWorkspace>(`/marcellus/workspace/projects/${projectId}/native-workspace`);
+export const connectCortexNativeWorkspace = (projectId: string, body: { token: string; name: string }) =>
+  apiFetch<CortexNativeWorkspace>(`/marcellus/workspace/projects/${projectId}/native-workspace`, { method: 'POST', body: JSON.stringify(body) });
+export const syncCortexNativeWorkspace = (projectId: string) =>
+  apiFetch<CortexNativeWorkspace>(`/marcellus/workspace/projects/${projectId}/native-workspace/sync`, { method: 'POST' });
+export const getCortexConversations = (mode?: string, projectId?: string) => {
+  const params = new URLSearchParams();
+  if (mode) params.set('mode', mode);
+  if (projectId) params.set('project_id', projectId);
+  const query = params.toString();
+  return apiFetch<CortexConversation[]>(`/marcellus/workspace/conversations${query ? `?${query}` : ''}`);
+};
+export const createCortexConversation = (body: object) =>
+  apiFetch<CortexConversation>('/marcellus/workspace/conversations', { method: 'POST', body: JSON.stringify(body) });
+export const getCortexConversation = (id: string) =>
+  apiFetch<CortexConversationDetail>(`/marcellus/workspace/conversations/${id}`);
+export const archiveCortexConversation = (id: string) =>
+  apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}`, { method: 'DELETE' });
+export const moveCortexConversation = (id: string, projectId: string) =>
+  apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}/move`, {
+    method: 'POST',
+    body: JSON.stringify({ project_id: projectId }),
+  });
+export const sendCortexTurn = (id: string, body: object) =>
+  apiFetch<CortexTurn>(`/marcellus/workspace/conversations/${id}/turns`, { method: 'POST', body: JSON.stringify(body) });
+export async function streamCortexTurn(
+  id: string,
+  body: object,
+  onEvent: (event: CortexStreamEvent) => void,
+  signal?: AbortSignal,
+): Promise<CortexTurn> {
+  const token = getAuthToken();
+  const response = await fetch(`${BASE}/marcellus/workspace/conversations/${id}/turns/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      clearAuthToken();
+      window.location.replace('/login');
+    }
+    throw new ApiError(response.status, `API error ${response.status}`);
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let completed: CortexTurn | null = null;
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() || '';
+    for (const frame of frames) {
+      const event = frame.split('\n').find((line) => line.startsWith('event: '))?.slice(7) || 'message';
+      const encoded = frame.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+      if (!encoded) continue;
+      const data = JSON.parse(encoded);
+      onEvent({ event, data });
+      if (event === 'turn_failed') throw new Error(data.detail || 'The governed turn failed.');
+      if (event === 'turn_completed') completed = data as CortexTurn;
+    }
+    if (done) break;
+  }
+  if (!completed) throw new Error('The stream ended before the governed turn completed.');
+  return completed;
+}
+export const branchCortexConversation = (id: string, body: object) =>
+  apiFetch<CortexConversationDetail>(`/marcellus/workspace/conversations/${id}/branches`, { method: 'POST', body: JSON.stringify(body) });
+export const createCortexSecurityInvestigation = (id: string, body: object = {}) =>
+  apiFetch<{ job_id: string; status: string; name: string; requires_approval: boolean; conversation_id: string }>(
+    `/marcellus/workspace/conversations/${id}/security-investigation`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+export const searchCortexConversations = (query: string) =>
+  apiFetch<Array<{ conversation: CortexConversation; matching_message_id?: string; excerpt?: string }>>(
+    `/marcellus/workspace/search?q=${encodeURIComponent(query)}`,
+  );
+export const getCortexArtifacts = (projectId: string) =>
+  apiFetch<CortexArtifact[]>(`/marcellus/workspace/projects/${projectId}/artifacts`);
+export const ingestCortexArtifacts = (body: object) =>
+  apiFetch<CortexArtifact[]>('/marcellus/workspace/artifacts', { method: 'POST', body: JSON.stringify(body) });
+export const getCortexArtifact = (id: string) =>
+  apiFetch<CortexArtifact>(`/marcellus/workspace/artifacts/${id}`);
+export const updateCortexArtifact = (id: string, body: { path: string; content: string; mime_type?: string }) =>
+  apiFetch<CortexArtifact>(`/marcellus/workspace/artifacts/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+export const deleteCortexArtifact = (id: string) =>
+  apiFetch<CortexArtifact>(`/marcellus/workspace/artifacts/${id}`, { method: 'DELETE' });
+export const getCortexChangeProposals = (projectId: string) =>
+  apiFetch<CortexChangeProposal[]>(`/marcellus/workspace/projects/${projectId}/change-proposals`);
+export const reviewCortexChangeProposal = (id: string, decision: 'approve' | 'reject', reason = '') =>
+  apiFetch<CortexChangeProposal>(`/marcellus/workspace/change-proposals/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, reason }),
+  });
+export const runCortexResearch = (projectId: string, body: object) =>
+  apiFetch<CortexResearchResult>(`/marcellus/workspace/projects/${projectId}/research`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+export const getCortexTools = () =>
+  apiFetch<Array<{ name: string; description: string; capability: string; input_schema: Record<string, any> }>>(
+    '/marcellus/workspace/tools',
+  );
+export const invokeCortexTool = (body: object) =>
+  apiFetch<{ tool: string; status: string; policy: Record<string, any>; result: Record<string, any> }>(
+    '/marcellus/workspace/tools/invoke',
+    { method: 'POST', body: JSON.stringify(body) },
+  );
 
 // Memory / State Layer
 export const getMemorySummary = () => apiFetch<any>('/memory/summary');

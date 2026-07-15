@@ -19,6 +19,8 @@
   --rc-text-3:      #6b7280;
   --rc-border:      #1f2937;
   --rc-border-2:    #374151;
+  --rc-chat-canvas: #0b0d10;
+  --rc-chat-panel:  #111317;
 }
 
 /* ── Light theme variables ───────────────────────────────────────────────── */
@@ -32,6 +34,8 @@ html.light {
   --rc-text-3:      #64748b;
   --rc-border:      #e2e8f0;
   --rc-border-2:    #cbd5e1;
+  --rc-chat-canvas: #fcfcfd;
+  --rc-chat-panel:  #ffffff;
 }
 
 body {

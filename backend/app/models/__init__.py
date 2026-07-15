@@ -10,6 +10,13 @@ from app.models.finding import Finding, FindingSeverity, FindingStatus, Remediat
 from app.models.swarm import SwarmJob, SwarmTask, SwarmJobStatus, SwarmTaskStatus
 from app.models.marcellus import (
     CapabilityNodeRuntime,
+    CortexArtifact,
+    CortexConversation,
+    CortexConversationMessage,
+    CortexMission,
+    CortexMissionObservation,
+    CortexOvernightBrief,
+    CortexProject,
     NodeCheckpoint,
     PlexusMessage,
     ReflexDefinition,
@@ -30,4 +37,6 @@ __all__ = [
     "SwarmJob", "SwarmTask", "SwarmJobStatus", "SwarmTaskStatus",
     "PlexusMessage", "ReflexDefinition", "ReflexExecution",
     "NodeCheckpoint", "CapabilityNodeRuntime", "RegenerationRun",
+    "CortexProject", "CortexConversation", "CortexConversationMessage", "CortexArtifact",
+    "CortexMission", "CortexMissionObservation", "CortexOvernightBrief",
 ]

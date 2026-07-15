@@ -17,6 +17,7 @@ class ModelProfileCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=128)
     provider: str = Field(..., min_length=2, max_length=64)
     model: str = Field(..., min_length=2, max_length=256)
+    allowed_models: list[str] = Field(default_factory=list, max_length=64)
     allowed_claws: list[str] = Field(default_factory=list)
     allowed_data_classes: list[str] = Field(default_factory=lambda: ["public", "internal"])
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
@@ -25,6 +26,12 @@ class ModelProfileCreate(BaseModel):
     requires_redaction: bool = True
     fallback_profile: str | None = None
     tenant_id: str = Field(default="global", min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def include_default_model(self):
+        if self.allowed_models and self.model not in self.allowed_models:
+            raise ValueError("The default model must be included in allowed_models")
+        return self
 
 
 class ModelProfileRead(ModelProfileCreate):
@@ -79,11 +86,16 @@ class BrainStatusRead(BaseModel):
     authenticated: bool
     runtime: str | None = None
     account_type: str | None = None
+    models: list[str] = Field(default_factory=list)
+    supports_custom_model: bool = False
     detail: str | None = None
 
 
 class BrainInvokeRequest(BaseModel):
-    brain: str = Field(..., pattern="^(codex_subscription|claude_subscription)$")
+    brain: str = Field(
+        ...,
+        pattern="^(codex_subscription|claude_subscription|chatgpt_desktop|claude_desktop|chatgpt_browser|claude_browser|gemini_browser)$",
+    )
     prompt: str = Field(..., min_length=1, max_length=24000)
     model: str | None = Field(default=None, max_length=128)
     claw: str = Field(default="executive", min_length=2, max_length=64)
@@ -118,6 +130,7 @@ class ConsensusRequest(BaseModel):
             "codex_subscription",
             "claude_subscription",
             "profile:nim_fast_reasoning",
+            "profile:gemini_general",
             "profile:ollama_local_fallback",
         ],
         min_length=1,
@@ -151,11 +164,13 @@ class CortexGatewayRequest(BaseModel):
     mode: Literal["chat", "cowork", "security"] = "chat"
     messages: list[CortexMessage] = Field(..., min_length=1, max_length=24)
     source: str = Field(default="auto", min_length=2, max_length=128)
+    model: str | None = Field(default=None, max_length=128)
     consensus_sources: list[str] = Field(
         default_factory=lambda: [
             "codex_subscription",
             "claude_subscription",
             "profile:nim_fast_reasoning",
+            "profile:gemini_general",
             "profile:ollama_local_fallback",
         ],
         min_length=1,
@@ -172,7 +187,17 @@ class CortexGatewayRequest(BaseModel):
     def validate_total_context(self):
         if sum(len(message.content) for message in self.messages) > 24000:
             raise ValueError("Conversation context exceeds 24000 characters")
-        valid_source = self.source in {"auto", "consensus", "codex_subscription", "claude_subscription"}
+        valid_source = self.source in {
+            "auto",
+            "consensus",
+            "codex_subscription",
+            "claude_subscription",
+            "chatgpt_desktop",
+            "claude_desktop",
+            "chatgpt_browser",
+            "claude_browser",
+            "gemini_browser",
+        }
         if not valid_source and not self.source.startswith("profile:"):
             raise ValueError("Unsupported Cortex source")
         return self
@@ -201,4 +226,5 @@ class CortexGatewayResponse(BaseModel):
     votes: list[BrainVoteRead] = Field(default_factory=list)
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     agreement: str | None = None
+    routing: dict[str, Any] | None = None
     latency_ms: int | None = None

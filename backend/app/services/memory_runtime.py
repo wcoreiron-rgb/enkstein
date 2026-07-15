@@ -12,10 +12,13 @@ import json
 import re
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.marcellus.crypto import decrypt_json
+from app.models.marcellus import CortexMissionObservation
 from app.models.memory import IncidentMemory, TenantMemory
 from app.models.swarm import SwarmJob
 
@@ -43,6 +46,45 @@ async def build_swarm_memory_context(
     task_input: dict[str, Any],
     claw: str,
 ) -> dict[str, Any]:
+    tenant_id = str(task_input.get("tenant_id") or "").strip()
+    mission_id = str(task_input.get("mission_id") or "").strip()
+    if tenant_id and mission_id:
+        try:
+            mission_uuid = UUID(mission_id)
+        except ValueError:
+            return {"loaded": False, "claw": claw, "tenant_id": tenant_id, "reason": "invalid_mission_id"}
+        stmt = (
+            select(CortexMissionObservation)
+            .where(
+                CortexMissionObservation.tenant_id == tenant_id,
+                CortexMissionObservation.mission_id == mission_uuid,
+                CortexMissionObservation.status == "approved",
+            )
+            .order_by(desc(CortexMissionObservation.created_at))
+            .limit(3)
+        )
+        result = await db.execute(stmt)
+        observations = []
+        for item in result.scalars().all():
+            summary = decrypt_json(item.summary_ciphertext, item.summary_digest)["summary"]
+            if not _memory_text_is_safe(summary):
+                continue
+            observations.append(
+                {
+                    "id": str(item.id),
+                    "severity": item.severity,
+                    "summary": _redact(summary, 360),
+                    "evidence": json.loads(item.evidence_json or "{}"),
+                }
+            )
+        return {
+            "loaded": bool(observations),
+            "claw": claw,
+            "tenant_id": tenant_id,
+            "mission_id": mission_id,
+            "approved_mission_observations": observations,
+        }
+
     identity = str(task_input.get("identity") or task_input.get("user_id") or "").lower()
     tenant = await db.get(TenantMemory, 1)
 
@@ -109,6 +151,8 @@ async def propose_swarm_memory_update(
         job_input = json.loads(job.input_json or "{}")
     except Exception:
         job_input = {}
+    if job_input.get("tenant_id") and job_input.get("mission_id"):
+        return {"status": "skipped", "reason": "tenant_scoped_mission_memory_managed_separately"}
 
     identity = job_input.get("identity") or job_input.get("user_id") or job_input.get("principal")
     affected_users = [identity] if identity else []

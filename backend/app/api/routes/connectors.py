@@ -19,6 +19,8 @@ logger = logging.getLogger("connectors")
 
 router = APIRouter(prefix="/connectors", tags=["CoreOS — Connectors"])
 
+_STRICT_CREDENTIAL_CONNECTORS = {"openai", "anthropic", "nvidia", "nvidia_nim", "gemini"}
+
 
 # ── List / Get / Create / Update ──────────────────────────────────────────────
 
@@ -180,10 +182,34 @@ async def configure_connector(
             message=f"Blocked by Trust Fabric: {decision.reason}",
         )
 
-    # 3. Encrypt and store credentials
+    # 3. Hosted model credentials must pass a real provider request before they
+    # are stored or presented as connected. Reachability and key shape are not trust.
+    if connector.connector_type in _STRICT_CREDENTIAL_CONNECTORS:
+        was_configured = secrets_manager.is_configured(connector_id)
+        verification = await test_connector(
+            connector_type=connector.connector_type,
+            creds=payload.credentials,
+            endpoint=connector.endpoint or "",
+        )
+        if not verification.success or verification.verification_level != "credential":
+            return ConfigureResponse(
+                connector_id=connector_id,
+                is_configured=was_configured,
+                credential_hint="",
+                policy_decision="blocked",
+                policy_name="Credential verification gate",
+                block_reason=verification.message,
+                message=(
+                    f"New credentials were not saved; the existing connector remains configured: {verification.message}"
+                    if was_configured
+                    else f"Credentials were not saved: {verification.message}"
+                ),
+            )
+
+    # 4. Encrypt and store credentials
     hint = secrets_manager.store_credential(connector_id, payload.credentials)
 
-    # 4. Mark connector as pending (credentials saved, awaiting approval)
+    # 5. Mark connector as pending (credentials saved, awaiting approval)
     if connector.status == ConnectorStatus.BLOCKED:
         pass  # don't auto-promote blocked connectors
     elif connector.status == ConnectorStatus.APPROVED:
@@ -200,7 +226,7 @@ async def configure_connector(
             connector.status = ConnectorStatus.PENDING
         await db.commit()
 
-    # 5. Trigger auto-scan in the background for the affected claws
+    # 6. Trigger auto-scan in the background for the affected claws
     from app.services.claw_registry import get_claws_for_connector
     affected_claws = get_claws_for_connector(connector.connector_type)
     if affected_claws and connector.status == ConnectorStatus.APPROVED:
@@ -332,6 +358,7 @@ CREDENTIAL_FIELDS: dict[str, list[dict]] = {
     # AI / LLM
     "openai":      [{"name": "api_key", "label": "API Key", "type": "secret", "hint": "sk-..."}],
     "anthropic":   [{"name": "api_key", "label": "API Key", "type": "secret", "hint": "sk-ant-..."}],
+    "gemini":      [{"name": "api_key", "label": "Gemini API Key", "type": "secret", "hint": "Google AI Studio API key"}],
     "ollama":      [{"name": "base_url", "label": "Base URL", "type": "text", "hint": "http://localhost:11434"}],
     # Identity
     "entra_id": [

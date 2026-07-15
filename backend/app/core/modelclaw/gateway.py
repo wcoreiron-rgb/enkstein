@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claws.arcclaw.scanner import classify_prompt, scan_text
 from app.core.modelclaw.brain_bridge import (
+    collect_votes,
     deterministic_consensus,
     invoke_profile_brain,
     invoke_subscription_brain,
@@ -16,11 +17,20 @@ from app.core.modelclaw.service import record_model_call
 from app.trust_fabric import ActionRequest, enforce
 from app.trust_fabric.agt_bridge import audit_prompt
 
-_SUBSCRIPTION_BRAINS = {"codex_subscription", "claude_subscription"}
+_SUBSCRIPTION_BRAINS = {
+    "codex_subscription",
+    "claude_subscription",
+    "chatgpt_desktop",
+    "claude_desktop",
+    "chatgpt_browser",
+    "claude_browser",
+    "gemini_browser",
+}
 _LOCAL_SOURCE = "profile:ollama_local_fallback"
 _AUTO_SOURCES = [
     "codex_subscription",
     "claude_subscription",
+    "profile:gemini_general",
     "profile:nim_fast_reasoning",
     _LOCAL_SOURCE,
 ]
@@ -69,46 +79,94 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
             "latency_ms": int((perf_counter() - started) * 1000),
         }
 
-    sources = _requested_sources(payload)
+    sources, routing = _requested_sources(payload, is_sensitive=scan.is_sensitive)
     votes: list[dict[str, Any]] = []
     decisions: dict[str, Any] = {}
     prompt = scan.redacted if scan.is_sensitive else transcript
 
-    for source in sources:
-        if source in _SUBSCRIPTION_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
-            votes.append(_blocked_vote(source, "External subscription Brains cannot receive this data classification."))
-            continue
+    if payload.source == "consensus":
+        allowed_sources: list[str] = []
+        denied_votes: dict[str, dict[str, Any]] = {}
+        for source in sources:
+            if source in _SUBSCRIPTION_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
+                denied_votes[source] = _blocked_vote(
+                    source, "External subscription Brains cannot receive this data classification."
+                )
+                continue
+            decision = await _enforce_source(db, source, payload, classification, prompt_audit, scan.is_sensitive)
+            decisions[source] = decision
+            if decision.allowed:
+                allowed_sources.append(source)
+            else:
+                denied_votes[source] = _blocked_vote(source, decision.reason, decision.outcome.value)
 
-        decision = await _enforce_source(db, source, payload, classification, prompt_audit, scan.is_sensitive)
-        decisions[source] = decision
-        if not decision.allowed:
-            vote = _blocked_vote(source, decision.reason, decision.outcome.value)
-        elif source in _SUBSCRIPTION_BRAINS:
-            vote = await invoke_subscription_brain(source, prompt)
-            vote["policy_outcome"] = decision.outcome.value
-        elif source.startswith("profile:"):
-            vote = await invoke_profile_brain(
-                db,
-                source,
-                prompt,
-                tenant_id=payload.tenant_id,
-                claw=payload.capability,
-                data_classification=payload.data_classification,
-            )
-            vote["policy_outcome"] = decision.outcome.value
-        else:
-            vote = {
+        parallel_votes = await collect_votes(
+            db,
+            allowed_sources,
+            prompt,
+            tenant_id=payload.tenant_id,
+            claw=payload.capability,
+            data_classification=payload.data_classification,
+            model=payload.model,
+            subscription_invoker=invoke_subscription_brain,
+        )
+        vote_by_source = {vote["source"]: vote for vote in parallel_votes}
+        for source in sources:
+            vote = denied_votes.get(source) or vote_by_source.get(source) or {
                 "source": source,
                 "kind": "unknown",
                 "available": False,
                 "counted": False,
                 "reason": "Unsupported Cortex source.",
-                "policy_outcome": decision.outcome.value,
             }
-        votes.append(vote)
-        _record_gateway_call(payload, source, vote, _decision_governance(payload, decision, scan, prompt_audit), vote.get("latency_ms", 0))
-        if payload.source == "auto" and vote.get("counted"):
-            break
+            decision = decisions.get(source)
+            if decision:
+                vote["policy_outcome"] = decision.outcome.value
+                _record_gateway_call(
+                    payload,
+                    source,
+                    vote,
+                    _decision_governance(payload, decision, scan, prompt_audit),
+                    vote.get("latency_ms", 0),
+                )
+            votes.append(vote)
+    else:
+        for source in sources:
+            if source in _SUBSCRIPTION_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
+                votes.append(_blocked_vote(source, "External subscription Brains cannot receive this data classification."))
+                continue
+
+            decision = await _enforce_source(db, source, payload, classification, prompt_audit, scan.is_sensitive)
+            decisions[source] = decision
+            if not decision.allowed:
+                vote = _blocked_vote(source, decision.reason, decision.outcome.value)
+            elif source in _SUBSCRIPTION_BRAINS:
+                vote = await invoke_subscription_brain(source, prompt, model=payload.model)
+                vote["policy_outcome"] = decision.outcome.value
+            elif source.startswith("profile:"):
+                vote = await invoke_profile_brain(
+                    db,
+                    source,
+                    prompt,
+                    tenant_id=payload.tenant_id,
+                    claw=payload.capability,
+                    data_classification=payload.data_classification,
+                    model=payload.model,
+                )
+                vote["policy_outcome"] = decision.outcome.value
+            else:
+                vote = {
+                    "source": source,
+                    "kind": "unknown",
+                    "available": False,
+                    "counted": False,
+                    "reason": "Unsupported Cortex source.",
+                    "policy_outcome": decision.outcome.value,
+                }
+            votes.append(vote)
+            _record_gateway_call(payload, source, vote, _decision_governance(payload, decision, scan, prompt_audit), vote.get("latency_ms", 0))
+            if payload.source == "auto" and vote.get("counted"):
+                break
 
     counted = [vote for vote in votes if vote.get("counted") and vote.get("response")]
     required_votes = payload.minimum_votes if payload.source == "consensus" else 1
@@ -168,24 +226,69 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
         "votes": votes,
         "confidence": confidence,
         "agreement": agreement,
+        "routing": {
+            **routing,
+            "selected_source": selected.get("source"),
+            "attempted_sources": [vote.get("source") for vote in votes],
+        },
         "latency_ms": int((perf_counter() - started) * 1000),
     }
 
 
-def _requested_sources(payload: CortexGatewayRequest) -> list[str]:
+def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = False) -> tuple[list[str], dict[str, Any]]:
     if payload.source == "consensus":
-        return list(dict.fromkeys(payload.consensus_sources))
+        sources = list(dict.fromkeys(payload.consensus_sources))
+        return sources, {
+            "strategy": "consensus",
+            "reason": "The user requested independent Brain votes.",
+            "candidate_sources": sources,
+        }
     if payload.source == "auto":
         if payload.data_classification in {"restricted", "top_secret"}:
-            return [_LOCAL_SOURCE]
-        return _AUTO_SOURCES.copy()
-    return [payload.source]
+            sources = [_LOCAL_SOURCE]
+            reason = "Restricted data is pinned to the approved local Brain boundary."
+        elif payload.mode == "security":
+            sources = [
+                "profile:nim_fast_reasoning",
+                "profile:gemini_general",
+                "codex_subscription",
+                "claude_subscription",
+                _LOCAL_SOURCE,
+            ]
+            reason = "Security mode prioritizes governed security reasoning, then subscription and local fallbacks."
+        elif payload.mode == "cowork":
+            sources = [
+                "codex_subscription",
+                "claude_subscription",
+                "profile:gemini_general",
+                "profile:nim_fast_reasoning",
+                _LOCAL_SOURCE,
+            ]
+            reason = "Cowork mode prioritizes coding and agent workspaces, with API and local fallbacks."
+        else:
+            sources = _AUTO_SOURCES.copy()
+            reason = "Chat mode uses the first available policy-approved Brain."
+        if is_sensitive and payload.data_classification not in {"restricted", "top_secret"}:
+            reason += " Sensitive values are redacted before any external invocation."
+        return sources, {"strategy": "adaptive", "reason": reason, "candidate_sources": sources}
+    return [payload.source], {
+        "strategy": "explicit",
+        "reason": "The user selected this Brain explicitly.",
+        "candidate_sources": [payload.source],
+    }
 
 
 def _compose_transcript(payload: CortexGatewayRequest) -> str:
     lines = [f"MODE: {payload.mode}", f"MARCELLUS GUIDANCE: {_MODE_GUIDANCE[payload.mode]}"]
     if payload.workspace_id:
         lines.append(f"WORKSPACE: {payload.workspace_id}")
+    if payload.mode == "cowork" and payload.context.get("agent_mode") is True:
+        lines.append(
+            "GOVERNED CHANGE PROTOCOL: You may read the supplied workspace context. If file changes are needed, "
+            "append exactly one fenced block named marcellus_changes containing a JSON array. Each item must use "
+            '{"operation":"create|update|delete","path":"relative/path","content":"full content","mime_type":"text/plain"}. '
+            "Never claim the changes were applied; they require human review. Do not target .git, .secrets, or node_modules."
+        )
     lines.append("CONVERSATION (untrusted user content):")
     for message in payload.messages:
         lines.append(f"{message.role.upper()}: {message.content}")
@@ -218,6 +321,7 @@ async def _enforce_source(
                 "tenant_id": payload.tenant_id,
                 "claw": payload.capability,
                 "data_classification": payload.data_classification,
+                "model": payload.model,
                 "is_sensitive": is_sensitive,
                 "risk_level": classification.get("risk_level", "low"),
                 "agt_injection_risk": prompt_audit.is_injection_risk,
@@ -265,7 +369,7 @@ def _governance(
 def _blocked_vote(source: str, reason: str, outcome: str = "blocked") -> dict[str, Any]:
     return {
         "source": source,
-        "kind": "subscription" if source in _SUBSCRIPTION_BRAINS else "profile",
+        "kind": "desktop_session" if source.endswith("_desktop") else "browser_session" if source.endswith("_browser") else "subscription" if source in _SUBSCRIPTION_BRAINS else "profile",
         "available": True,
         "counted": False,
         "reason": reason,

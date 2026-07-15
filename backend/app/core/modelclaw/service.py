@@ -14,7 +14,7 @@ _PROVIDERS: dict[str, dict[str, Any]] = {
     "azure_openai": {"enabled": True, "default_model": "gpt-4o-mini", "supports_tool_calling": True},
     "openai": {"enabled": True, "default_model": "gpt-4.1-mini", "supports_tool_calling": True},
     "anthropic": {"enabled": True, "default_model": "claude-3-5-sonnet", "supports_tool_calling": True},
-    "gemini": {"enabled": False, "default_model": "gemini-2.5-pro", "supports_tool_calling": True},
+    "gemini": {"enabled": True, "default_model": "gemini-2.5-flash", "supports_tool_calling": True},
     "vllm_local": {"enabled": False, "default_model": "local/default", "supports_tool_calling": False},
 }
 
@@ -23,6 +23,16 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "name": "nim_fast_reasoning",
         "provider": "nvidia_nim",
         "model": "meta/llama-3.3-70b-instruct",
+        "allowed_models": [
+            "meta/llama-3.3-70b-instruct",
+            "meta/llama-3.1-70b-instruct",
+            "nvidia/llama-3.1-nemotron-70b-instruct",
+            "nvidia/llama-3.3-nemotron-super-49b-v1",
+            "mistralai/mistral-large-2-instruct",
+            "mistralai/mistral-nemo-12b-instruct",
+            "qwen/qwen2.5-72b-instruct",
+            "meta/llama-3.1-8b-instruct",
+        ],
         "allowed_claws": ["executive", "threatclaw", "identityclaw", "cloudclaw", "arcclaw"],
         "allowed_data_classes": ["public", "internal", "confidential"],
         "temperature": 0.2,
@@ -37,6 +47,8 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "name": "ollama_local_fallback",
         "provider": "ollama",
         "model": "qwen2.5:14b-instruct",
+        # An empty allowlist means any model reported by the local Ollama runtime.
+        "allowed_models": [],
         "allowed_claws": ["executive", "arcclaw", "threatclaw"],
         "allowed_data_classes": ["public", "internal", "confidential", "restricted", "top_secret"],
         "temperature": 0.2,
@@ -51,11 +63,27 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "name": "swarm_judge_profile",
         "provider": "nvidia_nim",
         "model": "meta/llama-3.3-70b-instruct",
+        "allowed_models": ["meta/llama-3.3-70b-instruct"],
         "allowed_claws": ["swarm_judge"],
         "allowed_data_classes": ["public", "internal", "confidential"],
         "temperature": 0.1,
         "max_tokens": 3000,
         "tool_calling": False,
+        "requires_redaction": True,
+        "fallback_profile": "ollama_local_fallback",
+        "tenant_id": "global",
+        "created_at": datetime.utcnow(),
+    },
+    "gemini_general": {
+        "name": "gemini_general",
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "allowed_models": ["gemini-2.5-flash", "gemini-2.5-pro"],
+        "allowed_claws": ["executive", "arcclaw"],
+        "allowed_data_classes": ["public", "internal", "confidential"],
+        "temperature": 0.2,
+        "max_tokens": 4000,
+        "tool_calling": True,
         "requires_redaction": True,
         "fallback_profile": "ollama_local_fallback",
         "tenant_id": "global",
@@ -107,6 +135,7 @@ def _load_state() -> None:
                 except ValueError:
                     profile["created_at"] = datetime.utcnow()
             profile.setdefault("tenant_id", "global")
+            profile.setdefault("allowed_models", [profile["model"]])
             _PROFILES[name] = profile
         _MODEL_CALLS.clear()
         for row in calls:

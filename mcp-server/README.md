@@ -18,6 +18,8 @@ audit. The MCP server itself holds no credentials and executes nothing locally.
 | `list_findings` | List security findings, filterable by claw and severity. |
 | `list_connectors` | Show connected security tools and their status. |
 | `run_swarm_investigation` | Launch a governed multi-agent investigation (high-risk actions still need human approval). |
+| `marcellus_browser_fetch` | Retrieve a public HTTPS source through Trust Fabric, SSRF defense, and prompt-injection scanning. |
+| `marcellus_workspace_search` | Search one authorized Cowork project's encrypted artifacts. |
 | `terraclaw_generate_secure_terraform` | Generate Trust Fabric-governed Terraform from a deployment request. |
 | `terraclaw_review_hcl` | Review Terraform HCL and return an APPROVE/WARN/BLOCK decision with remediations. |
 | `terraclaw_analyze_plan` | Analyze normalized Terraform plan changes before apply. |
