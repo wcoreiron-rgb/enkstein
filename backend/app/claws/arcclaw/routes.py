@@ -268,7 +268,7 @@ async def run_arc_task(payload: ArcTaskRequest, db: AsyncSession = Depends(get_d
     }
 
 
-@router.get("/providers", summary="ArcClaw provider connection status")
+@router.get("/provider-connectors", summary="ArcClaw provider connector records")
 async def get_arcclaw_providers(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Connector).where(

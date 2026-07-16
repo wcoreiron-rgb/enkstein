@@ -56,9 +56,12 @@ function inputText(element) {
 
 function normalizedInputText(text) {
   return String(text || '')
+    .normalize('NFKC')
     .replace(/\r\n?/g, '\n')
     .replace(/\u00a0/g, ' ')
     .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n+/g, '\n')
     .trim();
 }
 
@@ -92,7 +95,23 @@ function dispatchEditorInput(element, text, inputType = 'insertText') {
   }));
 }
 
-async function setInput(element, text) {
+function dispatchEditorPaste(element, text) {
+  try {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', text);
+    element.dispatchEvent(new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clipboardData,
+    }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function setInput(element, text, kind) {
   element.focus();
   if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
     const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -109,6 +128,42 @@ async function setInput(element, text) {
     if (inserted && await waitForInput(element, text)) {
       element.dispatchEvent(new Event('change', { bubbles: true }));
       return;
+    }
+
+    // ProseMirror-based provider editors may ignore direct DOM/input changes
+    // but accept a paste transaction and update their internal document state.
+    if (kind !== 'gemini') {
+      selectInputContents(element);
+      document.execCommand('delete', false);
+      if (dispatchEditorPaste(element, text) && await waitForInput(element, text)) {
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
+    }
+
+    if (kind === 'gemini') {
+      selectInputContents(element);
+      document.execCommand('delete', false);
+      const lines = text.replace(/\r\n?/g, '\n').split('\n');
+      let complete = true;
+      for (let index = 0; index < lines.length; index += 1) {
+        if (lines[index] && !document.execCommand('insertText', false, lines[index])) {
+          complete = false;
+          break;
+        }
+        if (index < lines.length - 1) {
+          const paragraphInserted = document.execCommand('insertParagraph', false)
+            || document.execCommand('insertLineBreak', false);
+          if (!paragraphInserted) {
+            complete = false;
+            break;
+          }
+        }
+      }
+      if (complete && await waitForInput(element, text)) {
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return;
+      }
     }
 
     // Some provider builds reject one large insert but accept native chunks.
@@ -205,12 +260,20 @@ async function waitForResponse(kind, baseline, timeoutMs = 180000) {
 async function execute(task) {
   const kind = provider();
   if (kind !== task.provider) throw new Error('The active tab does not match the requested provider.');
+  // A provider can expose its composer before React/ProseMirror has attached
+  // the controlled-editor handlers. Give the visible app a moment to hydrate.
+  await new Promise((resolve) => setTimeout(resolve, 750));
   const input = findInput(kind);
   if (!input) throw new Error('No compatible signed-in message field is visible on this provider page.');
   const baseline = new Set(responseTexts(kind));
-  await setInput(input, task.prompt);
+  await setInput(input, task.prompt, kind);
   if (!inputMatches(input, task.prompt)) {
-    throw new Error('The complete prompt could not be inserted into the provider message field.');
+    const editor = `${input.tagName.toLowerCase()}${input.id ? `#${input.id}` : ''}`;
+    throw new Error(
+      `The complete prompt could not be inserted into the provider message field `
+      + `(provider=${kind}, editor=${editor}, expected=${normalizedInputText(task.prompt).length}, `
+      + `observed=${normalizedInputText(inputText(input)).length}).`,
+    );
   }
   await submit(kind, input, task.prompt);
   return waitForResponse(kind, baseline);
