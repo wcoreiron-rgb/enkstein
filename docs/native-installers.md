@@ -85,11 +85,11 @@ unauthenticated runtimes appear as unavailable in Model Cortex. See
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh v0.3.0
-open dist/Enkstein-0.3.0-macos.pkg
+./scripts/build_macos_pkg.sh v0.3.1
+open dist/Enkstein-0.3.1-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.3.0-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.3.1-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 

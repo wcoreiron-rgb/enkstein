@@ -16,6 +16,23 @@ const RESPONSE_SELECTORS = {
   gemini: ['model-response .markdown', 'model-response', '.model-response-text'],
 };
 
+const SEND_SELECTORS = {
+  chatgpt: [
+    'button[data-testid="send-button"]',
+    'button[aria-label*="Send prompt" i]',
+    'button[aria-label*="Send message" i]',
+  ],
+  claude: [
+    'button[aria-label*="Send Message" i]',
+    'button[data-testid*="send" i]',
+  ],
+  gemini: [
+    'button[aria-label*="Send message" i]',
+    'button[aria-label*="Send" i]',
+    'button.send-button',
+  ],
+};
+
 function visible(element) {
   const style = getComputedStyle(element);
   const rect = element.getBoundingClientRect();
@@ -30,6 +47,13 @@ function findInput(kind) {
   return null;
 }
 
+function inputText(element) {
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+  return element.innerText || element.textContent || '';
+}
+
 function setInput(element, text) {
   element.focus();
   if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
@@ -37,11 +61,44 @@ function setInput(element, text) {
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (setter) setter.call(element, text);
     else element.value = text;
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
   } else {
-    element.textContent = text;
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const inserted = document.execCommand('insertText', false, text);
+    if (!inserted || inputText(element).trim() !== text.trim()) {
+      element.textContent = text;
+      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    }
   }
-  element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function findSendButton(kind) {
+  for (const selector of SEND_SELECTORS[kind]) {
+    const candidates = [...document.querySelectorAll(selector)].filter((button) => (
+      button instanceof HTMLButtonElement && visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true'
+    ));
+    if (candidates.length) return candidates[candidates.length - 1];
+  }
+  return [...document.querySelectorAll('button')].filter((button) => {
+    if (!(button instanceof HTMLButtonElement) || !visible(button) || button.disabled) return false;
+    const label = `${button.getAttribute('aria-label') || ''} ${button.getAttribute('data-testid') || ''}`.toLowerCase();
+    return label.includes('send') || label.includes('submit');
+  }).pop() || null;
+}
+
+async function waitForSendButton(kind, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const button = findSendButton(kind);
+    if (button) return button;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('The provider message field did not enable its Send button. Reload the provider tab and try again.');
 }
 
 function responseTexts(kind) {
@@ -56,18 +113,20 @@ function responseTexts(kind) {
   return [...new Set(values)];
 }
 
-function submit(input) {
-  const buttons = [...document.querySelectorAll('button')].filter((button) => {
-    if (!visible(button) || button.disabled) return false;
-    const label = `${button.getAttribute('aria-label') || ''} ${button.getAttribute('data-testid') || ''}`.toLowerCase();
-    return label.includes('send') || label.includes('submit');
-  });
-  if (buttons.length) {
-    buttons[buttons.length - 1].click();
-    return;
+async function waitForSubmission(input, originalText, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const remaining = inputText(input).trim();
+    if (!remaining || remaining !== originalText.trim()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
-  input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }));
+  throw new Error('The prompt remained in the provider message field and was not submitted. Reload the provider tab and try again.');
+}
+
+async function submit(kind, input, text) {
+  const button = await waitForSendButton(kind);
+  button.click();
+  await waitForSubmission(input, text);
 }
 
 async function waitForResponse(kind, baseline, timeoutMs = 180000) {
@@ -95,7 +154,10 @@ async function execute(task) {
   if (!input) throw new Error('No compatible signed-in message field is visible on this provider page.');
   const baseline = new Set(responseTexts(kind));
   setInput(input, task.prompt);
-  submit(input);
+  if (inputText(input).trim() !== task.prompt.trim()) {
+    throw new Error('The complete prompt could not be inserted into the provider message field.');
+  }
+  await submit(kind, input, task.prompt);
   return waitForResponse(kind, baseline);
 }
 

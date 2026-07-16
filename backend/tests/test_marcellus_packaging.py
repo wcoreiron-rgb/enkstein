@@ -108,6 +108,10 @@ def test_browser_companion_is_scoped_paired_and_packaged() -> None:
     assert "mapping.url" in background
     assert "chrome.tabs.onRemoved" in background
     assert "document.cookie" not in content
+    assert "document.execCommand('insertText'" in content
+    assert "waitForSendButton" in content
+    assert "waitForSubmission" in content
+    assert "The prompt remained in the provider message field" in content
     assert '"/v1/browser/exchange"' in bridge
     assert '"/v1/browser/poll"' in bridge
     assert '"/v1/browser/complete"' in bridge
