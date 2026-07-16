@@ -54,27 +54,82 @@ function inputText(element) {
   return element.innerText || element.textContent || '';
 }
 
-function setInput(element, text) {
+function normalizedInputText(text) {
+  return String(text || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .trim();
+}
+
+function inputMatches(element, text) {
+  return normalizedInputText(inputText(element)) === normalizedInputText(text);
+}
+
+async function waitForInput(element, text, timeoutMs = 2500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (inputMatches(element, text)) return true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return inputMatches(element, text);
+}
+
+function selectInputContents(element) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function dispatchEditorInput(element, text, inputType = 'insertText') {
+  element.dispatchEvent(new InputEvent('input', {
+    bubbles: true,
+    composed: true,
+    inputType,
+    data: text,
+  }));
+}
+
+async function setInput(element, text) {
   element.focus();
   if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
     const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     if (setter) setter.call(element, text);
     else element.value = text;
-    element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    dispatchEditorInput(element, text);
   } else {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    // Provider editors are controlled contenteditables. Use the native editing
+    // path first so ProseMirror/React receives a real beforeinput/input cycle.
+    selectInputContents(element);
+    document.execCommand('delete', false);
     const inserted = document.execCommand('insertText', false, text);
-    if (!inserted || inputText(element).trim() !== text.trim()) {
+    if (inserted && await waitForInput(element, text)) {
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+
+    // Some provider builds reject one large insert but accept native chunks.
+    selectInputContents(element);
+    document.execCommand('delete', false);
+    let chunked = true;
+    for (let offset = 0; offset < text.length; offset += 8000) {
+      if (!document.execCommand('insertText', false, text.slice(offset, offset + 8000))) {
+        chunked = false;
+        break;
+      }
+    }
+    if (!(chunked && await waitForInput(element, text))) {
+      // Final compatibility path for controlled editors that only synchronize
+      // after their DOM has been populated and an input event is dispatched.
       element.textContent = text;
-      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+      dispatchEditorInput(element, text, 'insertFromPaste');
     }
   }
   element.dispatchEvent(new Event('change', { bubbles: true }));
+  await waitForInput(element, text);
 }
 
 function findSendButton(kind) {
@@ -153,8 +208,8 @@ async function execute(task) {
   const input = findInput(kind);
   if (!input) throw new Error('No compatible signed-in message field is visible on this provider page.');
   const baseline = new Set(responseTexts(kind));
-  setInput(input, task.prompt);
-  if (inputText(input).trim() !== task.prompt.trim()) {
+  await setInput(input, task.prompt);
+  if (!inputMatches(input, task.prompt)) {
     throw new Error('The complete prompt could not be inserted into the provider message field.');
   }
   await submit(kind, input, task.prompt);

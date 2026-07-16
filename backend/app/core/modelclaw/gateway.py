@@ -195,7 +195,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
         else _governance(
             outcome="unavailable",
             policy_name="Cortex routing",
-            reason="No governed Brain returned a usable response.",
+            reason=_best_failure_reason(votes),
             risk_score=risk_score,
             payload=payload,
             scan_sensitive=scan.is_sensitive,
@@ -246,6 +246,15 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
         },
         "latency_ms": int((perf_counter() - started) * 1000),
     }
+
+
+def _best_failure_reason(votes: list[dict[str, Any]]) -> str:
+    """Return a safe, actionable provider reason instead of hiding it."""
+    for vote in votes:
+        reason = str(vote.get("reason") or "").strip()
+        if reason:
+            return reason[:240]
+    return "No governed Brain returned a usable response."
 
 
 def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = False) -> tuple[list[str], dict[str, Any]]:

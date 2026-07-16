@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.modelclaw import brain_bridge, routes
+from app.core.modelclaw import brain_bridge, gateway, routes
 
 
 BASE = "/api/v1/modelclaw"
@@ -206,6 +206,20 @@ def test_deterministic_consensus_reports_agreement_without_hidden_reasoning():
     assert answer == votes[0]["response"]
     assert 0.0 < confidence <= 0.95
     assert agreement in {"low", "moderate", "high"}
+
+
+def test_cortex_unavailable_reason_preserves_actionable_provider_failure():
+    votes = [
+        {
+            "source": "chatgpt_browser",
+            "available": False,
+            "counted": False,
+            "reason": "The provider message field rejected the prompt.",
+        }
+    ]
+
+    assert gateway._best_failure_reason(votes) == "The provider message field rejected the prompt."
+    assert gateway._best_failure_reason([]) == "No governed Brain returned a usable response."
 
 
 def test_browser_session_affinity_is_opaque_and_tenant_scoped():
