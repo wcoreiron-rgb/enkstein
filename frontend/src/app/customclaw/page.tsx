@@ -428,7 +428,7 @@ export default function CustomClawPage() {
                 <input
                   className="w-full px-3 py-2 rounded-lg text-sm border"
                   style={{ background: 'var(--rc-bg-base)', border: '1px solid var(--rc-border)', color: 'var(--rc-text-1)' }}
-                  placeholder="What this claw does"
+                  placeholder="What this capability does"
                   value={form.description}
                   onChange={e => setField('description', e.target.value)}
                 />
@@ -724,8 +724,8 @@ export default function CustomClawPage() {
           <Plug size={18} className="mt-0.5 shrink-0" style={{ color: 'var(--rc-accent-violet)' }} />
           <div>
             <span className="font-medium" style={{ color: 'var(--rc-text-1)' }}>Use in workflows: </span>
-            Reference any custom claw endpoint from the Security Copilot by saying something like
-            "POST to my Jira claw and create a ticket" or "call the GitHub Issues claw every hour".
+            Reference any custom capability endpoint from the Security Copilot by saying something like
+            "POST to my Jira capability and create a ticket" or "call the GitHub Issues capability every hour".
             The workflow generator will automatically create the right <code className="font-mono">http_request</code> step.
           </div>
         </div>

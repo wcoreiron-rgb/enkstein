@@ -1,2 +1,2 @@
-"""ModelClaw scaffolding package."""
+"""Model Cortex scaffolding package."""
 

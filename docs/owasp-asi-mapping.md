@@ -12,7 +12,7 @@
 
 | ASI | Category | Status | Evidence Anchor | Automated Test |
 |---|---|---|---|---|
-| ASI-01 | Agent Goal Hijack | **Partially Shipped** | Trust Fabric policy + ArcClaw prompt audit | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` |
+| ASI-01 | Agent Goal Hijack | **Partially Shipped** | Trust Fabric policy + AI Security prompt audit | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` |
 | ASI-02 | Tool Misuse & Exploitation | **Partially Shipped** | Ring policy + Trust Fabric action mediation | `test_owasp_asi_evidence.py::test_asi02_viewer_role_denied_ring1_action` |
 | ASI-03 | Identity & Privilege Abuse | **In Progress** | JWT identity + role checks + ring gates | `test_owasp_asi_evidence.py::test_asi03_viewer_role_cannot_approve_via_self_approval` |
 | ASI-04 | Agentic Supply Chain Compromise | **In Progress** | AGT supply-chain scan routes + connector policy gates + exchange checksum gate | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` |
@@ -70,7 +70,7 @@
 
 **Known Limitations:**
 - Tool parameters passed to agents are not schema-validated against a strict allowlist — callers can supply arbitrary JSON to some endpoints.
-- The ring policy covers exec channels and remediation approvals, but not all tool invocation paths in ArcClaw's security agent.
+- The ring policy covers exec channels and remediation approvals, but not all tool invocation paths in AI Security's security agent.
 
 ---
 

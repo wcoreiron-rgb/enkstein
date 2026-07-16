@@ -1,5 +1,5 @@
 """
-RegentClaw — Secure Model Router API Routes
+Enkstein — Secure Model Router API Routes
 """
 import logging
 import threading

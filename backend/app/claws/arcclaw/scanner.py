@@ -1,5 +1,5 @@
 """
-ArcClaw — Sensitive Pattern Scanner
+Sensitive Pattern Scanner
 Inspects AI prompts and outputs for sensitive data patterns.
 Inspired by 1Password's warning: a skill is never just content.
 """

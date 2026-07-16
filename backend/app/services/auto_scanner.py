@@ -1,5 +1,5 @@
 """
-RegentClaw — Auto Scanner
+Enkstein — Auto Scanner
 Triggers claw scans automatically when connectors are configured or approved.
 
 Flow:

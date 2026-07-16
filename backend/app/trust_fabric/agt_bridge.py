@@ -1,13 +1,13 @@
 """
 Trust Fabric — Microsoft AGT Bridge
 =====================================
-Integrates the Agent Governance Toolkit (agent_compliance) into RegentClaw.
+Integrates the Agent Governance Toolkit (agent_compliance) into Enkstein.
 
 What AGT Python provides (and where it plugs in):
-  PromptDefenseEvaluator  → ArcClaw: 12-vector prompt injection audit
+  PromptDefenseEvaluator  → AI Security: 12-vector prompt injection audit
   SupplyChainGuard        → Module/connector registration: typosquatting, drift, freshness
   SecurityScanner         → Skill/module scanning: directory-level security checks
-  governance.validate_attestation → ComplianceClaw: attestation validation
+  governance.validate_attestation → Compliance Assurance: attestation validation
 
 What AGT Python does NOT provide (handled by our Trust Fabric):
   Runtime policy enforcement (PolicyEvaluator) — TypeScript/.NET only
@@ -379,10 +379,10 @@ def agt_status() -> dict[str, Any]:
             "execution_rings": False,               # TypeScript/.NET only
             "zero_trust_identity": False,           # TypeScript/.NET only
         },
-        "runtime_enforcement": "RegentClaw Trust Fabric (custom — deterministic policy engine)",
+        "runtime_enforcement": "Enkstein Trust Fabric (custom — deterministic policy engine)",
         "note": (
             "AGT Python covers compliance/audit/scanning. "
             "Runtime policy enforcement, execution rings, and ZT identity "
-            "are TypeScript/.NET SDK features — handled by RegentClaw Trust Fabric."
+            "are TypeScript/.NET SDK features — handled by Enkstein Trust Fabric."
         ),
     }

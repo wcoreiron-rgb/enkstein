@@ -1,4 +1,4 @@
-"""AppClaw — Application Security API Routes."""
+"""Application Security API Routes."""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.connector_check import is_connector_configured
 
-router = APIRouter(prefix="/appclaw", tags=["AppClaw"])
+router = APIRouter(prefix="/appclaw", tags=["Application Security"])
 
 CLAW_NAME = "appclaw"
 PROVIDER_MAP = [
@@ -314,7 +314,7 @@ class AppTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-@router.get("/stats", summary="AppClaw summary statistics")
+@router.get("/stats", summary="Application Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -358,7 +358,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All AppClaw findings")
+@router.get("/findings", summary="All Application Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import is_connector_configured
     result = await db.execute(
@@ -391,15 +391,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="AppClaw provider connection status")
+@router.get("/providers", summary="Application Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run AppClaw scan and persist findings")
+@router.post("/scan", summary="Run Application Security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run an AppClaw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run an Application Security scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in _FINDINGS:
@@ -418,7 +418,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused AppClaw swarm task")
+@router.post("/task", summary="Execute focused Application Security swarm task")
 async def run_app_task(payload: AppTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

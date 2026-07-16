@@ -114,7 +114,7 @@ async def get_trust_fabric_status(db: AsyncSession = Depends(get_db)):
     return {
         "runtime": {
             "available": True,
-            "engine": "RegentClaw deterministic policy engine",
+            "engine": "Enkstein deterministic policy engine",
             "checks": [
                 "identity",
                 "policy",

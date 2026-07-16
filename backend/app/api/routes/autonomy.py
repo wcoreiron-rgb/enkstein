@@ -1,5 +1,5 @@
 """
-RegentClaw — Autonomy Mode Controls API
+Enkstein — Autonomy Mode Controls API
 Platform-level and per-agent autonomy settings.
 
 GET  /autonomy/settings              — get platform settings

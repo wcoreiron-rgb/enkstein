@@ -1,5 +1,5 @@
 """
-CloudClaw — Azure Provider Adapter
+Azure Provider Adapter
 Connects to Microsoft Defender for Cloud (Azure Security Center) to pull assessments.
 Real URL: GET https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Security/assessments?api-version=2021-06-01
 Falls back to simulated findings when no credentials configured.

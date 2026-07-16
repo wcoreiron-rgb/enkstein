@@ -1,5 +1,5 @@
 """
-RegentClaw — Workflow & WorkflowRun Models
+Enkstein — Workflow & WorkflowRun Models
 Orchestration: chain agents, policy checks, conditions, and notifications
 into governed multi-step workflows.
 """

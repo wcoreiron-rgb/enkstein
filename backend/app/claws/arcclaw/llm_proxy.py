@@ -1,13 +1,13 @@
 """
-ArcClaw — LLM Proxy Service
+LLM Proxy Service
 ==============================
-ArcClaw sits between the user and the LLM.
+AI Security sits between the user and the LLM.
 Every prompt is inspected BEFORE it reaches the model.
 
 Flow:
   User prompt
       ↓
-  ArcClaw scan (patterns + AGT injection audit)
+  AI Security scan (patterns + AGT injection audit)
       ↓
   Trust Fabric policy check
       ↓

@@ -1,5 +1,5 @@
 """
-RegentClaw — Agent CRUD + Run Trigger Routes (Async)
+Enkstein — Agent CRUD + Run Trigger Routes (Async)
 """
 import uuid
 from typing import List, Optional

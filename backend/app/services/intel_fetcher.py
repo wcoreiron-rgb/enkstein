@@ -1,5 +1,5 @@
 """
-RegentClaw — Intelligence Fetcher
+Enkstein — Intelligence Fetcher
 ==================================
 Calls real public APIs for security intelligence data.
 All sources here are FREE — no API key required (rate limits apply).

@@ -1,4 +1,4 @@
-"""ConfigClaw — Cloud Configuration & CIS Benchmarks API Routes."""
+"""Cloud Configuration & CIS Benchmarks API Routes."""
 from datetime import datetime
 from typing import Any
 
@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 
-router = APIRouter(prefix="/configclaw", tags=["ConfigClaw"])
+router = APIRouter(prefix="/configclaw", tags=["Configuration Security"])
 
 CLAW_NAME = "configclaw"
 
@@ -186,7 +186,7 @@ _FINDINGS = [
 ]
 
 
-@router.get("/stats", summary="ConfigClaw summary statistics")
+@router.get("/stats", summary="Configuration Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -221,7 +221,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "last_scan": last_seen.isoformat() if last_seen else None}
 
 
-@router.get("/findings", summary="All ConfigClaw findings")
+@router.get("/findings", summary="All Configuration Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -257,15 +257,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="ConfigClaw provider connection status")
+@router.get("/providers", summary="Configuration Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run Config Claw scan and persist findings")
+@router.post("/scan", summary="Run Configuration Security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a Config Claw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run a Configuration Security scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     default_provider = PROVIDER_MAP[0]["provider"] if PROVIDER_MAP else "simulation"
     pipeline_findings = []
@@ -286,7 +286,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused ConfigClaw swarm task")
+@router.post("/task", summary="Execute focused Configuration Security swarm task")
 async def run_config_task(payload: ConfigTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

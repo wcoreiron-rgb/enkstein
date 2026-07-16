@@ -1,4 +1,4 @@
-"""DevClaw — DevSecOps & CI/CD Security API Routes."""
+"""DevSecOps & CI/CD Security API Routes."""
 from datetime import datetime
 import logging
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from app.core.database import get_db
 from app.models.finding import Finding
 
-router = APIRouter(prefix="/devclaw", tags=["DevClaw"])
+router = APIRouter(prefix="/devclaw", tags=["Developer Security"])
 logger = logging.getLogger("devclaw")
 CLAW_NAME = "devclaw"
 
@@ -322,7 +322,7 @@ class DevTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-@router.get("/stats", summary="DevClaw summary statistics")
+@router.get("/stats", summary="Developer Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -355,7 +355,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "last_scan": last_seen.isoformat() if last_seen else None}
 
 
-@router.get("/findings", summary="All DevClaw findings")
+@router.get("/findings", summary="All Developer Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -391,15 +391,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="DevClaw provider connection status")
+@router.get("/providers", summary="Developer Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run Dev Claw scan and persist findings")
+@router.post("/scan", summary="Run Developer Security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a Dev Claw scan. Uses real GitHub API when configured, otherwise falls back to simulation."""
+    """Run a Developer Security scan. Uses real GitHub API when configured, otherwise falls back to simulation."""
     from app.services.finding_pipeline import ingest_findings
     from app.services.connector_check import is_connector_configured
 
@@ -450,7 +450,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused DevClaw swarm task")
+@router.post("/task", summary="Execute focused Developer Security swarm task")
 async def run_dev_task(payload: DevTaskRequest, db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import is_connector_configured
     from app.claws.devclaw.github_scanner import fetch_github_findings

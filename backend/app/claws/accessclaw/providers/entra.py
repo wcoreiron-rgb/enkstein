@@ -1,5 +1,5 @@
 """
-AccessClaw — Microsoft Entra ID (Azure AD) Adapter
+Microsoft Entra ID (Azure AD) Adapter
 Pulls identity risk and access findings via Microsoft Graph API.
 
 Auth: Azure AD OAuth2 client credentials

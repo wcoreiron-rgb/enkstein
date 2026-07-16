@@ -1,5 +1,5 @@
 """
-RegentClaw — Universal Finding Schemas
+Enkstein — Universal Finding Schemas
 Pydantic models for reading, creating, and updating Finding records.
 """
 from pydantic import BaseModel, ConfigDict

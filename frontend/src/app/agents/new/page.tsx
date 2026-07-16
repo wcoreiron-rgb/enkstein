@@ -11,31 +11,33 @@ import { capabilityName } from '@/lib/capability-names';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+// Capability picker options. `value` stays the persisted capability id;
+// the visible `label` is derived through the presentation adapter.
 const CLAWS = [
-  { value: 'arcclaw',         label: 'ArcClaw',         category: 'Core Security', icon: '🤖', color: '#a78bfa' },
-  { value: 'identityclaw',    label: 'IdentityClaw',    category: 'Core Security', icon: '👤', color: '#60a5fa' },
-  { value: 'cloudclaw',       label: 'CloudClaw',       category: 'Core Security', icon: '☁️', color: '#38bdf8' },
-  { value: 'accessclaw',      label: 'AccessClaw',      category: 'Core Security', icon: '🗝️', color: '#facc15' },
-  { value: 'endpointclaw',    label: 'EndpointClaw',    category: 'Core Security', icon: '💻', color: '#4ade80' },
-  { value: 'netclaw',         label: 'NetClaw',         category: 'Core Security', icon: '🌐', color: '#34d399' },
-  { value: 'dataclaw',        label: 'DataClaw',        category: 'Core Security', icon: '🛡️', color: '#fb923c' },
-  { value: 'appclaw',         label: 'AppClaw',         category: 'Core Security', icon: '🔌', color: '#f472b6' },
-  { value: 'saasclaw',        label: 'SaaSClaw',        category: 'Core Security', icon: '📦', color: '#c084fc' },
-  { value: 'threatclaw',      label: 'ThreatClaw',      category: 'Detection',     icon: '🎯', color: '#f87171' },
-  { value: 'logclaw',         label: 'LogClaw',         category: 'Detection',     icon: '📜', color: '#94a3b8' },
-  { value: 'intelclaw',       label: 'IntelClaw',       category: 'Detection',     icon: '🔍', color: '#818cf8' },
-  { value: 'userclaw',        label: 'UserClaw',        category: 'Detection',     icon: '👁️', color: '#22d3ee' },
-  { value: 'insiderclaw',     label: 'InsiderClaw',     category: 'Detection',     icon: '🚨', color: '#fb923c' },
-  { value: 'automationclaw',  label: 'AutomationClaw',  category: 'SecOps',        icon: '⚡', color: '#fbbf24' },
-  { value: 'attackpathclaw',  label: 'AttackPathClaw',  category: 'SecOps',        icon: '🗺️', color: '#f87171' },
-  { value: 'exposureclaw',    label: 'ExposureClaw',    category: 'SecOps',        icon: '📡', color: '#fb923c' },
-  { value: 'complianceclaw',  label: 'ComplianceClaw',  category: 'Governance',    icon: '📋', color: '#4ade80' },
-  { value: 'privacyclaw',     label: 'PrivacyClaw',     category: 'Governance',    icon: '🔒', color: '#a78bfa' },
-  { value: 'vendorclaw',      label: 'VendorClaw',      category: 'Governance',    icon: '🤝', color: '#60a5fa' },
-  { value: 'devclaw',         label: 'DevClaw',         category: 'Infrastructure',icon: '🔧', color: '#34d399' },
-  { value: 'configclaw',      label: 'ConfigClaw',      category: 'Infrastructure',icon: '⚙️', color: '#94a3b8' },
-  { value: 'recoveryclaw',    label: 'RecoveryClaw',    category: 'Infrastructure',icon: '🔄', color: '#22d3ee' },
-];
+  { value: 'arcclaw',         category: 'Core Security', icon: '🤖', color: '#a78bfa' },
+  { value: 'identityclaw',    category: 'Core Security', icon: '👤', color: '#60a5fa' },
+  { value: 'cloudclaw',       category: 'Core Security', icon: '☁️', color: '#38bdf8' },
+  { value: 'accessclaw',      category: 'Core Security', icon: '🗝️', color: '#facc15' },
+  { value: 'endpointclaw',    category: 'Core Security', icon: '💻', color: '#4ade80' },
+  { value: 'netclaw',         category: 'Core Security', icon: '🌐', color: '#34d399' },
+  { value: 'dataclaw',        category: 'Core Security', icon: '🛡️', color: '#fb923c' },
+  { value: 'appclaw',         category: 'Core Security', icon: '🔌', color: '#f472b6' },
+  { value: 'saasclaw',        category: 'Core Security', icon: '📦', color: '#c084fc' },
+  { value: 'threatclaw',      category: 'Detection',     icon: '🎯', color: '#f87171' },
+  { value: 'logclaw',         category: 'Detection',     icon: '📜', color: '#94a3b8' },
+  { value: 'intelclaw',       category: 'Detection',     icon: '🔍', color: '#818cf8' },
+  { value: 'userclaw',        category: 'Detection',     icon: '👁️', color: '#22d3ee' },
+  { value: 'insiderclaw',     category: 'Detection',     icon: '🚨', color: '#fb923c' },
+  { value: 'automationclaw',  category: 'SecOps',        icon: '⚡', color: '#fbbf24' },
+  { value: 'attackpathclaw',  category: 'SecOps',        icon: '🗺️', color: '#f87171' },
+  { value: 'exposureclaw',    category: 'SecOps',        icon: '📡', color: '#fb923c' },
+  { value: 'complianceclaw',  category: 'Governance',    icon: '📋', color: '#4ade80' },
+  { value: 'privacyclaw',     category: 'Governance',    icon: '🔒', color: '#a78bfa' },
+  { value: 'vendorclaw',      category: 'Governance',    icon: '🤝', color: '#60a5fa' },
+  { value: 'devclaw',         category: 'Infrastructure',icon: '🔧', color: '#34d399' },
+  { value: 'configclaw',      category: 'Infrastructure',icon: '⚙️', color: '#94a3b8' },
+  { value: 'recoveryclaw',    category: 'Infrastructure',icon: '🔄', color: '#22d3ee' },
+].map(c => ({ ...c, label: capabilityName(c.value) }));
 
 const CONNECTOR_OPTIONS = [
   { value: 'entra_id',              label: 'Microsoft Entra ID',     category: 'Identity' },

@@ -1,5 +1,5 @@
 """
-RegentClaw — Governed Execution Channels models
+Enkstein — Governed Execution Channels models
 Shell broker, browser sandbox, credential broker, and production gate.
 """
 from datetime import datetime

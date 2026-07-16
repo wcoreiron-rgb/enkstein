@@ -351,7 +351,7 @@
     </a>
     <ul class="nav-links">
       <li><a href="index.html#features">Features</a></li>
-      <li><a href="index.html#claws">Claws</a></li>
+      <li><a href="index.html#claws">Capability Nodes</a></li>
       <li><a href="index.html#architecture">Architecture</a></li>
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html">Changelog</a></li>
@@ -582,7 +582,7 @@
           <li>Prompt length is not capped before being forwarded to the model provider.</li>
           <li>No token budget or cost-cap enforcement at the API layer.</li>
           <li>SRE circuit breaker exists for governed modules but is not yet wired to LLM provider 429/503 backpressure.</li>
-          <li>Planned: per-endpoint rate limiting via slowapi on ArcClaw routes.</li>
+          <li>Planned: per-endpoint rate limiting via slowapi on AI Security routes.</li>
         </ul>
       </div>
     </div>
@@ -694,7 +694,7 @@
           <li>Tool parameters passed to agents are not schema-validated against a strict allowlist — callers can supply arbitrary JSON within the <code>parameters</code> field.</li>
           <li>No OS-level sandbox (seccomp, container isolation) prevents plugins from making unexpected system calls.</li>
           <li>Plugin authentication is via the platform JWT — there is no per-plugin scoped token or capability token.</li>
-          <li>The ring policy covers exec channels and remediation approvals but not all tool invocation paths in the ArcClaw security agent.</li>
+          <li>The ring policy covers exec channels and remediation approvals but not all tool invocation paths in the AI Security agent.</li>
         </ul>
       </div>
     </div>
@@ -735,7 +735,7 @@
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>The ArcClaw security agent tool list is bounded but not dynamically cross-checked against the ring policy at each tool invocation.</li>
+          <li>The AI Security agent tool list is bounded but not dynamically cross-checked against the ring policy at each tool invocation.</li>
           <li>Workflow runner can chain multiple actions — inter-step privilege accumulation is not yet tracked across a session.</li>
           <li>No per-session capability token — an agent that gains approval for one action could theoretically reference that context for adjacent actions in the same session.</li>
         </ul>
@@ -803,7 +803,7 @@
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>System prompts used by ArcClaw's security agent (<code>backend/app/claws/arcclaw/security_agent.py</code>) are stored in source code — if source is leaked, prompt IP is exposed.</li>
+          <li>System prompts used by AI Security's security agent (<code>backend/app/claws/arcclaw/security_agent.py</code>) are stored in source code — if source is leaked, prompt IP is exposed.</li>
           <li>No mechanism to detect adversarial probing attempts (repeated queries designed to reconstruct the system prompt).</li>
           <li>Provider-side model theft is entirely dependent on the provider's own security posture.</li>
         </ul>

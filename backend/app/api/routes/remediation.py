@@ -1,5 +1,5 @@
 """
-RegentClaw — Remediation Engine REST API
+Enkstein — Remediation Engine REST API
 Endpoints for managing approval queue, action history, and playbooks.
 """
 from __future__ import annotations

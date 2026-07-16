@@ -1,5 +1,5 @@
 """
-RegentClaw — Remediation Playbooks
+Enkstein — Remediation Playbooks
 Built-in playbook definitions + auto-trigger logic.
 
 Call check_and_trigger(finding, db) from finding_pipeline after ingesting

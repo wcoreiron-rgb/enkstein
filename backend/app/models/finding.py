@@ -1,5 +1,5 @@
 """
-RegentClaw — Universal Security Finding Model
+Enkstein — Universal Security Finding Model
 All 23 Claws write findings to this single table.
 Query by claw + provider + severity + status for per-claw dashboards.
 """

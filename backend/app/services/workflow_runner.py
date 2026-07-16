@@ -1,5 +1,5 @@
 """
-RegentClaw — Workflow Runner Service
+Enkstein — Workflow Runner Service
 Executes governed multi-step workflows sequentially.
 
 Step types:
@@ -12,7 +12,7 @@ Step types:
 Context passing:
   Each step receives the accumulated `ctx` dict from all previous steps.
   Steps can add keys to ctx which downstream steps can reference.
-  This is how CloudClaw's asset list flows into ExposureClaw's CVE scanner, etc.
+  This is how Cloud Security's asset list flows into Exposure Management's CVE scanner, etc.
 """
 import asyncio
 import json
@@ -374,7 +374,7 @@ async def _exec_webhook_call(step: Dict, ctx: Dict) -> Dict:
 
 async def _exec_notify(step: Dict, db: AsyncSession, workflow_id: UUID) -> Dict:
     """
-    Emit a RegentClaw Event as a notification and route to configured channels
+    Emit a Enkstein Event as a notification and route to configured channels
     (Slack, Teams, PagerDuty) via the alert router.
     """
     from datetime import datetime
@@ -413,7 +413,7 @@ async def _exec_notify(step: Dict, db: AsyncSession, workflow_id: UUID) -> Dict:
     try:
         from app.services.alert_router import route_event_alert
         alerts_sent = await route_event_alert(db, {
-            "title": f"RegentClaw Workflow Alert: {step.get('name', 'Notification')}",
+            "title": f"Enkstein Workflow Alert: {step.get('name', 'Notification')}",
             "description": message,
             "severity": severity,
             "claw": "orchestrations",

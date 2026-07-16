@@ -136,7 +136,7 @@ async def create_microsoft_identity_incident_preset(
 ):
     """
     Microsoft security demo preset: identity-led incident investigation.
-    Uses Entra/Defender/Sentinel/Azure-capable Claws when connectors are configured,
+    Uses Entra/Defender/Sentinel/Azure-capable Capability Nodes when connectors are configured,
     with deterministic fallback preserved for local demos without credentials.
     """
     payload = body or {}

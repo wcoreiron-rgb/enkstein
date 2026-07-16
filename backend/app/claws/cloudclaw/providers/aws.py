@@ -1,5 +1,5 @@
 """
-CloudClaw — AWS Provider Adapter
+AWS Provider Adapter
 Connects to AWS Security Hub to pull findings.
 Real call: GET https://securityhub.{region}.amazonaws.com/findings
 Falls back to simulated findings when no credentials configured.

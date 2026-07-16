@@ -1,5 +1,5 @@
 """
-RegentClaw — FastAPI dependencies.
+Enkstein — FastAPI dependencies.
 
 get_current_user:
   In DEBUG mode → returns a synthetic admin user (no token required).

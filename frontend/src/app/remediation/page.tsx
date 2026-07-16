@@ -5,6 +5,7 @@ import {
   Zap, RefreshCcw, ChevronDown, ChevronUp, PlayCircle, ToggleLeft, ToggleRight,
   Shield, Activity, Ban
 } from 'lucide-react';
+import { capabilityName, marcellusText } from '@/lib/capability-names';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -437,13 +438,13 @@ function PlaybookCard({ pb, onToggle }: { pb: Playbook; onToggle: (id: string) =
               </span>
             )}
             {pb.trigger_claw && (
-              <span className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-3)' }}>
-                {pb.trigger_claw}
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-3)' }}>
+                {capabilityName(pb.trigger_claw)}
               </span>
             )}
           </div>
           {pb.description && (
-            <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{pb.description}</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>{marcellusText(pb.description)}</p>
           )}
           {pb.trigger_keywords.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">

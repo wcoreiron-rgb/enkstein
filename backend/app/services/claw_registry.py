@@ -1,5 +1,5 @@
 """
-RegentClaw — Claw Registry
+Enkstein — Claw Registry
 Maps connector_type → which claw(s) should be scanned when that connector is configured.
 
 This is the source of truth for "when I plug connector X, which claw wakes up?"

@@ -1,5 +1,5 @@
 """
-RegentClaw — Security Exchange API
+Enkstein — Security Exchange API
 GET  /exchange/packages          — browse marketplace
 GET  /exchange/packages/{id}     — package detail
 POST /exchange/packages/{id}/install  — install a package

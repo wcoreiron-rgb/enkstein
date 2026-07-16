@@ -1,5 +1,5 @@
 """
-EndpointClaw — Microsoft Defender for Endpoint Adapter
+Microsoft Defender for Endpoint Adapter
 Pulls alerts and vulnerabilities from MDE via Microsoft Graph / Defender APIs.
 
 Auth: Azure AD OAuth2 client credentials

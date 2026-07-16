@@ -1,5 +1,5 @@
 """
-RegentClaw — Skill Pack API Routes (v2 — versioned packs)
+Enkstein — Skill Pack API Routes (v2 — versioned packs)
 Note: policy_packs.py already handles the original "Policy Pack" concept.
 This module handles "Skill Packs" — versioned automation skill bundles.
 """

@@ -1,6 +1,6 @@
 """
 Trust Fabric — Enforcement Layer
-The core zero-trust action mediation for RegentClaw.
+The core zero-trust action mediation for Enkstein.
 Every action is verified before execution. No anonymous execution.
 """
 import json

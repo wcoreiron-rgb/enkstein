@@ -1,5 +1,5 @@
 """
-RegentClaw — Memory Service
+Enkstein — Memory Service
 Helpers for reading and writing structured memory:
   - Incident timeline management
   - Asset risk history updates

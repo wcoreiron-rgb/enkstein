@@ -1,6 +1,6 @@
-"""ReleaseClaw — Zero Trust release and deployment control plane.
+"""Zero Trust release and deployment control plane.
 
-ReleaseClaw normalizes CI/CD, cloud SDK/CLI, IaC, Kubernetes, and script-driven
+Release Governance normalizes CI/CD, cloud SDK/CLI, IaC, Kubernetes, and script-driven
 deployments into one governed preflight/evidence contract. It intentionally does
 not execute arbitrary scripts directly; execution is represented as a Trust
 Fabric-gated handoff to CI/CD systems or ExecChannels.
@@ -21,7 +21,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.trust_fabric import ActionRequest, enforce
 
-router = APIRouter(prefix="/releaseclaw", tags=["ReleaseClaw — Governed Deployments"])
+router = APIRouter(prefix="/releaseclaw", tags=["Governed Deployments"])
 
 CLAW_NAME = "releaseclaw"
 
@@ -448,7 +448,7 @@ def _deployment_record(
         "channel": ADAPTERS[body.source]["execution_channel"],
         "adapter": body.source,
         "direct_script_execution": False,
-        "note": "ReleaseClaw never executes arbitrary scripts directly; use governed ExecChannels or CI/CD adapters.",
+        "note": "Release Governance never executes arbitrary scripts directly; use governed ExecChannels or CI/CD adapters.",
     }
     evidence = {
         "deployment_id": deployment_id,
@@ -607,7 +607,7 @@ async def get_findings(tenant_id: str = "default"):
 async def run_scan():
     """Compatibility scan endpoint for left-blade testing.
 
-    ReleaseClaw scans deployment definitions/templates rather than external findings.
+    Release Governance scans deployment definitions/templates rather than external findings.
     """
     return {
         "status": "completed",
@@ -615,7 +615,7 @@ async def run_scan():
         "findings_updated": 0,
         "templates_checked": len(TEMPLATES),
         "adapters_checked": len(ADAPTERS),
-        "message": "ReleaseClaw deployment template/control catalog scan complete.",
+        "message": "Release Governance deployment template/control catalog scan complete.",
     }
 
 
@@ -794,7 +794,7 @@ async def execute_deployment(
     return deployment
 
 
-@router.post("/task", summary="Execute focused ReleaseClaw swarm task")
+@router.post("/task", summary="Execute focused Release Governance swarm task")
 async def run_release_task(payload: ReleaseTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     body = DeploymentRequest(**{

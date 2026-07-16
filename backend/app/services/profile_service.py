@@ -1,5 +1,5 @@
 """
-RegentClaw — MemoryClaw: Entity Behavioral Profile Service
+Enkstein — Memory Cortex: Entity Behavioral Profile Service
 
 Core functions:
     log_behavior_event()    — record an event and update the entity's profile

@@ -2,6 +2,30 @@ import pytest
 import json
 
 from app.models.event import Event, EventOutcome, EventSeverity
+from app.services.channel_processor import _build_response
+from app.services.nl_workflow_generator import _detect_claws
+
+
+def test_channel_response_uses_capability_display_names():
+    response = _build_response(
+        text="run cloud scan",
+        identity={"allowed": True},
+        policy={"decision": "allowed"},
+        intents=["scan"],
+        claws=["CloudClaw", "IdentityClaw"],
+        execution=None,
+    )
+
+    assert "Cloud Security" in response
+    assert "Identity Security" in response
+    assert "cloudclaw" not in response.lower()
+
+
+def test_threat_intent_routes_to_threat_analysis_capability():
+    detected = _detect_claws("investigate a malicious threat actor campaign")
+
+    assert {item["claw_id"] for item in detected} == {"threatclaw"}
+    assert detected[0]["label"] == "Threat Analysis"
 
 
 @pytest.mark.asyncio

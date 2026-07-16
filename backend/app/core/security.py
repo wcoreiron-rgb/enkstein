@@ -1,5 +1,5 @@
 """
-RegentClaw — Security utilities: password hashing + JWT creation/verification.
+Enkstein — Security utilities: password hashing + JWT creation/verification.
 
 In DEBUG mode (settings.DEBUG = True, the default) auth is a no-op so that
 local dev still works without credentials.  Set DEBUG=False (and a real

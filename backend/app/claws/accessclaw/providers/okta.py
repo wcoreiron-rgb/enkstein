@@ -1,5 +1,5 @@
 """
-AccessClaw — Okta Adapter
+Okta Adapter
 Pulls identity/access findings from Okta using the Okta API.
 
 Auth: API Token (SSWS token)

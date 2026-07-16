@@ -1,5 +1,5 @@
 """
-RegentClaw — Schedule CRUD + Manual Trigger Routes (Async)
+Enkstein — Schedule CRUD + Manual Trigger Routes (Async)
 """
 import uuid
 from typing import List, Optional

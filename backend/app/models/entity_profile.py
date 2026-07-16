@@ -1,5 +1,5 @@
 """
-RegentClaw — MemoryClaw: Entity Behavioral Profiling Models
+Enkstein — Memory Cortex: Entity Behavioral Profiling Models
 
 EntityProfile  — per-entity behavioral baseline (Honcho "Peer" equivalent)
 BehaviorEvent  — individual activity log entry   (Honcho "Message" equivalent)

@@ -1,5 +1,5 @@
 """
-RegentClaw — Trigger Engine
+Enkstein — Trigger Engine
 Evaluates all active triggers whenever a Finding or Event is written.
 Fires the configured action (workflow launch, claw scan, alert) when conditions match.
 
@@ -172,7 +172,7 @@ async def _fire_trigger(
             from app.services.alert_router import route_event_alert
             cfg = json.loads(trigger.alert_config_json or "{}")
             payload = {
-                "title": cfg.get("title") or f"RegentClaw Trigger: {trigger.name}",
+                "title": cfg.get("title") or f"Enkstein Trigger: {trigger.name}",
                 "description": cfg.get("description") or f"Trigger '{trigger.name}' fired. Context: {json.dumps(context)[:300]}",
                 "severity": cfg.get("severity", "medium"),
                 "claw": context.get("claw", "coreos"),

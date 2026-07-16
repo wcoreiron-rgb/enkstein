@@ -1,4 +1,4 @@
-"""EndpointClaw — Endpoint Security API Routes."""
+"""Endpoint Security API Routes."""
 from datetime import datetime
 import logging
 from typing import Optional
@@ -18,7 +18,7 @@ from app.claws.endpointclaw.providers import sentinelone as sentinelone_adapter
 
 logger = logging.getLogger("endpointclaw")
 
-router = APIRouter(prefix="/endpointclaw", tags=["EndpointClaw — Endpoint Security"])
+router = APIRouter(prefix="/endpointclaw", tags=["Endpoint Security"])
 
 CLAW_NAME = "endpointclaw"
 
@@ -46,7 +46,7 @@ async def _get_credentials(db: AsyncSession, connector_type: str) -> Optional[di
     return get_credential(str(conn.id))
 
 
-@router.get("/stats", summary="EndpointClaw summary statistics")
+@router.get("/stats", summary="Endpoint Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == "endpointclaw"))
     findings = result.scalars().all()
@@ -78,7 +78,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All EndpointClaw findings")
+@router.get("/findings", summary="All Endpoint Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Finding).where(Finding.claw == "endpointclaw").order_by(Finding.risk_score.desc())
@@ -165,13 +165,13 @@ PROVIDER_MAP = [
 ]
 
 
-@router.get("/providers", summary="EndpointClaw provider connection status")
+@router.get("/providers", summary="Endpoint Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/task", summary="Execute focused EndpointClaw swarm task")
+@router.post("/task", summary="Execute focused Endpoint Security swarm task")
 async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     stmt = (

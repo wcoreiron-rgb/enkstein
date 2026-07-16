@@ -31,6 +31,7 @@ import {
   runCortexMission,
   updateCortexMission,
 } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 const PARTICIPANTS = [
   ['identityclaw', 'Identity'],
@@ -48,7 +49,7 @@ const DEFAULT_PARTICIPANTS = ['identityclaw', 'cloudclaw', 'threatclaw', 'datacl
 function armLabel(value: string) {
   const known = PARTICIPANTS.find(([id]) => id === value)?.[1];
   if (known) return known;
-  return value.replace(/claw$/i, '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return capabilityName(value);
 }
 
 function relativeTime(value: string | null) {

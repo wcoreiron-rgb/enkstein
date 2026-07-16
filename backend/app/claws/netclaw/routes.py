@@ -1,4 +1,4 @@
-"""NetClaw — Network Security API Routes."""
+"""Network Security API Routes."""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -11,7 +11,7 @@ from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.finding_pipeline import ingest_findings
 from app.services.connector_check import check_providers, is_connector_configured
 
-router = APIRouter(prefix="/netclaw", tags=["NetClaw — Network Security"])
+router = APIRouter(prefix="/netclaw", tags=["Network Security"])
 
 CLAW_NAME = "netclaw"
 
@@ -337,7 +337,7 @@ class NetTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-@router.get("/stats", summary="NetClaw summary statistics")
+@router.get("/stats", summary="Network Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -390,7 +390,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All NetClaw findings")
+@router.get("/findings", summary="All Network Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(Finding.risk_score.desc())
@@ -432,14 +432,14 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="NetClaw provider connection status")
+@router.get("/providers", summary="Network Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run NetClaw network security scan and persist findings")
+@router.post("/scan", summary="Run Network Security network security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a NetClaw scan. Falls back to simulation when no real connector is configured."""
+    """Run a Network Security scan. Falls back to simulation when no real connector is configured."""
     pipeline_findings = []
     for f in _FINDINGS:
         entry = dict(f)
@@ -457,7 +457,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused NetClaw swarm task")
+@router.post("/task", summary="Execute focused Network Security swarm task")
 async def run_net_task(payload: NetTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

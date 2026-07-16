@@ -1,5 +1,5 @@
 """
-CustomClaw — User-defined REST API integrations
+User-defined REST API integrations
 ================================================
 Lets users define their own "claw" by pointing at any REST API.
 Each definition becomes a mini-claw with:
@@ -31,7 +31,7 @@ from app.models.customclaw import CustomClawDefinition
 
 logger = logging.getLogger("customclaw")
 
-router = APIRouter(prefix="/customclaw", tags=["CustomClaw"])
+router = APIRouter(prefix="/customclaw", tags=["Custom Capability"])
 
 TIMEOUT = httpx.Timeout(20.0)
 
@@ -174,14 +174,14 @@ async def _call_endpoint(
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-@router.get("/definitions", summary="List all custom claw definitions")
+@router.get("/definitions", summary="List all custom capability definitions")
 async def list_definitions(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(CustomClawDefinition).order_by(CustomClawDefinition.created_at.desc()))
     rows = result.scalars().all()
     return [_to_dict(r) for r in rows]
 
 
-@router.post("/definitions", status_code=201, summary="Create a custom claw definition")
+@router.post("/definitions", status_code=201, summary="Create a custom capability definition")
 async def create_definition(body: ClawDefinition, db: AsyncSession = Depends(get_db)):
     row = CustomClawDefinition(
         name=body.name,
@@ -201,7 +201,7 @@ async def create_definition(body: ClawDefinition, db: AsyncSession = Depends(get
     return _to_dict(row)
 
 
-@router.get("/definitions/{def_id}", summary="Get a custom claw definition")
+@router.get("/definitions/{def_id}", summary="Get a custom capability definition")
 async def get_definition(def_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CustomClawDefinition).where(CustomClawDefinition.id == uuid.UUID(def_id))
@@ -212,7 +212,7 @@ async def get_definition(def_id: str, db: AsyncSession = Depends(get_db)):
     return _to_dict(row)
 
 
-@router.put("/definitions/{def_id}", summary="Update a custom claw definition")
+@router.put("/definitions/{def_id}", summary="Update a custom capability definition")
 async def update_definition(def_id: str, body: ClawDefinition, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CustomClawDefinition).where(CustomClawDefinition.id == uuid.UUID(def_id))
@@ -237,7 +237,7 @@ async def update_definition(def_id: str, body: ClawDefinition, db: AsyncSession 
     return _to_dict(row)
 
 
-@router.delete("/definitions/{def_id}", status_code=204, summary="Delete a custom claw definition")
+@router.delete("/definitions/{def_id}", status_code=204, summary="Delete a custom capability definition")
 async def delete_definition(def_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CustomClawDefinition).where(CustomClawDefinition.id == uuid.UUID(def_id))
@@ -278,7 +278,7 @@ async def test_endpoint(def_id: str, ep_index: int = 0, db: AsyncSession = Depen
     }
 
 
-@router.post("/definitions/{def_id}/scan", summary="Run all endpoints in a custom claw")
+@router.post("/definitions/{def_id}/scan", summary="Run all endpoints in a custom capability")
 async def scan_definition(def_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(CustomClawDefinition).where(CustomClawDefinition.id == uuid.UUID(def_id))
@@ -323,7 +323,7 @@ async def scan_definition(def_id: str, db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/stats", summary="CustomClaw aggregate stats")
+@router.get("/stats", summary="Custom Capability aggregate stats")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(CustomClawDefinition))
     rows = result.scalars().all()
@@ -339,7 +339,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused CustomClaw swarm task")
+@router.post("/task", summary="Execute focused Custom Capability swarm task")
 async def run_custom_task(payload: CustomTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.now(timezone.utc)
     result = await db.execute(select(CustomClawDefinition))
@@ -364,7 +364,7 @@ async def run_custom_task(payload: CustomTaskRequest, db: AsyncSession = Depends
     findings = top_defs or [
         {
             "title": "No custom definitions configured",
-            "detail": "Create a CustomClaw definition to run connector-backed custom scans.",
+            "detail": "Create a Custom Capability definition to run connector-backed custom scans.",
         }
     ]
 

@@ -43,7 +43,7 @@ from app.core.modelclaw.service import (
 )
 from app.trust_fabric import ActionRequest, enforce
 
-router = APIRouter(prefix="/modelclaw", tags=["ModelClaw"])
+router = APIRouter(prefix="/modelclaw", tags=["Model Cortex"])
 _EXTERNAL_BRAINS = {
     "codex_subscription",
     "claude_subscription",
@@ -100,7 +100,7 @@ async def put_model_profile(payload: ModelProfileCreate):
     return upsert_profile(payload)
 
 
-@router.get("/calls", response_model=list[ModelCallRead], summary="Recent ModelClaw call audit")
+@router.get("/calls", response_model=list[ModelCallRead], summary="Recent Model Cortex call audit")
 async def get_model_calls(limit: int = 50, tenant_id: str = "global"):
     return list_model_calls(limit, tenant_id=tenant_id)
 
@@ -287,7 +287,7 @@ async def route_model_call(payload: ModelRouteRequest, db: AsyncSession = Depend
         raise HTTPException(status_code=404, detail="Model profile not found")
 
     if profile["allowed_claws"] and payload.claw not in profile["allowed_claws"]:
-        raise HTTPException(status_code=403, detail="Claw is not allowed for selected model profile")
+        raise HTTPException(status_code=403, detail="Capability is not allowed for selected model profile")
 
     if payload.data_classification not in profile["allowed_data_classes"]:
         raise HTTPException(status_code=403, detail="Data classification is not allowed for selected model profile")
@@ -322,7 +322,7 @@ async def route_model_call(payload: ModelRouteRequest, db: AsyncSession = Depend
         )
 
     simulated_response = (
-        f"ModelClaw response from {profile['provider']}:{profile['model']} for {payload.claw} "
+        f"Model Cortex response from {profile['provider']}:{profile['model']} for {payload.claw} "
         f"(classification={payload.data_classification})"
     )
     tokens = min(16000, max(64, len(payload.prompt) // 3))

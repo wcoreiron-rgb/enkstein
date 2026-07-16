@@ -1,5 +1,5 @@
 """
-LogClaw — Splunk Adapter
+Splunk Adapter
 Pulls security alerts and notable events from Splunk Enterprise Security.
 
 Auth: Username/password or API token

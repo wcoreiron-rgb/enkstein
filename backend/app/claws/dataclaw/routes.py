@@ -1,4 +1,4 @@
-"""DataClaw — Data Security & DLP API Routes."""
+"""Data Security & DLP API Routes."""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -11,7 +11,7 @@ from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.finding_pipeline import ingest_findings
 from app.services.connector_check import check_providers, is_connector_configured
 
-router = APIRouter(prefix="/dataclaw", tags=["DataClaw — Data Security & DLP"])
+router = APIRouter(prefix="/dataclaw", tags=["Data Security & DLP"])
 
 CLAW_NAME = "dataclaw"
 
@@ -307,7 +307,7 @@ class DataTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-@router.get("/stats", summary="DataClaw summary statistics")
+@router.get("/stats", summary="Data Security summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -360,7 +360,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All DataClaw findings")
+@router.get("/findings", summary="All Data Security findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(Finding.risk_score.desc())
@@ -402,14 +402,14 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="DataClaw provider connection status")
+@router.get("/providers", summary="Data Security provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run DataClaw data security scan and persist findings")
+@router.post("/scan", summary="Run Data Security data security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a DataClaw scan. Falls back to simulation when no real connector is configured."""
+    """Run a Data Security scan. Falls back to simulation when no real connector is configured."""
     pipeline_findings = []
     for f in _FINDINGS:
         entry = dict(f)
@@ -427,7 +427,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused DataClaw swarm task")
+@router.post("/task", summary="Execute focused Data Security swarm task")
 async def run_data_task(payload: DataTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

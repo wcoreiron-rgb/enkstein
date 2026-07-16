@@ -1,5 +1,5 @@
 """
-RegentClaw — Governed Execution policy engine
+Enkstein — Governed Execution policy engine
 Evaluates whether a shell/browser/credential/production request is allowed,
 needs approval, or should be blocked outright.
 """

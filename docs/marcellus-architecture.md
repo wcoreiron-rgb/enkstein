@@ -108,9 +108,9 @@ host tools. This is a compatibility boundary, not a policy bypass.
 | Component | Current foundation | Responsibility |
 |---|---|---|
 | CoreOS | CoreOS, workflows, schedules, triggers | Platform state and coordination |
-| Command Cortex | CommandClaw, channels, remote control | Normalize and authorize operator intent |
+| Command Cortex | Command, channels, remote control | Normalize and authorize operator intent |
 | Coordination Cortex | Swarm planner, dispatcher, Judge | Plan multi-node work and reconcile results |
-| Model Cortex | ModelClaw and model router | Govern model selection and reasoning support |
+| Model Cortex | Model Cortex and model router | Govern model selection and reasoning support |
 
 ## Three Hearts
 

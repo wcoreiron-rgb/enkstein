@@ -1,4 +1,4 @@
-"""TerraClaw — Terraform Security & Governance Claw."""
+"""Terraform Security & Governance Capability."""
 import re
 import uuid
 from datetime import datetime
@@ -12,7 +12,7 @@ from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 from app.trust_fabric import ActionRequest, enforce
 
-router = APIRouter(prefix="/terraclaw", tags=["TerraClaw"])
+router = APIRouter(prefix="/terraclaw", tags=["Terraform Governance"])
 
 CLAW_NAME = "terraclaw"
 
@@ -972,7 +972,7 @@ class TerraTaskRequest(BaseModel):
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-@router.get("/stats", summary="TerraClaw summary statistics")
+@router.get("/stats", summary="Terraform Governance summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -1012,7 +1012,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All TerraClaw findings")
+@router.get("/findings", summary="All Terraform Governance findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Finding).where(Finding.claw == CLAW_NAME).order_by(Finding.risk_score.desc())
@@ -1054,7 +1054,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="TerraClaw provider connection status")
+@router.get("/providers", summary="Terraform Governance provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     providers = await check_providers(db, PROVIDER_MAP)
@@ -1226,7 +1226,7 @@ async def generate_terraform(
             {
                 "step": "terraform_mcp",
                 "status": "completed",
-                "detail": "Generated module artifacts through TerraClaw Terraform MCP contract.",
+                "detail": "Generated module artifacts through the Terraform Governance MCP contract.",
             },
             {
                 "step": "security_review",
@@ -1378,7 +1378,7 @@ async def analyze_plan(
     }
 
 
-@router.post("/scan", summary="Run TerraClaw scan and persist findings")
+@router.post("/scan", summary="Run Terraform Governance scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
     from app.services.finding_pipeline import ingest_findings
     default_provider = PROVIDER_MAP[0]["provider"] if PROVIDER_MAP else "simulation"
@@ -1400,7 +1400,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused TerraClaw swarm task")
+@router.post("/task", summary="Execute focused Terraform Governance swarm task")
 async def run_terra_task(payload: TerraTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

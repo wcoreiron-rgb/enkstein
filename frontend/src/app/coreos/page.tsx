@@ -9,37 +9,39 @@ import RiskBadge from '@/components/RiskBadge';
 import { getDashboard, getConnectors, getPolicies, getEvents, getFindingsStats } from '@/lib/api';
 import { capabilityName } from '@/lib/capability-names';
 
-// ─── All 23 Claw modules ──────────────────────────────────────────────────────
+// ─── Platform capability modules ─────────────────────────────────────────────
+// `claw` stays the persisted capability id (compatibility). Visible names are
+// resolved via capabilityName(); only CoreOS carries an explicit displayName.
 
-const MODULES = [
+const MODULES: { claw: string; phase: number; desc: string; displayName?: string }[] = [
   // CoreOS foundations
-  { name: 'CoreOS',         claw: 'coreos',         phase: 1, desc: 'Platform foundation — identity registry, policy engine, telemetry bus, finding pipeline' },
+  { claw: 'coreos',         displayName: 'CoreOS', phase: 1, desc: 'Platform foundation — identity registry, policy engine, telemetry bus, finding pipeline' },
   // Phase 1 — AI & Identity
-  { name: 'ArcClaw',        claw: 'arcclaw',        phase: 1, desc: 'AI Security — prompt inspection, sensitive pattern detection, LLM governance' },
-  { name: 'IdentityClaw',   claw: 'identityclaw',   phase: 1, desc: 'Identity Security — governance of human and non-human identities, orphan detection' },
+  { claw: 'arcclaw',        phase: 1, desc: 'AI Security — prompt inspection, sensitive pattern detection, LLM governance' },
+  { claw: 'identityclaw',   phase: 1, desc: 'Identity Security — governance of human and non-human identities, orphan detection' },
   // Phase 2 — Infrastructure
-  { name: 'CloudClaw',      claw: 'cloudclaw',      phase: 2, desc: 'Cloud Security — AWS/Azure/GCP asset discovery, misconfiguration detection' },
-  { name: 'ExposureClaw',   claw: 'exposureclaw',   phase: 2, desc: 'Vulnerability Management — NVD CVE scanning, EPSS scoring, CISA KEV correlation' },
-  { name: 'ThreatClaw',     claw: 'threatclaw',     phase: 2, desc: 'Threat Intelligence — CISA KEV, MITRE ATT&CK, IOC correlation' },
-  { name: 'EndpointClaw',   claw: 'endpointclaw',   phase: 2, desc: 'Endpoint Security — CrowdStrike, Defender, SentinelOne detection ingestion' },
-  { name: 'AccessClaw',     claw: 'accessclaw',     phase: 2, desc: 'Access Security — Okta, Entra ID risky user and MFA gap detection' },
-  { name: 'LogClaw',        claw: 'logclaw',        phase: 2, desc: 'Log Intelligence — Splunk SIEM notable event correlation and alerting' },
-  { name: 'NetClaw',        claw: 'netclaw',        phase: 2, desc: 'Network Security — lateral movement, traffic anomaly, firewall gap detection' },
-  { name: 'DataClaw',       claw: 'dataclaw',       phase: 2, desc: 'Data Security — sensitive data exposure, DLP policy enforcement' },
-  { name: 'AppClaw',        claw: 'appclaw',        phase: 2, desc: 'Application Security — SAST/DAST findings, dependency vulnerabilities' },
-  { name: 'SaaSClaw',       claw: 'saasclaw',       phase: 2, desc: 'SaaS Security — misconfigured SaaS apps, shadow IT, OAuth token sprawl' },
+  { claw: 'cloudclaw',      phase: 2, desc: 'Cloud Security — AWS/Azure/GCP asset discovery, misconfiguration detection' },
+  { claw: 'exposureclaw',   phase: 2, desc: 'Vulnerability Management — NVD CVE scanning, EPSS scoring, CISA KEV correlation' },
+  { claw: 'threatclaw',     phase: 2, desc: 'Threat Intelligence — CISA KEV, MITRE ATT&CK, IOC correlation' },
+  { claw: 'endpointclaw',   phase: 2, desc: 'Endpoint Security — CrowdStrike, Defender, SentinelOne detection ingestion' },
+  { claw: 'accessclaw',     phase: 2, desc: 'Access Security — Okta, Entra ID risky user and MFA gap detection' },
+  { claw: 'logclaw',        phase: 2, desc: 'Log Intelligence — Splunk SIEM notable event correlation and alerting' },
+  { claw: 'netclaw',        phase: 2, desc: 'Network Security — lateral movement, traffic anomaly, firewall gap detection' },
+  { claw: 'dataclaw',       phase: 2, desc: 'Data Security — sensitive data exposure, DLP policy enforcement' },
+  { claw: 'appclaw',        phase: 2, desc: 'Application Security — SAST/DAST findings, dependency vulnerabilities' },
+  { claw: 'saasclaw',       phase: 2, desc: 'SaaS Security — misconfigured SaaS apps, shadow IT, OAuth token sprawl' },
   // Phase 3 — Governance & Detection
-  { name: 'ConfigClaw',     claw: 'configclaw',     phase: 3, desc: 'Configuration Management — CIS benchmark gaps, hardening drift' },
-  { name: 'ComplianceClaw', claw: 'complianceclaw', phase: 3, desc: 'Compliance — SOC 2, NIST, ISO 27001 control gap tracking' },
-  { name: 'PrivacyClaw',    claw: 'privacyclaw',    phase: 3, desc: 'Privacy — GDPR/CCPA data subject request tracking, PII exposure' },
-  { name: 'VendorClaw',     claw: 'vendorclaw',     phase: 3, desc: 'Third-Party Risk — vendor assessment, supply chain security scoring' },
-  { name: 'UserClaw',       claw: 'userclaw',       phase: 3, desc: 'User Behaviour Analytics — anomalous access patterns, privilege escalation' },
-  { name: 'InsiderClaw',    claw: 'insiderclaw',    phase: 3, desc: 'Insider Threat — data staging, mass download, off-hours access detection' },
-  { name: 'AutomationClaw', claw: 'automationclaw', phase: 3, desc: 'Automation Security — runbook governance, script/pipeline risk scoring' },
-  { name: 'AttackPathClaw', claw: 'attackpathclaw', phase: 3, desc: 'Attack Path Analysis — blast radius mapping, lateral movement chain detection' },
-  { name: 'DevClaw',        claw: 'devclaw',        phase: 3, desc: 'Dev Security — secrets in code, CI/CD misconfiguration, SBOM tracking' },
-  { name: 'IntelClaw',      claw: 'intelclaw',      phase: 3, desc: 'Cyber Intelligence — dark web monitoring, threat actor TTPs, brand exposure' },
-  { name: 'RecoveryClaw',   claw: 'recoveryclaw',   phase: 3, desc: 'Recovery & Resilience — backup validation, IR playbook execution tracking' },
+  { claw: 'configclaw',     phase: 3, desc: 'Configuration Management — CIS benchmark gaps, hardening drift' },
+  { claw: 'complianceclaw', phase: 3, desc: 'Compliance — SOC 2, NIST, ISO 27001 control gap tracking' },
+  { claw: 'privacyclaw',    phase: 3, desc: 'Privacy — GDPR/CCPA data subject request tracking, PII exposure' },
+  { claw: 'vendorclaw',     phase: 3, desc: 'Third-Party Risk — vendor assessment, supply chain security scoring' },
+  { claw: 'userclaw',       phase: 3, desc: 'User Behaviour Analytics — anomalous access patterns, privilege escalation' },
+  { claw: 'insiderclaw',    phase: 3, desc: 'Insider Threat — data staging, mass download, off-hours access detection' },
+  { claw: 'automationclaw', phase: 3, desc: 'Automation Security — runbook governance, script/pipeline risk scoring' },
+  { claw: 'attackpathclaw', phase: 3, desc: 'Attack Path Analysis — blast radius mapping, lateral movement chain detection' },
+  { claw: 'devclaw',        phase: 3, desc: 'Dev Security — secrets in code, CI/CD misconfiguration, SBOM tracking' },
+  { claw: 'intelclaw',      phase: 3, desc: 'Cyber Intelligence — dark web monitoring, threat actor TTPs, brand exposure' },
+  { claw: 'recoveryclaw',   phase: 3, desc: 'Recovery & Resilience — backup validation, IR playbook execution tracking' },
 ];
 
 // ─── Shared Services wired to the finding pipeline ───────────────────────────
@@ -529,11 +531,11 @@ function PhaseGroup({ phase, label, modules }: { phase: number; label: string; m
         <span className={`text-xs font-semibold uppercase tracking-wide ${phaseColors[phase] ?? 'text-gray-400'}`}>{label}</span>
       </div>
       {modules.map(m => (
-        <div key={m.name} className="px-6 py-3.5 flex items-center gap-4 border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
+        <div key={m.claw} className="px-6 py-3.5 flex items-center gap-4 border-b border-gray-800/60 hover:bg-gray-800/30 transition-colors">
           <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-white text-sm font-medium">
-              {m.claw === 'coreos' ? m.name : capabilityName(m.claw)}
+              {m.displayName ?? capabilityName(m.claw)}
               <span className="text-xs text-gray-500 ml-2 font-normal">{m.claw === 'coreos' ? 'Cortex' : 'Capability Node'}</span>
             </p>
             <p className="text-xs text-gray-400 mt-0.5 truncate">{m.desc}</p>

@@ -1,5 +1,5 @@
 """
-RegentClaw — MemoryClaw: Entity Behavioral Profiling API
+Enkstein — Memory Cortex: Entity Behavioral Profiling API
 
 GET  /memory/profiles                  — list entity profiles (sorted by anomaly)
 GET  /memory/profiles/anomalous        — entities actively drifting from baseline
@@ -35,7 +35,7 @@ from app.services.profile_service import (
     _get_or_create_profile,
 )
 
-router = APIRouter(prefix="/memory", tags=["MemoryClaw-Profiles"])
+router = APIRouter(prefix="/memory", tags=["Memory Cortex-Profiles"])
 
 
 # ─── output helpers ───────────────────────────────────────────────────────────

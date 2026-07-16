@@ -1,5 +1,5 @@
 """
-EndpointClaw — SentinelOne Adapter
+SentinelOne Adapter
 Pulls threats and alerts from SentinelOne Singularity platform.
 
 Auth: API Token (passed as Authorization header)

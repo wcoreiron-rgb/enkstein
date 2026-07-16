@@ -15,8 +15,8 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | Authentication | Require real JWT/OIDC identity in front of operator routes. Do not rely on local development defaults. |
 | Trust Fabric | Keep policy evaluation fail-closed for execution, remediation, model calls, connector calls, and evidence exports. |
 | CI security | Keep SBOM and dependency audit jobs enabled. Use `security/supply_chain_baseline.json` only for time-boxed accepted legacy findings. |
-| Release gates | Run production deployments through ReleaseClaw preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
-| Terraform/IaC gates | Run TerraClaw build/review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
+| Release gates | Run production deployments through Release Governance preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
+| Terraform/IaC gates | Run Terraform Governance build/review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
 | Frontend runtime | Build the Next.js frontend into the container image and serve it with `npm run start`; do not mount `.next` or run `next dev` in the production Compose path. |
 
 ## Minimum Environment Checklist
@@ -30,15 +30,15 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - CORS allows only approved frontend origins.
 - Reverse proxy enforces TLS, request size limits, and sane timeouts.
 - Backend logs redact request bodies and secrets.
-- ReleaseClaw preflight templates are reviewed for the target deployment path.
+- Release Governance preflight templates are reviewed for the target deployment path.
 - Production release handoff is approved by someone other than the requester.
 - Rollback plans/artifacts exist before non-dry-run deployments.
-- Terraform modules generated or reviewed by TerraClaw are checked before apply.
+- Terraform modules generated or reviewed by Terraform Governance are checked before apply.
 - The frontend container is rebuilt before deployment so `INTERNAL_API_URL=http://backend:8000` is baked into Next.js rewrites for Docker-internal API proxying.
 
-## TerraClaw Terraform/IaC Gates
+## Terraform Governance Terraform/IaC Gates
 
-For Terraform-backed releases, run TerraClaw first:
+For Terraform-backed releases, run Terraform Governance first:
 
 ```http
 POST /api/v1/terraclaw/build
@@ -48,27 +48,27 @@ POST /api/v1/terraclaw/plan
 ```
 
 Use `build` when an operator wants a secure Terraform module from plain
-English. Use `generate` for the TerraClaw agent/MCP path, which returns
+English. Use `generate` for the Terraform Governance agent/MCP path, which returns
 Terraform module output, artifacts, applied controls, Trust Fabric metadata, and
 security-review evidence. Use `review` for existing `.tf` content. Use `plan`
 before apply to detect risky creates, deletes, replacements, public network
 exposure, weak data protection, hardcoded secrets, excessive IAM, missing
 diagnostics, and other high-risk IaC changes.
 
-Attach the build/generate, review, and plan decisions to the ReleaseClaw preflight
-evidence for Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. TerraClaw
+Attach the build/generate, review, and plan decisions to the Release Governance preflight
+evidence for Terraform Cloud, GitOps, CI/CD, or CLI-driven applies. Terraform Governance
 identifies public network exposure, excessive IAM, hardcoded secrets,
 data-protection misconfiguration, missing diagnostics, and risky
-replacement/delete operations; ReleaseClaw then gates the execution handoff.
+replacement/delete operations; Release Governance then gates the execution handoff.
 
 External coding agents can use the RegentClaw MCP server tools
 `terraclaw_generate_secure_terraform`, `terraclaw_review_hcl`, and
 `terraclaw_analyze_plan`; the MCP server forwards to the backend API and does
 not execute Terraform locally or hold provider credentials.
 
-## ReleaseClaw Deployment Gates
+## Release Governance Deployment Gates
 
-ReleaseClaw is the deployment governance layer for production changes. It
+Release Governance is the deployment governance layer for production changes. It
 normalizes deployment paths such as GitHub Actions, GitLab CI, Jenkins, Azure
 DevOps, ArgoCD, Terraform Cloud, AWS/Azure/GCP CLIs, Kubernetes/Helm/Docker,
 Bash, PowerShell, Python, Node, Ansible, webhooks, full-stack application
@@ -78,7 +78,7 @@ rollouts, and AI service stacks.
 POST /api/v1/releaseclaw/preflight
 ```
 
-ReleaseClaw checks:
+Release Governance checks:
 
 - source adapter and execution channel
 - target environment and data classification
@@ -88,7 +88,7 @@ ReleaseClaw checks:
 - risky script/cloud operations before execution handoff
 - Trust Fabric policy decision, ring-policy posture, and audit event creation
 
-ReleaseClaw does not directly execute arbitrary scripts. A successful preflight
+Release Governance does not directly execute arbitrary scripts. A successful preflight
 returns a governed handoff plan for CI/CD, GitOps, cloud runners, or
 ExecChannels, plus a SHA-256 evidence hash.
 
@@ -101,7 +101,7 @@ ExecChannels, plus a SHA-256 evidence hash.
 
 ## Compliance Evidence Export
 
-ComplianceClaw provides an audit-ready JSON export:
+Compliance Assurance provides an audit-ready JSON export:
 
 ```http
 POST /api/v1/complianceclaw/evidence/export

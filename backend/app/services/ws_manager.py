@@ -1,5 +1,5 @@
 """
-RegentClaw — WebSocket Connection Manager
+Enkstein — WebSocket Connection Manager
 
 Singleton that tracks all active browser connections and broadcasts
 structured events to them.  Import `ws_manager` anywhere in the backend

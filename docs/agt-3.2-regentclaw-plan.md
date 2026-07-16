@@ -1,6 +1,6 @@
 # RegentClaw AGT Upgrade Plan (v3.2 Track)
 
-This plan applies AGT new-release capabilities without coupling Claws to AGT internals.
+This plan applies AGT new-release capabilities without coupling Capability Nodes to AGT internals.
 
 ## Guardrails
 
@@ -29,6 +29,6 @@ This plan applies AGT new-release capabilities without coupling Claws to AGT int
 ## Operator Notes
 
 - Do not expose raw AGT terms directly in product UX.
-- Map governance to Regent language: Claws, Fabric decisions, policy packs, trust score, audit evidence.
+- Map governance to Regent language: Capability Nodes, Fabric decisions, policy packs, trust score, audit evidence.
 - Validate each rollout with existing policy/approval/audit tests.
 

@@ -1,5 +1,5 @@
 """
-CloudClaw — GCP Provider Adapter
+GCP Provider Adapter
 Connects to Google Cloud Security Command Center (SCC) to pull findings.
 Real URL: GET https://securitycenter.googleapis.com/v1/organizations/{org_id}/sources/-/findings
 Falls back to simulated findings when no credentials configured.

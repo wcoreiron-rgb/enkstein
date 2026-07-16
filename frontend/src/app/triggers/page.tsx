@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getTriggers, getTriggerStats, createTrigger, updateTrigger, deleteTrigger, getWorkflows, testTrigger } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
+import { capabilityName } from '@/lib/capability-names';
 
 // ─── Trigger type metadata ────────────────────────────────────────────────────
 
@@ -418,7 +419,7 @@ export default function TriggersPage() {
                           <span><span className="text-gray-500">Workflow ID: </span>{trigger.workflow_id}</span>
                         )}
                         {trigger.target_claw && (
-                          <span><span className="text-gray-500">Target claw: </span>{trigger.target_claw}</span>
+                          <span><span className="text-gray-500">Target capability: </span>{capabilityName(trigger.target_claw)}</span>
                         )}
                         {trigger.last_triggered_at && (
                           <span><span className="text-gray-500">Last fired: </span><ClientDate value={trigger.last_triggered_at} /></span>
@@ -573,7 +574,7 @@ export default function TriggersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Participants (comma-separated claws)</label>
+                    <label className="block text-xs text-gray-400 mb-1.5">Participants (comma-separated capabilities)</label>
                     <input
                       value={form.target_claw}
                       onChange={e => setForm(f => ({ ...f, target_claw: e.target.value }))}

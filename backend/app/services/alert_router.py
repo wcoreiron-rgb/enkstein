@@ -1,5 +1,5 @@
 """
-RegentClaw — Alert Router
+Enkstein — Alert Router
 Routes high-risk findings and policy violations to configured notification channels:
   - Slack webhooks
   - PagerDuty Events API v2
@@ -99,10 +99,10 @@ async def _send_slack(
             {
                 "color": color,
                 "fallback": _finding_summary(finding),
-                "title": f"RegentClaw Alert — {finding.severity.upper()} Finding",
+                "title": f"Enkstein Alert — {finding.severity.upper()} Finding",
                 "text": (
                     f"*{finding.title[:256]}*{kev_block}\n"
-                    f"Claw: `{finding.claw}` | Provider: `{finding.provider}` | "
+                    f"Capability: `{finding.claw}` | Provider: `{finding.provider}` | "
                     f"Risk Score: `{finding.risk_score:.0f}/100`"
                 ),
                 "fields": [
@@ -111,7 +111,7 @@ async def _send_slack(
                     {"title": "Category",  "value": finding.category or "—", "short": True},
                     {"title": "Status",    "value": finding.status, "short": True},
                 ],
-                "footer": "RegentClaw Security Platform",
+                "footer": "Enkstein Security Platform",
                 "ts": int(datetime.utcnow().timestamp()),
             }
         ]
@@ -149,7 +149,7 @@ async def _send_pagerduty(
         "payload": {
             "summary": _finding_summary(finding),
             "severity": severity,
-            "source": f"RegentClaw/{finding.claw}",
+            "source": f"Enkstein/{finding.claw}",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "component": finding.claw,
             "group": "security",
@@ -198,8 +198,8 @@ async def _send_teams(
         "summary": _finding_summary(finding),
         "sections": [
             {
-                "activityTitle": f"**RegentClaw — {finding.severity.upper()} Security Finding**",
-                "activitySubtitle": f"Claw: {finding.claw} | Provider: {finding.provider}",
+                "activityTitle": f"**Enkstein — {finding.severity.upper()} Security Finding**",
+                "activitySubtitle": f"Capability: {finding.claw} | Provider: {finding.provider}",
                 "activityText": f"{kev_note}{finding.title[:256]}",
                 "facts": [
                     {"name": "Severity",   "value": finding.severity.upper()},
@@ -300,7 +300,7 @@ async def route_event_alert(
 ) -> int:
     """
     Route a raw event (dict) to alert channels.
-    Used by orchestration workflows and ArcClaw governance alerts.
+    Used by orchestration workflows and AI Security governance alerts.
 
     event_data keys: title, description, severity, claw, risk_score, metadata
     """
@@ -329,14 +329,14 @@ async def route_event_alert(
                     payload = {
                         "attachments": [{
                             "color": color,
-                            "title": f"RegentClaw Event — {severity.upper()}",
+                            "title": f"Enkstein Event — {severity.upper()}",
                             "text": event_data.get("title", "Security Event"),
                             "fields": [
                                 {"title": "Description", "value": event_data.get("description", "")[:300], "short": False},
-                                {"title": "Claw",        "value": event_data.get("claw", "—"), "short": True},
+                                {"title": "Capability",  "value": event_data.get("claw", "—"), "short": True},
                                 {"title": "Risk Score",  "value": str(event_data.get("risk_score", 0)), "short": True},
                             ],
-                            "footer": "RegentClaw Security Platform",
+                            "footer": "Enkstein Security Platform",
                             "ts": int(datetime.utcnow().timestamp()),
                         }]
                     }
@@ -353,9 +353,9 @@ async def route_event_alert(
                         "routing_key": integration_key,
                         "event_action": "trigger",
                         "payload": {
-                            "summary": event_data.get("title", "RegentClaw Security Event")[:256],
+                            "summary": event_data.get("title", "Enkstein Security Event")[:256],
                             "severity": pd_sev,
-                            "source": f"RegentClaw/{event_data.get('claw', 'system')}",
+                            "source": f"Enkstein/{event_data.get('claw', 'system')}",
                             "timestamp": datetime.utcnow().isoformat() + "Z",
                         },
                     }
@@ -376,10 +376,10 @@ async def route_event_alert(
                         "themeColor": color.lstrip("#"),
                         "summary": event_data.get("title", "Security Event"),
                         "sections": [{
-                            "activityTitle": f"**RegentClaw — {severity.upper()} Event**",
+                            "activityTitle": f"**Enkstein — {severity.upper()} Event**",
                             "activityText": event_data.get("description", "")[:400],
                             "facts": [
-                                {"name": "Claw",       "value": event_data.get("claw", "—")},
+                                {"name": "Capability", "value": event_data.get("claw", "—")},
                                 {"name": "Risk Score", "value": str(event_data.get("risk_score", 0))},
                             ],
                         }],

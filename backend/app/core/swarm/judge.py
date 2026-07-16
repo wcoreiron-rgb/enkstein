@@ -45,8 +45,8 @@ async def judge_swarm_result_with_modelclaw(
     swarm_job_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    Swarm Judge with ModelClaw synthesis.
-    Falls back to deterministic judge when ModelClaw route is denied/unavailable.
+    Swarm Judge with Model Cortex synthesis.
+    Falls back to deterministic judge when Model Cortex route is denied/unavailable.
     """
     judged = judge_swarm_result(job_name, aggregate, task_count)
 

@@ -1,5 +1,5 @@
 """
-RegentClaw — Email Channel Provider
+Enkstein — Email Channel Provider
 
 Async SMTP email delivery using smtplib in a thread-pool executor so the
 FastAPI event loop is never blocked.

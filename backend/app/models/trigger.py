@@ -1,5 +1,5 @@
 """
-RegentClaw — Event Trigger System
+Enkstein — Event Trigger System
 Reactive triggers that watch for findings/events/webhooks and auto-launch workflows.
 
 Trigger types:

@@ -1,5 +1,5 @@
 """
-RegentClaw — Secure Model Router
+Enkstein — Secure Model Router
 Routes AI/LLM calls to the appropriate back-end based on data sensitivity,
 policy rules, and provider availability.
 

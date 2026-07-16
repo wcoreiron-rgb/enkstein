@@ -1,4 +1,4 @@
-"""IdentityClaw — API Routes."""
+"""API Routes."""
 import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,7 +18,7 @@ from app.services.secrets_manager import get_credential
 from app.models.connector import Connector, ConnectorStatus
 from app.claws.accessclaw.providers import entra as entra_adapter
 
-router = APIRouter(prefix="/identityclaw", tags=["IdentityClaw — Identity Security"])
+router = APIRouter(prefix="/identityclaw", tags=["Identity Security"])
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -219,7 +219,7 @@ async def review_approval(
     return action
 
 
-@router.get("/stats", response_model=IdentityClawStats, summary="IdentityClaw summary")
+@router.get("/stats", response_model=IdentityClawStats, summary="Identity Security summary")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     total = await db.execute(select(func.count(Identity.id)))
     humans = await db.execute(select(func.count(Identity.id)).where(Identity.type == IdentityType.HUMAN))
@@ -246,7 +246,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/findings", summary="IdentityClaw findings compatibility endpoint")
+@router.get("/findings", summary="Identity Security findings compatibility endpoint")
 async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get_db)):
     """
     Compatibility endpoint for left-blade testing parity with other claws.
@@ -288,7 +288,7 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
     return findings
 
 
-@router.get("/providers", summary="IdentityClaw provider connection status")
+@router.get("/providers", summary="Identity Security provider connection status")
 async def get_identity_providers(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Connector).where(
@@ -309,7 +309,7 @@ async def get_identity_providers(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.post("/task", summary="Execute focused IdentityClaw swarm task")
+@router.post("/task", summary="Execute focused Identity Security swarm task")
 async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     connector_state = "unconfigured"

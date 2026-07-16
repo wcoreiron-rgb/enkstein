@@ -1,5 +1,5 @@
 """
-RegentClaw — Channel Gateway message processor
+Enkstein — Channel Gateway message processor
 Ingests a message → identity check → policy eval → intent parse → dispatch → respond.
 
 Outbound alert delivery is handled by the provider modules in
@@ -45,6 +45,20 @@ _CLAW_PATTERNS = [
     ("LogClaw",          re.compile(r"\b(log|siem|splunk|sentinel|logclaw)\b", re.I)),
     ("ComplianceClaw",   re.compile(r"\b(compliance|soc2|hipaa|pci|gdpr|complianceclaw)\b", re.I)),
 ]
+
+_CAPABILITY_DISPLAY = {
+    "ArcClaw": "AI Security",
+    "CloudClaw": "Cloud Security",
+    "IdentityClaw": "Identity Security",
+    "AccessClaw": "Privileged Access",
+    "EndpointClaw": "Endpoint Security",
+    "NetClaw": "Network Security",
+    "DataClaw": "Data Security",
+    "ThreatClaw": "Threat Analysis",
+    "ExposureClaw": "Exposure Management",
+    "LogClaw": "Security Telemetry",
+    "ComplianceClaw": "Compliance Assurance",
+}
 
 _HIGH_RISK_PATTERNS = re.compile(
     r"\b(delete|wipe|destroy|drop|nuke|all users|all devices|production|prod\b|reset all)\b", re.I
@@ -149,7 +163,7 @@ def _build_response(
     lines = []
 
     if policy["decision"] == "blocked":
-        lines.append("🚫 **Request blocked by RegentClaw**")
+        lines.append("🚫 **Request blocked by Enkstein**")
         for flag in policy.get("flags", []):
             lines.append(f"  • {flag.replace('_', ' ').title()}")
         return "\n".join(lines)
@@ -157,14 +171,16 @@ def _build_response(
     if policy["decision"] == "requires_approval":
         lines.append("⏳ **Request queued for approval**")
         lines.append(f"Intent: `{', '.join(intents) or 'general'}`")
-        lines.append(f"Claws: `{', '.join(claws) or 'none detected'}`")
+        names = [_CAPABILITY_DISPLAY.get(capability, capability) for capability in claws]
+        lines.append(f"Capabilities: `{', '.join(names) or 'none detected'}`")
         lines.append("An admin will review and approve this action.")
         return "\n".join(lines)
 
     # Allowed
-    lines.append("✅ **RegentClaw executing**")
+    lines.append("✅ **Enkstein executing**")
     lines.append(f"Intent: `{', '.join(intents) or 'general'}`")
-    lines.append(f"Claws: `{', '.join(claws) or 'auto-detected'}`")
+    names = [_CAPABILITY_DISPLAY.get(capability, capability) for capability in claws]
+    lines.append(f"Capabilities: `{', '.join(names) or 'auto-detected'}`")
     if execution:
         run_id = execution.get("run_id", execution.get("id", ""))
         if run_id:
@@ -309,7 +325,7 @@ async def dispatch_alert(
             password=config.get("password", ""),
             from_addr=config["from_addr"],
             to_addrs=config["to_addrs"],
-            subject=f"[RegentClaw Alert] {title}",
+            subject=f"[Enkstein Alert] {title}",
             body=text,
             html_body=config.get("html_body"),
         )

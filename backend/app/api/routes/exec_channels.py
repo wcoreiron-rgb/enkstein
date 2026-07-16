@@ -1,5 +1,5 @@
 """
-RegentClaw — Governed Execution Channels API
+Enkstein — Governed Execution Channels API
 
 POST /exec/shell                    — Submit shell command for governed execution
 POST /exec/browser                  — Submit browser task for governed execution

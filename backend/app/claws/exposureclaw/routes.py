@@ -1,4 +1,4 @@
-"""ExposureClaw — External Attack Surface & Exposure Management API Routes."""
+"""External Attack Surface & Exposure Management API Routes."""
 from datetime import datetime
 from typing import Any
 
@@ -10,7 +10,7 @@ from sqlalchemy import desc, select
 from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 
-router = APIRouter(prefix="/exposureclaw", tags=["ExposureClaw"])
+router = APIRouter(prefix="/exposureclaw", tags=["Exposure Management"])
 CLAW_NAME = "exposureclaw"
 
 PROVIDER_MAP = [
@@ -267,7 +267,7 @@ _FINDINGS = [
 ]
 
 
-@router.get("/stats", summary="ExposureClaw summary statistics")
+@router.get("/stats", summary="Exposure Management summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -311,7 +311,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All ExposureClaw findings")
+@router.get("/findings", summary="All Exposure Management findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import is_connector_configured
     result = await db.execute(
@@ -344,15 +344,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="ExposureClaw provider connection status")
+@router.get("/providers", summary="Exposure Management provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run ExposureClaw scan and persist findings")
+@router.post("/scan", summary="Run Exposure Management scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run an ExposureClaw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run an Exposure Management scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in _FINDINGS:
@@ -384,7 +384,7 @@ async def get_attack_surface(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused ExposureClaw swarm task")
+@router.post("/task", summary="Execute focused Exposure Management swarm task")
 async def run_exposure_task(payload: ExposureTaskRequest, db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import is_connector_configured
 

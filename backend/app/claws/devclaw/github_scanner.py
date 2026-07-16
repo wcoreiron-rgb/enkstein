@@ -1,5 +1,5 @@
 """
-DevClaw — GitHub Security Scanner
+GitHub Security Scanner
 ===================================
 Pulls real security findings from GitHub via the REST API:
   - Secret scanning alerts

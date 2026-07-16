@@ -1,5 +1,5 @@
 """
-CloudClaw — Cloud Security Posture Management Routes
+Cloud Security Posture Management Routes
 Supports AWS Security Hub, Azure Defender for Cloud, GCP Security Command Center.
 """
 import logging
@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger("cloudclaw")
 
-router = APIRouter(prefix="/cloudclaw", tags=["CloudClaw — Cloud Security"])
+router = APIRouter(prefix="/cloudclaw", tags=["Cloud Security"])
 
 CLAW_NAME = "cloudclaw"
 
@@ -85,7 +85,7 @@ async def _get_provider_credentials(db: AsyncSession, connector_type: str | list
 @router.get("/stats")
 async def get_cloudclaw_stats(db: AsyncSession = Depends(get_db)):
     """
-    CloudClaw summary: finding counts by severity and provider, open/critical totals,
+    Cloud Security summary: finding counts by severity and provider, open/critical totals,
     and which cloud providers are connected.
     """
     # Base query: only cloudclaw findings
@@ -154,7 +154,7 @@ async def get_cloudclaw_findings(
     limit: int = Query(100, le=500),
     db: AsyncSession = Depends(get_db),
 ):
-    """List CloudClaw findings with optional filters."""
+    """List Cloud Security findings with optional filters."""
     stmt = (
         select(Finding)
         .where(Finding.claw == CLAW_NAME)
@@ -240,13 +240,13 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
         "providers": provider_results,
         "errors": errors,
         "message": (
-            f"CloudClaw scan complete. {total_created} new findings, "
+            f"Cloud Security scan complete. {total_created} new findings, "
             f"{total_updated} updated across {len(PROVIDER_CONFIG)} providers."
         ),
     }
 
 
-@router.post("/task", summary="Execute focused CloudClaw swarm task")
+@router.post("/task", summary="Execute focused Cloud Security swarm task")
 async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     stmt = (

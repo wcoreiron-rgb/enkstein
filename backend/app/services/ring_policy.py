@@ -1,5 +1,5 @@
 """
-RegentClaw — Execution Ring Policy
+Enkstein — Execution Ring Policy
 Implements ring-based isolation (ring0..ring3) for governed actions.
 Ring levels map to privilege tiers with deterministic enforcement rules.
 """

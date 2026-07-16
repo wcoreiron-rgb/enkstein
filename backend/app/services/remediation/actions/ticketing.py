@@ -42,7 +42,7 @@ async def _create_jira_ticket(params: dict, creds: dict, context: dict) -> Actio
     project_key = params.get("project_key") or creds.get("jira_project_key", "SEC")
     summary     = _fmt(params.get("summary", "Security Finding Requires Action"), context)
     description = _fmt(
-        params.get("description", "An automated remediation action was triggered by RegentClaw."),
+        params.get("description", "An automated remediation action was triggered by Enkstein."),
         context,
     )
     priority    = params.get("priority", "High")
@@ -100,11 +100,11 @@ def _has_pd_creds(creds: dict) -> bool:
 
 
 async def _create_pd_incident(params: dict, creds: dict, context: dict) -> ActionResult:
-    title       = _fmt(params.get("title", "Security Incident — RegentClaw Alert"), context)
+    title       = _fmt(params.get("title", "Security Incident — Enkstein Alert"), context)
     urgency     = params.get("urgency", "high")
     service_id  = creds.get("pd_service_id", "")
     body_detail = _fmt(
-        params.get("body", "RegentClaw detected a critical security event that requires immediate attention."),
+        params.get("body", "Enkstein detected a critical security event that requires immediate attention."),
         context,
     )
 
@@ -155,7 +155,7 @@ def _has_slack_creds(creds: dict) -> bool:
 
 async def _send_slack(params: dict, creds: dict, context: dict) -> ActionResult:
     webhook_url = creds["slack_webhook_url"]
-    text        = _fmt(params.get("text", "Security alert from RegentClaw"), context)
+    text        = _fmt(params.get("text", "Security alert from Enkstein"), context)
     blocks = [
         {
             "type": "section",

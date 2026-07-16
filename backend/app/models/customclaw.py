@@ -1,4 +1,4 @@
-"""CustomClaw — Persisted user-defined REST API integration definitions."""
+"""Persisted user-defined REST API integration definitions."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, DateTime, Text

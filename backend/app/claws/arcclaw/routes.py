@@ -1,4 +1,4 @@
-"""ArcClaw — API Routes."""
+"""API Routes."""
 import json
 import logging
 from datetime import datetime
@@ -23,7 +23,7 @@ from app.models.connector import ConnectorStatus
 from pydantic import BaseModel as PydanticBase, Field
 from typing import Optional as Opt
 
-router = APIRouter(prefix="/arcclaw", tags=["ArcClaw — AI Security"])
+router = APIRouter(prefix="/arcclaw", tags=["AI Security"])
 
 
 async def _resolve_llm_key(db: AsyncSession, provider: str) -> Opt[str]:
@@ -59,11 +59,11 @@ async def _resolve_llm_key(db: AsyncSession, provider: str) -> Opt[str]:
 @router.post("/events", response_model=AIEventRead, summary="Submit AI event for inspection")
 async def submit_ai_event(payload: AIEventSubmit, db: AsyncSession = Depends(get_db)):
     """
-    Submit an AI interaction. ArcClaw will:
+    Submit an AI interaction. AI Security will:
     1. AGT PromptDefenseEvaluator — 12-vector injection audit (primary)
-    2. RegentClaw scanner — sensitive data pattern detection (secondary)
+    2. Enkstein scanner — sensitive data pattern detection (secondary)
     3. Prompt classification
-    4. Trust Fabric enforcement (runtime policy — RegentClaw layer)
+    4. Trust Fabric enforcement (runtime policy — Enkstein layer)
     5. Return decision + redacted content
     """
     # 1. AGT prompt injection audit (primary layer — 12 attack vectors)
@@ -165,7 +165,7 @@ async def get_ai_event(event_id: str, db: AsyncSession = Depends(get_db)):
     return event
 
 
-@router.get("/stats", response_model=ArcClawStats, summary="ArcClaw risk summary")
+@router.get("/stats", response_model=ArcClawStats, summary="AI Security risk summary")
 async def get_arcclaw_stats(db: AsyncSession = Depends(get_db)):
     total = await db.execute(select(func.count(AIEvent.id)))
     blocked = await db.execute(select(func.count(AIEvent.id)).where(AIEvent.outcome == AIEventOutcome.BLOCKED))
@@ -193,10 +193,10 @@ async def get_arcclaw_stats(db: AsyncSession = Depends(get_db)):
     )
 
 
-@router.get("/findings", summary="ArcClaw findings compatibility endpoint")
+@router.get("/findings", summary="AI Security findings compatibility endpoint")
 async def get_arcclaw_findings(limit: int = 50, db: AsyncSession = Depends(get_db)):
     """
-    Compatibility endpoint so ArcClaw exposes the same surface as other claws.
+    Compatibility endpoint so AI Security exposes the same surface as other claws.
     Returns recent AI events mapped into finding-like records.
     """
     result = await db.execute(
@@ -229,7 +229,7 @@ class ArcTaskRequest(PydanticBase):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-@router.post("/task", summary="Execute focused ArcClaw swarm task")
+@router.post("/task", summary="Execute focused AI Security swarm task")
 async def run_arc_task(payload: ArcTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     result = await db.execute(select(AIEvent).order_by(desc(AIEvent.timestamp)).limit(5))
@@ -268,7 +268,7 @@ async def run_arc_task(payload: ArcTaskRequest, db: AsyncSession = Depends(get_d
     }
 
 
-@router.get("/provider-connectors", summary="ArcClaw provider connector records")
+@router.get("/provider-connectors", summary="AI Security provider connector records")
 async def get_arcclaw_providers(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Connector).where(
@@ -326,7 +326,7 @@ class ChatResponse(PydanticBase):
 @router.post("/chat", response_model=ChatResponse, summary="Inspect prompt then call real LLM")
 async def arcclaw_chat(payload: ChatRequest, db: AsyncSession = Depends(get_db)):
     """
-    The full ArcClaw proxy flow:
+    The full AI Security proxy flow:
     1. Inspect the prompt (AGT + pattern scanner + classification)
     2. Run through Trust Fabric policy engine
     3. If BLOCKED → return decision, never call LLM
@@ -498,7 +498,7 @@ async def agent_chat(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Security Copilot agent — full ArcClaw inspection pipeline runs on every message
+    Security Copilot agent — full AI Security inspection pipeline runs on every message
     before it reaches the LLM. PII, secrets, and injection attempts are caught,
     redacted, logged to AI Governance, and the user is warned.
     """

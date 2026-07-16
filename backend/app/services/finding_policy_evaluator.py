@@ -1,5 +1,5 @@
 """
-RegentClaw — Finding Policy Evaluator
+Enkstein — Finding Policy Evaluator
 Evaluates security findings against the policy engine and emits Event records
 for every policy violation or DENY/REQUIRE_APPROVAL decision.
 

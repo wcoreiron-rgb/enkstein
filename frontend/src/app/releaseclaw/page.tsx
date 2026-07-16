@@ -15,6 +15,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import StatCard from '@/components/StatCard';
+import { capabilityName } from '@/lib/capability-names';
 import {
   approveRelease,
   executeRelease,
@@ -360,7 +361,7 @@ export default function ReleaseClawPage() {
                   </h3>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {selected.required_claws.map((claw: string) => (
-                      <span key={claw} className="rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>{claw}</span>
+                      <span key={claw} className="rounded-full border px-2.5 py-1 text-xs" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>{capabilityName(claw)}</span>
                     ))}
                   </div>
                 </div>

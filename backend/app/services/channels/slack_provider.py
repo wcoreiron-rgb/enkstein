@@ -1,5 +1,5 @@
 """
-RegentClaw — Slack Channel Provider
+Enkstein — Slack Channel Provider
 
 Outbound message delivery via Incoming Webhooks and inbound signature
 verification for Slack Events API / slash commands.

@@ -1,5 +1,5 @@
 """
-RegentClaw — External Agent Registration & Key Management API
+Enkstein — External Agent Registration & Key Management API
 
 POST   /external-agents/register          — register an external OpenClaw agent (returns secret ONCE)
 POST   /external-agents/{id}/rotate-key   — rotate signing secret (old one immediately invalidated)
@@ -103,7 +103,7 @@ async def register_external_agent(
     It will never be retrievable again. Lose it → rotate.
 
     The operator must configure their OpenClaw agent with this secret so it can:
-      1. Verify RegentClaw's X-RegentClaw-Signature on inbound calls.
+      1. Verify Enkstein's X-Enkstein-Signature on inbound calls.
       2. Sign its responses with X-Agent-Signature.
     """
     # SSRF validation before we even save to DB

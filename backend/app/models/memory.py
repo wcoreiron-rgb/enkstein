@@ -1,5 +1,5 @@
 """
-RegentClaw — Memory / State Layer Models
+Enkstein — Memory / State Layer Models
 Persistent structured memory for the platform:
   - IncidentMemory    : timeline of a security incident (linked to findings/runs)
   - AssetMemory       : per-asset risk history and context

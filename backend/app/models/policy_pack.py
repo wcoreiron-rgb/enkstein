@@ -1,5 +1,5 @@
 """
-RegentClaw — PolicyPack Model
+Enkstein — PolicyPack Model
 Compliance framework bundles that deploy curated policy sets.
 """
 import uuid

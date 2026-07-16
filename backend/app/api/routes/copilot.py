@@ -1,5 +1,5 @@
 """
-RegentClaw — Copilot API Routes
+Enkstein — Copilot API Routes
 Natural-language workflow creation: NL → draft → policy eval → approve → run.
 """
 import logging

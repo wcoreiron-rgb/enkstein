@@ -1048,7 +1048,7 @@ export default function ArcClawPage() {
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {tab === 'governance' && (
         <div className="space-y-4">
-          {/* How ArcClaw works */}
+          {/* How AI Security works */}
           <div className="rounded-xl border p-5"
             style={{ background: "var(--rc-bg-surface)", borderColor: "var(--rc-border)" }}>
             <p className="text-sm font-semibold mb-2" style={{ color: "var(--rc-text-1)" }}>

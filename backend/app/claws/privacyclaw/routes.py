@@ -1,4 +1,4 @@
-"""PrivacyClaw — Data Privacy & Compliance API Routes."""
+"""Data Privacy & Compliance API Routes."""
 from datetime import datetime
 from typing import Any
 
@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.connector_check import is_connector_configured
 
-router = APIRouter(prefix="/privacyclaw", tags=["PrivacyClaw"])
+router = APIRouter(prefix="/privacyclaw", tags=["Privacy Governance"])
 
 CLAW_NAME = "privacyclaw"
 PROVIDER_MAP = [
@@ -241,7 +241,7 @@ _FINDINGS = [
 ]
 
 
-@router.get("/stats", summary="PrivacyClaw summary statistics")
+@router.get("/stats", summary="Privacy Governance summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Finding).where(Finding.claw == CLAW_NAME))
     findings = result.scalars().all()
@@ -285,7 +285,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.get("/findings", summary="All PrivacyClaw findings")
+@router.get("/findings", summary="All Privacy Governance findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import is_connector_configured
     result = await db.execute(
@@ -318,15 +318,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="PrivacyClaw provider connection status")
+@router.get("/providers", summary="Privacy Governance provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run PrivacyClaw scan and persist findings")
+@router.post("/scan", summary="Run Privacy Governance scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a PrivacyClaw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run a Privacy Governance scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in _FINDINGS:
@@ -361,7 +361,7 @@ async def get_dsr_requests(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused PrivacyClaw swarm task")
+@router.post("/task", summary="Execute focused Privacy Governance swarm task")
 async def run_privacy_task(payload: PrivacyTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

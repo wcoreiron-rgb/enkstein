@@ -1,4 +1,4 @@
-"""InsiderClaw — Insider Threat Detection API Routes."""
+"""Insider Threat Detection API Routes."""
 from datetime import datetime
 from typing import Any
 
@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 
-router = APIRouter(prefix="/insiderclaw", tags=["InsiderClaw"])
+router = APIRouter(prefix="/insiderclaw", tags=["Insider Risk"])
 CLAW_NAME = "insiderclaw"
 
 
@@ -263,7 +263,7 @@ _FINDINGS = [
 ]
 
 
-@router.get("/stats", summary="InsiderClaw summary statistics")
+@router.get("/stats", summary="Insider Risk summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -296,7 +296,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "last_scan": last_seen.isoformat() if last_seen else None}
 
 
-@router.get("/findings", summary="All InsiderClaw findings")
+@router.get("/findings", summary="All Insider Risk findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -331,15 +331,15 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="InsiderClaw provider connection status")
+@router.get("/providers", summary="Insider Risk provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
 
 
-@router.post("/scan", summary="Run InsiderClaw scan and persist findings")
+@router.post("/scan", summary="Run Insider Risk scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run an InsiderClaw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run an Insider Risk scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in _FINDINGS:
@@ -358,7 +358,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused InsiderClaw swarm task")
+@router.post("/task", summary="Execute focused Insider Risk swarm task")
 async def run_insider_task(payload: InsiderTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

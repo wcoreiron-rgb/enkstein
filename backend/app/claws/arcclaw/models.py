@@ -1,4 +1,4 @@
-"""ArcClaw — AI Security database models."""
+"""AI Security database models."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, DateTime, Float, Text, Boolean, Enum as SAEnum

@@ -1,4 +1,4 @@
-"""IdentityClaw — Identity Security database models."""
+"""Identity Security database models."""
 import uuid
 from datetime import datetime
 from sqlalchemy import String, DateTime, Float, Text, Boolean, Enum as SAEnum, Integer

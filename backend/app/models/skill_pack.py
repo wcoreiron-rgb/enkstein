@@ -1,5 +1,5 @@
 """
-RegentClaw — Skill Pack Models
+Enkstein — Skill Pack Models
 Versioned, policy-governed security skill bundles.
 
 A SkillPack groups related automation skills (e.g., "CrowdStrike Endpoint

@@ -1,5 +1,5 @@
 """
-RegentClaw — Agent & Scheduler Pydantic Schemas
+Enkstein — Agent & Scheduler Pydantic Schemas
 """
 from __future__ import annotations
 import uuid

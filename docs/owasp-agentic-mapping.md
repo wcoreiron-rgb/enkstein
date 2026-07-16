@@ -85,7 +85,7 @@
 
 **Known Limitations:**
 - No HTML sanitization layer exists for outputs rendered in the frontend.
-- Output sanitization is currently enforced in Model Router paths; additional Claw-local AI paths should converge on the same output-scan contract.
+- Output sanitization is currently enforced in Model Router paths; additional Capability Node-local AI paths should converge on the same output-scan contract.
 
 ---
 
@@ -127,7 +127,7 @@
 **Known Limitations:**
 - In-process limiter is single-instance scoped; multi-replica deployments should use Redis-backed distributed limits.
 - Per-tenant quotas and token-budget controls are still planned.
-- ArcClaw-specific chat/event endpoints should adopt the same limiter contract for full parity.
+- AI Security-specific chat/event endpoints should adopt the same limiter contract for full parity.
 
 ---
 
@@ -204,7 +204,7 @@
 - Tool parameters passed to agents are not schema-validated against a strict allowlist — callers can supply arbitrary JSON.
 - No runtime sandbox (seccomp, container isolation) prevents a plugin from making unexpected system calls.
 - Plugin authentication is via the platform JWT — there is no per-plugin credential rotation or scoped token.
-- The ring policy covers exec channels and remediation approvals, but not all tool invocation paths in ArcClaw's security agent.
+- The ring policy covers exec channels and remediation approvals, but not all tool invocation paths in AI Security's security agent.
 
 ---
 
@@ -230,7 +230,7 @@
 - `backend/tests/test_owasp_asi_evidence.py::test_asi09_self_approval_is_blocked` — HTTP-level integration test asserting that the same identity cannot approve its own exec channel request (HTTP 403), closing the self-approval path for excessive agency via approval fraud.
 
 **Known Limitations:**
-- The ArcClaw security agent (`security_agent.py`) tool list is bounded but not dynamically validated against the ring policy at invocation time.
+- The AI Security agent (`security_agent.py`) tool list is bounded but not dynamically validated against the ring policy at invocation time.
 - Workflow runner (`workflow_runner.py`) can chain multiple actions — inter-step privilege accumulation is not yet tracked.
 - No per-session capability token — an agent that obtains approval for one action could theoretically reuse context for adjacent actions.
 
@@ -271,7 +271,7 @@
 
 - RegentClaw does not host model weights. All inference is via provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama). Model theft from the RegentClaw platform itself is not applicable.
 - `backend/app/services/secrets_manager.py`: Provider API keys encrypted at rest with Fernet. Keys are never logged or returned via API.
-- System prompts used by ArcClaw's security agent (`backend/app/claws/arcclaw/security_agent.py`) are stored in source code — not separately protected.
+- System prompts used by AI Security's security agent (`backend/app/claws/arcclaw/security_agent.py`) are stored in source code — not separately protected.
 - No system prompt confidentiality enforcement (prompt extraction via token probabilities or completion nudging is not mitigated).
 
 **Test Coverage:** N/A

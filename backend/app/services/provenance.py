@@ -1,5 +1,5 @@
 """
-RegentClaw — Connector / Skill-Pack Provenance Service
+Enkstein — Connector / Skill-Pack Provenance Service
 Verifies manifest integrity at install time via SHA-256 content hash
 and optional Ed25519 signature (when publisher key is available).
 """

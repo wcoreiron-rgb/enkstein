@@ -191,7 +191,7 @@ function buildTicketDraft(job: any, summary: any, tasks: any[]): string {
     `Status: ${job?.status || ''}`,
     `Severity: ${job?.overall_severity || 'info'}`,
     `Confidence: ${job?.confidence ?? 'n/a'}`,
-    `Participants: ${participants.length ? participants.join(', ') : 'n/a'}`,
+    `Participants: ${participants.length ? participants.map(capabilityName).join(', ') : 'n/a'}`,
     '',
     'Executive Summary:',
     `${summary?.executive_summary || 'No summary available.'}`,

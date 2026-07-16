@@ -1,5 +1,5 @@
 """
-RegentClaw — Event Trigger Routes
+Enkstein — Event Trigger Routes
 CRUD for EventTrigger definitions + inbound webhook endpoint.
 
 GET    /triggers           — list all triggers (filterable)

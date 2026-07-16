@@ -1,5 +1,5 @@
 """
-RegentClaw — Messaging Channel Gateway API
+Enkstein — Messaging Channel Gateway API
 
 POST /channel-gateway/slack/events          — Slack Events API webhook
 POST /channel-gateway/teams/webhook         — Microsoft Teams outgoing webhook
@@ -172,7 +172,7 @@ def _persist_message(db: Session, result: dict, channel_name: str = "") -> Chann
 
 def _response_title(result: dict) -> str:
     decision = (result.get("policy_decision") or "processed").replace("_", " ").title()
-    return f"RegentClaw {decision}"
+    return f"Enkstein {decision}"
 
 
 def _response_color(result: dict) -> str:
@@ -651,7 +651,7 @@ async def teams_webhook(
     return {
         "type":    "message",
         "text":    out["response"],
-        "summary": f"RegentClaw: {out['policy_decision']} ({out['execution_status']})",
+        "summary": f"Enkstein: {out['policy_decision']} ({out['execution_status']})",
     }
 
 

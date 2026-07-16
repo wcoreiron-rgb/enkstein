@@ -307,7 +307,7 @@
     </a>
     <ul class="nav-links">
       <li><a href="index.html#features">Features</a></li>
-      <li><a href="index.html#claws">Claws</a></li>
+      <li><a href="index.html#claws">Capability Nodes</a></li>
       <li><a href="index.html#architecture">Architecture</a></li>
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html" class="active-page">Changelog</a></li>
@@ -331,6 +331,34 @@
       <a href="https://github.com/wcoreiron-rgb/marcellus/commits/main" target="_blank" rel="noopener">
         &#9679; Commit History
       </a>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.4 — Capability Presentation Migration -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Capability Presentation Migration</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.3.4</span>
+          <span class="tag tag-feat">Enkstein terminology</span>
+          <span class="tag tag-sec">Compatibility preserved</span>
+          <span class="release-date">July 16, 2026 &nbsp;·&nbsp; Enkstein v0.3.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein now presents domain workers as Capability Nodes grouped into Security Arms, while retaining the established API paths, persisted identifiers, and compatibility modules underneath.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Unified presentation:</strong> navigation, operational pages, Swarm participants, schedules, policies, notifications, and current documentation use Enkstein capability names.</li>
+          <li><strong>Compatibility preserved:</strong> existing <code>/api/v1/*claw</code> routes, database fields, task contracts, and module imports are unchanged.</li>
+          <li><strong>Safe translation:</strong> only known legacy module names are translated; external products such as OpenClaw and literal compatibility paths remain intact.</li>
+          <li><strong>Correct hierarchy:</strong> Security Arms identify domain pillars and Capability Nodes identify individual workers.</li>
+        </ul>
+      </div>
     </div>
   </div>
 
@@ -895,15 +923,15 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.6.4 — TerraClaw Terraform MCP Agent Generation                 -->
+  <!--  v0.6.4 — Terraform Governance Terraform MCP Agent Generation                 -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--orange);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">TerraClaw Terraform MCP Agent Generation</div>
+        <div class="release-title">Terraform Governance Terraform MCP Agent Generation</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">TerraClaw</span>
+          <span class="tag tag-feat">Terraform Governance</span>
           <span class="tag tag-feat">MCP</span>
           <span class="tag tag-sec">IaC Security</span>
           <span class="release-date">June 8, 2026 &nbsp;·&nbsp; v0.6.4</span>
@@ -912,16 +940,16 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice turns TerraClaw Generate into an agent-style Terraform workspace: operators can describe infrastructure, receive governed Terraform output, inspect MCP trace/artifacts/controls, and hand the result into Review or Plan Analysis.
+        This slice turns Terraform Governance Generate into an agent-style Terraform workspace: operators can describe infrastructure, receive governed Terraform output, inspect MCP trace/artifacts/controls, and hand the result into Review or Plan Analysis.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>Terraform MCP provider:</strong> TerraClaw now reports Terraform MCP as a provider surface and maps the <code>terraform_mcp</code> connector to TerraClaw.</li>
+          <li><strong>Terraform MCP provider:</strong> Terraform Governance now reports Terraform MCP as a provider surface and maps the <code>terraform_mcp</code> connector to Terraform Governance.</li>
           <li><strong>MCP tools:</strong> the RegentClaw MCP server exposes <code>terraclaw_generate_secure_terraform</code>, <code>terraclaw_review_hcl</code>, and <code>terraclaw_analyze_plan</code>.</li>
           <li><strong>Agent response contract:</strong> <code>/api/v1/terraclaw/generate</code> returns MCP mode, agent trace, output artifacts, applied controls, framework metadata, and next actions.</li>
           <li><strong>Cloud coverage:</strong> added a secure GCP Cloud SQL PostgreSQL template with private networking, encrypted storage, backups, SSL-only connections, and deletion protection.</li>
-          <li><strong>Generate UI:</strong> the TerraClaw Generate tab now behaves like a chat-style agent surface with Review and Plan handoff buttons.</li>
+          <li><strong>Generate UI:</strong> the Terraform Governance Generate tab now behaves like a chat-style agent surface with Review and Plan handoff buttons.</li>
         </ul>
       </div>
     </div>
@@ -960,47 +988,47 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.6.2 — TerraClaw Natural-Language Build Wizard                   -->
+  <!--  v0.6.2 — Terraform Governance Natural-Language Build Wizard                   -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--orange);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">TerraClaw Natural-Language Terraform Build Wizard</div>
+        <div class="release-title">Terraform Governance Natural-Language Terraform Build Wizard</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">TerraClaw</span>
+          <span class="tag tag-feat">Terraform Governance</span>
           <span class="tag tag-sec">IaC Security</span>
-          <span class="tag tag-feat">ArcClaw</span>
+          <span class="tag tag-feat">AI Security</span>
           <span class="release-date">June 5, 2026 &nbsp;·&nbsp; v0.6.2</span>
         </div>
       </div>
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice expands TerraClaw with a plain-English Terraform module builder that scans operator input with ArcClaw, generates hardened IaC modules, reviews the output, and returns deployment guidance.
+        This slice expands Terraform Governance with a plain-English Terraform module builder that scans operator input with AI Security, generates hardened IaC modules, reviews the output, and returns deployment guidance.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Build endpoint:</strong> added <code>POST /api/v1/terraclaw/build</code> for natural-language Terraform module generation.</li>
-          <li><strong>ArcClaw safety scan:</strong> build requests run prompt-injection and sensitive-pattern checks before module generation.</li>
+          <li><strong>AI Security safety scan:</strong> build requests run prompt-injection and sensitive-pattern checks before module generation.</li>
           <li><strong>Secure module output:</strong> generated modules include secure-by-default controls such as private networking, encryption, diagnostics, managed identity, and secret generation where applicable.</li>
-          <li><strong>Build UI:</strong> TerraClaw page now starts on a Build tab with intent summary, generated module, security controls, review findings, and deploy steps.</li>
+          <li><strong>Build UI:</strong> Terraform Governance page now starts on a Build tab with intent summary, generated module, security controls, review findings, and deploy steps.</li>
         </ul>
       </div>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.6.1 — TerraClaw Terraform / IaC Governance                      -->
+  <!--  v0.6.1 — Terraform Governance Terraform / IaC Governance                      -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--orange);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">TerraClaw Terraform &amp; IaC Governance</div>
+        <div class="release-title">Terraform Governance Terraform &amp; IaC Governance</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">TerraClaw</span>
+          <span class="tag tag-feat">Terraform Governance</span>
           <span class="tag tag-sec">IaC Security</span>
           <span class="tag tag-fix">Swarm</span>
           <span class="release-date">June 4, 2026 &nbsp;·&nbsp; v0.6.1</span>
@@ -1009,32 +1037,32 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice adds TerraClaw as the Terraform and infrastructure-as-code governance claw, aligned with the standard RegentClaw findings, provider, scan, and Swarm task contracts.
+        This slice adds Terraform Governance as the Terraform and infrastructure-as-code governance claw, aligned with the standard RegentClaw findings, provider, scan, and Swarm task contracts.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Terraform HCL review:</strong> Trust Fabric-gated review for public exposure, weak data protection, excessive IAM, hardcoded secrets, missing diagnostics, and risky Kubernetes control plane settings.</li>
-          <li><strong>Secure Terraform generation:</strong> generates security-first Terraform templates and immediately runs the TerraClaw rule review on generated code.</li>
+          <li><strong>Secure Terraform generation:</strong> generates security-first Terraform templates and immediately runs the Terraform Governance rule review on generated code.</li>
           <li><strong>Plan risk analysis:</strong> analyzes Terraform plan changes before apply and returns APPROVE / WARN / BLOCK decisions with risky-change details.</li>
           <li><strong>Provider surfaces:</strong> exposes Terraform Cloud, tfsec/Trivy, Checkov, and Infracost connector status with scan-path registration.</li>
           <li><strong>Swarm support:</strong> adds <code>POST /api/v1/terraclaw/task</code>, Swarm dispatcher routing, connector-state metadata, and normalized 0-100 risk scores for Findings and task output.</li>
-          <li><strong>Docs:</strong> README, technical docs, landing page, maturity matrix, production deployment guide, and changelog now describe TerraClaw consistently.</li>
+          <li><strong>Docs:</strong> README, technical docs, landing page, maturity matrix, production deployment guide, and changelog now describe Terraform Governance consistently.</li>
         </ul>
       </div>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.6.0 — ReleaseClaw Deployment Governance                         -->
+  <!--  v0.6.0 — Release Governance Deployment Governance                         -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--blue);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">ReleaseClaw Zero Trust Deployment Preflight</div>
+        <div class="release-title">Release Governance Zero Trust Deployment Preflight</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">ReleaseClaw</span>
+          <span class="tag tag-feat">Release Governance</span>
           <span class="tag tag-feat">Deployment</span>
           <span class="tag tag-fix">Governance</span>
           <span class="release-date">June 2, 2026 &nbsp;·&nbsp; v0.6.0</span>
@@ -1043,7 +1071,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice adds ReleaseClaw as RegentClaw's governed release authority for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments.
+        This slice adds Release Governance as RegentClaw's governed release authority for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -1051,8 +1079,8 @@
           <li><strong>Universal deployment contract:</strong> deployment preflight normalizes source, environment, app, change ref, deployment type, mode, artifacts, execution plan, rollback plan, model profile, and classification.</li>
           <li><strong>Adapter catalog:</strong> GitHub Actions, GitLab CI, Jenkins, Azure DevOps, ArgoCD, Terraform Cloud, AWS/Azure/GCP CLI, Kubernetes, Helm, Docker, Docker Compose, Bash, PowerShell, Python, Node, Ansible, webhook, and custom paths are represented as governed handoff adapters.</li>
           <li><strong>Trust Fabric gating:</strong> preflight, approval, and execution handoff are policy-governed and audited; self-approval is blocked.</li>
-          <li><strong>Evidence bundle:</strong> deployment gates include required controls, Claw coverage, blockers, warnings, policy decision, handoff metadata, and SHA-256 chain-of-custody hash.</li>
-          <li><strong>UI:</strong> ReleaseClaw page added to the Infrastructure blade with templates, adapters, preflight form, approval, execute handoff, recent gates, and evidence hash visibility.</li>
+          <li><strong>Evidence bundle:</strong> deployment gates include required controls, Capability Node coverage, blockers, warnings, policy decision, handoff metadata, and SHA-256 chain-of-custody hash.</li>
+          <li><strong>UI:</strong> Release Governance page added to the Infrastructure blade with templates, adapters, preflight form, approval, execute handoff, recent gates, and evidence hash visibility.</li>
         </ul>
       </div>
       <div class="change-section">
@@ -1073,7 +1101,7 @@
     <div class="release-dot" style="background: var(--green);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">Swarm Task Provenance Completed Across Remaining Claws + Scan Log Hardening</div>
+        <div class="release-title">Swarm Task Provenance Completed Across Remaining Capability Nodes + Scan Log Hardening</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Swarm</span>
           <span class="tag tag-fix">Hardening</span>
@@ -1089,8 +1117,8 @@
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Provenance completion:</strong> added <code>data_source</code>/<code>connector_state</code> to remaining focused task handlers (Intel, Privacy, Vendor, Insider, User, SaaS, Custom).</li>
-          <li><strong>Regression expansion:</strong> dispatcher routing provenance tests now cover all currently swarm-routed claws.</li>
-          <li><strong>Log hardening:</strong> CloudClaw and EndpointClaw provider scan failures now log sanitized provider context without embedding raw exception payloads.</li>
+          <li><strong>Regression expansion:</strong> dispatcher routing provenance tests now cover all currently swarm-routed capability nodes.</li>
+          <li><strong>Log hardening:</strong> Cloud Security and Endpoint Security provider scan failures now log sanitized provider context without embedding raw exception payloads.</li>
         </ul>
       </div>
     </div>
@@ -1175,7 +1203,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This run adds a Trust Fabric-governed ComplianceClaw evidence export and documents the baseline production deployment controls.
+        This run adds a Trust Fabric-governed Compliance Assurance evidence export and documents the baseline production deployment controls.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -1217,7 +1245,7 @@
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>Update preview:</strong> added <code>POST /api/v1/skill-packs/{id}/preview-update</code> to show skill, connector, Claw, and scope-permission diffs before applying a pack upgrade.</li>
+          <li><strong>Update preview:</strong> added <code>POST /api/v1/skill-packs/{id}/preview-update</code> to show skill, connector, Capability Node, and scope-permission diffs before applying a pack upgrade.</li>
           <li><strong>Installed-pack upgrade:</strong> added <code>POST /api/v1/skill-packs/{id}/upgrade</code> with bounded previous-version snapshots stored in manifest lifecycle metadata.</li>
           <li><strong>Rollback:</strong> added <code>POST /api/v1/skill-packs/{id}/rollback</code> with rollback actor and reason metadata.</li>
           <li><strong>Operator visibility:</strong> pack responses now expose <code>rollback_available</code> so the UI/API can show whether a pack can be restored.</li>
@@ -1233,15 +1261,15 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.5.5 — MemoryClaw Runtime Context + Swarm Memory Proposals       -->
+  <!--  v0.5.5 — Memory Cortex Runtime Context + Swarm Memory Proposals       -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--teal);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">MemoryClaw Runtime Context + Swarm Memory Proposals</div>
+        <div class="release-title">Memory Cortex Runtime Context + Swarm Memory Proposals</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">MemoryClaw</span>
+          <span class="tag tag-feat">Memory Cortex</span>
           <span class="tag tag-feat">Swarm</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.5.5</span>
         </div>
@@ -1249,7 +1277,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This run connects MemoryClaw to Swarm execution so tasks can use safe runtime context and high-risk judged outcomes can create reviewable incident memory.
+        This run connects Memory Cortex to Swarm execution so tasks can use safe runtime context and high-risk judged outcomes can create reviewable incident memory.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -1292,7 +1320,7 @@
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Enrollment token endpoint:</strong> added <code>POST /api/v1/remote-agents/enrollment-token</code> with signed tenant/owner/scope metadata and expiry.</li>
-          <li><strong>Registration guardrails:</strong> remote-agent registration can validate enrollment token tenant, owner, allowed actions, allowed Claws, and allowed connectors.</li>
+          <li><strong>Registration guardrails:</strong> remote-agent registration can validate enrollment token tenant, owner, allowed actions, allowed Capability Nodes, and allowed connectors.</li>
           <li><strong>Key rotation endpoint:</strong> added <code>POST /api/v1/remote-agents/{agent_id}/rotate-key</code> with duplicate-key rejection and rotation audit metadata.</li>
           <li><strong>Capability inventory:</strong> registration and heartbeat can now persist remote-agent capabilities for operator and dispatch context.</li>
         </ul>
@@ -1330,7 +1358,7 @@
         <ul class="change-list">
           <li><strong>New preset:</strong> <code>POST /api/v1/swarm/jobs/presets/microsoft-identity-incident</code> launches Identity, Cloud, Endpoint, Log, Threat, Compliance, and Automation tasks.</li>
           <li><strong>Connector preference metadata:</strong> preset input declares Entra ID, Azure Defender, Defender Endpoint, and Microsoft Sentinel as preferred connector families.</li>
-          <li><strong>IdentityClaw task upgrade:</strong> <code>POST /api/v1/identityclaw/task</code> now attempts Entra-backed findings through configured connector credentials before falling back to persisted or seeded data.</li>
+          <li><strong>Identity Security task upgrade:</strong> <code>POST /api/v1/identityclaw/task</code> now attempts Entra-backed findings through configured connector credentials before falling back to persisted or seeded data.</li>
           <li><strong>Swarm UI:</strong> incident preset controls now include a Microsoft Incident quick-launch action.</li>
         </ul>
       </div>
@@ -1383,15 +1411,15 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.5.4 — MemoryClaw Proposal Review + Rollback                    -->
+  <!--  v0.5.4 — Memory Cortex Proposal Review + Rollback                    -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--purple);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">MemoryClaw Proposal Review + Rollback</div>
+        <div class="release-title">Memory Cortex Proposal Review + Rollback</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">MemoryClaw</span>
+          <span class="tag tag-feat">Memory Cortex</span>
           <span class="tag tag-feat">Operator UX</span>
           <span class="release-date">June 1, 2026 &nbsp;·&nbsp; v0.5.4</span>
         </div>
@@ -1502,7 +1530,7 @@
     <div class="release-dot" style="background: var(--green);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">Swarm Dispatcher Routing Expanded to IntelClaw + RecoveryClaw</div>
+        <div class="release-title">Swarm Dispatcher Routing Expanded to Threat Intelligence + Recovery Readiness</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Swarm</span>
           <span class="tag tag-feat">Task Contract</span>
@@ -1512,14 +1540,14 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This batch replaces additional swarm simulation fallback paths by adding focused task endpoints for IntelClaw and RecoveryClaw and wiring dispatcher routing to use them.
+        This batch replaces additional swarm simulation fallback paths by adding focused task endpoints for Threat Intelligence and Recovery Readiness and wiring dispatcher routing to use them.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>New endpoints:</strong> <code>POST /api/v1/intelclaw/task</code> and <code>POST /api/v1/recoveryclaw/task</code>.</li>
-          <li><strong>Dispatcher routing:</strong> <code>backend/app/core/swarm/dispatcher.py</code> now routes IntelClaw/RecoveryClaw tasks through real handlers.</li>
-          <li><strong>Regression updates:</strong> dispatcher routing test matrix now includes intel and recovery claws.</li>
+          <li><strong>Dispatcher routing:</strong> <code>backend/app/core/swarm/dispatcher.py</code> now routes Threat Intelligence and Recovery Readiness tasks through real handlers.</li>
+          <li><strong>Regression updates:</strong> dispatcher routing test matrix now includes intel and recovery capability nodes.</li>
         </ul>
       </div>
     </div>
@@ -1600,7 +1628,7 @@
       <div>
         <div class="release-title">Command Timeline Focus Filters (All/Approvals/Rejections)</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-feat">Channel Gateway</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.9</span>
         </div>
@@ -1630,7 +1658,7 @@
       <div>
         <div class="release-title">Command Approval Audit Summary in Status API</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">Auditability</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.8</span>
         </div>
@@ -1661,7 +1689,7 @@
         <div class="release-title">JWT-Bound Command Approval Principals</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-fix">Security</span>
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.7</span>
         </div>
       </div>
@@ -1697,7 +1725,7 @@
       <div>
         <div class="release-title">Bulk Review Guardrails + Partial Failure Surfacing</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">Validation</span>
           <span class="tag tag-feat">Channel Gateway</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.6</span>
@@ -1740,7 +1768,7 @@
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-fix">Validation</span>
           <span class="tag tag-feat">E2E</span>
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.5</span>
         </div>
       </div>
@@ -1781,7 +1809,7 @@
       <div>
         <div class="release-title">Bulk Pending-Command Review (Approve/Reject)</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-feat">Channel Gateway</span>
           <span class="tag tag-fix">Ops UX</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.4</span>
@@ -1824,7 +1852,7 @@
       <div>
         <div class="release-title">Per-Command Approval Policy Update Controls</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-feat">Delegation</span>
           <span class="tag tag-fix">Ops UX</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.3</span>
@@ -1868,7 +1896,7 @@
       <div>
         <div class="release-title">Pending Command Filters + Consolidated Status Endpoint</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-feat">Channel Gateway</span>
           <span class="tag tag-fix">Ops UX</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.2</span>
@@ -1912,7 +1940,7 @@
       <div>
         <div class="release-title">Command Timeline Endpoint + UI Audit View</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">Audit</span>
           <span class="tag tag-feat">Frontend</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.1</span>
@@ -1956,7 +1984,7 @@
       <div>
         <div class="release-title">Pending Command Rejection Path + UI Action</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-sec">Governance</span>
           <span class="tag tag-fix">Ops UX</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.4.0</span>
@@ -2001,7 +2029,7 @@
         <div class="release-title">Multi-Operator Command Approval Semantics</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-sec">Hardening</span>
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">Governance</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.9</span>
         </div>
@@ -2047,7 +2075,7 @@
         <div class="release-title">Channel Gateway Pending-Command Approval UX</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Frontend</span>
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">UX</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.8</span>
         </div>
@@ -2089,7 +2117,7 @@
       <div>
         <div class="release-title">CLI Ingress Adapter + Pending Command Approval APIs</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-sec">Control Plane</span>
           <span class="tag tag-fix">Tests</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.7</span>
@@ -2131,7 +2159,7 @@
 
     <div class="release-header">
       <div>
-        <div class="release-title">Webhook + Email Ingress Adapters for CommandClaw</div>
+        <div class="release-title">Webhook + Email Ingress Adapters for Command</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Channel Gateway</span>
           <span class="tag tag-sec">Governance</span>
@@ -2143,7 +2171,7 @@
 
     <div class="release-body">
       <div class="release-description">
-        This slice expands command ingress coverage so webhook and email traffic can drive governed commands through the same CommandClaw flow as portal, Slack, and Teams inputs.
+        This slice expands command ingress coverage so webhook and email traffic can drive governed commands through the same Command flow as portal, Slack, and Teams inputs.
       </div>
 
       <div class="change-section">
@@ -2178,7 +2206,7 @@
         <div class="release-title">Remote Dispatch Guardrails + Channel Simulation Parity</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-sec">Hardening</span>
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-fix">Tests</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.5</span>
         </div>
@@ -2212,16 +2240,16 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.3.4 — Channel Ingress CommandClaw Normalization                 -->
+  <!--  v0.3.4 — Channel Ingress Command Normalization                 -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--blue);"></div>
 
     <div class="release-header">
       <div>
-        <div class="release-title">Channel Ingress → CommandClaw Contract</div>
+        <div class="release-title">Channel Ingress → Command Contract</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-feat">CommandClaw</span>
+          <span class="tag tag-feat">Command</span>
           <span class="tag tag-sec">Governance</span>
           <span class="tag tag-fix">Reliability</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.4</span>
@@ -2232,14 +2260,14 @@
     <div class="release-body">
       <div class="release-description">
         This release converges channel ingress with the unified command control plane.
-        Slack/Teams/internal channel messages are normalized into CommandClaw payloads,
+        Slack/Teams/internal channel messages are normalized into Command payloads,
         evaluated through Trust Fabric policy flow, and returned with command outcome metadata.
       </div>
 
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>Channel normalization</strong> added for <code>/channel-gateway/slack/events</code>, <code>/channel-gateway/teams/webhook</code>, and <code>/channel-gateway/message</code> into CommandClaw request shape.</li>
+          <li><strong>Channel normalization</strong> added for <code>/channel-gateway/slack/events</code>, <code>/channel-gateway/teams/webhook</code>, and <code>/channel-gateway/message</code> into Command request shape.</li>
           <li><strong>Unified policy path</strong> now executes normalized channel commands through the same guarded contract as <code>POST /api/v1/commands</code>.</li>
           <li><strong>Response traceability</strong> now includes <code>command_result</code> in channel message responses.</li>
           <li><strong>Graceful fallback</strong> returns <code>outcome: unavailable</code> when async command backend is unreachable, without breaking channel ingestion.</li>
@@ -2335,17 +2363,17 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.3.6 — CustomClaw Swarm Task Routing                             -->
+  <!--  v0.3.6 — Custom Capability Swarm Task Routing                             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--purple);"></div>
 
     <div class="release-header">
       <div>
-        <div class="release-title">Swarm Runtime: CustomClaw Real Task Path</div>
+        <div class="release-title">Swarm Runtime: Custom Capability Real Task Path</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Swarm</span>
-          <span class="tag tag-new">CustomClaw</span>
+          <span class="tag tag-new">Custom Capability</span>
           <span class="tag tag-fix">Tests</span>
           <span class="release-date">May 31, 2026 &nbsp;·&nbsp; v0.3.6</span>
         </div>
@@ -2354,13 +2382,13 @@
 
     <div class="release-body">
       <div class="release-description">
-        This release adds a real focused task endpoint for CustomClaw and routes Swarm dispatch directly through it.
+        This release adds a real focused task endpoint for Custom Capability and routes Swarm dispatch directly through it.
       </div>
 
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>CustomClaw task endpoint:</strong> added <code>POST /api/v1/customclaw/task</code> returning standardized Swarm Task Contract fields.</li>
+          <li><strong>Custom Capability task endpoint:</strong> added <code>POST /api/v1/customclaw/task</code> returning standardized Swarm Task Contract fields.</li>
           <li><strong>Dispatcher wiring:</strong> <code>customclaw</code> now executes through its real task handler instead of fallback simulation.</li>
           <li><strong>Fallback regression updated:</strong> unsupported-module fallback now validates against <code>unknownclaw</code>.</li>
         </ul>
@@ -2411,7 +2439,7 @@
       <div class="change-section">
         <div class="change-section-title">Verification</div>
         <ul class="change-list">
-          <li><strong>Swarm routing tests</strong> updated to validate all newly routed claws and fallback behavior on unsupported modules.</li>
+          <li><strong>Swarm routing tests</strong> updated to validate all newly routed capability nodes and fallback behavior on unsupported modules.</li>
           <li><strong>Test runs</strong>: <code>pytest -q tests/test_swarm_dispatcher_routing.py tests/test_swarm.py</code> and <code>pytest -q tests/test_remote_control.py tests/test_channel_gateway_commands.py</code> passed.</li>
         </ul>
       </div>
@@ -2538,7 +2566,7 @@
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Preset endpoint</strong> added: <code>POST /api/v1/swarm/jobs/presets/suspicious-identity</code>.</li>
-          <li><strong>Preset participants</strong> include IdentityClaw, ThreatClaw, CloudClaw, DataClaw, ComplianceClaw, and AutomationClaw.</li>
+          <li><strong>Preset participants</strong> include Identity Security, Threat Analysis, Cloud Security, Data Security, Compliance Assurance, and Security Automation.</li>
           <li><strong>Approval-gated launch</strong> is enabled by default for this preset.</li>
           <li><strong>Swarm list UI</strong> adds a quick-launch card for the preset workflow.</li>
           <li><strong>Swarm detail UI</strong> now shows judge <code>root_cause</code>, <code>blast_radius</code>, and <code>next_steps</code> when available.</li>
@@ -2603,14 +2631,14 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  v0.3.0 — Swarm + ModelClaw Foundation                              -->
+  <!--  v0.3.0 — Swarm + Model Cortex Foundation                              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--blue);"></div>
 
     <div class="release-header">
       <div>
-        <div class="release-title">Swarm Parallel Runtime + ModelClaw Foundation</div>
+        <div class="release-title">Swarm Parallel Runtime + Model Cortex Foundation</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-new">New Feature</span>
           <span class="tag tag-feat">Swarm</span>
@@ -2623,7 +2651,7 @@
     <div class="release-body">
       <div class="release-description">
         This release moves Swarm from proof-of-concept execution toward governed runtime behavior:
-        bounded parallel task execution, real claw task routing, live stream visibility, ModelClaw
+        bounded parallel task execution, real claw task routing, live stream visibility, Model Cortex
         scaffolding, and Swarm Judge synthesis routed through a dedicated model profile.
       </div>
 
@@ -2631,10 +2659,10 @@
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Bounded parallel swarm execution</strong> shipped for background jobs (Semaphore + gather) instead of sequential loops.</li>
-          <li><strong>Real claw task routing</strong> in dispatcher now targets <code>/task</code>-equivalent handlers for IdentityClaw, CloudClaw, ThreatClaw, and ArcClaw with deterministic fallback for unsupported claws.</li>
+          <li><strong>Real claw task routing</strong> in dispatcher now targets <code>/task</code>-equivalent handlers for Identity Security, Cloud Security, Threat Analysis, and AI Security with deterministic fallback for unsupported capability nodes.</li>
           <li><strong>Live swarm stream endpoint</strong> added: <code>GET /api/v1/swarm/jobs/{id}/stream</code> (SSE events for job/task lifecycle).</li>
-          <li><strong>ModelClaw scaffold</strong> added with governed route/profile/provider/call-audit APIs under <code>/api/v1/modelclaw/*</code>.</li>
-          <li><strong>Swarm Judge synthesis</strong> now uses ModelClaw via dedicated <code>swarm_judge_profile</code> and falls back to deterministic summary when policy blocks or profile constraints apply.</li>
+          <li><strong>Model Cortex scaffold</strong> added with governed route/profile/provider/call-audit APIs under <code>/api/v1/modelclaw/*</code>.</li>
+          <li><strong>Swarm Judge synthesis</strong> now uses Model Cortex via dedicated <code>swarm_judge_profile</code> and falls back to deterministic summary when policy blocks or profile constraints apply.</li>
         </ul>
       </div>
 
@@ -2642,10 +2670,10 @@
         <div class="change-section-title">Verification</div>
         <ul class="change-list">
           <li><strong>Swarm parallelism tests</strong> added to verify bounded concurrency.</li>
-          <li><strong>Claw task contract tests</strong> added for the four shipped <code>/task</code> claws.</li>
+          <li><strong>Capability Node task contract tests</strong> added for the four shipped <code>/task</code> capability nodes.</li>
           <li><strong>Dispatcher routing tests</strong> added for both real-handler and fallback paths.</li>
           <li><strong>Swarm SSE test</strong> added to verify stream events and terminal lifecycle completion behavior.</li>
-          <li><strong>ModelClaw + Swarm Judge tests</strong> added for allow and denied/fallback synthesis paths.</li>
+          <li><strong>Model Cortex + Swarm Judge tests</strong> added for allow and denied/fallback synthesis paths.</li>
         </ul>
       </div>
     </div>
@@ -2692,7 +2720,7 @@
           <li><strong>Schedule delete</strong> no longer fails on linked runs; related <code>agent_runs.schedule_id</code> is cleared first.</li>
           <li><strong>Autonomy emergency mode</strong> endpoints now accept object JSON payloads used by the UI.</li>
           <li><strong>Run replay</strong> now supports <code>GET /api/v1/orchestrations/run-replay/{run_id}</code>.</li>
-          <li><strong>Claw contract consistency</strong> added missing compatibility endpoints for ArcClaw and IdentityClaw findings/providers.</li>
+          <li><strong>Capability Node contract consistency</strong> added missing compatibility endpoints for AI Security and Identity Security findings/providers.</li>
         </ul>
       </div>
     </div>
@@ -2740,7 +2768,7 @@
           <li><strong>Dual-approval enforced</strong> — shell/browser exec channels require 2 different approvers. Self-approval blocked.</li>
           <li><strong>approved_by from JWT</strong> — approval identity pulled from token sub, never from client-supplied body field.</li>
           <li><strong>SSRF blocklist</strong> — connector tester blocks RFC1918, loopback, and cloud metadata IPs (<code>169.254.169.254</code>).</li>
-          <li><strong>ArcClaw chat auth</strong> — Next.js proxy route now forwards <code>Authorization</code> header to backend.</li>
+          <li><strong>AI Security chat auth</strong> — Next.js proxy route now forwards <code>Authorization</code> header to backend.</li>
           <li><strong>SECRET_KEY guard</strong> — startup rejects known insecure default keys when <code>DEBUG=false</code>.</li>
         </ul>
       </div>
@@ -2836,7 +2864,7 @@
           <li>Get a free NVIDIA NIM key at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener" style="color:var(--nvidia);">build.nvidia.com/models</a> — no credit card needed.</li>
           <li>Open RegentClaw → <strong>Connectors</strong> → search <em>NVIDIA NIM</em> → click <strong>Configure</strong>.</li>
           <li>Paste your key → complete the 4-step flow → done.</li>
-          <li>Navigate to <strong>ArcClaw</strong> → Security Copilot auto-activates with NVIDIA NIM selected.</li>
+          <li>Navigate to <strong>AI Security</strong> → Security Copilot auto-activates with NVIDIA NIM selected.</li>
         </ul>
       </div>
 
@@ -2922,7 +2950,7 @@
     <div class="release-body">
       <div class="release-description">
         First public release of RegentClaw — a self-hosted, open-source Zero Trust Security
-        platform. 24 specialized security modules (Claws), a central Trust Fabric enforcement
+        platform. 24 specialized security modules (Capability Nodes), a central Trust Fabric enforcement
         layer, AI governance, policy engine, and a full connector marketplace for integrating
         your own tools and credentials locally.
       </div>
@@ -2930,9 +2958,9 @@
       <div class="change-section">
         <div class="change-section-title">Included at Launch</div>
         <ul class="change-list">
-          <li><strong>24 Claw modules</strong> — ArcClaw (AI), CloudClaw, EndpointClaw, IdentityClaw, ExposureClaw, ThreatClaw, and 18 more.</li>
+          <li><strong>24 Capability Node modules</strong> — AI Security (AI), Cloud Security, Endpoint Security, Identity Security, Exposure Management, Threat Analysis, and 18 more.</li>
           <li><strong>Trust Fabric</strong> — central policy evaluation, risk scoring, and audit for every action.</li>
-          <li><strong>Security Copilot</strong> (ArcClaw) — AI agent with live tool calling: CVEs, MITRE ATT&amp;CK, findings, scans, workflow triggers.</li>
+          <li><strong>Security Copilot</strong> (AI Security) — AI agent with live tool calling: CVEs, MITRE ATT&amp;CK, findings, scans, workflow triggers.</li>
           <li><strong>AI Governance</strong> — prompt injection detection (12-vector AGT audit), PII/secret redaction, risk scoring, full audit log.</li>
           <li><strong>Connector Marketplace</strong> — 100+ connectors, Fernet-encrypted credentials stored locally, never in the cloud.</li>
           <li><strong>Policy Engine</strong> — define allow/block/alert rules scoped to any connector, user, or module.</li>

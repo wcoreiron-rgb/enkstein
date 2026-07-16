@@ -1,5 +1,5 @@
 """
-RegentClaw — WebSocket API Route
+Enkstein — WebSocket API Route
 
 GET /ws   — upgrade to WebSocket; receives real-time platform events.
 
@@ -76,7 +76,7 @@ async def websocket_endpoint(ws: WebSocket) -> None:
         "type":      "connected",
         "timestamp": _now(),
         "data":      {
-            "message":     "RegentClaw live feed connected",
+            "message":     "Enkstein live feed connected",
             "connections": ws_manager.connection_count,
         },
     })

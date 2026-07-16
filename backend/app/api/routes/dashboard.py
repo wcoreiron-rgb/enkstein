@@ -120,7 +120,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
 async def get_agt_status():
     """
     Returns AGT integration status and capability map.
-    Shows which layers use AGT vs. RegentClaw's built-in enforcement.
+    Shows which layers use AGT vs. Enkstein's built-in enforcement.
     """
     return agt_status()
 

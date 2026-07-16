@@ -1,4 +1,4 @@
-"""ComplianceClaw — Compliance & Audit Management API Routes."""
+"""Compliance & Audit Management API Routes."""
 import hashlib
 import json
 import uuid
@@ -14,7 +14,7 @@ from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 from app.trust_fabric import ActionRequest, enforce
 
-router = APIRouter(prefix="/complianceclaw", tags=["ComplianceClaw"])
+router = APIRouter(prefix="/complianceclaw", tags=["Compliance Assurance"])
 
 CLAW_NAME = "complianceclaw"
 PROVIDER_MAP = [
@@ -243,7 +243,7 @@ def _audit_evidence(a: AuditLog) -> dict:
     }
 
 
-@router.get("/stats", summary="ComplianceClaw summary statistics")
+@router.get("/stats", summary="Compliance Assurance summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -278,7 +278,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "last_scan": last_seen.isoformat() if last_seen else None}
 
 
-@router.get("/findings", summary="All ComplianceClaw findings")
+@router.get("/findings", summary="All Compliance Assurance findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -314,7 +314,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="ComplianceClaw provider connection status")
+@router.get("/providers", summary="Compliance Assurance provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
@@ -450,9 +450,9 @@ async def export_evidence_bundle(
     return bundle
 
 
-@router.post("/scan", summary="Run Compliance Claw scan and persist findings")
+@router.post("/scan", summary="Run Compliance Assurance scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a Compliance Claw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run a Compliance Assurance scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     default_provider = PROVIDER_MAP[0]["provider"] if PROVIDER_MAP else "simulation"
     pipeline_findings = []
@@ -473,7 +473,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused ComplianceClaw swarm task")
+@router.post("/task", summary="Execute focused Compliance Assurance swarm task")
 async def run_compliance_task(payload: ComplianceTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

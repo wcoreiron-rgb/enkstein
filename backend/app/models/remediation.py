@@ -1,5 +1,5 @@
 """
-RegentClaw — Remediation Engine Models
+Enkstein — Remediation Engine Models
 DB models for autonomous remediation actions, playbooks, and audit trail.
 """
 import enum

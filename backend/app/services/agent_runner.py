@@ -1,5 +1,5 @@
 """
-RegentClaw — Agent Runner Service (Async)
+Enkstein — Agent Runner Service (Async)
 Every agent execution flows through Trust Fabric.
 
 Execution modes:
@@ -116,7 +116,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "disable_account",    "target": "redacted_user",   "risk": "low"},
                 {"id": "A002", "type": "enforce_mfa_policy", "target": "Marketing group", "risk": "medium"},
             ],
-            "summary": "IdentityClaw found 2 identity hygiene issues. 1 stale admin, 3 accounts without MFA.",
+            "summary": "Identity Security found 2 identity hygiene issues. 1 stale admin, 3 accounts without MFA.",
         },
         "cloudclaw": {
             "findings": [
@@ -127,7 +127,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "block_public_access", "target": "logs-bucket-prod", "risk": "low"},
                 {"id": "A002", "type": "disable_iam_role",    "target": "LegacyDevRole",    "risk": "medium"},
             ],
-            "summary": "CloudClaw found 1 critical and 1 medium cloud misconfiguration.",
+            "summary": "Cloud Security found 1 critical and 1 medium cloud misconfiguration.",
         },
         "accessclaw": {
             "findings": [
@@ -138,7 +138,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "rotate_credential",   "target": "svc-deploy", "risk": "low"},
                 {"id": "A002", "type": "revoke_stale_tokens", "target": "all",        "risk": "low"},
             ],
-            "summary": "AccessClaw identified 1 shared privileged credential and 7 stale session tokens.",
+            "summary": "Privileged Access identified 1 shared privileged credential and 7 stale session tokens.",
         },
         "endpointclaw": {
             "findings": [
@@ -149,7 +149,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "deploy_edr",       "target": "unmanaged_group", "risk": "low"},
                 {"id": "A002", "type": "quarantine_hosts", "target": "CVE-1234-hosts",  "risk": "high"},
             ],
-            "summary": "EndpointClaw found 12 unmanaged endpoints and 4 hosts with critical unpatched CVE.",
+            "summary": "Endpoint Security found 12 unmanaged endpoints and 4 hosts with critical unpatched CVE.",
         },
         "arcclaw": {
             "findings": [
@@ -160,7 +160,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "block_llm_session", "target": "session-abc123", "risk": "low"},
                 {"id": "A002", "type": "flag_for_review",   "target": "output-xyz789",  "risk": "low"},
             ],
-            "summary": "ArcClaw intercepted 1 prompt injection and 1 DLP violation in LLM traffic.",
+            "summary": "AI Security intercepted 1 prompt injection and 1 DLP violation in LLM traffic.",
         },
         "threatclaw": {
             "findings": [
@@ -171,7 +171,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "isolate_host",    "target": "192.168.1.50", "risk": "medium"},
                 {"id": "A002", "type": "create_incident", "target": "SOC queue",    "risk": "low"},
             ],
-            "summary": "ThreatClaw detected active C2 beaconing and lateral movement indicators.",
+            "summary": "Threat Analysis detected active C2 beaconing and lateral movement indicators.",
         },
         "complianceclaw": {
             "findings": [
@@ -182,7 +182,7 @@ def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
                 {"id": "A001", "type": "enable_logging",  "target": "5-systems",     "risk": "low"},
                 {"id": "A002", "type": "schedule_review", "target": "Finance group",  "risk": "low"},
             ],
-            "summary": "ComplianceClaw found 1 medium SOC 2 gap and 1 overdue access review.",
+            "summary": "Compliance Assurance found 1 medium SOC 2 gap and 1 overdue access review.",
         },
     }
 

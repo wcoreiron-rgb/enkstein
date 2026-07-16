@@ -1,4 +1,4 @@
-"""IntelClaw — Threat Intelligence Feed API Routes."""
+"""Threat Intelligence Feed API Routes."""
 from datetime import datetime
 
 from fastapi import APIRouter, Depends
@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 
-router = APIRouter(prefix="/intelclaw", tags=["IntelClaw"])
+router = APIRouter(prefix="/intelclaw", tags=["Threat Intelligence"])
 CLAW_NAME = "intelclaw"
 
 PROVIDER_MAP = [
@@ -220,7 +220,7 @@ _FINDINGS = [
 ]
 
 
-@router.get("/stats", summary="IntelClaw summary statistics")
+@router.get("/stats", summary="Threat Intelligence summary statistics")
 async def get_stats(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -253,7 +253,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
             "last_scan": last_seen.isoformat() if last_seen else None}
 
 
-@router.get("/findings", summary="All IntelClaw findings")
+@router.get("/findings", summary="All Threat Intelligence findings")
 async def get_findings(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     from app.models.finding import Finding
@@ -288,7 +288,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
     ]
 
 
-@router.get("/providers", summary="IntelClaw provider connection status")
+@router.get("/providers", summary="Threat Intelligence provider connection status")
 async def get_providers(db: AsyncSession = Depends(get_db)):
     from app.services.connector_check import check_providers
     return await check_providers(db, PROVIDER_MAP)
@@ -309,9 +309,9 @@ async def get_feeds():
     }
 
 
-@router.post("/scan", summary="Run IntelClaw scan and persist findings")
+@router.post("/scan", summary="Run Threat Intelligence scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run an IntelClaw scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
+    """Run an Threat Intelligence scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     pipeline_findings = []
     for f in _FINDINGS:
@@ -330,7 +330,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     }
 
 
-@router.post("/task", summary="Execute focused IntelClaw swarm task")
+@router.post("/task", summary="Execute focused Threat Intelligence swarm task")
 async def run_intel_task(payload: IntelTaskRequest, db: AsyncSession = Depends(get_db)):
     started = datetime.utcnow()
     any_configured = any([

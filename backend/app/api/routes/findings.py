@@ -1,5 +1,5 @@
 """
-RegentClaw — Universal Findings Routes
+Enkstein — Universal Findings Routes
 Aggregated view across all Claws. Filter by claw, provider, severity, status.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query

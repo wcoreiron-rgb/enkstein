@@ -1,5 +1,5 @@
 """
-RegentClaw — Agent & Scheduler Models
+Enkstein — Agent & Scheduler Models
 Every agent is a governed actor. Every run goes through Trust Fabric.
 """
 import uuid

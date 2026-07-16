@@ -1,5 +1,5 @@
 """
-RegentClaw — Secrets Manager
+Enkstein — Secrets Manager
 ==============================
 Encrypts connector credentials at rest using Fernet symmetric encryption.
 Credentials are NEVER stored in plaintext — not in the DB, not in logs.

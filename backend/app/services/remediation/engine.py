@@ -1,5 +1,5 @@
 """
-RegentClaw — Autonomous Remediation Engine
+Enkstein — Autonomous Remediation Engine
 Main orchestration layer: dispatch actions, handle approval gates, write audit trail.
 """
 from __future__ import annotations

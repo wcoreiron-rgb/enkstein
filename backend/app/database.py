@@ -1,5 +1,5 @@
 """
-RegentClaw — Sync database compatibility layer
+Enkstein — Sync database compatibility layer
 Re-exports Base from app.core.database so all models share a single metadata
 registry, then provides a standard sync engine + session for routes that use
 Depends(get_db) with a plain sqlalchemy.orm.Session.

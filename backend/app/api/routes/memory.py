@@ -1,5 +1,5 @@
 """
-RegentClaw — Memory / State Layer API Routes
+Enkstein — Memory / State Layer API Routes
 """
 import logging
 import json
@@ -214,7 +214,7 @@ async def approve_memory_proposal(
     if not incident:
         raise HTTPException(status_code=404, detail="Memory proposal not found")
     if not _is_memory_proposal(incident):
-        raise HTTPException(status_code=400, detail="Incident is not a MemoryClaw proposal")
+        raise HTTPException(status_code=400, detail="Incident is not a Memory Cortex proposal")
     if incident.status != "investigating":
         raise HTTPException(status_code=409, detail=f"Memory proposal is already {incident.status}")
 
@@ -245,7 +245,7 @@ async def reject_memory_proposal(
     if not incident:
         raise HTTPException(status_code=404, detail="Memory proposal not found")
     if not _is_memory_proposal(incident):
-        raise HTTPException(status_code=400, detail="Incident is not a MemoryClaw proposal")
+        raise HTTPException(status_code=400, detail="Incident is not a Memory Cortex proposal")
     if incident.status != "investigating":
         raise HTTPException(status_code=409, detail=f"Memory proposal is already {incident.status}")
 

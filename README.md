@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.3` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.4` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -221,7 +221,7 @@ RegentClaw collapses that tradeoff. The thesis is simple:
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/remediation.png" alt="Autonomous Remediation engine" /><br/><sub><b>Autonomous Remediation</b> — approval queue, action history with one-click rollback, and built-in response playbooks.</sub></td>
-    <td width="50%"><img src="docs/screenshots/arcclaw.png" alt="ArcClaw Security Copilot" /><br/><sub><b>Security Copilot (ArcClaw)</b> — AI agent with live tool calling for CVEs, MITRE ATT&amp;CK, findings, and posture.</sub></td>
+    <td width="50%"><img src="docs/screenshots/arcclaw.png" alt="AI Security Copilot" /><br/><sub><b>Security Copilot (AI Security)</b> — AI agent with live tool calling for CVEs, MITRE ATT&amp;CK, findings, and posture.</sub></td>
   </tr>
 </table>
 
@@ -240,7 +240,7 @@ RegentClaw sits at the intersection of three tool categories — and is the only
 | Human-in-the-loop approval gates | ❌ | ~ DIY | ✅ | ✅ dual-approval, self-approval blocked |
 | Immutable audit of every agent action | ❌ | ❌ | ~ | ✅ |
 | AI-specific governance (prompt injection, DLP) | ❌ | ❌ | ❌ | ✅ 12-vector AGT audit |
-| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 25 security claws |
+| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 25 capability nodes |
 | Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
 | Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
 
@@ -252,7 +252,7 @@ RegentClaw sits at the intersection of three tool categories — and is the only
 
 ```
 RegentClaw/
-├── backend/           FastAPI — CoreOS, Trust Fabric, ArcClaw, IdentityClaw
+├── backend/           FastAPI — CoreOS, Trust Fabric, AI Security, Identity Security
 ├── frontend/          Next.js — Platform UI dashboard
 ├── docker-compose.yml Full local stack
 ```
@@ -288,7 +288,7 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 
 Supply-chain policy gating supports a temporary time-boxed waiver baseline at `security/supply_chain_baseline.json` so CI blocks on net-new risk while legacy debt is being burned down.
 
-ComplianceClaw now exposes a Trust Fabric-governed evidence bundle export at `POST /api/v1/complianceclaw/evidence/export`, including findings, compliance-relevant audit logs, framework rollups, and a SHA-256 chain-of-custody hash.
+Compliance Assurance now exposes a Trust Fabric-governed evidence bundle export at `POST /api/v1/complianceclaw/evidence/export`, including findings, compliance-relevant audit logs, framework rollups, and a SHA-256 chain-of-custody hash.
 
 ## Quick Start
 
@@ -370,15 +370,15 @@ The Docker frontend runs as a production Next.js server. The image builds the UI
    - Credentials are encrypted at rest (Fernet AES-128) and never stored in plaintext
    - Each deployment auto-generates its own encryption key in `backend/.secrets/` (gitignored)
 3. Go to **Policies** → add preset policies (Block Shell Execution, etc.)
-4. Go to **ArcClaw** → submit a test prompt (try including an API key to test detection)
+4. Go to **AI Security** → submit a test prompt (try including an API key to test detection)
 5. Watch the **Events** and **Audit** log populate
-6. Go to **IdentityClaw** → check identity inventory
+6. Go to **Identity Security** → check identity inventory
 
 > **Security note:** Never commit `backend/.secrets/` — it contains your encryption key and stored credentials. This directory is gitignored by default. Each deployer gets their own isolated key.
 
 ### Connecting your own tools
 
-Every Claw module supports real integrations. Go to **Connectors** and add credentials for the tools you use:
+Every Capability Node module supports real integrations. Go to **Connectors** and add credentials for the tools you use:
 
 | Category | Supported integrations |
 |---|---|
@@ -388,7 +388,7 @@ Every Claw module supports real integrations. Go to **Connectors** and add crede
 | AI/LLM | Anthropic, OpenAI, Azure OpenAI, Ollama (local) |
 | Code | GitHub (secret scanning, code review) |
 | Log/SIEM | Splunk |
-| Custom | Any REST API via CustomClaw |
+| Custom | Any REST API via Custom Capability |
 
 Without credentials, all modules run on realistic simulated findings so the platform is fully usable for demos and evaluation.
 
@@ -458,7 +458,7 @@ Key endpoints:
 |--------|------|-------------|
 | GET | /api/v1/dashboard | Platform stats |
 | POST | /api/v1/arcclaw/events | Submit AI event for inspection |
-| GET | /api/v1/arcclaw/stats | ArcClaw risk summary |
+| GET | /api/v1/arcclaw/stats | AI Security risk summary |
 | GET | /api/v1/identityclaw/identities | Identity inventory |
 | GET | /api/v1/identityclaw/orphaned | Orphaned identities |
 | GET | /api/v1/policies | List policies |
@@ -486,7 +486,7 @@ Key endpoints:
 
 ## AGT + Multi-Agent Governance (New)
 
-RegentClaw now exposes AGT rollout through a provider boundary instead of direct Claw coupling:
+RegentClaw now exposes AGT rollout through a provider boundary instead of direct Capability Node coupling:
 
 - Adapter boundary: `backend/app/fabric/providers/agt/`
 - Feature flags (opt-in): `AGT_ENABLE_MCP_GATEWAY`, `AGT_ENABLE_E2E_MESSAGING`, `AGT_ENABLE_AGENT_MESH`, `AGT_ENABLE_SHADOW_DISCOVERY`
@@ -499,7 +499,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 ## Latest Updates (May 31, 2026)
 
 - Command and channel control-plane convergence:
-  - Channel gateway ingress (`/channel-gateway/slack/events`, `/channel-gateway/teams/webhook`, `/channel-gateway/message`) now normalizes inbound requests into CommandClaw contract payloads.
+  - Channel gateway ingress (`/channel-gateway/slack/events`, `/channel-gateway/teams/webhook`, `/channel-gateway/message`) now normalizes inbound requests into Command contract payloads.
   - Normalized channel commands execute through the same policy-governed command path used by `POST /api/v1/commands`.
   - Channel responses now include `command_result` metadata with command id, intent, target, and policy outcome.
   - Added fallback behavior for unavailable command backend (`outcome: unavailable`) so channel ingestion remains non-breaking.
@@ -507,7 +507,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added channel ingress adapters for generic webhook and email:
     - `POST /api/v1/channel-gateway/webhook`
     - `POST /api/v1/channel-gateway/email/inbound`
-    Both routes now normalize to the same CommandClaw contract and return `command_result`.
+    Both routes now normalize to the same Command contract and return `command_result`.
   - Added CLI ingress adapter:
     - `POST /api/v1/channel-gateway/cli/command`
     with optional `tenant_id` for tenant-scoped command normalization.
@@ -540,7 +540,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - pending list filters (`source`, `requester`, `min_risk`) for tighter triage views
     - approval delegation control to raise/lower required approvals (within guardrails)
   - Channel Gateway UI now includes:
-    - `Pending Commands` approval tab wired to CommandClaw approval APIs
+    - `Pending Commands` approval tab wired to Command approval APIs
     - multi-select + bulk approve/reject controls for pending command batches
     - bulk review outcome summary with per-command error visibility for partial-failure cases
     - per-command timeline view for operator audit context
@@ -571,11 +571,11 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added Playwright E2E coverage for Channel Gateway bulk pending-command approve flow.
 - Swarm runtime:
   - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
-  - Dispatcher now routes supported claws to real focused task handlers (`/task`) with deterministic fallback for unsupported claws.
+  - Dispatcher now routes supported capability nodes to real focused task handlers (`/task`) with deterministic fallback for unsupported capability nodes.
   - Task outputs now include execution provenance metadata (`execution_mode`, `fallback_reason`) for operator/audit visibility.
   - Swarm SSE `task_completed` events now include execution provenance fields for real-time operator context.
   - Added live SSE stream endpoint: `GET /api/v1/swarm/jobs/{id}/stream` with `job_snapshot`, `task_started`, `task_completed`, and `job_completed` events.
-- Core claw task contract:
+- Core Capability task contract:
   - Added `POST /task` for:
     - `/api/v1/identityclaw/task`
     - `/api/v1/cloudclaw/task`
@@ -603,10 +603,10 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - `/api/v1/exposureclaw/task`
     - `/api/v1/customclaw/task`
   - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
-  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed claw task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/Terra/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
-  - CloudClaw/EndpointClaw provider-scan failures now log sanitized provider context without raw exception payloads.
-- ModelClaw scaffold:
-  - Added `ModelClaw` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
+  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed Capability task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/Terra/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
+  - Cloud Security and Endpoint Security provider-scan failures now log sanitized provider context without raw exception payloads.
+- Model Cortex scaffold:
+  - Added `Model Cortex` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
   - New endpoints:
     - `GET /api/v1/modelclaw/providers`
     - `GET /api/v1/modelclaw/profiles`
@@ -617,7 +617,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added tenant-scoped profile/call filtering (`tenant_id`) and persisted runtime state for profiles/call audit (`backend/.state/modelclaw_state.json`).
 - Swarm Judge synthesis:
   - Added dedicated `swarm_judge_profile`.
-  - Swarm Judge now attempts ModelClaw-routed synthesis and falls back to deterministic summary when denied/unavailable.
+  - Swarm Judge now attempts Model Cortex-routed synthesis and falls back to deterministic summary when denied/unavailable.
 - Sprint 5 trigger/schedule swarm support:
   - Added `start_swarm` / `fire_swarm` trigger execution path with profile-aware defaults and optional pre-execution approval gating.
   - Added schedule swarm execution support for `SWARM_JOB`, `START_SWARM`, and `FIRE_SWARM` notes types.
@@ -625,7 +625,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
     - pre-execution approval now starts/runs the job
     - post-judge approval now finalizes the job
   - Added shared swarm profile defaults (`FAST_TRIAGE`, `DEEP_INVESTIGATION`, `INCIDENT_RESPONSE`, `AUTONOMOUS_LOW_RISK`, `EMERGENCY_CONTAINMENT`) applied to trigger/schedule launches.
-- MemoryClaw runtime integration:
+- Memory Cortex runtime integration:
   - Swarm tasks now receive short, redacted `memory_context` when relevant tenant/incidents memory exists.
   - Task outputs expose `memory_context_loaded` for operator/audit visibility.
   - High-risk Swarm Judge results now propose incident memory entries for analyst review.
@@ -643,7 +643,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
   - Added Microsoft security demo preset endpoint:
     - `POST /api/v1/swarm/jobs/presets/microsoft-identity-incident`
     This launches Identity/Cloud/Endpoint/Log/Threat/Compliance/Automation with Entra/Azure Defender/Defender Endpoint/Sentinel connector preference metadata and deterministic fallback when credentials are absent.
-  - IdentityClaw focused `/task` now uses configured Entra ID credentials through the existing Entra adapter before falling back to persisted/seeded identity data.
+  - Identity Security focused `/task` now uses configured Entra ID credentials through the existing Entra adapter before falling back to persisted/seeded identity data.
   - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
   - Swarm job detail now generates a live ticket draft and compliance impact rollup from judge/task evidence.
   - Added direct **Create Ticket** handoff from Swarm detail to `POST /api/v1/remediation/trigger` using `create_jira_ticket` action specs.
@@ -661,46 +661,46 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
      - `GET /api/v1/dashboard/control-center-summary`
    - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, execution gate status, and outbound channel reply health.
 
-## Platform Modules (25 Security Claws + 4 Core Surfaces + Core Engines)
+## Platform Modules (25 Capability Nodes + 4 Core Surfaces + Core Engines)
 
-### Security Domain Claws (25)
+### Security Domain Capability Nodes (25)
 
 | Module | Description |
 |--------|-------------|
-| 🤖 ArcClaw | AI & LLM Security — prompt injection detection (12-vector AGT audit), NVIDIA NIM, Claude, OpenAI, Ollama |
-| 🪪 IdentityClaw | Identity Governance — human & non-human identity risk scoring, Okta, Entra ID |
-| ☁️ CloudClaw | Cloud Security Posture — AWS, Azure, GCP, real-time findings |
-| 🌐 ExposureClaw | External Attack Surface Management — CVE lookup, CISA KEV, MITRE ATT&CK |
-| 🛡️ EndpointClaw | EDR — CrowdStrike, Defender, SentinelOne, quarantine/unquarantine |
-| 🔍 ThreatClaw | Threat Intelligence & Detection — MITRE ATT&CK mapping, automated triage |
-| 📋 LogClaw | Log Management & SIEM coverage |
-| 🌉 NetClaw | Network Security & segmentation — Palo Alto, Fortinet, Cisco |
-| 🔑 AccessClaw | Access Control & IAM governance — Okta, Entra ID, CyberArk |
-| 🗂️ DataClaw | Data Loss Prevention — Varonis, Purview, Macie |
-| 📱 AppClaw | Application Security — SAST, SCA, Snyk, Veracode |
-| ☁️ SaasClaw | SaaS Security Posture Management — Netskope, Zscaler |
-| ⚙️ ConfigClaw | Configuration Compliance — AWS Config, Azure Policy |
-| 🧱 TerraClaw | Terraform & IaC Security Governance — chat-style secure generation, Terraform MCP tools, HCL review, plan risk analysis, GCP Cloud SQL/Azure/AWS templates, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
-| ✅ ComplianceClaw | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
-| 🔒 PrivacyClaw | Privacy & GDPR enforcement — OneTrust, TrustArc |
-| 🏢 VendorClaw | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |
-| 👤 UserClaw | User Behavior Analytics — UEBA, anomaly detection |
-| 🔎 InsiderClaw | Insider Threat Detection — Proofpoint, Purview |
-| ⚡ AutomationClaw | Automation & CI/CD Security — ServiceNow, Jira, SOAR |
-| 🗺️ AttackPathClaw | Attack Path Analysis — XM Cyber, Orca, Tenable |
-| 💻 DevClaw | DevSecOps & Secret Scanning — GitHub Advanced Security, Snyk |
-| 🧠 IntelClaw | Threat Intelligence Feeds — Recorded Future, MISP |
-| 🔄 RecoveryClaw | Incident Recovery & Runbooks — Veeam, Rubrik |
-| 🔌 CustomClaw | User-defined REST API integrations — no-code builder |
+| 🤖 AI Security | AI & LLM Security — prompt injection detection (12-vector AGT audit), NVIDIA NIM, Claude, OpenAI, Ollama |
+| 🪪 Identity Security | Identity Governance — human & non-human identity risk scoring, Okta, Entra ID |
+| ☁️ Cloud Security | Cloud Security Posture — AWS, Azure, GCP, real-time findings |
+| 🌐 Exposure Management | External Attack Surface Management — CVE lookup, CISA KEV, MITRE ATT&CK |
+| 🛡️ Endpoint Security | EDR — CrowdStrike, Defender, SentinelOne, quarantine/unquarantine |
+| 🔍 Threat Analysis | Threat Intelligence & Detection — MITRE ATT&CK mapping, automated triage |
+| 📋 Security Telemetry | Log Management & SIEM coverage |
+| 🌉 Network Security | Network Security & segmentation — Palo Alto, Fortinet, Cisco |
+| 🔑 Privileged Access | Access Control & IAM governance — Okta, Entra ID, CyberArk |
+| 🗂️ Data Security | Data Loss Prevention — Varonis, Purview, Macie |
+| 📱 Application Security | Application Security — SAST, SCA, Snyk, Veracode |
+| ☁️ SaaS Security | SaaS Security Posture Management — Netskope, Zscaler |
+| ⚙️ Configuration Security | Configuration Compliance — AWS Config, Azure Policy |
+| 🧱 Terraform Governance | Terraform & IaC Security Governance — chat-style secure generation, Terraform MCP tools, HCL review, plan risk analysis, GCP Cloud SQL/Azure/AWS templates, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
+| ✅ Compliance Assurance | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
+| 🔒 Privacy Governance | Privacy & GDPR enforcement — OneTrust, TrustArc |
+| 🏢 Vendor Risk | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |
+| 👤 User Risk | User Behavior Analytics — UEBA, anomaly detection |
+| 🔎 Insider Risk | Insider Threat Detection — Proofpoint, Purview |
+| ⚡ Security Automation | Automation & CI/CD Security — ServiceNow, Jira, SOAR |
+| 🗺️ Attack Path Analysis | Attack Path Analysis — XM Cyber, Orca, Tenable |
+| 💻 Developer Security | DevSecOps & Secret Scanning — GitHub Advanced Security, Snyk |
+| 🧠 Threat Intelligence | Threat Intelligence Feeds — Recorded Future, MISP |
+| 🔄 Recovery Readiness | Incident Recovery & Runbooks — Veeam, Rubrik |
+| 🔌 Custom Capability | User-defined REST API integrations — no-code builder |
 
 ### New Core Platform Surfaces (4)
 
 | Module | Description |
 |--------|-------------|
-| 🧩 ModelClaw | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, ModelClaw Judge synthesis |
-| ⚡ CommandClaw | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
+| 🧩 Model Cortex | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, Model Cortex Judge synthesis |
+| ⚡ Command | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
 | 🎛️ Control Center | Unified operator cockpit — commands, approvals, swarms, remote agents, channel pressure, execution gates |
-| 🚀 ReleaseClaw | Zero Trust Deployment Governance — preflight CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments before execution handoff |
+| 🚀 Release Governance | Zero Trust Deployment Governance — preflight CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments before execution handoff |
 
 ### Platform Engines (always-on)
 
@@ -716,7 +716,7 @@ Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 | 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
 | 🖥️ Governed Exec Channels | Shell / browser / credential execution behind dual-approval, ring policy, and fail-closed Trust Fabric gating |
 | 🛰️ Remote Control | Remote/edge agent registration, heartbeat, command dispatch, tenant scoping, and kill-switch |
-| 🚀 Release Governance | Deployment request → ReleaseClaw preflight → Trust Fabric decision → approval/execute handoff → chain-of-custody evidence |
+| 🚀 Release Governance | Deployment request → Release Governance preflight → Trust Fabric decision → approval/execute handoff → chain-of-custody evidence |
 
 ### Skill Pack Exchange Lifecycle
 
@@ -725,7 +725,7 @@ The Skill Pack API now supports governed install and lifecycle operations withou
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /api/v1/skill-packs/{id}/install` | Trust Fabric-governed install with optional AGT MCP gateway `scan_path` enforcement |
-| `POST /api/v1/skill-packs/{id}/preview-update` | Shows skills, connectors, Claws, and scope-permission diff before upgrade |
+| `POST /api/v1/skill-packs/{id}/preview-update` | Shows skills, connectors, Capability Nodes, and scope-permission diff before upgrade |
 | `POST /api/v1/skill-packs/{id}/upgrade` | Upgrades an installed pack and stores a bounded previous-version snapshot |
 | `POST /api/v1/skill-packs/{id}/rollback` | Restores the latest previous version and records rollback actor/reason metadata |
 

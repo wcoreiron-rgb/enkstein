@@ -1,5 +1,5 @@
 /**
- * Dedicated proxy for ArcClaw agent/chat.
+ * Dedicated proxy for AI Security (arcclaw) agent/chat.
  *
  * Why this exists:
  *   Next.js rewrites have a hard ~30 s socket timeout. NVIDIA NIM (and any

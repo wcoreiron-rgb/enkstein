@@ -1,5 +1,5 @@
 """
-ArcClaw — Security Copilot Agent
+Security Copilot Agent
 ==================================
 Tool-calling AI agent for security operations.
 Supports: CVE lookup, vulnerability scanning, MITRE ATT&CK,
@@ -72,7 +72,7 @@ TOOLS = [
     },
     {
         "name": "get_security_posture",
-        "description": "Get overall security posture across all Claws — total/critical/high findings per domain.",
+        "description": "Get overall security posture across all Capability Nodes — total/critical/high findings per domain.",
         "input_schema": {
             "type": "object",
             "properties": {},
@@ -81,7 +81,7 @@ TOOLS = [
     {
         "name": "get_findings",
         "description": (
-            "Get findings from a specific Claw. Claws: cloudclaw, exposureclaw, threatclaw, netclaw, "
+            "Get findings from a specific Capability Node. Capability ids: cloudclaw, exposureclaw, threatclaw, netclaw, "
             "endpointclaw, logclaw, accessclaw, dataclaw, appclaw, saasclaw, configclaw, complianceclaw, "
             "privacyclaw, vendorclaw, userclaw, insiderclaw, intelclaw, recoveryclaw, devclaw, "
             "attackpathclaw, automationclaw"
@@ -98,7 +98,7 @@ TOOLS = [
     },
     {
         "name": "run_claw_scan",
-        "description": "Trigger a fresh security scan on a Claw module.",
+        "description": "Trigger a fresh security scan on a Capability Node.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -170,8 +170,8 @@ TOOLS = [
         "name": "list_connected_claws",
         "description": (
             "ALWAYS call this first when asked about findings, posture, scans, or workflows. "
-            "Returns which Claws have real connectors configured vs which are unconnected. "
-            "Only unconnected Claws should be told they need a data source."
+            "Returns which Capability Nodes have real connectors configured vs which are unconnected. "
+            "Only unconnected Capability Nodes should be told they need a data source."
         ),
         "input_schema": {
             "type": "object",
@@ -363,8 +363,8 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 "connected": connected,
                 "disconnected": disconnected,
                 "summary": (
-                    f"{len(connected)} of {len(all_claws)} Claws have real data sources connected. "
-                    + ("No Claws are connected yet — all data would be placeholder only."
+                    f"{len(connected)} of {len(all_claws)} Capability Nodes have real data sources connected. "
+                    + ("No Capability Nodes are connected yet — all data would be placeholder only."
                        if len(connected) == 0 else "")
                 ),
             }
@@ -428,7 +428,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 if r.status_code != 200:
                     return {
                         "error": (
-                            f"Claw '{claw}' not found. "
+                            f"Capability '{claw}' not found. "
                             "Available: cloudclaw, exposureclaw, threatclaw, etc."
                         )
                     }
@@ -514,7 +514,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 "duration_sec": run.duration_sec,
                 "note": (
                     "Workflow executed against connected data sources only. "
-                    "Steps targeting unconnected Claws returned no data."
+                    "Steps targeting unconnected Capability Nodes returned no data."
                 ),
             }
 
@@ -654,7 +654,7 @@ GENERAL AUTOMATION (non-security):
   - Calling any REST API (CRM, billing, HR, monitoring) via http_request or webhook_call steps
   - Syncing data between systems, querying databases, triggering deploys
   When a user asks for general automation (not security), generate a workflow using
-  'http_request' or 'webhook_call' step types and reference the Custom Claw builder
+  'http_request' or 'webhook_call' step types and reference the Custom Capability builder
   at /customclaw if they want to configure a reusable REST integration.
   The workflow generator understands intents like: "notify Slack", "create a Jira ticket",
   "call the Stripe API", "trigger a webhook", "sync data", "deploy on merge", etc."""

@@ -1,5 +1,5 @@
 """
-RegentClaw — CommandClaw / Remote Agent Control Plane
+Enkstein — CommandClaw / Remote Agent Control Plane
 
 Remote agent lifecycle:
 POST /remote-agents/register

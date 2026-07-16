@@ -1,5 +1,5 @@
 """
-RegentClaw — Zero Trust External Agent Dispatcher
+Enkstein — Zero Trust External Agent Dispatcher
 Calls a registered external / OpenClaw agent endpoint with full Zero Trust controls.
 
 Security controls applied on every call:
@@ -12,13 +12,13 @@ Security controls applied on every call:
   7. Hard timeout      — 30 s max; no hanging calls
 
 Flow:
-  RegentClaw                              External OpenClaw Agent
+  Enkstein                              External OpenClaw Agent
   ──────────                              ───────────────────────
   Build payload
   Sign with HMAC-SHA256
-  POST → endpoint_url ──────────────────► Verify RegentClaw signature
+  POST → endpoint_url ──────────────────► Verify Enkstein signature
          (Authorization: Bearer <secret>)  Do work
-         (X-RegentClaw-Signature: <sig>)   Sign response with HMAC-SHA256
+         (X-Enkstein-Signature: <sig>)   Sign response with HMAC-SHA256
                                            Return { findings, proposed_actions }
   Receive response ◄──────────────────────
   Verify X-Agent-Signature

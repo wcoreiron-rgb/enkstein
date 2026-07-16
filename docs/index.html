@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Enkstein — Distributed Zero Trust Security</title>
-  <meta name="description" content="25 security claws + core control surfaces and platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
+  <meta name="description" content="25 capability nodes + core control surfaces and platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -517,7 +517,7 @@
     </a>
     <ul class="nav-links">
       <li><a href="#features">Features</a></li>
-      <li><a href="#claws">Claws</a></li>
+      <li><a href="#claws">Capability Nodes</a></li>
       <li><a href="#architecture">Architecture</a></li>
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html">Changelog</a></li>
@@ -536,7 +536,7 @@
     Zero Trust Security Platform
   </div>
   <h1>AI Security Automation.<br><span class="accent">Governed by Default.</span></h1>
-  <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 25 security claws, multi-agent swarms, and a Trust Fabric that governs every move.</p>
+  <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 25 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
   <div class="hero-ctas">
     <a href="docs.html" class="btn-primary">View Documentation →</a>
     <a href="https://github.com/wcoreiron-rgb/marcellus/releases" target="_blank" rel="noopener" class="btn-ghost">Download macOS / Windows</a>
@@ -552,7 +552,7 @@
   <div class="stats-inner">
     <div class="stat">
       <div class="stat-number">25</div>
-      <div class="stat-label">Security Claws</div>
+      <div class="stat-label">Capability Nodes</div>
     </div>
     <div class="stat">
       <div class="stat-number">8</div>
@@ -569,11 +569,11 @@
   </div>
   <div class="ship-note">
     <strong>Latest shipped:</strong>
-    <strong>CommandClaw</strong> — multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, self-approval guards, timeline audit, bulk review, and delegation controls.
+    <strong>Command</strong> — multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, self-approval guards, timeline audit, bulk review, and delegation controls.
     <strong>Two-Way Channel Replies</strong> — Slack/Teams outbound status cards now preserve thread metadata, expose delivery state, and include approval action metadata for queued commands.
-    <strong>ModelClaw</strong> — policy-governed AI model routing with tenant-scoped profiles, call audit, and Swarm Judge synthesis.
+    <strong>Model Cortex</strong> — policy-governed AI model routing with tenant-scoped profiles, call audit, and Swarm Judge synthesis.
     <strong>Swarm Orchestration</strong> — parallel multi-agent investigation with SSE live stream, suspicious-identity preset, ticket handoff, and compliance rollup.
-    <strong>MemoryClaw Review</strong> — Swarm-proposed incident memory now has approve/reject review and rollback controls before it influences future investigations.
+    <strong>Memory Cortex Review</strong> — Swarm-proposed incident memory now has approve/reject review and rollback controls before it influences future investigations.
     <strong>Skill Pack Lifecycle UI</strong> — governed install scan path, update preview, upgrade, and rollback controls are now available from the Skill Packs page.
     <strong>Execution Ring Policy</strong> — 4-tier privilege isolation (ring0 blocked → ring3 auto-allow) across exec channels and remediation.
     <strong>17 Security Fixes</strong> — auth deadlock, DEBUG=false default, port binding, SSRF blocklist, JWT identity enforcement, bcrypt prehash, rate limiting, security headers.
@@ -637,176 +637,176 @@
 <!-- CLAWS GRID -->
 <section id="claws">
   <div class="section-inner">
-    <span class="section-tag">The Claw System</span>
-    <h2 class="section-title">25 Security Claws + Core Control Surfaces</h2>
-    <p class="section-sub">Each Claw is a self-contained security domain module with its own provider adapters, findings engine, and governance integration. Core surfaces add model routing, command control, and governed deployment release gates.</p>
+    <span class="section-tag">The Capability Node System</span>
+    <h2 class="section-title">25 Capability Nodes + Core Control Surfaces</h2>
+    <p class="section-sub">Each Capability Node is a self-contained security domain module with its own provider adapters, findings engine, and governance integration. Core surfaces add model routing, command control, and governed deployment release gates.</p>
     <div class="claws-grid">
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🤖</span><span class="phase-badge phase-mvp">MVP</span></div>
-        <div class="claw-name">ArcClaw</div>
+        <div class="claw-name">AI Security</div>
         <div class="claw-desc">AI &amp; LLM Security with Microsoft AGT PromptDefenseEvaluator integration</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🪪</span><span class="phase-badge phase-mvp">MVP</span></div>
-        <div class="claw-name">IdentityClaw</div>
+        <div class="claw-name">Identity Security</div>
         <div class="claw-desc">Identity Governance &amp; Non-Human Identity (NHI) management</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">☁️</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">CloudClaw</div>
+        <div class="claw-name">Cloud Security</div>
         <div class="claw-desc">Cloud Security Posture Management across multi-cloud environments</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🌐</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">ExposureClaw</div>
+        <div class="claw-name">Exposure Management</div>
         <div class="claw-desc">External Attack Surface Management &amp; continuous exposure monitoring</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🛡️</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">EndpointClaw</div>
+        <div class="claw-name">Endpoint Security</div>
         <div class="claw-desc">Endpoint Detection &amp; Response with behavioral threat correlation</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔍</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">ThreatClaw</div>
-        <div class="claw-desc">Threat Intelligence &amp; Detection — correlate IOCs across all claws</div>
+        <div class="claw-name">Threat Analysis</div>
+        <div class="claw-desc">Threat Intelligence &amp; Detection — correlate IOCs across all capability nodes</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">📋</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">LogClaw</div>
+        <div class="claw-name">Security Telemetry</div>
         <div class="claw-desc">Log Management &amp; SIEM integration for centralized security telemetry</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🌐</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">NetClaw</div>
+        <div class="claw-name">Network Security</div>
         <div class="claw-desc">Network Security monitoring, segmentation, and traffic analysis</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔑</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">AccessClaw</div>
+        <div class="claw-name">Privileged Access</div>
         <div class="claw-desc">Access Control &amp; IAM policy enforcement across systems and services</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🗂️</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">DataClaw</div>
+        <div class="claw-name">Data Security</div>
         <div class="claw-desc">Data Loss Prevention — classify, monitor, and protect sensitive data flows</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">📱</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">AppClaw</div>
+        <div class="claw-name">Application Security</div>
         <div class="claw-desc">Application Security testing, SAST/DAST, and runtime protection</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">☁️</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">SaasClaw</div>
+        <div class="claw-name">SaaS Security</div>
         <div class="claw-desc">SaaS Security Posture Management — OAuth, shadow IT, and misconfiguration detection</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">⚙️</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">ConfigClaw</div>
+        <div class="claw-name">Configuration Security</div>
         <div class="claw-desc">Configuration Compliance — drift detection and remediation across infrastructure</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">✅</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">ComplianceClaw</div>
+        <div class="claw-name">Compliance Assurance</div>
         <div class="claw-desc">Compliance Frameworks — SOC 2, ISO 27001, NIST, CIS, and custom controls</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔒</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">PrivacyClaw</div>
+        <div class="claw-name">Privacy Governance</div>
         <div class="claw-desc">Privacy &amp; GDPR enforcement — consent, data subject rights, and PII tracking</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🏢</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">VendorClaw</div>
+        <div class="claw-name">Vendor Risk</div>
         <div class="claw-desc">Third-Party Risk Management — vendor assessments and supply chain security</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">👤</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">UserClaw</div>
+        <div class="claw-name">User Risk</div>
         <div class="claw-desc">User Behavior Analytics — anomaly detection for insider risk indicators</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔎</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">InsiderClaw</div>
+        <div class="claw-name">Insider Risk</div>
         <div class="claw-desc">Insider Threat Detection with contextual risk signals and case management</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">⚡</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">AutomationClaw</div>
+        <div class="claw-name">Security Automation</div>
         <div class="claw-desc">Automation Security — govern scripts, pipelines, and automated processes</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🗺️</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">AttackPathClaw</div>
+        <div class="claw-name">Attack Path Analysis</div>
         <div class="claw-desc">Attack Path Analysis — visualize lateral movement and blast radius</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">💻</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">DevClaw</div>
+        <div class="claw-name">Developer Security</div>
         <div class="claw-desc">DevSecOps &amp; CI/CD security — secrets scanning, SBOM, and pipeline governance</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🧱</span><span class="phase-badge phase-2">Phase 2</span></div>
-        <div class="claw-name">TerraClaw</div>
+        <div class="claw-name">Terraform Governance</div>
         <div class="claw-desc">Terraform &amp; IaC governance — build modules from plain English, review HCL, analyze plans, and map controls</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🧠</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">IntelClaw</div>
+        <div class="claw-name">Threat Intelligence</div>
         <div class="claw-desc">Threat Intelligence Feeds — ingest, normalize, and operationalize external intel</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔄</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">RecoveryClaw</div>
+        <div class="claw-name">Recovery Readiness</div>
         <div class="claw-desc">Incident Recovery — playbooks, runbooks, and recovery validation workflows</div>
       </div>
 
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔌</span><span class="phase-badge phase-3">Phase 3</span></div>
-        <div class="claw-name">CustomClaw</div>
+        <div class="claw-name">Custom Capability</div>
         <div class="claw-desc">Custom REST Integrations — extend RegentClaw to any security tool or API</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.04);">
         <div class="claw-top"><span class="claw-emoji">🧩</span><span class="phase-badge phase-mvp">New v0.3</span></div>
-        <div class="claw-name">ModelClaw</div>
+        <div class="claw-name">Model Cortex</div>
         <div class="claw-desc">AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, and Swarm Judge synthesis</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(59,130,246,0.4);background:rgba(59,130,246,0.04);">
         <div class="claw-top"><span class="claw-emoji">⚡</span><span class="phase-badge phase-mvp">New v0.3</span></div>
-        <div class="claw-name">CommandClaw</div>
+        <div class="claw-name">Command</div>
         <div class="claw-desc">Multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, timeline audit, and bulk review</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(34,211,238,0.4);background:rgba(34,211,238,0.04);">
         <div class="claw-top"><span class="claw-emoji">🚀</span><span class="phase-badge phase-mvp">New v0.6</span></div>
-        <div class="claw-name">ReleaseClaw</div>
+        <div class="claw-name">Release Governance</div>
         <div class="claw-desc">Zero Trust deployment preflight for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack release gates</div>
       </div>
 
@@ -819,7 +819,7 @@
   <div class="section-inner">
     <span class="section-tag">Platform Engines</span>
     <h2 class="section-title">Always-On Intelligence. Built In.</h2>
-    <p class="section-sub">Beyond the 25 security claws and core control surfaces, these engines run continuously to govern every action, agent, and workflow.</p>
+    <p class="section-sub">Beyond the 25 capability nodes and core control surfaces, these engines run continuously to govern every action, agent, and workflow.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2.5rem;">
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
@@ -837,7 +837,7 @@
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
         <div style="font-size:1.5rem;margin-bottom:.5rem;">🚀</div>
         <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Release Governance</div>
-        <div style="font-size:.85rem;color:var(--text2);">Deployment request → ReleaseClaw preflight → Trust Fabric decision → approval/execute handoff → SHA-256 evidence bundle.</div>
+        <div style="font-size:.85rem;color:var(--text2);">Deployment request → Release Governance preflight → Trust Fabric decision → approval/execute handoff → SHA-256 evidence bundle.</div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
@@ -855,7 +855,7 @@
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
         <div style="font-size:1.5rem;margin-bottom:.5rem;">📡</div>
         <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Channel Gateway</div>
-        <div style="font-size:.85rem;color:var(--text2);">Normalizes Teams, Slack, webhook, email, and CLI commands into a single policy-governed CommandClaw contract. Multi-operator approval, bulk review, timeline audit.</div>
+        <div style="font-size:.85rem;color:var(--text2);">Normalizes Teams, Slack, webhook, email, and CLI commands into a single policy-governed Command contract. Multi-operator approval, bulk review, timeline audit.</div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
@@ -926,7 +926,7 @@
       <div class="principle-card">
         <span class="principle-icon">🪪</span>
         <div class="principle-title">Every component has identity</div>
-        <div class="principle-desc">Agents, claws, workflows, and service accounts are first-class identity principals. Non-human identities are governed alongside human ones.</div>
+        <div class="principle-desc">Agents, capability nodes, workflows, and service accounts are first-class identity principals. Non-human identities are governed alongside human ones.</div>
       </div>
       <div class="principle-card">
         <span class="principle-icon">🔐</span>
@@ -936,7 +936,7 @@
       <div class="principle-card">
         <span class="principle-icon">👁️</span>
         <div class="principle-title">Every runtime is monitored</div>
-        <div class="principle-desc">Behavioral baselines for all claws and agents surface anomalies in real time, before policies are even invoked.</div>
+        <div class="principle-desc">Behavioral baselines for all capability nodes and agents surface anomalies in real time, before policies are even invoked.</div>
       </div>
       <div class="principle-card">
         <span class="principle-icon">🧾</span>
@@ -951,7 +951,7 @@
       <div class="principle-card">
         <span class="principle-icon">⚙️</span>
         <div class="principle-title">Every module is governed</div>
-        <div class="principle-desc">All 25 security claws and core control surfaces share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
+        <div class="principle-desc">All 25 capability nodes and core control surfaces share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
       </div>
     </div>
   </div>
@@ -966,7 +966,7 @@
         <h2 class="section-title">Up and Running in Minutes</h2>
         <p>Use the native macOS <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">.pkg</code> or Windows <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">setup.exe</code> for one-click startup, or use the portable release bundle. The launcher creates unique secrets and starts the backend API, production Next.js frontend, PostgreSQL, and Redis through Docker Desktop.</p>
         <p>The universal macOS app presents startup progress, waits for the Cortex and UI to become healthy, and loads Enkstein inside a native desktop window. The frontend image builds once and runs with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">next start</code>, with local <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">/api/v1/*</code> calls proxied to the backend service inside Docker.</p>
-        <p>Fully self-hosted. Your credentials stay on your machine — encrypted at rest, never sent anywhere. Add your own API keys via the Connectors UI and each Claw connects to your real environment.</p>
+        <p>Fully self-hosted. Your credentials stay on your machine — encrypted at rest, never sent anywhere. Add your own API keys via the Connectors UI and each Capability Node connects to your real environment.</p>
         <p class="quickstart-security-note">
           <strong>Security:</strong> Never commit <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">backend/.secrets/</code> to git. This folder holds your encryption key and is gitignored by default. Each deployment generates its own isolated key on first run.
         </p>
@@ -988,7 +988,7 @@
 <span class="c-comment"># Add your own credentials</span>
 <span class="c-comment"># → Go to Connectors → click any connector</span>
 <span class="c-comment"># → Enter your API key/token — encrypted at rest</span>
-<span class="c-comment"># → Claw switches from demo data to your real environment</span></pre>
+<span class="c-comment"># → Capability Node switches from demo data to your real environment</span></pre>
       </div>
     </div>
   </div>
@@ -1008,7 +1008,7 @@
       <a href="docs.html">Documentation</a>
       <a href="changelog.html">Changelog</a>
       <a href="owasp-agentic.html">OWASP Matrix</a>
-      <a href="#claws">Security Claws</a>
+      <a href="#claws">Capability Nodes</a>
       <a href="#architecture">Architecture</a>
       <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener">GitHub</a>
     </nav>

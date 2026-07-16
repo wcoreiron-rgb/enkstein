@@ -1,5 +1,5 @@
 """
-RegentClaw — Messaging Channel Gateway models
+Enkstein — Messaging Channel Gateway models
 Tracks inbound messages, identity checks, policy decisions, and dispatched executions.
 """
 from datetime import datetime
@@ -43,7 +43,7 @@ class ChannelMessage(Base):
 
 
 class ChannelIdentity(Base):
-    """Maps messaging platform user IDs to RegentClaw identities."""
+    """Maps messaging platform user IDs to Enkstein identities."""
     __tablename__ = "channel_identities"
 
     id               = Column(Integer, primary_key=True, autoincrement=True)

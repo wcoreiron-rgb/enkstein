@@ -98,7 +98,7 @@ async def _cs_kill_process(device_id: str, params: dict, creds: dict) -> ActionR
     async with httpx.AsyncClient(timeout=30) as client:
         session_resp = await client.post(
             f"{base}/real-time-response/entities/sessions/v1",
-            json={"device_id": device_id, "origin": "RegentClaw"},
+            json={"device_id": device_id, "origin": "Enkstein"},
             headers=headers,
         )
         if session_resp.status_code not in (200, 201):
@@ -175,7 +175,7 @@ async def _defender_isolate(machine_id: str, isolate: bool, creds: dict) -> Acti
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             url,
-            json={"Comment": f"RegentClaw autonomous {action}"},
+            json={"Comment": f"Enkstein autonomous {action}"},
             headers=headers,
         )
         try:

@@ -1,5 +1,5 @@
 """
-RegentClaw — Finding Pipeline
+Enkstein — Finding Pipeline
 Central upsert/dedup pipeline used by ALL 23 Claw adapters.
 
 Usage:

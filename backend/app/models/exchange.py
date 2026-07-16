@@ -1,5 +1,5 @@
 """
-RegentClaw — Security Exchange models
+Enkstein — Security Exchange models
 Signed marketplace for skills, policies, and playbooks.
 """
 from datetime import datetime

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Users2, XCircle, Sparkles, Ban, RotateCcw } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, createMicrosoftIdentityIncidentSwarm, createSuspiciousIdentitySwarm, createSwarmJob, getSwarmJobs } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -256,7 +257,7 @@ export default function SwarmPage() {
                         <Link href={`/swarm/${job.id}`} className="text-white hover:text-cyan-300">{job.name}</Link>
                       </td>
                       <td className="px-5 py-3 text-gray-400">{job.profile}</td>
-                      <td className="px-5 py-3 text-gray-400">{participants.length ? participants.join(', ') : '—'}</td>
+                      <td className="px-5 py-3 text-gray-400">{participants.length ? participants.map(capabilityName).join(', ') : '—'}</td>
                       <td className="px-5 py-3">
                         <span className={`inline-flex items-center gap-1 ${meta.color}`}>
                           <Icon className={`w-4 h-4 ${job.status === 'running' ? 'animate-spin' : ''}`} />

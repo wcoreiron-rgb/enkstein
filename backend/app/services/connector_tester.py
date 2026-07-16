@@ -1,5 +1,5 @@
 """
-RegentClaw — Connector Test Service
+Enkstein — Connector Test Service
 =====================================
 Tests real connectivity for each connector type.
 Uses stored (decrypted) credentials to make a minimal API call.

@@ -1,5 +1,5 @@
 """
-RegentClaw — Natural Language Workflow Generator
+Enkstein — Natural Language Workflow Generator
 Translates a plain-English security intent into a structured workflow draft,
 evaluates it against active policies inline, and returns it for human approval.
 
@@ -106,45 +106,45 @@ _INTENT_PATTERNS: list[tuple[str, str, str]] = [
 _CLAW_PATTERNS: list[tuple[str, str, str]] = [
     # ── Security claws ────────────────────────────────────────────────────────
     (r"\b(endpoint|laptop|workstation|device|host|machine|desktop|malware|ransomware|edr)\b",
-     "endpointclaw", "EndpointClaw"),
+     "endpointclaw", "Endpoint Security"),
     (r"\b(identity|user|account|mfa|password|credential|active directory|okta|entra|azure ad|ldap|sso)\b",
-     "identityclaw", "IdentityClaw"),
+     "identityclaw", "Identity Security"),
     (r"\b(cloud|aws|azure|gcp|s3|bucket|iam|ec2|resource group|subscription|storage|rds)\b",
-     "cloudclaw", "CloudClaw"),
+     "cloudclaw", "Cloud Security"),
     (r"\b(network|traffic|firewall|port|ip address|subnet|vpn|dns|packet|ndr|nac)\b",
-     "netclaw", "NetClaw"),
+     "netclaw", "Network Security"),
     (r"\b(threat intel|ioc|indicator|cti|stix|taxii|mitre att&ck|reputation|ttps)\b",
-     "intelclaw", "IntelClaw"),
+     "intelclaw", "Threat Intelligence"),
     (r"\b(vulnerabilit|cve|exploit|exposure|cvss|patch level|nvd|tenable|qualys)\b",
-     "exposureclaw", "ExposureClaw"),
+     "exposureclaw", "Exposure Management"),
     (r"\b(log|siem|splunk|event|audit trail|log source|elastic|chronicle|sentinel)\b",
-     "logclaw", "LogClaw"),
+     "logclaw", "Security Telemetry"),
     (r"\b(access|privilege|rbac|role|permission|entitlement|pam|cyberark|jump)\b",
-     "accessclaw", "AccessClaw"),
+     "accessclaw", "Privileged Access"),
     (r"\b(data|pii|sensitive|classification|dlp|exfiltration|data loss)\b",
-     "dataclaw", "DataClaw"),
+     "dataclaw", "Data Security"),
     (r"\b(compliance|gdpr|hipaa|pci.?dss|iso 27001|soc 2|regulation|audit|control|framework)\b",
-     "complianceclaw", "ComplianceClaw"),
+     "complianceclaw", "Compliance Assurance"),
     (r"\b(misconfigur|config drift|hardening|baseline|cis benchmark|dsc)\b",
-     "configclaw", "ConfigClaw"),
+     "configclaw", "Configuration Security"),
     (r"\b(saas|salesforce|m365|microsoft 365|google workspace|slack|zendesk|dropbox)\b",
-     "saasclaw", "SaaSClaw"),
+     "saasclaw", "SaaS Security"),
     (r"\b(app|application|appsec|owasp|api security|web app|waf)\b",
-     "appclaw", "AppClaw"),
+     "appclaw", "Application Security"),
     (r"\b(vendor|third.?party|supplier|partner|external|supply chain)\b",
-     "vendorclaw", "VendorClaw"),
+     "vendorclaw", "Vendor Risk"),
     (r"\b(insider|employee behaviour|ueba|abnormal|user behaviour)\b",
-     "insiderclaw", "InsiderClaw"),
+     "insiderclaw", "Insider Risk"),
     (r"\b(recover|restore|backup|dr|disaster recovery|business continuity|rto|rpo|resilience)\b",
-     "recoveryclaw", "RecoveryClaw"),
+     "recoveryclaw", "Recovery Readiness"),
     (r"\b(attack path|lateral movement|privilege escalation|kill chain|blast radius)\b",
-     "attackpathclaw", "AttackPathClaw"),
+     "attackpathclaw", "Attack Path Analysis"),
     (r"\b(dev|devsecops|code|repo|github|pipeline|secret.?leak|ci.?cd|sast|dast|dependency)\b",
-     "devclaw", "DevClaw"),
+     "devclaw", "Developer Security"),
     (r"\b(automation|orchestration|runbook|playbook|soar)\b",
-     "automationclaw", "AutomationClaw"),
+     "automationclaw", "Security Automation"),
     (r"\b(threat|malicious|attacker|actor|apt|campaign|indicator)\b",
-     "intelclaw", "ThreatClaw"),
+     "threatclaw", "Threat Analysis"),
 
     # ── General automation domains (non-security) ─────────────────────────────
     # Messaging / communication platforms
@@ -247,9 +247,9 @@ def _detect_claws(text: str) -> list[dict[str, str]]:
                 seen.add(claw_id)
                 result.append({"claw_id": claw_id, "label": label})
     # If only customclaw hits fired, keep them — that means it's a general automation
-    # If zero matches, fall back to ArcClaw (catch-all security AI)
+    # If zero matches, fall back to AI Security (catch-all security AI)
     if not result:
-        result.append({"claw_id": "arcclaw", "label": "ArcClaw"})
+        result.append({"claw_id": "arcclaw", "label": "AI Security"})
     return result
 
 
@@ -435,9 +435,9 @@ def generate_workflow_draft(
     # ─ Workflow metadata ─────────────────────────────────────────────────────
     general_automation = _is_general_automation(claws)
     primary_intent = intents[0][1] if intents else "Integrate"
-    primary_claw   = claws[0]["label"] if claws else ("Custom Integration" if general_automation else "ArcClaw")
+    primary_claw   = claws[0]["label"] if claws else ("Custom Integration" if general_automation else "AI Security")
     name           = f"{primary_intent} via {primary_claw}"
-    domain_note    = "general automation" if general_automation else f"{len(claws)} claw(s)"
+    domain_note    = "general automation" if general_automation else f"{len(claws)} capability node(s)"
     description    = (
         f'Auto-generated from: "{prompt[:120]}". '
         f"Covers {domain_note} with {len(steps)} steps."
@@ -463,7 +463,7 @@ def generate_workflow_draft(
             "rule": "BROAD_SCOPE",
             "severity": "medium",
             "message": (
-                f"Workflow spans {len(claws)} claws — "
+                f"Workflow spans {len(claws)} capability nodes — "
                 "confirm the scope is intentional."
             ),
         })

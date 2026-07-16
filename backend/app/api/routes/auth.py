@@ -1,5 +1,5 @@
 """
-RegentClaw — Auth Routes
+Enkstein — Auth Routes
 POST /api/v1/auth/token  → exchange credentials for a Bearer JWT
 GET  /api/v1/auth/me     → return the current user (requires valid token)
 

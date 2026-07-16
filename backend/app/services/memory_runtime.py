@@ -1,7 +1,7 @@
 """
 Runtime memory helpers for Swarm/Claw execution.
 
-These helpers keep MemoryClaw integration conservative:
+These helpers keep Memory Cortex integration conservative:
 - expose only short, redacted context snippets to tasks
 - block memory writes that look like secrets or prompt-injection payloads
 - store high-risk swarm outcomes as incident memory for analyst review

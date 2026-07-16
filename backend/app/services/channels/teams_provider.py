@@ -1,5 +1,5 @@
 """
-RegentClaw — Microsoft Teams Channel Provider
+Enkstein — Microsoft Teams Channel Provider
 
 Sends alert messages to a Teams channel via an Incoming Webhook using the
 legacy MessageCard schema (works without installing an app, using only a

@@ -1,5 +1,5 @@
 """
-EndpointClaw — CrowdStrike Falcon Adapter
+CrowdStrike Falcon Adapter
 Pulls endpoint detections and prevention alerts from CrowdStrike Falcon.
 
 Auth: OAuth2 client credentials (client_id + client_secret)
