@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import {
   MessageSquare, Shield, CheckCircle, XCircle, Clock, Download, Copy,
   RefreshCw, Send, User, Zap, Filter,
@@ -1131,7 +1131,7 @@ export default function ChannelGatewayPage() {
             </thead>
             <tbody>
               {visiblePendingCommands.map(cmd => (
-                <div key={cmd.command_id} className="contents">
+                <Fragment key={cmd.command_id}>
                   <tr key={cmd.command_id} className="border-b border-gray-800 hover:bg-gray-800/30">
                     <td className="px-4 py-3">
                       <input
@@ -1261,7 +1261,7 @@ export default function ChannelGatewayPage() {
                       </td>
                     </tr>
                   )}
-                </div>
+                </Fragment>
               ))}
             </tbody>
           </table>

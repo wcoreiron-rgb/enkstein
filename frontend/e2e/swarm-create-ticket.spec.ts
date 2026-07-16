@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('swarm detail can hand off ticket draft to remediation route', async ({ page }) => {
   const swarmJob = {

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('channel gateway supports bulk approve for pending commands', async ({ page }) => {
   let pendingCommands = [
