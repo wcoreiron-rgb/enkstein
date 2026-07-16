@@ -1,5 +1,5 @@
 /**
- * Marcellus useWebSocket hook
+ * Enkstein useWebSocket hook
  *
  * Maintains a persistent WebSocket connection to the backend live feed.
  * Features:

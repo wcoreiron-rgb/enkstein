@@ -114,7 +114,7 @@ private final class BrowserSessionBroker {
         guard live else {
             condition.unlock()
             throw BridgeError.runtimeUnavailable(
-                "The Marcellus browser companion is not connected to a signed-in \(provider.capitalized) tab."
+                "The Enkstein browser companion is not connected to a signed-in \(provider.capitalized) tab."
             )
         }
         let taskID = UUID().uuidString.lowercased()
@@ -148,13 +148,13 @@ private final class BrowserSessionBroker {
             "kind": "browser_session",
             "available": connected,
             "authenticated": connected,
-            "runtime": connected ? "Marcellus browser companion" : NSNull(),
+            "runtime": connected ? "Enkstein browser companion" : NSNull(),
             "account_type": connected ? "User-managed browser session" : NSNull(),
             "models": [],
             "supports_custom_model": false,
             "detail": connected
                 ? "Ready through a visible signed-in \(label) browser tab."
-                : "Install and pair the Marcellus browser companion, then sign in to \(label).",
+                : "Install and pair the Enkstein browser companion, then sign in to \(label).",
         ]
     }
 
@@ -260,9 +260,9 @@ private final class BrainBridge {
     ) {
         if request.method == "GET", request.path.hasPrefix("/v1/browser/setup") {
             let html = """
-            <!doctype html><html><head><meta charset="utf-8"><title>Marcellus Browser Pairing</title></head>
+            <!doctype html><html><head><meta charset="utf-8"><title>Enkstein Browser Pairing</title></head>
             <body style="font:16px system-ui;padding:40px;max-width:640px;margin:auto">
-            <h1>Pairing Marcellus</h1><p id="status">Waiting for the Marcellus browser companion…</p>
+            <h1>Pairing Enkstein</h1><p id="status">Waiting for the Enkstein browser companion…</p>
             </body></html>
             """
             sendHTML(connection, status: 200, html: html)
@@ -325,7 +325,7 @@ private final class BrainBridge {
             guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
                   let brain = payload["brain"] as? String,
                   let prompt = payload["prompt"] as? String,
-                  !prompt.isEmpty, prompt.count <= 24_000 else {
+                  !prompt.isEmpty, prompt.count <= 128_000 else {
                 send(connection, status: 400, body: ["detail": "Invalid invocation payload"])
                 return
             }
@@ -360,7 +360,7 @@ private final class BrainBridge {
                     "granted": granted,
                     "detail": granted
                         ? "Desktop Brain access is ready."
-                        : "Allow Marcellus in System Settings > Privacy & Security > Accessibility, then refresh.",
+                        : "Allow Enkstein in System Settings > Privacy & Security > Accessibility, then refresh.",
                 ])
             }
             return
@@ -591,7 +591,7 @@ private final class BrainBridge {
         if !installed {
             detail = "Install the \(appName) desktop app and sign in with your subscription."
         } else if !trusted {
-            detail = "Grant Marcellus Accessibility access to use the visible \(appName) app session."
+            detail = "Grant Enkstein Accessibility access to use the visible \(appName) app session."
         } else if compatible == false {
             detail = "Installed, but this \(appName) version does not expose a compatible message field to macOS Accessibility."
         } else if running == nil {
@@ -658,7 +658,7 @@ private final class BrainBridge {
         guard model == nil || model?.isEmpty == true else { throw BridgeError.invalidRequest }
         let started = Date()
         let governedPrompt = """
-        You are a reasoning-only Brain inside Marcellus. Do not claim tools or systems were changed. Answer concisely and identify uncertainty.
+        You are a reasoning-only Brain inside Enkstein. Do not claim tools or systems were changed. Answer concisely and identify uncertainty.
 
         QUESTION:
         \(prompt)
@@ -726,7 +726,7 @@ private final class BrainBridge {
         }
         guard accessibilityTrusted(prompt: true) else {
             throw BridgeError.runtimeUnavailable(
-                "Allow Marcellus in System Settings > Privacy & Security > Accessibility, then retry."
+                "Allow Enkstein in System Settings > Privacy & Security > Accessibility, then retry."
             )
         }
         guard let applicationURL = desktopApplicationURL(appName: appName, bundleIdentifiers: bundleIdentifiers) else {
@@ -752,12 +752,12 @@ private final class BrainBridge {
         let baseline = Set(accessibleStaticText(in: appElement))
         guard let input = editableTextElement(in: appElement) else {
             throw BridgeError.invocationFailed(
-                "Marcellus could not find the \(appName) message field. Make sure the app is signed in and showing a chat."
+                "Enkstein could not find the \(appName) message field. Make sure the app is signed in and showing a chat."
             )
         }
 
         let governedPrompt = """
-        You are a reasoning-only Brain inside Marcellus. Do not claim tools or systems were changed. Answer concisely and identify uncertainty.
+        You are a reasoning-only Brain inside Enkstein. Do not claim tools or systems were changed. Answer concisely and identify uncertainty.
 
         QUESTION:
         \(prompt)
@@ -768,7 +768,7 @@ private final class BrainBridge {
         AXUIElementSetAttributeValue(input, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         let setResult = AXUIElementSetAttributeValue(input, kAXValueAttribute as CFString, governedPrompt as CFTypeRef)
         guard setResult == .success else {
-            throw BridgeError.invocationFailed("Marcellus could not write to the \(appName) message field.")
+            throw BridgeError.invocationFailed("Enkstein could not write to the \(appName) message field.")
         }
 
         let started = Date()
@@ -903,7 +903,7 @@ private final class BrainBridge {
         if let model, !model.isEmpty { arguments += ["--model", model] }
         arguments.append("-")
         let governedPrompt = """
-        You are a reasoning-only Brain inside Marcellus. Do not call tools, inspect files, browse, or change any system. Do not claim actions were executed. Answer the supplied question concisely and identify uncertainty.
+        You are a reasoning-only Brain inside Enkstein. Do not call tools, inspect files, browse, or change any system. Do not claim actions were executed. Answer the supplied question concisely and identify uncertainty.
 
         QUESTION:
         \(prompt)
@@ -934,7 +934,7 @@ private final class BrainBridge {
         var arguments = ["-p", "--output-format", "json", "--permission-mode", "dontAsk", "--tools", ""]
         if let model, !model.isEmpty { arguments += ["--model", model] }
         arguments.append(
-            "You are a reasoning-only Brain inside Marcellus. Do not use tools or change systems. " +
+            "You are a reasoning-only Brain inside Enkstein. Do not use tools or change systems. " +
             "Answer concisely and identify uncertainty.\n\nQUESTION:\n" + prompt
         )
         let started = Date()
@@ -1055,6 +1055,6 @@ do {
     activeBridge = BrainBridge(config: try BridgeConfig.load())
     try activeBridge?.start()
 } catch {
-    FileHandle.standardError.write(Data("Invalid Marcellus Brain Bridge configuration.\n".utf8))
+    FileHandle.standardError.write(Data("Invalid Enkstein Brain Bridge configuration.\n".utf8))
     exit(2)
 }

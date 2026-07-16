@@ -1,12 +1,12 @@
-# Marcellus Plexus Architecture
+# Enkstein Plexus Architecture
 
 Status: Runtime contract 0.2.0  
-Working name: Marcellus  
+Working name: Enkstein
 Lineage: Independent compatibility-first evolution of RegentClaw
 
 ## Thesis
 
-Marcellus is an octopus-inspired distributed security architecture. It combines a strategic Cortex with stable Security Arms and specialized Capability Nodes. Nodes may resolve delegated routine work locally or collaborate directly, but Trust Fabric remains mandatory for every message and action.
+Enkstein is an octopus-inspired distributed security architecture. It combines a strategic Cortex with stable Security Arms and specialized Capability Nodes. Nodes may resolve delegated routine work locally or collaborate directly, but Trust Fabric remains mandatory for every message and action.
 
 > The Cortex may be bypassed for delegated routine coordination. Trust Fabric may never be bypassed.
 
@@ -17,7 +17,7 @@ The biological language is an organizing model, not a claim that software reprod
 ```text
 Operator / Event / Schedule / Channel
                   |
-             Marcellus Cortex
+             Enkstein Cortex
        command | plan | arbitrate | judge
                   |
       +-----------+-----------+
@@ -67,7 +67,7 @@ The Cortex owns system-level intent and arbitration, not every operational decis
 ### Cortex Gateway
 
 `POST /api/v1/modelclaw/gateway` is the common reasoning boundary for the
-Marcellus Chat and Cowork workspaces and for Swarm Judge synthesis. Its request
+Enkstein Chat and Cowork workspaces and for Swarm Judge synthesis. Its request
 contract carries the work mode, conversation, Brain source, data classification,
 tenant, capability, and optional workspace context. Before inference it:
 
@@ -239,7 +239,7 @@ session and Mission memory cannot self-approve.
 ## Migration Rules
 
 1. RegentClaw remains untouched as the stable source repository.
-2. Marcellus evolves in a separate Git repository with push access to RegentClaw disabled.
+2. Enkstein evolves in a separate Git repository with push access to RegentClaw disabled.
 3. Existing route prefixes and module names remain available during compatibility migration.
 4. Public terminology changes before physical package and database names.
 5. New runtime behavior must be real and tested before its status changes from `contract_only` or `partial`.

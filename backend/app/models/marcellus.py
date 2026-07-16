@@ -1,4 +1,4 @@
-"""Persistent runtime state for the Marcellus distributed architecture."""
+"""Persistent runtime state for the Enkstein distributed architecture."""
 
 from __future__ import annotations
 

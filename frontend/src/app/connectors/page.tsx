@@ -455,7 +455,7 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
               <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>{testResult.message}</p>
               {testResult.success && !['credential', 'service'].includes(testResult.verification_level) && (
                 <p className="text-xs p-2 rounded border text-amber-300 bg-amber-950/30 border-amber-800">
-                  Marcellus will not auto-approve this connector until a provider-specific credential check succeeds.
+                  Enkstein will not auto-approve this connector until a provider-specific credential check succeeds.
                 </p>
               )}
               {!testResult.success && (

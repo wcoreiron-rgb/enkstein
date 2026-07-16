@@ -3,19 +3,19 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 
-internal static class MarcellusLauncher
+internal static class EnksteinLauncher
 {
     [STAThread]
     private static void Main()
     {
         string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string launchScript = Path.Combine(appDirectory, "runtime", "Start-Marcellus.ps1");
+        string launchScript = Path.Combine(appDirectory, "runtime", "Start-Enkstein.ps1");
 
         if (!File.Exists(launchScript))
         {
             MessageBox.Show(
-                "The Marcellus runtime is missing. Reinstall Marcellus.",
-                "Marcellus",
+                "The Enkstein runtime is missing. Reinstall Enkstein.",
+                "Enkstein",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             );
@@ -37,8 +37,8 @@ internal static class MarcellusLauncher
         catch (Exception exception)
         {
             MessageBox.Show(
-                "Marcellus could not start: " + exception.Message,
-                "Marcellus",
+                "Enkstein could not start: " + exception.Message,
+                "Enkstein",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error
             );

@@ -116,7 +116,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          package="dist/Marcellus-${GITHUB_REF_NAME#v}-macos.pkg"
+          package="dist/Enkstein-${GITHUB_REF_NAME#v}-macos.pkg"
           xcrun notarytool submit "$package" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
@@ -130,7 +130,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-assets
-          path: dist/Marcellus-*-macos.pkg
+          path: dist/Enkstein-*-macos.pkg
           if-no-files-found: error
 
       - name: Remove temporary signing keychain
@@ -171,7 +171,7 @@ jobs:
           WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
-          $installer = "dist\Marcellus-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
+          $installer = "dist\Enkstein-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
           $certificate = Join-Path $env:RUNNER_TEMP "windows-signing.pfx"
           [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERT))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
@@ -191,7 +191,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-assets
-          path: dist/Marcellus-*-windows-x64-setup.exe
+          path: dist/Enkstein-*-windows-x64-setup.exe
           if-no-files-found: error
 
   publish:
@@ -225,5 +225,5 @@ jobs:
             gh release create "${GITHUB_REF_NAME}" release-assets/* \
               --verify-tag \
               --generate-notes \
-              --title "Marcellus ${GITHUB_REF_NAME}"
+              --title "Enkstein ${GITHUB_REF_NAME}"
           fi

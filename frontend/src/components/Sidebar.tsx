@@ -546,7 +546,7 @@ export default function Sidebar() {
           /* Collapsed — just the icon centred */
           <button onClick={() => setCollapsed(false)} className="mx-auto" title="Expand sidebar">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/favicon.png" alt="Marcellus" width={40} height={40} style={{ display: 'block' }} />
+            <img src="/favicon.png" alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
           </button>
         ) : (
           /* Expanded — logo centred on top, text below, collapse button top-right */
@@ -563,10 +563,10 @@ export default function Sidebar() {
             </div>
             <div className="flex flex-col items-center gap-2 pb-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/favicon.png" alt="Marcellus" width={104} height={104} style={{ display: 'block' }} />
+              <img src="/favicon.png" alt="Enkstein" width={104} height={104} style={{ display: 'block' }} />
               <div className="text-center">
                 <h1 className="font-bold text-sm leading-tight" style={{ color: 'var(--rc-text-1)' }}>
-                  Marcellus
+                  Enkstein
                 </h1>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--rc-text-3)' }}>
                   Distributed Security OS

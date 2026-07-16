@@ -18,29 +18,29 @@ import {
   Zap,
 } from 'lucide-react';
 import {
-  acknowledgeMarcellusPlexusMessage,
-  approveMarcellusPlexusMessage,
-  approveMarcellusReflexExecution,
-  approveMarcellusRegeneration,
-  createMarcellusCheckpoint,
-  createMarcellusReflex,
-  evaluateMarcellusReflexes,
-  getMarcellusCheckpoints,
-  getMarcellusNodeRuntimes,
-  getMarcellusPlexusMessages,
-  getMarcellusReflexExecutions,
-  getMarcellusReflexes,
-  getMarcellusRegenerationRuns,
-  MarcellusCapabilityNode,
-  MarcellusCheckpoint,
-  MarcellusNodeRuntime,
-  MarcellusPlexusMessage,
-  MarcellusReflexDefinition,
-  MarcellusReflexExecution,
-  MarcellusRegenerationRun,
-  sendMarcellusPlexusMessage,
-  startMarcellusRegeneration,
-  verifyMarcellusCheckpoint,
+  acknowledgeEnksteinPlexusMessage,
+  approveEnksteinPlexusMessage,
+  approveEnksteinReflexExecution,
+  approveEnksteinRegeneration,
+  createEnksteinCheckpoint,
+  createEnksteinReflex,
+  evaluateEnksteinReflexes,
+  getEnksteinCheckpoints,
+  getEnksteinNodeRuntimes,
+  getEnksteinPlexusMessages,
+  getEnksteinReflexExecutions,
+  getEnksteinReflexes,
+  getEnksteinRegenerationRuns,
+  EnksteinCapabilityNode,
+  EnksteinCheckpoint,
+  EnksteinNodeRuntime,
+  EnksteinPlexusMessage,
+  EnksteinReflexDefinition,
+  EnksteinReflexExecution,
+  EnksteinRegenerationRun,
+  sendEnksteinPlexusMessage,
+  startEnksteinRegeneration,
+  verifyEnksteinCheckpoint,
 } from '@/lib/api';
 
 type RuntimeTab = 'plexus' | 'reflexes' | 'regeneration';
@@ -99,7 +99,7 @@ function Empty({ text }: { text: string }) {
   return <p className="py-8 text-center text-sm" style={{ color: 'var(--rc-text-3)' }}>{text}</p>;
 }
 
-export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCapabilityNode[] }) {
+export default function EnksteinRuntimeConsole({ nodes }: { nodes: EnksteinCapabilityNode[] }) {
   const nodeIds = useMemo(() => nodes.map((node) => node.id), [nodes]);
   const [tab, setTab] = useState<RuntimeTab>('plexus');
   const [tenantId, setTenantId] = useState('demo-tenant');
@@ -107,12 +107,12 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
-  const [messages, setMessages] = useState<MarcellusPlexusMessage[]>([]);
-  const [reflexes, setReflexes] = useState<MarcellusReflexDefinition[]>([]);
-  const [executions, setExecutions] = useState<MarcellusReflexExecution[]>([]);
-  const [checkpoints, setCheckpoints] = useState<MarcellusCheckpoint[]>([]);
-  const [runs, setRuns] = useState<MarcellusRegenerationRun[]>([]);
-  const [runtimes, setRuntimes] = useState<MarcellusNodeRuntime[]>([]);
+  const [messages, setMessages] = useState<EnksteinPlexusMessage[]>([]);
+  const [reflexes, setReflexes] = useState<EnksteinReflexDefinition[]>([]);
+  const [executions, setExecutions] = useState<EnksteinReflexExecution[]>([]);
+  const [checkpoints, setCheckpoints] = useState<EnksteinCheckpoint[]>([]);
+  const [runs, setRuns] = useState<EnksteinRegenerationRun[]>([]);
+  const [runtimes, setRuntimes] = useState<EnksteinNodeRuntime[]>([]);
 
   const [sender, setSender] = useState(nodeIds[0] || 'threat-analysis');
   const [recipient, setRecipient] = useState(nodeIds[1] || 'threat-intelligence');
@@ -137,12 +137,12 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
     setNotice(null);
     try {
       const [nextMessages, nextReflexes, nextExecutions, nextCheckpoints, nextRuns, nextRuntimes] = await Promise.all([
-        getMarcellusPlexusMessages(tenantId),
-        getMarcellusReflexes(tenantId),
-        getMarcellusReflexExecutions(tenantId),
-        getMarcellusCheckpoints(tenantId),
-        getMarcellusRegenerationRuns(tenantId),
-        getMarcellusNodeRuntimes(tenantId),
+        getEnksteinPlexusMessages(tenantId),
+        getEnksteinReflexes(tenantId),
+        getEnksteinReflexExecutions(tenantId),
+        getEnksteinCheckpoints(tenantId),
+        getEnksteinRegenerationRuns(tenantId),
+        getEnksteinNodeRuntimes(tenantId),
       ]);
       setMessages(nextMessages);
       setReflexes(nextReflexes);
@@ -175,7 +175,7 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
 
   const sendMessage = (event: FormEvent) => {
     event.preventDefault();
-    void perform('send-message', () => sendMarcellusPlexusMessage({
+    void perform('send-message', () => sendEnksteinPlexusMessage({
       tenant_id: tenantId,
       sender_node_id: sender,
       recipient_node_id: recipient,
@@ -188,7 +188,7 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
 
   const registerReflex = (event: FormEvent) => {
     event.preventDefault();
-    void perform('create-reflex', () => createMarcellusReflex({
+    void perform('create-reflex', () => createEnksteinReflex({
       tenant_id: tenantId,
       name: reflexName,
       node_id: reflexNode,
@@ -203,7 +203,7 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
     }), 'Reflex registered with its policy envelope.');
   };
 
-  const evaluateEvent = () => void perform('evaluate-reflex', () => evaluateMarcellusReflexes({
+  const evaluateEvent = () => void perform('evaluate-reflex', () => evaluateEnksteinReflexes({
     tenant_id: tenantId,
     event_id: `ui-event-${crypto.randomUUID()}`,
     event_type: reflexEventType,
@@ -213,7 +213,7 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
 
   const saveCheckpoint = (event: FormEvent) => {
     event.preventDefault();
-    void perform('create-checkpoint', () => createMarcellusCheckpoint({
+    void perform('create-checkpoint', () => createEnksteinCheckpoint({
       tenant_id: tenantId,
       node_id: checkpointNode,
       state: parseObject(checkpointState, 'Checkpoint state'),
@@ -316,8 +316,8 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
                     <span className="inline-flex items-center gap-1"><KeyRound className="h-3 w-3" /> {message.signature_algorithm}</span>
                     <span>risk {Math.round(message.risk_score)}</span>
                     <span className="font-mono">{message.payload_digest.slice(0, 12)}</span>
-                    {message.status === 'delivered' && <button type="button" className="font-medium text-green-500" onClick={() => perform(`ack-${message.id}`, () => acknowledgeMarcellusPlexusMessage(message.id, { tenant_id: tenantId, recipient_node_id: message.recipient_node_id }), 'Message signature verified and acknowledged.')}>Acknowledge</button>}
-                    {message.status === 'requires_approval' && <button type="button" className="font-medium text-amber-500" onClick={() => perform(`approve-message-${message.id}`, () => approveMarcellusPlexusMessage(message.id, tenantId), 'Peer message approved.')}>Approve</button>}
+                    {message.status === 'delivered' && <button type="button" className="font-medium text-green-500" onClick={() => perform(`ack-${message.id}`, () => acknowledgeEnksteinPlexusMessage(message.id, { tenant_id: tenantId, recipient_node_id: message.recipient_node_id }), 'Message signature verified and acknowledged.')}>Acknowledge</button>}
+                    {message.status === 'requires_approval' && <button type="button" className="font-medium text-amber-500" onClick={() => perform(`approve-message-${message.id}`, () => approveEnksteinPlexusMessage(message.id, tenantId), 'Peer message approved.')}>Approve</button>}
                   </div>
                 </div>
               ))}
@@ -345,7 +345,7 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
             <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Definitions</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{reflexes.length === 0 ? <Empty text="No Reflex definitions for this tenant." /> : reflexes.map((reflex) => <div key={reflex.id} className="flex items-start justify-between gap-3 p-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{reflex.name}</p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{reflex.node_id} | {reflex.event_type} | {reflex.run_count} runs</p></div><Status value={reflex.is_active ? 'active' : 'inactive'} /></div>)}</div></div>
-            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Execution Decisions</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{executions.length === 0 ? <Empty text="No Reflex executions for this tenant." /> : executions.map((execution) => <div key={execution.id} className="p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{execution.event_type}</p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{execution.policy_outcome} | risk {Math.round(execution.risk_score)}</p></div><Status value={execution.status} /></div>{execution.status === 'requires_approval' && <button type="button" className="mt-2 text-xs font-medium text-amber-500" onClick={() => perform(`approve-reflex-${execution.id}`, () => approveMarcellusReflexExecution(execution.id, tenantId), 'Reflex execution approved and re-evaluated.')}>Approve execution</button>}</div>)}</div></div>
+            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Execution Decisions</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{executions.length === 0 ? <Empty text="No Reflex executions for this tenant." /> : executions.map((execution) => <div key={execution.id} className="p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{execution.event_type}</p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{execution.policy_outcome} | risk {Math.round(execution.risk_score)}</p></div><Status value={execution.status} /></div>{execution.status === 'requires_approval' && <button type="button" className="mt-2 text-xs font-medium text-amber-500" onClick={() => perform(`approve-reflex-${execution.id}`, () => approveEnksteinReflexExecution(execution.id, tenantId), 'Reflex execution approved and re-evaluated.')}>Approve execution</button>}</div>)}</div></div>
           </div>
         </div>
       )}
@@ -359,10 +359,10 @@ export default function MarcellusRuntimeConsole({ nodes }: { nodes: MarcellusCap
               <div><Label>Recoverable State</Label><textarea rows={6} className={`${CONTROL} font-mono text-xs`} style={fieldStyle()} value={checkpointState} onChange={(event) => setCheckpointState(event.target.value)} /></div>
               <button type="submit" disabled={busy !== null} className={`${BUTTON} bg-green-700 text-white hover:bg-green-800`}><DatabaseBackup className="h-4 w-4" /> Checkpoint</button>
             </form>
-            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Signed Checkpoints</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{checkpoints.length === 0 ? <Empty text="No signed checkpoints for this tenant." /> : checkpoints.map((checkpoint) => <div key={checkpoint.id} className="p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{checkpoint.node_id} <span style={{ color: 'var(--rc-text-3)' }}>v{checkpoint.version}</span></p><p className="mt-1 font-mono text-xs" style={{ color: 'var(--rc-text-3)' }}>{checkpoint.state_digest.slice(0, 16)} | {checkpoint.signature_algorithm}</p></div><Status value={checkpoint.status} /></div><div className="mt-2 flex gap-3"><button type="button" className="text-xs font-medium text-cyan-500" onClick={() => perform(`verify-${checkpoint.id}`, () => verifyMarcellusCheckpoint(checkpoint.id, tenantId), 'Checkpoint signature and manifest verified.')}>Verify</button><button type="button" className="text-xs font-medium text-green-500" onClick={() => perform(`regenerate-${checkpoint.id}`, () => startMarcellusRegeneration(tenantId, checkpoint.id), 'Regeneration request passed into its approval gate.')}>Regenerate</button></div></div>)}</div></div>
+            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Signed Checkpoints</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{checkpoints.length === 0 ? <Empty text="No signed checkpoints for this tenant." /> : checkpoints.map((checkpoint) => <div key={checkpoint.id} className="p-3"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{checkpoint.node_id} <span style={{ color: 'var(--rc-text-3)' }}>v{checkpoint.version}</span></p><p className="mt-1 font-mono text-xs" style={{ color: 'var(--rc-text-3)' }}>{checkpoint.state_digest.slice(0, 16)} | {checkpoint.signature_algorithm}</p></div><Status value={checkpoint.status} /></div><div className="mt-2 flex gap-3"><button type="button" className="text-xs font-medium text-cyan-500" onClick={() => perform(`verify-${checkpoint.id}`, () => verifyEnksteinCheckpoint(checkpoint.id, tenantId), 'Checkpoint signature and manifest verified.')}>Verify</button><button type="button" className="text-xs font-medium text-green-500" onClick={() => perform(`regenerate-${checkpoint.id}`, () => startEnksteinRegeneration(tenantId, checkpoint.id), 'Regeneration request passed into its approval gate.')}>Regenerate</button></div></div>)}</div></div>
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
-            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Regeneration Runs</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{runs.length === 0 ? <Empty text="No Regeneration runs for this tenant." /> : runs.map((run) => <div key={run.id} className="p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{run.node_id}</p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{run.policy_outcome} | risk {Math.round(run.risk_score)}</p></div><Status value={run.status} /></div>{run.status === 'requires_approval' && <button type="button" className="mt-2 text-xs font-medium text-amber-500" onClick={() => perform(`approve-regeneration-${run.id}`, () => approveMarcellusRegeneration(run.id, tenantId), 'Regeneration approved and executed.')}>Approve and execute</button>}</div>)}</div></div>
+            <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Regeneration Runs</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{runs.length === 0 ? <Empty text="No Regeneration runs for this tenant." /> : runs.map((run) => <div key={run.id} className="p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{run.node_id}</p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{run.policy_outcome} | risk {Math.round(run.risk_score)}</p></div><Status value={run.status} /></div>{run.status === 'requires_approval' && <button type="button" className="mt-2 text-xs font-medium text-amber-500" onClick={() => perform(`approve-regeneration-${run.id}`, () => approveEnksteinRegeneration(run.id, tenantId), 'Regeneration approved and executed.')}>Approve and execute</button>}</div>)}</div></div>
             <div><h3 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Node Runtimes</h3><div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>{runtimes.length === 0 ? <Empty text="No regenerated runtimes for this tenant." /> : runtimes.map((runtime) => <div key={runtime.id} className="p-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{runtime.node_id} <span style={{ color: 'var(--rc-text-3)' }}>generation {runtime.generation}</span></p><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>{runtime.instance_id}</p></div><Status value={runtime.status} /></div><p className="mt-2 inline-flex items-center gap-1 text-xs" style={{ color: 'var(--rc-text-3)' }}><Clock3 className="h-3 w-3" /> {new Date(runtime.regenerated_at).toLocaleString()}</p></div>)}</div></div>
           </div>
         </div>

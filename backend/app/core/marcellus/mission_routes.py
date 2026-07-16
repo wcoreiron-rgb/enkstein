@@ -31,7 +31,7 @@ from app.core.marcellus.missions import (
 from app.core.marcellus.runtime_security import actor_id, actor_name, resolve_tenant
 
 
-router = APIRouter(prefix="/marcellus/missions", tags=["Marcellus Missions"])
+router = APIRouter(prefix="/marcellus/missions", tags=["Enkstein Missions"])
 
 
 @router.post("", response_model=CortexMissionRead, summary="Create a persistent governed Mission")

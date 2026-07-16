@@ -10,7 +10,7 @@ async def test_architecture_exposes_all_core_concepts(client: AsyncClient):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["name"] == "Marcellus Plexus Architecture"
+    assert payload["name"] == "Enkstein Plexus Architecture"
     assert payload["working_name"] is True
     assert len(payload["hearts"]) == 3
     assert len(payload["arms"]) == 8

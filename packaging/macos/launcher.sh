@@ -30,11 +30,11 @@ show_error() {
   if [ "${MARCELLUS_EMBEDDED:-0}" = "1" ]; then
     return
   fi
-  /usr/bin/osascript -e "display dialog \"Marcellus could not start. ${message}\" buttons {\"OK\"} default button \"OK\" with icon stop" >/dev/null 2>&1 || true
+  /usr/bin/osascript -e "display dialog \"Enkstein could not start. ${message}\" buttons {\"OK\"} default button \"OK\" with icon stop" >/dev/null 2>&1 || true
 }
 
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  notify_status "Marcellus is already starting. Waiting for the secure runtime..."
+  notify_status "Enkstein is already starting. Waiting for the secure runtime..."
   if [ "${MARCELLUS_EMBEDDED:-0}" != "1" ]; then
     /usr/bin/open "http://127.0.0.1:3000/marcellus"
   fi
@@ -43,11 +43,11 @@ fi
 trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 if [ ! -f "$SOURCE_RUNTIME/VERSION" ]; then
-  show_error "The application runtime is missing. Reinstall Marcellus."
+  show_error "The application runtime is missing. Reinstall Enkstein."
   exit 1
 fi
 
-notify_status "Preparing the Marcellus runtime..."
+notify_status "Preparing the Enkstein runtime..."
 source_version=$(tr -d '\r\n' < "$SOURCE_RUNTIME/VERSION")
 runtime_version=${source_version#v}
 installed_version=""
@@ -101,7 +101,7 @@ ensure_env_value() {
 }
 
 start_brain_bridge() {
-  local bridge="$APP_ROOT/Resources/MarcellusBrainBridge"
+  local bridge="$APP_ROOT/Resources/EnksteinBrainBridge"
   [ -x "$bridge" ] || return 0
   if [ ! -s "$BRIDGE_SECRET_FILE" ]; then
     /usr/bin/openssl rand -hex 32 > "$BRIDGE_SECRET_FILE"
@@ -151,7 +151,7 @@ PLIST
 }
 
 if ! command -v docker >/dev/null 2>&1; then
-  show_error "Docker Desktop is required. Install Docker Desktop, then launch Marcellus again."
+  show_error "Docker Desktop is required. Install Docker Desktop, then launch Enkstein again."
   /usr/bin/open "https://www.docker.com/products/docker-desktop/" || true
   exit 1
 fi
@@ -159,7 +159,7 @@ fi
 if ! docker info >/dev/null 2>&1; then
   notify_status "Starting Docker Desktop..."
   /usr/bin/open -a Docker >/dev/null 2>&1 || true
-  /usr/bin/osascript -e 'display notification "Waiting for Docker Desktop to start" with title "Marcellus"' >/dev/null 2>&1 || true
+  /usr/bin/osascript -e 'display notification "Waiting for Docker Desktop to start" with title "Enkstein"' >/dev/null 2>&1 || true
   for _ in $(seq 1 60); do
     if docker info >/dev/null 2>&1; then
       break
@@ -174,7 +174,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 {
-  echo "[$(date -u +%FT%TZ)] Starting Marcellus $source_version"
+  echo "[$(date -u +%FT%TZ)] Starting Enkstein $source_version"
   cd "$RUNTIME_DIR"
   notify_status "Starting governed services. The first launch may take a few minutes..."
   ./install.sh --no-start
@@ -215,9 +215,9 @@ printf '%s\n' "$ui_url" > "$USER_ROOT/ui-url"
 
 notify_status "Waiting for the Cortex and Trust Fabric..."
 wait_for_url "The backend" "http://127.0.0.1:${backend_port}/health" 300
-notify_status "Waiting for the Marcellus desktop..."
+notify_status "Waiting for the Enkstein desktop..."
 wait_for_url "The desktop UI" "http://127.0.0.1:${frontend_port}/" 180
-notify_status "Marcellus is ready."
+notify_status "Enkstein is ready."
 
 if [ "${MARCELLUS_EMBEDDED:-0}" != "1" ]; then
   /usr/bin/open "$ui_url"

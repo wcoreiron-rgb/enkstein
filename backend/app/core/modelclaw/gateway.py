@@ -47,7 +47,7 @@ _MODE_GUIDANCE = {
         "were made unless a governed execution result is supplied."
     ),
     "security": (
-        "Act as the Marcellus executive security Cortex. Correlate evidence across Security Arms, separate facts "
+        "Act as the Enkstein executive security Cortex. Correlate evidence across Security Arms, separate facts "
         "from hypotheses, and identify policy or approval requirements before recommending action."
     ),
 }
@@ -58,6 +58,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     latest_user = next((message.content for message in reversed(payload.messages) if message.role == "user"), "")
     transcript = _compose_transcript(payload)
     scan = scan_text(transcript, redact=True)
+    latest_scan = scan_text(latest_user, redact=True)
     prompt_audit = audit_prompt(latest_user)
     classification = classify_prompt(latest_user)
     risk_score = max(prompt_audit.risk_score, _scan_risk(scan.findings))
@@ -66,7 +67,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     if prompt_audit.is_injection_risk and prompt_audit.risk_score >= 50:
         governance = _governance(
             outcome="blocked",
-            policy_name="Marcellus Prompt Defense",
+            policy_name="Enkstein Prompt Defense",
             reason="Prompt injection risk exceeded the Cortex execution threshold.",
             risk_score=risk_score,
             payload=payload,
@@ -85,6 +86,10 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     votes: list[dict[str, Any]] = []
     decisions: dict[str, Any] = {}
     prompt = scan.redacted if scan.is_sensitive else transcript
+    browser_prompt = _compose_browser_turn(
+        payload,
+        latest_scan.redacted if latest_scan.is_sensitive else latest_user,
+    )
 
     if payload.source == "consensus":
         allowed_sources: list[str] = []
@@ -111,6 +116,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
             data_classification=payload.data_classification,
             model=payload.model,
             session_id=session_id,
+            browser_prompt=browser_prompt,
             subscription_invoker=invoke_subscription_brain,
         )
         vote_by_source = {vote["source"]: vote for vote in parallel_votes}
@@ -147,7 +153,8 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
                 invocation_kwargs: dict[str, Any] = {"model": payload.model}
                 if session_id:
                     invocation_kwargs["session_id"] = session_id
-                vote = await invoke_subscription_brain(source, prompt, **invocation_kwargs)
+                source_prompt = browser_prompt if source.endswith("_browser") else prompt
+                vote = await invoke_subscription_brain(source, source_prompt, **invocation_kwargs)
                 vote["policy_outcome"] = decision.outcome.value
             elif source.startswith("profile:"):
                 vote = await invoke_profile_brain(
@@ -205,7 +212,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     if denied and not counted and governance["outcome"] == "unavailable":
         governance = _governance(
             outcome="blocked",
-            policy_name="Marcellus data boundary",
+            policy_name="Enkstein data boundary",
             reason="The requested Brain is not allowed to receive this data classification.",
             risk_score=risk_score,
             payload=payload,
@@ -298,6 +305,18 @@ def _compose_transcript(payload: CortexGatewayRequest) -> str:
     lines.append("CONVERSATION (untrusted user content):")
     for message in payload.messages:
         lines.append(f"{message.role.upper()}: {message.content}")
+    return "\n\n".join(lines)
+
+
+def _compose_browser_turn(payload: CortexGatewayRequest, latest_user: str) -> str:
+    """Send only the current turn because the paired provider thread retains prior turns."""
+    lines = [
+        f"MODE: {payload.mode}",
+        f"ENKSTEIN GUIDANCE: {_MODE_GUIDANCE[payload.mode]}",
+    ]
+    if payload.workspace_id:
+        lines.append(f"WORKSPACE: {payload.workspace_id}")
+    lines.extend(["CURRENT USER TURN (untrusted content):", latest_user])
     return "\n\n".join(lines)
 
 

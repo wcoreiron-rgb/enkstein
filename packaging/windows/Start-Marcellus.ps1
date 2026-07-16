@@ -14,8 +14,8 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 function Show-Error([string]$Message) {
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show(
-        "Marcellus could not start. $Message",
-        "Marcellus",
+        "Enkstein could not start. $Message",
+        "Enkstein",
         "OK",
         "Error"
     ) | Out-Null
@@ -69,7 +69,7 @@ try {
     }
 
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Show-Error "Docker Desktop is required. Install it, then start Marcellus again."
+        Show-Error "Docker Desktop is required. Install it, then start Enkstein again."
         Start-Process "https://www.docker.com/products/docker-desktop/"
         exit 1
     }
@@ -103,7 +103,7 @@ try {
 
     Start-BrainBridge
 
-    "[$([DateTime]::UtcNow.ToString('o'))] Starting Marcellus" | Out-File -Append -FilePath $LogFile
+    "[$([DateTime]::UtcNow.ToString('o'))] Starting Enkstein" | Out-File -Append -FilePath $LogFile
     & docker compose --env-file $EnvFile -f $ComposeFile config --quiet *>> $LogFile
     if ($LASTEXITCODE -ne 0) { throw "Docker Compose validation failed. See $LogFile." }
     & docker compose --env-file $EnvFile -f $ComposeFile up -d --build *>> $LogFile

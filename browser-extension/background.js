@@ -30,6 +30,16 @@ function providerUrl(provider) {
   return 'https://gemini.google.com/app';
 }
 
+function safeProviderUrl(url, expectedProvider) {
+  try {
+    const parsed = new URL(url);
+    const sanitized = `${parsed.origin}${parsed.pathname}`;
+    return providerForUrl(`${sanitized}/`) === expectedProvider ? sanitized : null;
+  } catch {
+    return null;
+  }
+}
+
 async function bridgeRequest(path, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['X-Marcellus-Browser-Token'] = token;
@@ -94,8 +104,11 @@ async function sessionTab(task) {
   const stored = await storageGet('marcellusSessionTabs');
   const mappings = stored.marcellusSessionTabs || {};
   if (sessionKey && mappings[sessionKey]) {
+    const mapping = typeof mappings[sessionKey] === 'number'
+      ? { tab_id: mappings[sessionKey] }
+      : mappings[sessionKey];
     try {
-      const existing = await tabsGet(mappings[sessionKey]);
+      const existing = await tabsGet(mapping.tab_id);
       if (existing?.id && providerForUrl(existing.url) === task.provider) {
         await tabsUpdate(existing.id, { active: true });
         await waitForTab(existing.id);
@@ -103,18 +116,40 @@ async function sessionTab(task) {
         return existing;
       }
     } catch {}
-    delete mappings[sessionKey];
-    await storageSet({ marcellusSessionTabs: mappings });
+    const restoredUrl = safeProviderUrl(mapping.url, task.provider);
+    if (restoredUrl) {
+      const restored = await tabsCreate({ url: restoredUrl, active: true });
+      await waitForTab(restored.id);
+      await waitForProviderReady(restored.id);
+      mappings[sessionKey] = { tab_id: restored.id, url: restoredUrl };
+      await storageSet({ marcellusSessionTabs: mappings });
+      return restored;
+    }
   }
 
   const created = await tabsCreate({ url: providerUrl(task.provider), active: true });
   await waitForTab(created.id);
   await waitForProviderReady(created.id);
   if (sessionKey) {
-    mappings[sessionKey] = created.id;
+    mappings[sessionKey] = {
+      tab_id: created.id,
+      url: safeProviderUrl(created.url, task.provider) || providerUrl(task.provider),
+    };
     await storageSet({ marcellusSessionTabs: mappings });
   }
   return created;
+}
+
+async function rememberSessionTab(task, tabId) {
+  if (!task.session_id) return;
+  const tab = await tabsGet(tabId);
+  const url = safeProviderUrl(tab?.url, task.provider);
+  if (!url) return;
+  const sessionKey = `${task.provider}:${task.session_id}`;
+  const stored = await storageGet('marcellusSessionTabs');
+  const mappings = stored.marcellusSessionTabs || {};
+  mappings[sessionKey] = { tab_id: tabId, url };
+  await storageSet({ marcellusSessionTabs: mappings });
 }
 
 async function executeTask(task) {
@@ -122,6 +157,7 @@ async function executeTask(task) {
   await tabsUpdate(tab.id, { active: true });
   try {
     const result = await sendToTab(tab.id, { type: 'marcellus-execute', task });
+    await rememberSessionTab(task, tab.id);
     return result || { success: false, detail: 'Provider page returned no result.' };
   } catch (error) {
     return { success: false, detail: error instanceof Error ? error.message : 'Provider page invocation failed.' };
@@ -177,8 +213,12 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   const mappings = stored.marcellusSessionTabs || {};
   let changed = false;
   for (const [key, value] of Object.entries(mappings)) {
-    if (value === tabId) {
-      delete mappings[key];
+    const mapping = typeof value === 'number' ? { tab_id: value } : value;
+    if (mapping?.tab_id === tabId) {
+      const provider = key.split(':', 1)[0];
+      const url = safeProviderUrl(mapping.url, provider);
+      if (url) mappings[key] = { tab_id: null, url };
+      else delete mappings[key];
       changed = true;
     }
   }

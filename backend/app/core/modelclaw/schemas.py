@@ -157,7 +157,7 @@ class ConsensusResponse(BaseModel):
 
 class CortexMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(..., min_length=1, max_length=12000)
+    content: str = Field(..., min_length=1, max_length=120000)
 
 
 class CortexGatewayRequest(BaseModel):
@@ -185,8 +185,8 @@ class CortexGatewayRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_total_context(self):
-        if sum(len(message.content) for message in self.messages) > 24000:
-            raise ValueError("Conversation context exceeds 24000 characters")
+        if sum(len(message.content) for message in self.messages) > 120000:
+            raise ValueError("Conversation context exceeds 120000 characters")
         valid_source = self.source in {
             "auto",
             "consensus",

@@ -106,43 +106,43 @@ export default function BrainConnectionsPage() {
       id: 'codex_subscription',
       name: 'Codex Subscription',
       icon: TerminalSquare,
-      instruction: 'Install Codex, run codex login, then relaunch Marcellus.',
+      instruction: 'Install Codex, run codex login, then relaunch Enkstein.',
     },
     {
       id: 'claude_subscription',
       name: 'Claude Subscription',
       icon: BrainCircuit,
-      instruction: 'Install Claude Code, run claude and sign in, then relaunch Marcellus.',
+      instruction: 'Install Claude Code, run claude and sign in, then relaunch Enkstein.',
     },
     {
       id: 'chatgpt_desktop',
       name: 'ChatGPT Desktop Session',
       icon: BrainCircuit,
-      instruction: 'Install and sign in to ChatGPT, then grant Marcellus Accessibility access.',
+      instruction: 'Install and sign in to ChatGPT, then grant Enkstein Accessibility access.',
     },
     {
       id: 'claude_desktop',
       name: 'Claude Desktop Session',
       icon: BrainCircuit,
-      instruction: 'Install and sign in to Claude, then grant Marcellus Accessibility access.',
+      instruction: 'Install and sign in to Claude, then grant Enkstein Accessibility access.',
     },
     {
       id: 'chatgpt_browser',
       name: 'ChatGPT Browser Session',
       icon: Cloud,
-      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in ChatGPT tab open.',
+      instruction: 'Install the Enkstein browser companion, pair it once, and keep a signed-in ChatGPT tab open.',
     },
     {
       id: 'claude_browser',
       name: 'Claude Browser Session',
       icon: Cloud,
-      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in Claude tab open.',
+      instruction: 'Install the Enkstein browser companion, pair it once, and keep a signed-in Claude tab open.',
     },
     {
       id: 'gemini_browser',
       name: 'Gemini Browser Session',
       icon: Cloud,
-      instruction: 'Install the Marcellus browser companion, pair it once, and keep a signed-in Gemini tab open.',
+      instruction: 'Install the Enkstein browser companion, pair it once, and keep a signed-in Gemini tab open.',
     },
   ].map((entry) => ({ ...entry, status: brains.find((brain) => brain.brain === entry.id) })), [brains]);
 
@@ -200,7 +200,7 @@ export default function BrainConnectionsPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-600 text-white"><BrainCircuit className="h-5 w-5" /></div>
               <div>
                 <h1 className="text-xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>Brain Connections</h1>
-                <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-3)' }}>Choose how Marcellus reasons. Every request still passes through Trust Fabric.</p>
+                <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-3)' }}>Choose how Enkstein reasons. Every request still passes through Trust Fabric.</p>
               </div>
             </div>
           </div>
@@ -232,7 +232,7 @@ export default function BrainConnectionsPage() {
 
         {warnings.length > 0 && (
           <div className="mb-5 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-            {warnings.join(' ')} Refresh after the Marcellus runtime is available.
+            {warnings.join(' ')} Refresh after the Enkstein runtime is available.
           </div>
         )}
 
@@ -240,7 +240,7 @@ export default function BrainConnectionsPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Desktop subscriptions</h2>
-              <p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>Use a vendor CLI or the visible signed-in desktop app. Marcellus never copies credentials or browser sessions.</p>
+              <p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>Use a vendor CLI or the visible signed-in desktop app. Enkstein never copies credentials or browser sessions.</p>
             </div>
             <button
               type="button"
@@ -283,7 +283,7 @@ export default function BrainConnectionsPage() {
                   </div>
                   <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{status?.detail || instruction}</p>
                   {id.endsWith('_desktop') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option visibly opens the vendor app and remains subject to its normal plan and usage limits.</p>}
-                  {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Marcellus.</p>}
+                  {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Enkstein.</p>}
                   {(status?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status!.models!.join(' · ')}</p>}
                 </article>
               );

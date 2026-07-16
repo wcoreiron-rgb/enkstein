@@ -336,7 +336,7 @@ async def run_mission_job(mission_id: UUID, job_id: UUID) -> None:
                 action="mission_memory_propose",
                 tenant_id=mission.tenant_id,
                 actor_id="mission-runtime",
-                actor_name="Marcellus Mission Runtime",
+                actor_name="Enkstein Mission Runtime",
                 actor_type="agent",
                 target=str(mission.id),
                 context={"job_id": str(job.id), "severity": job.overall_severity or "low", "safe": safe},
@@ -602,7 +602,7 @@ async def mission_scheduler_loop(session_factory) -> None:
                             db,
                             mission,
                             actor_id="mission-scheduler",
-                            actor_name="Marcellus Mission Scheduler",
+                            actor_name="Enkstein Mission Scheduler",
                             actor_type="agent",
                         )
                         runs.append((mission.id, launched.job_id))

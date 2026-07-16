@@ -142,7 +142,7 @@ TOOLS = [
     },
     {
         "name": "send_security_alert",
-        "description": "Create a security alert event in Marcellus (routable to Slack/Teams/PagerDuty).",
+        "description": "Create a security alert event in Enkstein (routable to Slack/Teams/PagerDuty).",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -158,7 +158,7 @@ TOOLS = [
     },
     {
         "name": "get_recent_events",
-        "description": "Get recent security events and alerts from Marcellus.",
+        "description": "Get recent security events and alerts from Enkstein.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -568,7 +568,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
                 "severity": severity_str,
                 "alerts_routed": alerts_sent,
                 "note": (
-                    f"Alert created in Marcellus. "
+                    f"Alert created in Enkstein. "
                     f"{'Routed to ' + str(alerts_sent) + ' external channel(s).' if alerts_sent > 0 else 'No alert channels configured — add Slack/Teams/PagerDuty connector to route externally.'}"
                 ),
             }
@@ -609,7 +609,7 @@ async def _execute_tool(name: str, inputs: dict, db) -> dict:
 
 # ── Agent loop ────────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are Marcellus Security Copilot — an expert AI analyst for security AND general automation.
+SYSTEM_PROMPT = """You are Enkstein Security Copilot — an expert AI analyst for security AND general automation.
 
 You have two types of tools:
 
@@ -648,7 +648,7 @@ When data is a mix of real and simulation: summarize real findings first, then n
 are still on demo data and what connectors would make them real.
 
 GENERAL AUTOMATION (non-security):
-  Marcellus is not limited to security. Users can also orchestrate ANY business automation:
+  Enkstein is not limited to security. Users can also orchestrate ANY business automation:
   - Sending Slack/Teams messages via webhook steps
   - Creating Jira/GitHub issues via http_request steps
   - Calling any REST API (CRM, billing, HR, monitoring) via http_request or webhook_call steps

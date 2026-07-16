@@ -7,9 +7,9 @@ if (!code) {
   chrome.runtime.sendMessage({ type: 'marcellus-pair', code }, (result) => {
     if (!status) return;
     if (chrome.runtime.lastError || !result?.success) {
-      status.textContent = result?.detail || 'Pairing failed. Start pairing again from Marcellus.';
+      status.textContent = result?.detail || 'Pairing failed. Start pairing again from Enkstein.';
       return;
     }
-    status.textContent = 'Browser companion paired. Keep a signed-in ChatGPT, Claude, or Gemini tab open, then return to Marcellus.';
+    status.textContent = 'Browser companion paired. Keep a signed-in ChatGPT, Claude, or Gemini tab open, then return to Enkstein.';
   });
 }

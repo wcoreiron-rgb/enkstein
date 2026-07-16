@@ -125,7 +125,7 @@ async def request_desktop_brain_access() -> dict[str, Any]:
         logger.warning("Desktop Brain access request failed: %s", type(exc).__name__)
         return {
             "granted": False,
-            "detail": "Marcellus could not request desktop app access.",
+            "detail": "Enkstein could not request desktop app access.",
         }
 
 
@@ -145,7 +145,7 @@ async def create_browser_brain_pairing() -> dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("Browser Brain pairing failed: %s", type(exc).__name__)
-        return {"available": False, "detail": "Marcellus could not start browser pairing."}
+        return {"available": False, "detail": "Enkstein could not start browser pairing."}
 
 
 async def open_browser_companion_folder() -> dict[str, Any]:
@@ -156,7 +156,7 @@ async def open_browser_companion_folder() -> dict[str, Any]:
         return {"opened": bool(body.get("opened")), "detail": body.get("detail")}
     except Exception as exc:
         logger.warning("Browser companion folder open failed: %s", type(exc).__name__)
-        return {"opened": False, "detail": "Marcellus could not open the browser companion folder."}
+        return {"opened": False, "detail": "Enkstein could not open the browser companion folder."}
 
 
 async def invoke_subscription_brain(
@@ -306,7 +306,7 @@ async def _invoke_prepared_profile(prepared: dict[str, Any], prompt: str) -> dic
         transmitted_prompt,
         model=resolved_model,
         system=(
-            "You are a reasoning-only Brain inside Marcellus. Return a concise, evidence-aware answer. "
+            "You are a reasoning-only Brain inside Enkstein. Return a concise, evidence-aware answer. "
             "Do not claim to have executed tools or changed systems."
         ),
         api_key=api_key,
@@ -344,6 +344,7 @@ async def collect_votes(
     data_classification: str,
     model: str | None = None,
     session_id: str | None = None,
+    browser_prompt: str | None = None,
     subscription_invoker=None,
 ) -> list[dict[str, Any]]:
     prepared: dict[str, dict[str, Any]] = {}
@@ -364,7 +365,8 @@ async def collect_votes(
             kwargs: dict[str, Any] = {"model": model}
             if session_id:
                 kwargs["session_id"] = session_id
-            return await invoker(source, prompt, **kwargs)
+            source_prompt = browser_prompt if source.endswith("_browser") and browser_prompt else prompt
+            return await invoker(source, source_prompt, **kwargs)
         if source.startswith("profile:"):
             profile_call = prepared[source]
             if "unavailable_vote" in profile_call:
@@ -448,11 +450,11 @@ def _unavailable_vote(source: str, kind: str, reason: str) -> dict[str, Any]:
 
 def _redaction_reason(input_redacted: bool, output_redacted: bool) -> str | None:
     if input_redacted and output_redacted:
-        return "Input and output were redacted by Marcellus."
+        return "Input and output were redacted by Enkstein."
     if input_redacted:
         return "Sensitive input was redacted before provider invocation."
     if output_redacted:
-        return "Output was redacted by Marcellus."
+        return "Output was redacted by Enkstein."
     return None
 
 

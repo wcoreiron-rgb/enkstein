@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Marcellus — Documentation</title>
+  <title>Enkstein — Documentation</title>
   <meta name="description" content="Technical documentation for the RegentClaw zero-trust security platform." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -397,8 +397,8 @@
 <!-- TOP BAR -->
 <header class="topbar">
   <a href="index.html" class="topbar-logo">
-    <div class="logo-icon"><img src="logo.png" alt="Marcellus"></div>
-    Marcellus
+    <div class="logo-icon"><img src="logo.png" alt="Enkstein"></div>
+    Enkstein
   </a>
   <span class="topbar-sep">/</span>
   <span class="topbar-title">Documentation</span>
@@ -469,11 +469,11 @@
 
     <!-- ─── OVERVIEW ─── -->
     <div id="sec-overview" class="doc-section active">
-      <h1>Marcellus</h1>
+      <h1>Enkstein</h1>
       <p class="lead">A modular zero-trust security ecosystem built to govern every security action — from AI prompt evaluation to cloud posture remediation — through a single, auditable enforcement layer.</p>
 
-      <h2>What is Marcellus?</h2>
-      <p>Marcellus is a distributed security and AI workspace organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
+      <h2>What is Enkstein?</h2>
+      <p>Enkstein is a distributed security and AI workspace organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
         <li><strong>25 Security Claws + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. ModelClaw, CommandClaw, and ReleaseClaw sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
@@ -518,10 +518,10 @@ cd regentclaw-VERSION
 ./install.sh</code></pre>
 
       <h2>Native Installers</h2>
-      <p>Desktop users can install <code>Marcellus-VERSION-macos.pkg</code> or <code>Marcellus-VERSION-windows-x64-setup.exe</code>. These packages create a Marcellus launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Marcellus in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
+      <p>Desktop users can install <code>Enkstein-VERSION-macos.pkg</code> or <code>Enkstein-VERSION-windows-x64-setup.exe</code>. These packages create a Enkstein launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Enkstein in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
 
       <h2>Persistent Chat and Cowork</h2>
-      <p>Marcellus provides encrypted tenant-scoped conversations, searchable history, branches, and Cowork Projects. The desktop shell can grant a project access to one selected local folder through an opaque native token; raw host paths never enter the container or web UI. Bounded text files become persistent Cowork context and can be created, edited, renamed, moved, synchronized, or sent to recoverable project trash. Browser Cowork keeps an import-copy fallback. Mutations are tenant-scoped and Trust Fabric authorized, with traversal and symlink defenses at the native boundary. Auto Brain routing records its candidates, attempts, selected source, and policy reason. A conversation can be handed to an approval-gated Security Swarm without copying plaintext conversation content into the Swarm record.</p>
+      <p>Enkstein provides encrypted tenant-scoped conversations, searchable history, branches, and Cowork Projects. The desktop shell can grant a project access to one selected local folder through an opaque native token; raw host paths never enter the container or web UI. Bounded text files become persistent Cowork context and can be created, edited, renamed, moved, synchronized, or sent to recoverable project trash. Browser Cowork keeps an import-copy fallback. Mutations are tenant-scoped and Trust Fabric authorized, with traversal and symlink defenses at the native boundary. Auto Brain routing records its candidates, attempts, selected source, and policy reason. A conversation can be handed to an approval-gated Security Swarm without copying plaintext conversation content into the Swarm record.</p>
       <pre><code>POST /api/v1/marcellus/workspace/projects
 POST /api/v1/marcellus/workspace/conversations
 POST /api/v1/marcellus/workspace/conversations/{id}/turns

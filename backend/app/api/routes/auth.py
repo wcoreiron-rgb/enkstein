@@ -415,14 +415,14 @@ async def request_email_code(
         delivered = await send_email(
             **config,
             to_addrs=[email],
-            subject="Your Marcellus sign-in code",
+            subject="Your Enkstein sign-in code",
             body=(
-                f"Your Marcellus sign-in code is {code}.\n\n"
+                f"Your Enkstein sign-in code is {code}.\n\n"
                 f"It expires in {minutes} minutes and can be used once.\n"
                 "If you did not request this code, ignore this message."
             ),
             html_body=(
-                "<p>Your Marcellus sign-in code is:</p>"
+                "<p>Your Enkstein sign-in code is:</p>"
                 f"<p style=\"font-size:28px;font-weight:700;letter-spacing:6px\">{code}</p>"
                 f"<p>It expires in {minutes} minutes and can be used once.</p>"
             ),

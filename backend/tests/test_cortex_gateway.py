@@ -92,6 +92,34 @@ async def test_gateway_passes_opaque_conversation_affinity_to_browser_brain(clie
 
 
 @pytest.mark.asyncio
+async def test_persistent_browser_brain_receives_current_turn_without_replaying_history(client, monkeypatch):
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        captured["prompt"] = prompt
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "chatgpt_browser",
+            "context": {"conversation_id": "conversation-123"},
+            "messages": [
+                {"role": "user", "content": "Earlier request that is already in the provider thread"},
+                {"role": "assistant", "content": "Earlier provider answer"},
+                {"role": "user", "content": "Review the complete attached script now"},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "Review the complete attached script now" in captured["prompt"]
+    assert "Earlier request" not in captured["prompt"]
+    assert "Earlier provider answer" not in captured["prompt"]
+
+
+@pytest.mark.asyncio
 async def test_gateway_redacts_sensitive_context_before_brain(client, monkeypatch):
     captured = {}
 

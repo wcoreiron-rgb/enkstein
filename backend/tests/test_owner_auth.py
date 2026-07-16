@@ -35,7 +35,7 @@ def test_totp_accepts_current_window_and_rejects_bad_code() -> None:
 
     assert owner_auth.verify_totp(secret, code, now=now) == counter
     assert owner_auth.verify_totp(secret, "000000", now=now) is None
-    assert "issuer=Marcellus" in owner_auth.enrollment_uri("owner", secret)
+    assert "issuer=Enkstein" in owner_auth.enrollment_uri("owner", secret)
 
 
 @pytest.mark.asyncio

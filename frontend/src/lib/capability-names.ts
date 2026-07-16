@@ -46,7 +46,7 @@ export function capabilityName(value?: string | null): string {
 
 export function marcellusText(value?: string | null): string {
   if (!value) return '';
-  let result = value.replace(/RegentClaw/g, 'Marcellus');
+  let result = value.replace(/RegentClaw/g, 'Enkstein');
   for (const [key, displayName] of Object.entries(CAPABILITY_NAMES)) {
     const legacyName = `${key.slice(0, -4)}Claw`;
     result = result.replace(new RegExp(legacyName, 'gi'), displayName);

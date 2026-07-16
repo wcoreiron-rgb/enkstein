@@ -161,7 +161,7 @@ async def fetch_research_source(url: str) -> dict[str, Any]:
     await _validate_public_resolution(url)
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=False) as client:
-            async with client.stream("GET", url, headers={"User-Agent": "Marcellus-Research/1.0"}) as response:
+            async with client.stream("GET", url, headers={"User-Agent": "Enkstein-Research/1.0"}) as response:
                 if 300 <= response.status_code < 400:
                     raise HTTPException(status_code=400, detail="Research redirects must be submitted as their final HTTPS URL")
                 if response.status_code < 200 or response.status_code >= 300:

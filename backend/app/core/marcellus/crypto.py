@@ -1,4 +1,4 @@
-"""Encryption and signing helpers for Marcellus runtime state."""
+"""Encryption and signing helpers for Enkstein runtime state."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _load_or_create_key() -> bytes:
             Fernet(stored)
             return stored
         except Exception as exc:
-            raise RuntimeError("Stored Marcellus runtime encryption key is invalid") from exc
+            raise RuntimeError("Stored Enkstein runtime encryption key is invalid") from exc
 
     key = Fernet.generate_key()
     _SECRETS_DIR.mkdir(parents=True, exist_ok=True)

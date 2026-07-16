@@ -13,8 +13,8 @@ _INSECURE_DEFAULTS = frozenset({
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "Marcellus"
-    APP_VERSION: str = "0.2.24"
+    APP_NAME: str = "Enkstein"
+    APP_VERSION: str = "0.3.0"
     DEBUG: bool = False
 
     # Database

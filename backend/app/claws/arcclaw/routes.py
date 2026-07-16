@@ -590,7 +590,7 @@ async def agent_chat(
     if hard_blocked:
         await db.commit()
         block_msg = (
-            f"🚫 **Message blocked by Marcellus AI Governance.**\n\n"
+            f"🚫 **Message blocked by Enkstein AI Governance.**\n\n"
             f"Reason: {decision.reason or 'Prompt injection attempt detected by AGT'}\n"
             f"Vectors flagged: {', '.join(agt_audit.vectors_flagged) if agt_audit.vectors_flagged else 'policy violation'}\n\n"
             f"This event has been logged to AI Governance."
@@ -681,7 +681,7 @@ async def agent_chat(
                 finding_lines.append(f"• **Injection attempt** — vector: `{v}`")
 
         warning = (
-            "🛡️ **Marcellus AI Governance — Sensitive Data Intercepted**\n\n"
+            "🛡️ **Enkstein AI Governance — Sensitive Data Intercepted**\n\n"
             + "\n".join(finding_lines)
             + "\n\nSensitive values were replaced with `[REDACTED]` before reaching the AI. "
             "This event has been recorded in the AI Governance log.\n\n---\n\n"
@@ -689,7 +689,7 @@ async def agent_chat(
         response_text = warning + response_text
     elif is_sensitive and agt_audit.is_injection_risk:
         warning = (
-            f"🛡️ **Marcellus AI Governance — Injection Risk Detected**\n\n"
+            f"🛡️ **Enkstein AI Governance — Injection Risk Detected**\n\n"
             f"• Vectors flagged: {', '.join(agt_audit.vectors_flagged)}\n\n"
             "Message was forwarded with AGT-flagged content noted. "
             "This event has been recorded in the AI Governance log.\n\n---\n\n"

@@ -35,10 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let appItem = NSMenuItem()
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "About Marcellus", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Enkstein", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates(_:)), keyEquivalent: "")
-        appMenu.addItem(withTitle: "Relaunch Marcellus", action: #selector(relaunchApplication(_:)), keyEquivalent: "r")
+        appMenu.addItem(withTitle: "Relaunch Enkstein", action: #selector(relaunchApplication(_:)), keyEquivalent: "r")
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: "Lock Console", action: #selector(lockConsole(_:)), keyEquivalent: "l")
         appMenu.addItem(withTitle: "Quit Console (Runtime Continues)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -48,9 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "Marcellus")
+        item.button?.image = NSImage(systemSymbolName: "shield.lefthalf.filled", accessibilityDescription: "Enkstein")
         let menu = NSMenu()
-        menu.addItem(withTitle: "Open Marcellus", action: #selector(openConsole(_:)), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Enkstein", action: #selector(openConsole(_:)), keyEquivalent: "")
         menu.addItem(withTitle: "Lock Console", action: #selector(lockConsole(_:)), keyEquivalent: "")
         menu.addItem(NSMenuItem.separator())
         let runtime = NSMenuItem(title: "Runtime active in background", action: nil, keyEquivalent: "")
@@ -83,14 +83,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         } catch {
             showAlert(
                 title: "Relaunch failed",
-                message: "Marcellus could not relaunch: \(error.localizedDescription)"
+                message: "Enkstein could not relaunch: \(error.localizedDescription)"
             )
         }
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
         guard updateCheck == nil else { return }
-        guard let repository = Bundle.main.object(forInfoDictionaryKey: "MarcellusGitHubRepository") as? String,
+        guard let repository = Bundle.main.object(forInfoDictionaryKey: "EnksteinGitHubRepository") as? String,
               repository.split(separator: "/").count == 2,
               let url = URL(string: "https://api.github.com/repos/\(repository)/releases/latest") else {
             showAlert(title: "Update feed unavailable", message: "This build does not have a valid GitHub release feed.")
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("Marcellus-Desktop", forHTTPHeaderField: "User-Agent")
+        request.setValue("Enkstein-Desktop", forHTTPHeaderField: "User-Agent")
 
         updateCheck = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async {
@@ -117,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                       let tag = release["tag_name"] as? String else {
                     self.showAlert(
                         title: "No published release feed",
-                        message: "Marcellus could not find a public GitHub Release. Publish a signed release in the configured repository and try again."
+                        message: "Enkstein could not find a public GitHub Release. Publish a signed release in the configured repository and try again."
                     )
                     return
                 }
@@ -131,11 +131,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
         guard latest.compare(current, options: .numeric) == .orderedDescending else {
-            showAlert(title: "Marcellus is up to date", message: "Version \(current) is the newest published release.")
+            showAlert(title: "Enkstein is up to date", message: "Version \(current) is the newest published release.")
             return
         }
 
         let expectedNames = [
+            "Enkstein-\(latest)-macos.pkg",
+            "Enkstein-\(tag)-macos.pkg",
             "Marcellus-\(latest)-macos.pkg",
             "Marcellus-\(tag)-macos.pkg",
         ]
@@ -147,7 +149,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         let releaseURL = release["html_url"] as? String
 
         let alert = NSAlert()
-        alert.messageText = "Marcellus \(latest) is available"
+        alert.messageText = "Enkstein \(latest) is available"
         alert.informativeText = packageURL == nil
             ? "The release exists, but it does not contain the expected signed macOS installer."
             : "Download the notarized installer from GitHub. Installing it replaces the current app and preserves your local data."
@@ -181,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             backing: .buffered,
             defer: false
         )
-        window.title = "Marcellus"
+        window.title = "Enkstein"
         window.titlebarAppearsTransparent = true
         window.minSize = NSSize(width: 960, height: 640)
         window.center()
@@ -215,7 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         icon.imageScaling = .scaleProportionallyUpOrDown
         icon.translatesAutoresizingMaskIntoConstraints = false
 
-        let title = NSTextField(labelWithString: "Marcellus")
+        let title = NSTextField(labelWithString: "Enkstein")
         title.font = .systemFont(ofSize: 30, weight: .semibold)
         title.alignment = .center
 
@@ -303,13 +305,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             let json = String(data: payload, encoding: .utf8) ?? "{}"
             webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('marcellus:native-workspace-selected', { detail: \(json) }));")
         } catch {
-            showAlert(title: "Folder access failed", message: "Marcellus could not create a protected workspace grant.")
+            showAlert(title: "Folder access failed", message: "Enkstein could not create a protected workspace grant.")
         }
     }
 
     private func startRuntime() {
         guard let helper = Bundle.main.resourceURL?.appendingPathComponent("launcher.sh") else {
-            showFailure("The desktop launcher is missing. Reinstall Marcellus.")
+            showFailure("The desktop launcher is missing. Reinstall Enkstein.")
             return
         }
 
@@ -335,7 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 if completed.terminationStatus == 0 {
                     self?.waitForDesktop()
                 } else {
-                    self?.showFailure("Marcellus could not start. Open Help > Startup Log for details.")
+                    self?.showFailure("Enkstein could not start. Open Help > Startup Log for details.")
                 }
             }
         }
@@ -344,7 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             launcher = process
             try process.run()
         } catch {
-            showFailure("Marcellus could not launch its local runtime: \(error.localizedDescription)")
+            showFailure("Enkstein could not launch its local runtime: \(error.localizedDescription)")
         }
     }
 
@@ -369,12 +371,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 if ready {
                     self?.showLogin(from: endpoint)
                 } else if attempt < 180 {
-                    self?.statusLabel.stringValue = "Waiting for the Marcellus desktop..."
+                    self?.statusLabel.stringValue = "Waiting for the Enkstein desktop..."
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                         self?.waitForDesktop(attempt: attempt + 1)
                     }
                 } else {
-                    self?.showFailure("The local Marcellus desktop did not become ready.")
+                    self?.showFailure("The local Enkstein desktop did not become ready.")
                 }
             }
         }.resume()

@@ -14,10 +14,10 @@ function PreparingRuntime() {
     <main className="flex min-h-screen items-center justify-center bg-white px-6 text-slate-950">
       <div className="text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="Marcellus" width={104} height={104} className="mx-auto mb-5" />
-        <h1 className="text-2xl font-semibold">Marcellus</h1>
+        <img src="/logo.png" alt="Enkstein" width={104} height={104} className="mx-auto mb-5" />
+        <h1 className="text-2xl font-semibold">Enkstein</h1>
         <div className="mx-auto mt-5 h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-red-600" aria-hidden="true" />
-        <p className="mt-3 text-sm text-slate-500">Preparing the Marcellus runtime...</p>
+        <p className="mt-3 text-sm text-slate-500">Preparing the Enkstein runtime...</p>
       </div>
     </main>
   );

@@ -79,7 +79,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64" style={{ color: 'var(--rc-text-2)' }}>
-        Loading Marcellus platform data…
+        Loading Enkstein platform data…
       </div>
     );
   }
@@ -131,7 +131,7 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-3xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Platform Overview</h1>
             <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-2)' }}>
-              Distributed Zero Trust Security — Marcellus Cortex
+              Distributed Zero Trust Security — Enkstein Cortex
             </p>
           </div>
         </div>

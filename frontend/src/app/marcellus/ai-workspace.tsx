@@ -134,6 +134,10 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   const [researching, setResearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const selectedArtifactBytes = artifacts.reduce(
+    (total, artifact) => total + (selectedArtifacts.has(artifact.id) ? artifact.size_bytes : 0),
+    0,
+  );
   const [nativeWorkspace, setNativeWorkspace] = useState<CortexNativeWorkspace | null>(null);
   const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -451,6 +455,10 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
     event?.preventDefault();
     const content = draft.trim();
     if (!content || busy) return;
+    if (selectedArtifactBytes > 100_000) {
+      setError('Selected files exceed the complete-context limit. Select fewer files so no code is truncated.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setStreamText('');
@@ -618,7 +626,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         content: await file.text(),
         mime_type: file.type || 'text/plain',
       })));
-      await ingestCortexArtifacts({
+      const ingested = await ingestCortexArtifacts({
         project_id: targetProjectId,
         conversation_id: active?.id,
         classification,
@@ -626,7 +634,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       });
       const rows = await getCortexArtifacts(targetProjectId);
       setArtifacts(rows);
-      setSelectedArtifacts(new Set(rows.slice(0, 20).map((item) => item.id)));
+      setSelectedArtifacts(new Set(ingested.map((item) => item.id)));
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Files could not be ingested.');
     } finally {
@@ -763,7 +771,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <BrainCircuit className="h-4 w-4 text-red-500" />
-              <h1 className="truncate text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{active?.title || (mode === 'chat' ? 'Marcellus Chat' : 'Marcellus Cowork')}</h1>
+              <h1 className="truncate text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{active?.title || (mode === 'chat' ? 'Enkstein Chat' : 'Enkstein Cowork')}</h1>
             </div>
             <p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Cortex Gateway · encrypted history · Trust Fabric enforced</p>
           </div>
@@ -859,14 +867,14 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
           {error && <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-red-500"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div>}
           {selectedArtifacts.size > 0 && (
             <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--rc-text-3)' }}>
-              <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} project file{selectedArtifacts.size === 1 ? '' : 's'} in context
+              <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} complete file{selectedArtifacts.size === 1 ? '' : 's'} · {Math.ceil(selectedArtifactBytes / 1024)} KB
               <button type="button" onClick={() => setSelectedArtifacts(new Set())} className="ml-1 text-red-500">clear</button>
             </div>
           )}
           <div className="mx-auto max-w-3xl rounded-2xl border p-2 shadow-sm"
             style={{ background: mode === 'chat' ? 'var(--rc-chat-panel)' : 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
             <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 12000))} onKeyDown={handleKey} rows={3}
-              placeholder={mode === 'chat' ? 'Message Marcellus' : 'Ask about this project'}
+              placeholder={mode === 'chat' ? 'Message Enkstein' : 'Ask about this project'}
               className="w-full resize-none bg-transparent px-2 py-1 text-sm leading-6 outline-none" style={{ color: 'var(--rc-text-1)' }} />
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-1">
@@ -1007,7 +1015,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
             <label className="mt-4 block text-xs font-medium" style={{ color: 'var(--rc-text-2)' }}>
               Question
               <textarea value={researchQuestion} onChange={(event) => setResearchQuestion(event.target.value.slice(0, 4000))} rows={3}
-                placeholder="What should Marcellus investigate across these sources?" autoFocus
+                placeholder="What should Enkstein investigate across these sources?" autoFocus
                 className="mt-1 w-full resize-none rounded-md border p-3 text-sm outline-none"
                 style={{ background: 'var(--rc-bg)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }} />
             </label>

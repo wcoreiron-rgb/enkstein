@@ -19,13 +19,13 @@ import {
   Workflow,
 } from 'lucide-react';
 import {
-  getMarcellusArchitecture,
-  MarcellusArchitecture,
-  MarcellusCapabilityNode,
-  MarcellusImplementationState,
-  MarcellusSecurityArm,
+  getEnksteinArchitecture,
+  EnksteinArchitecture,
+  EnksteinCapabilityNode,
+  EnksteinImplementationState,
+  EnksteinSecurityArm,
 } from '@/lib/api';
-import MarcellusRuntimeConsole from './runtime-console';
+import EnksteinRuntimeConsole from './runtime-console';
 import MissionControl from './mission-control';
 
 const ARM_COLORS: Record<string, string> = {
@@ -39,13 +39,13 @@ const ARM_COLORS: Record<string, string> = {
   ai_autonomous_operations: '#4f46e5',
 };
 
-const STATE_LABELS: Record<MarcellusImplementationState, string> = {
+const STATE_LABELS: Record<EnksteinImplementationState, string> = {
   existing: 'Existing',
   partial: 'Partial',
   contract_only: 'Contract only',
 };
 
-function StateBadge({ state }: { state: MarcellusImplementationState }) {
+function StateBadge({ state }: { state: EnksteinImplementationState }) {
   const color = state === 'existing' ? '#16a34a' : state === 'partial' ? '#d97706' : '#64748b';
   return (
     <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color }}>
@@ -73,10 +73,10 @@ function ArmPanel({
   selectedId,
   onSelect,
 }: {
-  arm: MarcellusSecurityArm;
-  nodes: MarcellusCapabilityNode[];
+  arm: EnksteinSecurityArm;
+  nodes: EnksteinCapabilityNode[];
   selectedId: string | null;
-  onSelect: (node: MarcellusCapabilityNode) => void;
+  onSelect: (node: EnksteinCapabilityNode) => void;
 }) {
   const color = ARM_COLORS[arm.id] || '#64748b';
   return (
@@ -132,8 +132,8 @@ function ArmPanel({
 }
 
 export default function SecurityWorkspace() {
-  const [architecture, setArchitecture] = useState<MarcellusArchitecture | null>(null);
-  const [selectedNode, setSelectedNode] = useState<MarcellusCapabilityNode | null>(null);
+  const [architecture, setArchitecture] = useState<EnksteinArchitecture | null>(null);
+  const [selectedNode, setSelectedNode] = useState<EnksteinCapabilityNode | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,7 +141,7 @@ export default function SecurityWorkspace() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getMarcellusArchitecture();
+      const result = await getEnksteinArchitecture();
       setArchitecture(result);
       setSelectedNode((current) => current || result.capability_nodes[0] || null);
     } catch (err) {
@@ -154,7 +154,7 @@ export default function SecurityWorkspace() {
   useEffect(() => { load(); }, [load]);
 
   const nodesByArm = useMemo(() => {
-    const grouped = new Map<string, MarcellusCapabilityNode[]>();
+    const grouped = new Map<string, EnksteinCapabilityNode[]>();
     architecture?.capability_nodes.forEach((node) => {
       grouped.set(node.arm_id, [...(grouped.get(node.arm_id) || []), node]);
     });
@@ -165,7 +165,7 @@ export default function SecurityWorkspace() {
     return (
       <div className="flex h-64 items-center justify-center" style={{ color: 'var(--rc-text-2)' }}>
         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-        Loading Marcellus architecture
+        Loading Enkstein architecture
       </div>
     );
   }
@@ -190,7 +190,7 @@ export default function SecurityWorkspace() {
         <div>
           <div className="flex items-center gap-3">
             <BrainCircuit className="h-7 w-7 text-cyan-400" />
-            <h1 className="text-3xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Marcellus Architecture</h1>
+            <h1 className="text-3xl font-bold" style={{ color: 'var(--rc-text-1)' }}>Enkstein Architecture</h1>
           </div>
           <p className="mt-2 max-w-3xl text-sm" style={{ color: 'var(--rc-text-2)' }}>{architecture.thesis}</p>
           <p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>
@@ -216,7 +216,7 @@ export default function SecurityWorkspace() {
         <Metric label="Capability Nodes" value={architecture.capability_nodes.length} icon={CircleDot} />
       </section>
 
-      <MarcellusRuntimeConsole nodes={architecture.capability_nodes} />
+      <EnksteinRuntimeConsole nodes={architecture.capability_nodes} />
 
       <section>
         <div className="mb-4 flex items-center gap-2">

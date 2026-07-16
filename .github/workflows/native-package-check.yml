@@ -56,22 +56,22 @@ jobs:
       - name: Validate package payload
         run: |
           rm -rf "$RUNNER_TEMP/marcellus-pkg"
-          pkgutil --expand-full "dist/Marcellus-$VERSION-macos.pkg" "$RUNNER_TEMP/marcellus-pkg"
-          payload="$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Payload/Applications/Marcellus.app"
-          test -x "$payload/Contents/MacOS/Marcellus"
+          pkgutil --expand-full "dist/Enkstein-$VERSION-macos.pkg" "$RUNNER_TEMP/enkstein-pkg"
+          payload="$RUNNER_TEMP/enkstein-pkg/Enkstein-component.pkg/Payload/Applications/Enkstein.app"
+          test -x "$payload/Contents/MacOS/Enkstein"
           test -x "$payload/Contents/Resources/launcher.sh"
-          test -x "$payload/Contents/Resources/MarcellusBrainBridge"
+          test -x "$payload/Contents/Resources/EnksteinBrainBridge"
           test -f "$payload/Contents/Resources/runtime/compose.yaml"
           test -f "$payload/Contents/Resources/runtime/docs/brain-bridges.md"
           test -f "$payload/Contents/Resources/runtime/VERSION"
-          test ! -e "$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Payload/Users"
-          test -x "$RUNNER_TEMP/marcellus-pkg/Marcellus-component.pkg/Scripts/postinstall"
+          test ! -e "$RUNNER_TEMP/enkstein-pkg/Enkstein-component.pkg/Payload/Users"
+          test -x "$RUNNER_TEMP/enkstein-pkg/Enkstein-component.pkg/Scripts/postinstall"
           codesign --verify --deep --strict --verbose=2 "$payload"
 
       - uses: actions/upload-artifact@v4
         with:
           name: macos-unsigned-preview
-          path: dist/Marcellus-${{ env.VERSION }}-macos.pkg
+          path: dist/Enkstein-${{ env.VERSION }}-macos.pkg
           retention-days: 7
 
   windows-package:
@@ -101,18 +101,18 @@ jobs:
       - name: Validate installer
         shell: pwsh
         run: |
-          $installer = "dist\Marcellus-$env:VERSION-windows-x64-setup.exe"
+          $installer = "dist\Enkstein-$env:VERSION-windows-x64-setup.exe"
           if (-not (Test-Path $installer)) { throw "Installer missing: $installer" }
           if ((Get-Item $installer).Length -lt 1MB) { throw "Installer is unexpectedly small" }
           $extract = Join-Path $env:RUNNER_TEMP "marcellus-windows"
           Remove-Item -Recurse -Force $extract -ErrorAction SilentlyContinue
           Start-Process -FilePath $installer -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/DIR=$extract" -Wait
           if (-not (Test-Path (Join-Path $extract "runtime\BrainBridge.ps1"))) { throw "Brain bridge missing from installer" }
-          if (-not (Test-Path (Join-Path $extract "runtime\Start-Marcellus.ps1"))) { throw "Runtime launcher missing from installer" }
+          if (-not (Test-Path (Join-Path $extract "runtime\Start-Enkstein.ps1"))) { throw "Runtime launcher missing from installer" }
           if (-not (Test-Path (Join-Path $extract "runtime\docs\brain-bridges.md"))) { throw "Brain bridge docs missing from installer" }
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned-preview
-          path: dist/Marcellus-${{ env.VERSION }}-windows-x64-setup.exe
+          path: dist/Enkstein-${{ env.VERSION }}-windows-x64-setup.exe
           retention-days: 7

@@ -184,7 +184,7 @@ function buildTicketDraft(job: any, summary: any, tasks: any[]): string {
   const complianceLines = compliance.slice(0, 8).map((c, i) => `${i + 1}. ${c.key} (${c.count})`);
 
   return [
-    `Title: [Marcellus] Suspicious Identity Investigation - ${job?.name || 'Swarm Job'}`,
+    `Title: [Enkstein] Suspicious Identity Investigation - ${job?.name || 'Swarm Job'}`,
     `Generated: ${now}`,
     `Job ID: ${job?.id || ''}`,
     `Profile: ${job?.profile || ''}`,
@@ -491,7 +491,7 @@ export default function SwarmJobDetailPage() {
     setTicketHandoffMsg(null);
     try {
       const complianceSummary = complianceRollup.map((c) => ({ control: c.key, count: c.count }));
-      const title = `[Marcellus] ${job?.name || 'Swarm Incident'} (${(job?.overall_severity || 'info').toUpperCase()})`;
+      const title = `[Enkstein] ${job?.name || 'Swarm Incident'} (${(job?.overall_severity || 'info').toUpperCase()})`;
       const response = await triggerRemediationAction({
         triggered_by: `swarm:${id}`,
         action_spec: {

@@ -233,7 +233,7 @@ function MessageRow({ msg }: { msg: Message }) {
                 )}
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-400 mb-2">Marcellus Response</p>
+                <p className="text-xs font-semibold text-gray-400 mb-2">Enkstein Response</p>
                 <pre className="text-xs text-gray-300 bg-gray-900 rounded-lg p-3 whitespace-pre-wrap">
                   {msg.response_text}
                 </pre>
@@ -1278,7 +1278,7 @@ export default function ChannelGatewayPage() {
             <User className="w-4 h-4 text-cyan-400" /> Channel Identity Registry
           </h3>
           <p className="text-xs text-gray-500 mb-4">
-            Register Slack/Teams users with their Marcellus roles and trust levels. Unregistered users will be blocked.
+            Register Slack/Teams users with their Enkstein roles and trust levels. Unregistered users will be blocked.
           </p>
           <IdentityEditor identities={identities} onSaved={load} />
         </div>

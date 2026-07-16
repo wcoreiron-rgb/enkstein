@@ -85,7 +85,7 @@ async function waitForResponse(kind, baseline, timeoutMs = 180000) {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  throw new Error('The visible provider response did not complete before the Marcellus timeout.');
+  throw new Error('The visible provider response did not complete before the Enkstein timeout.');
 }
 
 async function execute(task) {

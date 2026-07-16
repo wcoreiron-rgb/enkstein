@@ -9,13 +9,13 @@ from app.core.marcellus.registry import (
 from app.core.marcellus.schemas import ArchitectureSnapshot, CapabilityNode, SecurityArm, SecurityArmId
 
 
-router = APIRouter(prefix="/marcellus", tags=["Marcellus Architecture"])
+router = APIRouter(prefix="/marcellus", tags=["Enkstein Architecture"])
 
 
 @router.get(
     "/architecture",
     response_model=ArchitectureSnapshot,
-    summary="Get the complete Marcellus architecture contract",
+    summary="Get the complete Enkstein architecture contract",
 )
 async def architecture() -> ArchitectureSnapshot:
     return get_architecture_snapshot()

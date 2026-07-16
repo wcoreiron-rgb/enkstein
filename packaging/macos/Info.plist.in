@@ -5,17 +5,17 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Marcellus</string>
+  <string>Enkstein</string>
   <key>CFBundleExecutable</key>
-  <string>Marcellus</string>
+  <string>Enkstein</string>
   <key>CFBundleIconFile</key>
-  <string>Marcellus</string>
+  <string>Enkstein</string>
   <key>CFBundleIdentifier</key>
   <string>com.marcellus.desktop</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Marcellus</string>
+  <string>Enkstein</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -33,7 +33,7 @@
   </dict>
   <key>NSHighResolutionCapable</key>
   <true/>
-  <key>MarcellusGitHubRepository</key>
+  <key>EnksteinGitHubRepository</key>
   <string>wcoreiron-rgb/marcellus</string>
 </dict>
 </plist>

@@ -55,7 +55,7 @@ export default function LoginPage() {
         setMailConfigured(Boolean(mail?.enabled && mail?.delivery_configured));
         setView(owner?.setup_required ? 'setup' : 'owner');
       })
-      .catch(() => { setError('Unable to reach the local Marcellus runtime.'); setView('owner'); });
+      .catch(() => { setError('Unable to reach the local Enkstein runtime.'); setView('owner'); });
   }, []);
 
   const finishLogin = (token: string) => {
@@ -134,7 +134,7 @@ export default function LoginPage() {
       });
       if (!response.ok) { setError(await responseDetail(response, 'Unable to send a sign-in code.')); return; }
       rememberEmail(email); setCode(''); setView('email-code');
-    } catch { setError('Unable to reach Marcellus.'); }
+    } catch { setError('Unable to reach Enkstein.'); }
     finally { setLoading(false); }
   };
 
@@ -157,14 +157,14 @@ export default function LoginPage() {
 
   const title = view === 'setup' ? 'Create the local owner' : view === 'enroll' ? 'Enroll Authenticator'
     : view === 'recovery-codes' ? 'Save recovery codes' : view === 'email' || view === 'email-code'
-      ? 'Verified email access' : view === 'recovery' ? 'Owner recovery' : 'Unlock Marcellus';
+      ? 'Verified email access' : view === 'recovery' ? 'Owner recovery' : 'Unlock Enkstein';
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-white p-4 text-slate-950">
       <section className="w-full max-w-sm border border-slate-200 bg-white p-7 shadow-sm" style={{ borderRadius: 8 }}>
         <header className="mb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Marcellus" width={76} height={76} className="mx-auto mb-3" />
+          <img src="/logo.png" alt="Enkstein" width={76} height={76} className="mx-auto mb-3" />
           <h1 className="text-xl font-semibold text-slate-950">{title}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {view === 'setup' ? 'Secure this installation before the console opens.'
@@ -198,14 +198,14 @@ export default function LoginPage() {
           <button type="button" onClick={copyRecoveryCodes} className="flex h-10 w-full items-center justify-center gap-2 border border-slate-300 text-sm font-medium text-slate-700" style={{ borderRadius: 6 }}>
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? 'Copied' : 'Copy recovery codes'}
           </button>
-          <Primary onClick={() => finishLogin(pendingAccessToken)}>I saved them, open Marcellus</Primary>
+          <Primary onClick={() => finishLogin(pendingAccessToken)}>I saved them, open Enkstein</Primary>
         </div>}
 
         {view === 'owner' && <form onSubmit={ownerLogin} className="space-y-4">
           <Field label="Owner username"><input required autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} style={fieldStyle} /></Field>
           <Field label="Password"><span className="relative block"><KeyRound className="absolute left-3 top-3.5 h-4 w-4 text-red-500" /><input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} style={{ ...fieldStyle, paddingLeft: '2.4rem' }} /></span></Field>
           <Field label="Authenticator code"><CodeInput value={code} setValue={setCode} /></Field>
-          <Primary disabled={loading || code.length !== 6}>{loading ? 'Unlocking...' : 'Unlock Marcellus'}</Primary>
+          <Primary disabled={loading || code.length !== 6}>{loading ? 'Unlocking...' : 'Unlock Enkstein'}</Primary>
           <button type="button" onClick={() => { setView('recovery'); setError(''); }} className="w-full text-xs text-slate-500 hover:text-slate-800">Use a recovery code</button>
           {mailConfigured && <button type="button" onClick={() => { setView('email'); setError(''); }} className="flex w-full items-center justify-center gap-1 text-xs text-cyan-700"><Mail className="h-3 w-3" /> Email viewer sign-in</button>}
         </form>}

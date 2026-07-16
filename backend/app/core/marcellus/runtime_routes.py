@@ -59,7 +59,7 @@ from app.core.marcellus.runtime_security import (
 )
 
 
-router = APIRouter(prefix="/marcellus", tags=["Marcellus Runtime"])
+router = APIRouter(prefix="/marcellus", tags=["Enkstein Runtime"])
 
 
 def _ip(request: Request) -> str | None:

@@ -10,35 +10,35 @@
 
 [Setup]
 AppId={{DDA57C8B-77E6-4A52-B56D-5CA5EAFE8C19}
-AppName=Marcellus
+AppName=Enkstein
 AppVersion={#Version}
-AppPublisher=Marcellus
+AppPublisher=Enkstein
 AppPublisherURL=https://github.com/wcoreiron-rgb/marcellus
-DefaultDirName={localappdata}\Programs\Marcellus
-DefaultGroupName=Marcellus
+DefaultDirName={localappdata}\Programs\Enkstein
+DefaultGroupName=Enkstein
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir={#OutputDir}
-OutputBaseFilename=Marcellus-{#Version}-windows-x64-setup
+OutputBaseFilename=Enkstein-{#Version}-windows-x64-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-SetupIconFile={#StageDir}\Marcellus.ico
-UninstallDisplayIcon={app}\Marcellus.exe
+SetupIconFile={#StageDir}\Enkstein.ico
+UninstallDisplayIcon={app}\Enkstein.exe
 LicenseFile={#StageDir}\runtime\LICENSE
 
 [Files]
-Source: "{#StageDir}\Marcellus.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\Enkstein.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Marcellus"; Filename: "{app}\Marcellus.exe"
-Name: "{autodesktop}\Marcellus"; Filename: "{app}\Marcellus.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Enkstein"; Filename: "{app}\Enkstein.exe"
+Name: "{autodesktop}\Enkstein"; Filename: "{app}\Enkstein.exe"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Run]
-Filename: "{app}\Marcellus.exe"; Description: "Start Marcellus"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Enkstein.exe"; Description: "Start Enkstein"; Flags: nowait postinstall skipifsilent

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Marcellus Browser Companion",
-  "version": "0.1.1",
-  "description": "Connects visible signed-in AI browser sessions to the governed Marcellus Brain Bridge.",
+  "name": "Enkstein Browser Companion",
+  "version": "0.1.2",
+  "description": "Connects visible signed-in AI browser sessions to the governed Enkstein Brain Bridge.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "http://127.0.0.1:47831/*",

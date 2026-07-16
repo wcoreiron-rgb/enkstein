@@ -66,7 +66,7 @@ from app.core.marcellus.workspace_schemas import (
 from app.core.swarm.orchestrator import run_swarm_job
 
 
-router = APIRouter(prefix="/marcellus/workspace", tags=["Marcellus Workspace"])
+router = APIRouter(prefix="/marcellus/workspace", tags=["Enkstein Workspace"])
 
 
 def _ip(request: Request) -> str | None:

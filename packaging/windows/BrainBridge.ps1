@@ -108,7 +108,7 @@ function Invoke-Brain([object]$Payload) {
     if (-not $prompt -or $prompt.Length -gt 24000) { throw "Invalid prompt." }
     $model = [string]$Payload.model
     if ($model -and $model -notmatch '^[A-Za-z0-9._:/-]{1,128}$') { throw "Invalid model." }
-    $governedPrompt = "You are a reasoning-only Brain inside Marcellus. Do not use tools or change systems. Do not claim actions were executed. Answer concisely and identify uncertainty.`n`nQUESTION:`n$prompt"
+    $governedPrompt = "You are a reasoning-only Brain inside Enkstein. Do not use tools or change systems. Do not claim actions were executed. Answer concisely and identify uncertainty.`n`nQUESTION:`n$prompt"
     $started = [DateTime]::UtcNow
 
     if ($Payload.brain -eq "codex_subscription") {

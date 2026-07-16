@@ -1,6 +1,6 @@
-# Marcellus Brain Bridges
+# Enkstein Brain Bridges
 
-Marcellus can consult model runtimes authenticated on the desktop while the
+Enkstein can consult model runtimes authenticated on the desktop while the
 governed FastAPI runtime remains in Docker. Vendor credentials stay in the
 vendor-owned host credential store. They are not copied into containers,
 connector records, prompts, logs, or API responses.
@@ -21,7 +21,7 @@ Docker backend -- shared-secret HTTP --> native host Brain Bridge
 ```
 
 The native installer generates a random 256-bit bridge secret, stores it in
-the user's Marcellus application-support directory with owner-only
+the user's Enkstein application-support directory with owner-only
 permissions, and injects only that bridge secret and local endpoint into the
 backend container. The bridge rejects non-local/private peers and compares the
 secret in constant time.
@@ -45,21 +45,21 @@ official `codex login` flow when needed.
 The bridge detects the official `claude` host runtime and checks its
 authentication status. Prompt mode runs with tools disabled and noninteractive
 permissions. If the runtime is absent, unauthenticated, or no longer supported
-for subscription usage, Marcellus reports the Brain as unavailable and does not
+for subscription usage, Enkstein reports the Brain as unavailable and does not
 silently switch to an API key.
 
 Anthropic's subscription and Agent SDK terms can change. Operators are
 responsible for using an account and distribution model allowed by current
-Anthropic terms. Marcellus does not extract browser cookies, desktop session
+Anthropic terms. Enkstein does not extract browser cookies, desktop session
 tokens, OAuth tokens, or undocumented credentials.
 
 ## Desktop App Session Bridge (macOS preview)
 
 ChatGPT Desktop and Claude Desktop can be selected as explicit Brains on macOS.
-Marcellus uses the operating system Accessibility API to open the visible,
+Enkstein uses the operating system Accessibility API to open the visible,
 user-installed application, start a new conversation, enter the already
 governed prompt, and read the visible completed response. The user must grant
-Marcellus Accessibility permission. Marcellus does not read cookies, copy
+Enkstein Accessibility permission. Enkstein does not read cookies, copy
 session tokens, call private endpoints, or store the vendor account credential.
 
 Desktop sessions are never chosen by automatic routing because they move focus
@@ -68,7 +68,7 @@ Multi-Brain Swarm. The app remains visible while it works, vendor sign-in is
 validated by the vendor UI, and normal provider plan limits, rate limits, and
 terms still apply. A desktop UI change can temporarily make this preview bridge
 unavailable; the CLI, API, and local model paths remain the stable unattended
-options. Marcellus performs a live compatibility check and does not mark an app
+options. Enkstein performs a live compatibility check and does not mark an app
 ready unless its current version exposes a writable message field through the
 macOS Accessibility tree.
 
@@ -80,7 +80,7 @@ that account's own retention settings.
 
 ## Browser Session Bridge
 
-The Marcellus Browser Companion connects visible signed-in tabs for ChatGPT,
+The Enkstein Browser Companion connects visible signed-in tabs for ChatGPT,
 Claude, and Gemini. It uses public page controls rather than cookies, account
 tokens, hidden endpoints, or copied browser profiles. Browser Brains are
 explicit choices and are not added to silent automatic routing.
@@ -89,8 +89,8 @@ One-time setup on Chrome or Edge:
 
 1. Open **Brain Connections** and select **Install companion**.
 2. Open the browser's Extensions page, enable Developer mode, select **Load
-   unpacked**, and choose the folder Marcellus opened.
-3. Select **Pair browser**. Marcellus opens a five-minute loopback pairing page
+   unpacked**, and choose the folder Enkstein opened.
+3. Select **Pair browser**. Enkstein opens a five-minute loopback pairing page
    in the default browser; the extension exchanges that one-time code for an
    owner-only local bridge token. A new pairing rotates that token and
    invalidates older companion sessions.
@@ -98,19 +98,24 @@ One-time setup on Chrome or Edge:
    Refresh Brain Connections and select the corresponding Browser Session.
 
 The companion is limited by its manifest to those three provider origins and
-the Marcellus loopback bridge. It reports only providers with an open tab,
+the Enkstein loopback bridge. It reports only providers with an open tab,
 submits the already governed/redacted prompt, waits for a stable visible
 response, and returns that text for output scanning and audit. Vendor UI
-changes can temporarily break a selector; Marcellus fails closed and leaves
+changes can temporarily break a selector; Enkstein fails closed and leaves
 CLI, API, and local Brains available. Provider plan limits and account terms
 continue to apply.
 
-Each Marcellus conversation receives an opaque tenant-scoped browser session
+Each Enkstein conversation receives an opaque tenant-scoped browser session
 key. The companion opens one provider tab for the first turn and reuses that
-same tab for later turns in the conversation. Starting or branching a
-Marcellus conversation creates a separate provider thread. Closing the
-provider tab safely clears the local binding and causes the next turn to open
-a replacement thread.
+same tab for later turns in the conversation. Starting or branching an
+Enkstein conversation creates a separate provider thread. The companion stores
+the provider conversation URL locally, not the provider authentication token,
+so a closed tab or restarted browser can reopen the same provider thread.
+
+Cowork sends explicitly selected text files in full up to a combined
+100,000-character limit. It does not silently truncate selected code. A larger
+selection is rejected with instructions to select fewer files; general project
+context may be bounded and is visibly marked when truncated.
 
 ## Consensus routing
 
@@ -146,25 +151,25 @@ agreement score so the Cortex can synthesize evidence without hiding dissent.
 
 The turn endpoint also exposes a server-sent event stream for lifecycle,
 Brain-completion, governed response, and proposed-change updates. Provider
-responses are completed and inspected before Marcellus streams the approved
+responses are completed and inspected before Enkstein streams the approved
 response to the desktop; provider-token streaming is not yet enabled.
 
 ## Cowork file authority
 
 Cowork has no blanket access to Desktop, Documents, or the rest of the host.
-The user explicitly selects a project folder, and Marcellus issues a scoped
+The user explicitly selects a project folder, and Enkstein issues a scoped
 native token for that folder only. Direct user edits can create, update,
 rename, move, or trash supported files inside that boundary.
 
 Brain-generated changes are different: Brains return a structured change
 proposal, Trust Fabric evaluates it, and Cowork shows the proposed path and
-content for human review. Marcellus writes to the native folder only after the
+content for human review. Enkstein writes to the native folder only after the
 user selects **Apply**. Path traversal, protected directories, stale file
 versions, unsafe content, and denied policy decisions fail closed.
 
 ## Governed research and MCP tools
 
-Cowork research accepts up to eight explicit public HTTPS sources. Marcellus
+Cowork research accepts up to eight explicit public HTTPS sources. Enkstein
 evaluates the research request and each source through Trust Fabric before
 network access, rejects credentials and non-standard ports, resolves and blocks
 private/link-local/metadata networks, disables redirects, limits responses to
@@ -177,7 +182,7 @@ content type, and SHA-256 digest. Invalid bracketed citation numbers emitted by
 a Brain are replaced with an unverified marker rather than presented as valid
 evidence.
 
-Marcellus exposes a deliberately small MCP capability registry:
+Enkstein exposes a deliberately small MCP capability registry:
 
 - `browser.fetch` / `marcellus_browser_fetch`: retrieve one governed public
   source; it cannot access localhost, private networks, or arbitrary ports.
@@ -190,17 +195,17 @@ to register arbitrary executable tools.
 
 ## API Brains
 
-Marcellus also supports approved API profiles for NVIDIA NIM, OpenAI,
+Enkstein also supports approved API profiles for NVIDIA NIM, OpenAI,
 Anthropic, Azure OpenAI, and Google Gemini. Gemini uses the documented Gemini
 Developer API with a connector-managed API key and defaults to the stable
 `gemini-2.5-flash` profile. Connector setup performs a real minimal generation;
-fake keys are not marked connected. Marcellus does not extract or reuse Gemini
+fake keys are not marked connected. Enkstein does not extract or reuse Gemini
 desktop/browser OAuth sessions.
 
 ## Local Ollama Brains
 
 The desktop package reaches the host Ollama service through Docker Desktop's
-private host gateway. Marcellus queries `/api/tags` and records the exact model
+private host gateway. Enkstein queries `/api/tags` and records the exact model
 used. If a profile's default is not installed, automatic routing selects a real
 installed model in this order: `MARCELLUS_OLLAMA_MODEL`, the profile default,
 the security-tuned Regent model, Qwen 2.5 7B, Llama 3.2, Phi-3, then the first
@@ -217,15 +222,15 @@ and installed model names.
   the Codex Subscription Bridge. On macOS, the separate opt-in Desktop Session
   Bridge can also operate the visible signed-in ChatGPT app through
   Accessibility. Neither path turns the subscription into an API credential.
-- Direct GPT chat inside Marcellus uses an approved OpenAI API connector. OpenAI
+- Direct GPT chat inside Enkstein uses an approved OpenAI API connector. OpenAI
   manages API usage and ChatGPT subscriptions separately.
 - Claude Pro or Max can authenticate the official Claude Code host runtime.
   Direct Claude API profiles use an Anthropic API key or supported workload
   identity instead.
 - Gemini uses a restricted Gemini API key today. Google desktop OAuth is a
-  viable future connector, but Marcellus does not extract Google browser or
+  viable future connector, but Enkstein does not extract Google browser or
   Gemini application sessions.
-- Free web chat pages are not treated as model APIs. Marcellus does not scrape
+- Free web chat pages are not treated as model APIs. Enkstein does not scrape
   consumer sessions, browser cookies, or undocumented private endpoints. The
   Desktop Session Bridge automates only a visible installed app after explicit
   operating-system permission.
@@ -240,7 +245,7 @@ return evidence through Trust Fabric.
 - Subscription availability depends on installed official vendor runtimes and
   their current account policies.
 - The reasoning bridge does not grant shell, filesystem, browser, connector,
-  or remediation authority. Those actions must return through Marcellus policy
+  or remediation authority. Those actions must return through Enkstein policy
   and approval paths.
 - Consensus confidence is operational agreement metadata, not a guarantee of
   factual correctness. Operators must inspect evidence before high-impact

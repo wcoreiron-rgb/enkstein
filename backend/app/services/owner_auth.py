@@ -1,4 +1,4 @@
-"""Local owner password, TOTP, and recovery-code security for Marcellus."""
+"""Local owner password, TOTP, and recovery-code security for Enkstein."""
 from __future__ import annotations
 
 import base64
@@ -38,7 +38,7 @@ def generate_totp_secret() -> str:
 
 
 def enrollment_uri(username: str, secret: str) -> str:
-    issuer = "Marcellus"
+    issuer = "Enkstein"
     label = quote(f"{issuer}:{username}", safe="")
     return (
         f"otpauth://totp/{label}?secret={secret}&issuer={quote(issuer)}"

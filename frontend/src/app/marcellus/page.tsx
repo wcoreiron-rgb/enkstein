@@ -11,7 +11,7 @@ function modeFromHash(): WorkspaceMode {
   return value === 'cowork' || value === 'security' ? value : 'chat';
 }
 
-export default function MarcellusPage() {
+export default function EnksteinPage() {
   const [mode, setMode] = useState<WorkspaceMode>('chat');
 
   useEffect(() => {

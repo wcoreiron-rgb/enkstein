@@ -933,7 +933,7 @@ async def review_change_proposal(
     return read_before.model_copy(update={"status": "applied"})
 
 
-def _bounded_history(messages: list[CortexMessageRead], latest_content: str, budget: int = 22000) -> list[CortexMessage]:
+def _bounded_history(messages: list[CortexMessageRead], latest_content: str, budget: int = 118000) -> list[CortexMessage]:
     selected: list[CortexMessage] = []
     remaining = max(0, budget - len(latest_content))
     for item in reversed(messages):
@@ -944,7 +944,7 @@ def _bounded_history(messages: list[CortexMessageRead], latest_content: str, bud
         if remaining <= 0:
             break
     selected.reverse()
-    selected.append(CortexMessage(role="user", content=latest_content[:12000]))
+    selected.append(CortexMessage(role="user", content=latest_content))
     return selected
 
 
@@ -1035,6 +1035,7 @@ async def execute_turn(
 
     artifact_context: list[str] = []
     requested_artifact_ids = list(dict.fromkeys(payload.artifact_ids))
+    explicit_artifacts = bool(requested_artifact_ids)
     if (
         not requested_artifact_ids
         and payload.include_project_files
@@ -1060,17 +1061,26 @@ async def execute_turn(
                 CortexArtifact.status == "active",
             )
         )
-        artifacts = artifact_result.scalars().all()
+        artifacts_by_id = {item.id: item for item in artifact_result.scalars().all()}
+        artifacts = [artifacts_by_id[item_id] for item_id in requested_artifact_ids if item_id in artifacts_by_id]
         if len(artifacts) != len(requested_artifact_ids):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more workspace artifacts were not found")
         if conversation.project_id is None or any(item.project_id != conversation.project_id for item in artifacts):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-project artifact context denied")
-        remaining = 10000
+        remaining = 100000 if explicit_artifacts else 60000
         for artifact in artifacts:
             content = decrypt_json(artifact.content_ciphertext, artifact.content_digest)["content"]
             block = f"--- {artifact.path} (v{artifact.version}) ---\n{content}"
             if len(block) > remaining:
-                block = block[:remaining]
+                if explicit_artifacts:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=(
+                            "Selected files exceed the 100,000-character complete-context limit. "
+                            "Select fewer files so Enkstein can send each one without truncation."
+                        ),
+                    )
+                block = block[: max(0, remaining - 80)] + "\n[Project context truncated; attach this file explicitly for complete analysis.]"
             artifact_context.append(block)
             remaining -= len(block)
             if remaining <= 0:
@@ -1132,7 +1142,7 @@ async def execute_turn(
                 ActionRequest(
                     module="marcellus_workspace",
                     actor_id=f"{gateway.get('source') or 'cortex'}-agent",
-                    actor_name="Marcellus Cowork agent",
+                    actor_name="Enkstein Cowork agent",
                     actor_type="agent",
                     action="workspace_change_propose",
                     target=str(conversation.project_id),

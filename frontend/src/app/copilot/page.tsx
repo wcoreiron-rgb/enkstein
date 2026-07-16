@@ -255,7 +255,7 @@ export default function CopilotPage() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: "Hello! I'm the Marcellus Copilot. Describe a security workflow in plain English and I'll generate a governed, policy-evaluated workflow draft for you to review before running.",
+      text: "Hello! I'm the Enkstein Copilot. Describe a security workflow in plain English and I'll generate a governed, policy-evaluated workflow draft for you to review before running.",
     },
   ]);
   const [input, setInput]       = useState('');

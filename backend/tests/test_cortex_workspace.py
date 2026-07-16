@@ -177,6 +177,67 @@ async def test_folder_artifacts_are_encrypted_versioned_and_reusable(client, db_
 
 
 @pytest.mark.asyncio
+async def test_explicit_script_attachment_is_sent_complete_without_silent_truncation(client, monkeypatch):
+    _use_identity(_identity())
+    project = await _create_project(client, "Complete script review")
+    conversation = await _create_conversation(client, project["id"])
+    script = "# PowerShell review target\n" + "Write-Output 'complete-line'\n" * 1400
+    created = await client.post(
+        f"{BASE}/artifacts",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "files": [{"path": "scripts/review.ps1", "content": script, "mime_type": "text/x-powershell"}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    captured = {}
+
+    async def fake_gateway(db, payload):
+        captured["prompt"] = payload.messages[-1].content
+        return _gateway_response("Complete review")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "How can I improve the attached script?",
+            "artifact_ids": [created.json()[0]["id"]],
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    assert script in captured["prompt"]
+    assert captured["prompt"].endswith(script)
+
+
+@pytest.mark.asyncio
+async def test_oversized_explicit_attachment_fails_instead_of_sending_partial_code(client):
+    _use_identity(_identity())
+    project = await _create_project(client, "Oversized review")
+    conversation = await _create_conversation(client, project["id"])
+    created = await client.post(
+        f"{BASE}/artifacts",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "files": [{"path": "scripts/large.ps1", "content": "x" * 100001}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Review all of this file",
+            "artifact_ids": [created.json()[0]["id"]],
+        },
+    )
+    assert turn.status_code == 413
+    assert "without truncation" in turn.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_cowork_automatically_reads_active_project_files(client, monkeypatch):
     _use_identity(_identity())
     project = await _create_project(client)

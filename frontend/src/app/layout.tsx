@@ -4,7 +4,7 @@ import { ThemeProvider } from '@/components/ThemeProvider';
 import AuthBoundary from '@/components/AuthBoundary';
 
 export const metadata: Metadata = {
-  title: 'Marcellus Architecture Lab',
+  title: 'Enkstein Architecture Lab',
   description: 'Distributed Zero Trust security architecture with Cortex, Hearts, Arms, and Capability Nodes',
   icons: {
     icon: [

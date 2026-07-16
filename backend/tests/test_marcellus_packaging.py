@@ -8,22 +8,22 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def test_native_packaging_uses_marcellus_identity() -> None:
+def test_native_packaging_uses_enkstein_brand_with_marcellus_compatibility_identity() -> None:
     mac_build = _read("scripts/build_macos_pkg.sh")
     mac_plist = _read("packaging/macos/Info.plist.in")
     mac_component = _read("packaging/macos/component.plist")
     windows_build = _read("scripts/build_windows_installer.ps1")
     windows_manifest = _read("packaging/windows/Marcellus.iss")
 
-    assert "Applications/Marcellus.app" in mac_build
+    assert "Applications/Enkstein.app" in mac_build
     assert "com.marcellus.desktop" in mac_build
     assert "com.marcellus.desktop" in mac_plist
     assert "BundleIsRelocatable" in mac_component
     assert "<false/>" in mac_component
-    assert "Applications/Marcellus.app" in mac_component
-    assert "Marcellus-$Version-windows-x64-setup.exe" in windows_build
-    assert "AppName=Marcellus" in windows_manifest
-    assert "DefaultDirName={localappdata}\\Programs\\Marcellus" in windows_manifest
+    assert "Applications/Enkstein.app" in mac_component
+    assert "Enkstein-$Version-windows-x64-setup.exe" in windows_build
+    assert "AppName=Enkstein" in windows_manifest
+    assert "DefaultDirName={localappdata}\\Programs\\Enkstein" in windows_manifest
 
 
 def test_native_package_workflow_builds_both_desktop_installers() -> None:
@@ -32,9 +32,9 @@ def test_native_package_workflow_builds_both_desktop_installers() -> None:
     assert "workflow_dispatch:" in workflow
     assert "runs-on: macos-14" in workflow
     assert "runs-on: windows-2022" in workflow
-    assert "Marcellus-${{ env.VERSION }}-macos.pkg" in workflow
-    assert "Marcellus-${{ env.VERSION }}-windows-x64-setup.exe" in workflow
-    assert "Contents/Resources/MarcellusBrainBridge" in workflow
+    assert "Enkstein-${{ env.VERSION }}-macos.pkg" in workflow
+    assert "Enkstein-${{ env.VERSION }}-windows-x64-setup.exe" in workflow
+    assert "Contents/Resources/EnksteinBrainBridge" in workflow
     assert "BrainBridge.ps1" in workflow
 
 
@@ -101,6 +101,11 @@ def test_browser_companion_is_scoped_paired_and_packaged() -> None:
     assert "X-Marcellus-Browser-Token" in background
     assert "marcellusSessionTabs" in background
     assert "task.session_id" in background
+    assert "rememberSessionTab" in background
+    assert "safeProviderUrl" in background
+    assert "parsed.origin" in background
+    assert "parsed.pathname" in background
+    assert "mapping.url" in background
     assert "chrome.tabs.onRemoved" in background
     assert "document.cookie" not in content
     assert '"/v1/browser/exchange"' in bridge
@@ -121,10 +126,10 @@ def test_macos_app_supports_github_updates_and_relaunch() -> None:
     mac_build = _read("scripts/build_macos_pkg.sh")
 
     assert "Check for Updates…" in mac_app
-    assert "Relaunch Marcellus" in mac_app
+    assert "Relaunch Enkstein" in mac_app
     assert "api.github.com/repos/" in mac_app
     assert "browser_download_url" in mac_app
-    assert "MarcellusGitHubRepository" in mac_plist
+    assert "EnksteinGitHubRepository" in mac_plist
     assert "wcoreiron-rgb/marcellus" in mac_plist
     assert "rm -rf \"$WORK_DIR\"" in mac_build
 
@@ -230,7 +235,7 @@ def test_desktop_auth_is_session_scoped_and_globally_gated() -> None:
     assert "sessionStorage.setItem(AUTH_TOKEN_KEY" in auth
     assert "localStorage.setItem(AUTH_TOKEN_KEY" not in auth
     assert "REMEMBERED_EMAIL_KEY" in auth
-    assert "Preparing the Marcellus runtime..." in boundary
+    assert "Preparing the Enkstein runtime..." in boundary
     assert "router.replace('/login')" in boundary
     assert "<AuthBoundary>{children}</AuthBoundary>" in layout
     assert "rememberEmail(email)" in login
@@ -256,8 +261,8 @@ def test_native_packages_include_authenticated_brain_bridges() -> None:
     windows_launcher = _read("packaging/windows/Start-Marcellus.ps1")
 
     assert "MarcellusBrainBridge.swift" in mac_build
-    assert 'chmod +x "$RESOURCES_DIR/MarcellusBrainBridge"' in mac_build
-    assert '--sign "$APPLE_APPLICATION_SIGNING_IDENTITY" "$RESOURCES_DIR/MarcellusBrainBridge"' in mac_build
+    assert 'chmod +x "$RESOURCES_DIR/EnksteinBrainBridge"' in mac_build
+    assert '--sign "$APPLE_APPLICATION_SIGNING_IDENTITY" "$RESOURCES_DIR/EnksteinBrainBridge"' in mac_build
     assert '--options runtime --timestamp' in mac_build
     assert "com.marcellus.brain-bridge" in mac_launcher
     assert "--secret-file" in mac_launcher

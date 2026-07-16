@@ -12,5 +12,12 @@ console_uid=$(id -u "$console_user")
 /bin/launchctl asuser "$console_uid" /usr/bin/osascript \
   -e 'tell application id "com.marcellus.desktop" to quit' >/dev/null 2>&1 || true
 /bin/sleep 1
-/bin/launchctl asuser "$console_uid" /usr/bin/open -a /Applications/Marcellus.app >/dev/null 2>&1 || true
+if [ -d /Applications/Enkstein.app ] && [ -d /Applications/Marcellus.app ]; then
+  new_id=$(/usr/bin/defaults read /Applications/Enkstein.app/Contents/Info CFBundleIdentifier 2>/dev/null || true)
+  old_id=$(/usr/bin/defaults read /Applications/Marcellus.app/Contents/Info CFBundleIdentifier 2>/dev/null || true)
+  if [ "$new_id" = "com.marcellus.desktop" ] && [ "$old_id" = "$new_id" ]; then
+    /bin/rm -rf /Applications/Marcellus.app
+  fi
+fi
+/bin/launchctl asuser "$console_uid" /usr/bin/open -a /Applications/Enkstein.app >/dev/null 2>&1 || true
 exit 0

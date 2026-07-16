@@ -44,26 +44,26 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
 export const getDashboard = () => apiFetch<any>('/dashboard');
 export const getControlCenterSummary = () => apiFetch<any>('/dashboard/control-center-summary');
 
-// Marcellus architecture discovery
-export type MarcellusImplementationState = 'existing' | 'partial' | 'contract_only';
+// Enkstein architecture discovery
+export type EnksteinImplementationState = 'existing' | 'partial' | 'contract_only';
 
-export interface MarcellusCortexComponent {
+export interface EnksteinCortexComponent {
   id: string;
   name: string;
   purpose: string;
-  implementation_state: MarcellusImplementationState;
+  implementation_state: EnksteinImplementationState;
   legacy_components: string[];
 }
 
-export interface MarcellusHeart {
+export interface EnksteinHeart {
   id: string;
   name: string;
   purpose: string;
-  implementation_state: MarcellusImplementationState;
+  implementation_state: EnksteinImplementationState;
   components: string[];
 }
 
-export interface MarcellusCapabilityNode {
+export interface EnksteinCapabilityNode {
   id: string;
   name: string;
   arm_id: string;
@@ -75,43 +75,43 @@ export interface MarcellusCapabilityNode {
   authority_ceiling: 'observe' | 'recommend' | 'approval_gated_action';
   supports_focused_task: boolean;
   plexus_ready: boolean;
-  implementation_state: MarcellusImplementationState;
+  implementation_state: EnksteinImplementationState;
 }
 
-export interface MarcellusSecurityArm {
+export interface EnksteinSecurityArm {
   id: string;
   name: string;
   purpose: string;
   node_ids: string[];
-  implementation_state: MarcellusImplementationState;
+  implementation_state: EnksteinImplementationState;
 }
 
-export interface MarcellusArchitecture {
+export interface EnksteinArchitecture {
   name: string;
   version: string;
   working_name: boolean;
   source_lineage: string;
   compatibility_mode: string;
   thesis: string;
-  cortex: MarcellusCortexComponent[];
-  hearts: MarcellusHeart[];
-  arms: MarcellusSecurityArm[];
-  capability_nodes: MarcellusCapabilityNode[];
+  cortex: EnksteinCortexComponent[];
+  hearts: EnksteinHeart[];
+  arms: EnksteinSecurityArm[];
+  capability_nodes: EnksteinCapabilityNode[];
   reflexes: {
-    implementation_state: MarcellusImplementationState;
+    implementation_state: EnksteinImplementationState;
     purpose: string;
     existing_foundation: string[];
     invariants: string[];
   };
   plexus: {
-    implementation_state: MarcellusImplementationState;
+    implementation_state: EnksteinImplementationState;
     purpose: string;
     current_transport: string;
     target_transport: string;
     invariants: string[];
   };
   regeneration: {
-    implementation_state: MarcellusImplementationState;
+    implementation_state: EnksteinImplementationState;
     purpose: string;
     recovery_sequence: string[];
     invariants: string[];
@@ -119,8 +119,8 @@ export interface MarcellusArchitecture {
   invariants: string[];
 }
 
-export const getMarcellusArchitecture = () =>
-  apiFetch<MarcellusArchitecture>('/marcellus/architecture');
+export const getEnksteinArchitecture = () =>
+  apiFetch<EnksteinArchitecture>('/marcellus/architecture');
 
 export type CortexMissionCadence = 'manual' | 'hourly' | 'every_6h' | 'daily' | 'weekly';
 export type CortexMissionMode = 'monitor' | 'assist' | 'approval';
@@ -207,7 +207,7 @@ export const reviewCortexMissionObservation = (
 export const generateCortexOvernightBrief = (hours = 12) =>
   apiFetch<CortexOvernightBrief>(`/marcellus/missions/overnight-brief?hours=${hours}`, { method: 'POST' });
 
-export interface MarcellusPlexusMessage {
+export interface EnksteinPlexusMessage {
   id: string;
   tenant_id: string;
   sender_node_id: string;
@@ -231,7 +231,7 @@ export interface MarcellusPlexusMessage {
   processed_at: string | null;
 }
 
-export interface MarcellusReflexDefinition {
+export interface EnksteinReflexDefinition {
   id: string;
   tenant_id: string;
   name: string;
@@ -250,7 +250,7 @@ export interface MarcellusReflexDefinition {
   expires_at: string | null;
 }
 
-export interface MarcellusReflexExecution {
+export interface EnksteinReflexExecution {
   id: string;
   tenant_id: string;
   reflex_id: string;
@@ -269,7 +269,7 @@ export interface MarcellusReflexExecution {
   completed_at: string | null;
 }
 
-export interface MarcellusCheckpoint {
+export interface EnksteinCheckpoint {
   id: string;
   tenant_id: string;
   node_id: string;
@@ -285,7 +285,7 @@ export interface MarcellusCheckpoint {
   verified_at: string | null;
 }
 
-export interface MarcellusRegenerationRun {
+export interface EnksteinRegenerationRun {
   id: string;
   tenant_id: string;
   node_id: string;
@@ -303,7 +303,7 @@ export interface MarcellusRegenerationRun {
   completed_at: string | null;
 }
 
-export interface MarcellusNodeRuntime {
+export interface EnksteinNodeRuntime {
   id: string;
   tenant_id: string;
   node_id: string;
@@ -317,40 +317,40 @@ export interface MarcellusNodeRuntime {
   last_health_at: string | null;
 }
 
-export const getMarcellusPlexusMessages = (tenantId: string) =>
-  apiFetch<MarcellusPlexusMessage[]>(`/marcellus/plexus/messages?tenant_id=${encodeURIComponent(tenantId)}`);
-export const sendMarcellusPlexusMessage = (body: Record<string, unknown>) =>
-  apiFetch<MarcellusPlexusMessage>('/marcellus/plexus/messages', { method: 'POST', body: JSON.stringify(body) });
-export const acknowledgeMarcellusPlexusMessage = (id: string, body: Record<string, unknown>) =>
-  apiFetch<MarcellusPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/ack`, { method: 'POST', body: JSON.stringify(body) });
-export const approveMarcellusPlexusMessage = (id: string, tenantId: string) =>
-  apiFetch<MarcellusPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+export const getEnksteinPlexusMessages = (tenantId: string) =>
+  apiFetch<EnksteinPlexusMessage[]>(`/marcellus/plexus/messages?tenant_id=${encodeURIComponent(tenantId)}`);
+export const sendEnksteinPlexusMessage = (body: Record<string, unknown>) =>
+  apiFetch<EnksteinPlexusMessage>('/marcellus/plexus/messages', { method: 'POST', body: JSON.stringify(body) });
+export const acknowledgeEnksteinPlexusMessage = (id: string, body: Record<string, unknown>) =>
+  apiFetch<EnksteinPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/ack`, { method: 'POST', body: JSON.stringify(body) });
+export const approveEnksteinPlexusMessage = (id: string, tenantId: string) =>
+  apiFetch<EnksteinPlexusMessage>(`/marcellus/plexus/messages/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
 
-export const getMarcellusReflexes = (tenantId: string) =>
-  apiFetch<MarcellusReflexDefinition[]>(`/marcellus/reflexes?tenant_id=${encodeURIComponent(tenantId)}`);
-export const createMarcellusReflex = (body: Record<string, unknown>) =>
-  apiFetch<MarcellusReflexDefinition>('/marcellus/reflexes', { method: 'POST', body: JSON.stringify(body) });
-export const evaluateMarcellusReflexes = (body: Record<string, unknown>) =>
-  apiFetch<MarcellusReflexExecution[]>('/marcellus/reflexes/evaluate', { method: 'POST', body: JSON.stringify(body) });
-export const getMarcellusReflexExecutions = (tenantId: string) =>
-  apiFetch<MarcellusReflexExecution[]>(`/marcellus/reflexes/executions?tenant_id=${encodeURIComponent(tenantId)}`);
-export const approveMarcellusReflexExecution = (id: string, tenantId: string) =>
-  apiFetch<MarcellusReflexExecution>(`/marcellus/reflexes/executions/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+export const getEnksteinReflexes = (tenantId: string) =>
+  apiFetch<EnksteinReflexDefinition[]>(`/marcellus/reflexes?tenant_id=${encodeURIComponent(tenantId)}`);
+export const createEnksteinReflex = (body: Record<string, unknown>) =>
+  apiFetch<EnksteinReflexDefinition>('/marcellus/reflexes', { method: 'POST', body: JSON.stringify(body) });
+export const evaluateEnksteinReflexes = (body: Record<string, unknown>) =>
+  apiFetch<EnksteinReflexExecution[]>('/marcellus/reflexes/evaluate', { method: 'POST', body: JSON.stringify(body) });
+export const getEnksteinReflexExecutions = (tenantId: string) =>
+  apiFetch<EnksteinReflexExecution[]>(`/marcellus/reflexes/executions?tenant_id=${encodeURIComponent(tenantId)}`);
+export const approveEnksteinReflexExecution = (id: string, tenantId: string) =>
+  apiFetch<EnksteinReflexExecution>(`/marcellus/reflexes/executions/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
 
-export const getMarcellusCheckpoints = (tenantId: string) =>
-  apiFetch<MarcellusCheckpoint[]>(`/marcellus/regeneration/checkpoints?tenant_id=${encodeURIComponent(tenantId)}`);
-export const createMarcellusCheckpoint = (body: Record<string, unknown>) =>
-  apiFetch<MarcellusCheckpoint>('/marcellus/regeneration/checkpoints', { method: 'POST', body: JSON.stringify(body) });
-export const verifyMarcellusCheckpoint = (id: string, tenantId: string) =>
+export const getEnksteinCheckpoints = (tenantId: string) =>
+  apiFetch<EnksteinCheckpoint[]>(`/marcellus/regeneration/checkpoints?tenant_id=${encodeURIComponent(tenantId)}`);
+export const createEnksteinCheckpoint = (body: Record<string, unknown>) =>
+  apiFetch<EnksteinCheckpoint>('/marcellus/regeneration/checkpoints', { method: 'POST', body: JSON.stringify(body) });
+export const verifyEnksteinCheckpoint = (id: string, tenantId: string) =>
   apiFetch<{ checkpoint_id: string; verified: boolean; checks: Record<string, boolean>; failures: string[] }>(`/marcellus/regeneration/checkpoints/${encodeURIComponent(id)}/verify`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
-export const startMarcellusRegeneration = (tenantId: string, checkpointId: string) =>
-  apiFetch<MarcellusRegenerationRun>('/marcellus/regeneration/runs', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, checkpoint_id: checkpointId }) });
-export const getMarcellusRegenerationRuns = (tenantId: string) =>
-  apiFetch<MarcellusRegenerationRun[]>(`/marcellus/regeneration/runs?tenant_id=${encodeURIComponent(tenantId)}`);
-export const approveMarcellusRegeneration = (id: string, tenantId: string) =>
-  apiFetch<MarcellusRegenerationRun>(`/marcellus/regeneration/runs/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
-export const getMarcellusNodeRuntimes = (tenantId: string) =>
-  apiFetch<MarcellusNodeRuntime[]>(`/marcellus/regeneration/runtimes?tenant_id=${encodeURIComponent(tenantId)}`);
+export const startEnksteinRegeneration = (tenantId: string, checkpointId: string) =>
+  apiFetch<EnksteinRegenerationRun>('/marcellus/regeneration/runs', { method: 'POST', body: JSON.stringify({ tenant_id: tenantId, checkpoint_id: checkpointId }) });
+export const getEnksteinRegenerationRuns = (tenantId: string) =>
+  apiFetch<EnksteinRegenerationRun[]>(`/marcellus/regeneration/runs?tenant_id=${encodeURIComponent(tenantId)}`);
+export const approveEnksteinRegeneration = (id: string, tenantId: string) =>
+  apiFetch<EnksteinRegenerationRun>(`/marcellus/regeneration/runs/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({ tenant_id: tenantId }) });
+export const getEnksteinNodeRuntimes = (tenantId: string) =>
+  apiFetch<EnksteinNodeRuntime[]>(`/marcellus/regeneration/runtimes?tenant_id=${encodeURIComponent(tenantId)}`);
 
 // ArcClaw
 export const getArcStats = () => apiFetch<any>('/arcclaw/stats');

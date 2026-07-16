@@ -404,7 +404,7 @@ _ARMS = _build_arms()
 def _validate_registry() -> None:
     arm_ids = {arm.id for arm in _ARMS}
     if arm_ids != set(SecurityArmId):
-        raise RuntimeError("Marcellus arm registry does not cover every SecurityArmId")
+        raise RuntimeError("Enkstein arm registry does not cover every SecurityArmId")
 
     node_ids = [node.id for node in _CAPABILITY_NODES]
     legacy_modules = [node.legacy_module for node in _CAPABILITY_NODES]
@@ -415,7 +415,7 @@ def _validate_registry() -> None:
         ("task route", task_routes),
     ):
         if len(values) != len(set(values)):
-            raise RuntimeError(f"Duplicate Marcellus {label} detected")
+            raise RuntimeError(f"Duplicate Enkstein {label} detected")
 
     assigned = {node_id for arm in _ARMS for node_id in arm.node_ids}
     if assigned != set(node_ids):
@@ -426,8 +426,8 @@ _validate_registry()
 
 
 _SNAPSHOT = ArchitectureSnapshot(
-    name="Marcellus Plexus Architecture",
-    version="0.2.0",
+    name="Enkstein Plexus Architecture",
+    version="0.3.0",
     source_lineage="Independent compatibility-first evolution of RegentClaw",
     compatibility_mode="Legacy route and module names remain available while new contracts are introduced",
     thesis="The Cortex may be bypassed for delegated routine coordination; Trust Fabric may never be bypassed.",

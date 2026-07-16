@@ -1,22 +1,23 @@
-# Native Marcellus Installers
+# Native Enkstein Installers
 
-Marcellus publishes native launchers around the self-hosted Docker runtime.
+Enkstein publishes native launchers around the self-hosted Docker runtime.
 This provides a familiar installation and startup experience while preserving
 the same FastAPI, Next.js, PostgreSQL, Redis, Trust Fabric, and connector
 architecture used by the source deployment.
 
 Docker Desktop remains a prerequisite. The native launchers start Docker when
-needed, generate installation secrets, and launch the Marcellus containers.
+needed, generate installation secrets, and launch the Enkstein containers.
 They do not bundle a hidden VM, database, or credential store outside the
 documented Compose runtime.
 
 ## macOS `.pkg`
 
-The package installs `/Applications/Marcellus.app`. Completing installation
+The package installs `/Applications/Enkstein.app`. Completing installation
 launches the app for the signed-in user. On first launch it:
 
 1. Copies the versioned runtime to
-   `~/Library/Application Support/Marcellus/runtime`.
+   `~/Library/Application Support/Marcellus/runtime` (the compatibility data
+   location retained during the Enkstein rename).
 2. Starts Docker Desktop if it is not already running.
 3. Generates unique application, PostgreSQL, and Redis secrets.
 4. Starts the production Compose stack.
@@ -28,7 +29,7 @@ launches the app for the signed-in user. On first launch it:
    supported Codex and Claude subscription runtimes.
 
 The app is a universal Intel and Apple Silicon executable. External links open
-in the default browser, while Marcellus routes remain inside the app. The first
+in the default browser, while Enkstein routes remain inside the app. The first
 launch can take several minutes because Docker builds the local backend and
 frontend images. The app shows startup status instead of displaying the UI
 before the backend is ready. Startup diagnostics are written to:
@@ -44,7 +45,7 @@ encrypted connector credentials, and runtime state.
 
 The desktop window is a console, not the security runtime itself. Closing the
 window leaves the macOS menu-bar process and Docker services running. The menu
-provides **Open Marcellus**, **Lock Console**, and **Quit Console (Runtime
+provides **Open Enkstein**, **Lock Console**, and **Quit Console (Runtime
 Continues)**. The console also locks after 30 minutes without interaction.
 
 Monitoring, schedules, active Swarms, and approved background automation keep
@@ -84,11 +85,11 @@ unauthenticated runtimes appear as unavailable in Model Cortex. See
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh v0.2.24
-open dist/Marcellus-0.2.24-macos.pkg
+./scripts/build_macos_pkg.sh v0.3.0
+open dist/Enkstein-0.3.0-macos.pkg
 ```
 
-The output is `dist/Marcellus-0.2.24-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.3.0-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 
@@ -97,7 +98,7 @@ signing and notarization are configured.
 An Apple account alone is not sufficient for trusted public distribution. The
 account must be enrolled in the Apple Developer Program and have:
 
-- A `Developer ID Application` certificate for `Marcellus.app`.
+- A `Developer ID Application` certificate for `Enkstein.app`.
 - A `Developer ID Installer` certificate for the `.pkg`.
 - An app-specific password for notarization.
 
@@ -130,8 +131,8 @@ notary service, staples the ticket, and validates Gatekeeper acceptance.
 ## Windows `.exe`
 
 The Windows installer is built with Inno Setup and installs per-user under
-`%LOCALAPPDATA%\Programs\Marcellus`. It creates Start Menu and optional desktop
-shortcuts, launches Marcellus after setup, starts Docker Desktop when needed,
+`%LOCALAPPDATA%\Programs\Enkstein`. It creates Start Menu and optional desktop
+shortcuts, launches Enkstein after setup, starts Docker Desktop when needed,
 creates installation secrets, starts the Compose stack, and opens the browser.
 
 Windows code signing is required by the tagged public-release workflow. Configure:
@@ -156,7 +157,7 @@ workflow manually from GitHub Actions. Its `windows-package` job runs on
 Windows Server, installs Inno Setup and ImageMagick, and uploads:
 
 ```text
-Marcellus-<version>-windows-x64-setup.exe
+Enkstein-<version>-windows-x64-setup.exe
 ```
 
 On a Windows development machine with those tools installed, the equivalent
@@ -172,7 +173,7 @@ The release workflow is triggered by a semantic version tag. Package versions
 must exactly match the tag:
 
 ```bash
-git tag -a v0.7.0 -m "Marcellus v0.7.0"
+git tag -a v0.7.0 -m "Enkstein v0.7.0"
 git push origin v0.7.0
 ```
 

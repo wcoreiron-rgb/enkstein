@@ -1,11 +1,11 @@
 > [!IMPORTANT]
-> **Marcellus architecture working copy.** This repository is an independent, compatibility-first evolution of RegentClaw. RegentClaw remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md). Existing RegentClaw names and routes remain available while the new runtime is implemented and verified.
+> **Enkstein architecture working copy.** This repository is an independent, compatibility-first evolution of RegentClaw. RegentClaw remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md). Existing RegentClaw names and routes remain available while the new runtime is implemented and verified.
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="Marcellus" width="120" />
+  <img src="frontend/public/logo.png" alt="Enkstein" width="120" />
 </p>
 
-<h1 align="center">Marcellus Architecture Lab</h1>
+<h1 align="center">Enkstein Architecture Lab</h1>
 
 <p align="center">Distributed, organism-inspired security automation with Zero Trust enforcement across every Cortex, Heart, Arm, Node, and action.</p>
 
@@ -17,16 +17,16 @@
 </p>
 
 > [!NOTE]
-> **Project status — early preview (v0.x).** Marcellus is a self-hosted, open-source architecture working copy under active development.
+> **Project status — early preview (v0.x).** Enkstein is a self-hosted, open-source architecture working copy under active development.
 > It runs on **realistic simulated findings out of the box** — connect your own API credentials to enable live integrations.
 > Security hardening is ongoing and the platform has **not yet had an independent third-party audit**. It is built for
 > evaluation, self-hosted testing, and community feedback — not yet for unmonitored production or multi-tenant SaaS use.
 > See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and
 > [Maturity Matrix](docs/maturity-matrix.md) for exactly what's shipped vs. in progress.
 
-## Marcellus Distributed Runtime
+## Enkstein Distributed Runtime
 
-Marcellus `0.2.0` adds three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.0` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -36,7 +36,7 @@ Marcellus `0.2.0` adds three governed runtime paths on top of the compatibility 
 
 The Regeneration implementation recreates the persisted logical Capability Node runtime. A host, process, container, or remote worker adapter is still required before it can replace an external runtime instance.
 
-The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Marcellus Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
+The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
 
 ### Persistent Missions and governed Memory
 
@@ -57,7 +57,7 @@ Arms, recent Reflex metadata, blocked activity, and Security Twin health without
 copying raw Reflex event bodies into the report.
 
 The API is under `/api/v1/marcellus/missions`; see
-[Marcellus Architecture](docs/marcellus-architecture.md#persistent-missions-and-governed-memory)
+[Enkstein Architecture](docs/marcellus-architecture.md#persistent-missions-and-governed-memory)
 for the route list and current limitations.
 
 ### Governed AI workspace
@@ -82,7 +82,7 @@ Chat and Cowork now persist encrypted, tenant-scoped conversation history.
 Cowork adds named Projects, encrypted versioned text artifacts, searchable
 history, persistent project-file context, conversation organization, and a
 real desktop folder bridge. A macOS operator can explicitly grant one local
-folder to a project; Marcellus receives an opaque grant, synchronizes bounded
+folder to a project; Enkstein receives an opaque grant, synchronizes bounded
 text files, and can create, edit, rename, move, or recoverably trash files in
 that folder. Browser Cowork retains an import-copy fallback. Raw host paths are
 never exposed to the container or web UI. Content is path-bounded, DLP-scanned,
@@ -99,7 +99,7 @@ gateway is tracked separately so tool capability is not silently reduced.
 
 ### Governed Brain Bridges and consensus
 
-Marcellus `0.2.15` can use supported model runtimes already authenticated on
+Enkstein `0.2.15` can use supported model runtimes already authenticated on
 the desktop without copying subscription tokens into Docker:
 
 - **Codex Subscription Bridge:** detects the official Codex runtime, verifies
@@ -111,11 +111,11 @@ the desktop without copying subscription tokens into Docker:
 - **Desktop Session Bridge:** can use a compatible visible ChatGPT or Claude
   macOS app after explicit Accessibility permission and a live message-field
   compatibility check. Incompatible vendor builds fail closed.
-- **Browser Session Bridge:** pairs the narrowly scoped Marcellus Browser
+- **Browser Session Bridge:** pairs the narrowly scoped Enkstein Browser
   Companion with visible signed-in ChatGPT, Claude, or Gemini tabs. It never
   reads cookies or account tokens and is selected explicitly rather than by
   silent automatic routing. Tenant-scoped conversation affinity reuses one
-  provider tab per Marcellus chat instead of creating a new thread per turn.
+  provider tab per Enkstein chat instead of creating a new thread per turn.
 - **Brain Consensus:** consults selected subscription, approved API, and local
   model profiles concurrently. Unavailable, policy-denied, failed, and
   simulated responses never count as votes.
@@ -306,21 +306,21 @@ cd marcellus-VERSION
 ```
 
 The installer validates Docker Compose, creates a private `.env` with unique
-random secrets, builds the containers, and starts Marcellus. It never
+random secrets, builds the containers, and starts Enkstein. It never
 overwrites an existing `.env`. See [installation details](docs/installation.md).
 
 ### One-click desktop installers
 
 GitHub Releases also provide native launchers:
 
-- **macOS:** install `Marcellus-VERSION-macos.pkg`; setup creates
-  `/Applications/Marcellus.app` and launches a native Intel/Apple Silicon
+- **macOS:** install `Enkstein-VERSION-macos.pkg`; setup creates
+  `/Applications/Enkstein.app` and launches a native Intel/Apple Silicon
   desktop window after installation.
-- **Windows x64:** run `Marcellus-VERSION-windows-x64-setup.exe`; setup creates
-  Start Menu and optional desktop shortcuts and launches `Marcellus.exe`.
+- **Windows x64:** run `Enkstein-VERSION-windows-x64-setup.exe`; setup creates
+  Start Menu and optional desktop shortcuts and launches `Enkstein.exe`.
 
 Both launchers start Docker Desktop when necessary, generate unique local
-secrets, and start the Marcellus services. The macOS app displays startup
+secrets, and start the Enkstein services. The macOS app displays startup
 progress, waits for the Cortex and UI health checks, and embeds the governed UI
 inside its own WebKit window instead of opening the browser. Docker Desktop is
 still required, and the first launch can take several minutes while local
@@ -331,7 +331,7 @@ UI and remain encrypted in persistent local volumes. See
 ### Local owner authentication and background runtime
 
 The first desktop launch requires creation of a local owner password and TOTP
-enrollment with an RFC-compatible Authenticator application. Marcellus displays
+enrollment with an RFC-compatible Authenticator application. Enkstein displays
 the QR secret only during enrollment and returns ten one-time recovery codes.
 Later owner sessions require both the password and current Authenticator code;
 email-code viewer access remains optional after an Email/SMTP connector is
