@@ -30,6 +30,7 @@ from app.core.marcellus.workspace import (
     list_projects,
     move_conversation,
     native_workspace_status,
+    rename_conversation,
     review_change_proposal,
     search_workspace,
     sync_native_workspace,
@@ -47,6 +48,7 @@ from app.core.marcellus.workspace_schemas import (
     CortexConversationDetail,
     CortexConversationMove,
     CortexConversationRead,
+    CortexConversationRename,
     CortexNativeWorkspaceBind,
     CortexNativeWorkspaceRead,
     CortexProjectCreate,
@@ -313,6 +315,31 @@ async def post_conversation_move(
 
 
 @router.post(
+    "/conversations/{conversation_id}/rename",
+    response_model=CortexConversationRead,
+    summary="Rename a conversation",
+)
+async def post_conversation_rename(
+    conversation_id: UUID,
+    payload: CortexConversationRename,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await rename_conversation(
+        db,
+        tenant_id,
+        conversation_id,
+        payload.model_copy(update={"tenant_id": tenant_id}),
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.post(
     "/conversations/{conversation_id}/turns",
     response_model=CortexTurnRead,
     summary="Execute and persist a governed Cortex turn",
@@ -394,6 +421,7 @@ async def post_turn_stream(
 async def post_branch(
     conversation_id: UUID,
     payload: CortexBranchCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
@@ -405,6 +433,8 @@ async def post_branch(
         payload.model_copy(update={"tenant_id": tenant_id}),
         user=user,
         actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
     )
 
 

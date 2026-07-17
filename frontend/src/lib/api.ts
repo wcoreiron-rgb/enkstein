@@ -605,7 +605,8 @@ export const routeModelClawCall = (body: object) =>
   apiFetch<any>('/modelclaw/route', { method: 'POST', body: JSON.stringify(body) });
 export const getModelClawCalls = (limit = 50) =>
   apiFetch<any[]>(`/modelclaw/calls?limit=${limit}`);
-export const getBrainStatuses = () => apiFetch<any[]>('/modelclaw/brains/status');
+export const getBrainStatuses = (force = false) =>
+  apiFetch<any[]>(`/modelclaw/brains/status${force ? '?force=true' : ''}`);
 export const requestDesktopBrainAccess = () =>
   apiFetch<{ granted: boolean; detail: string }>('/modelclaw/brains/desktop-access', { method: 'POST' });
 export const startBrowserBrainPairing = () =>
@@ -791,6 +792,11 @@ export const moveCortexConversation = (id: string, projectId: string) =>
   apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}/move`, {
     method: 'POST',
     body: JSON.stringify({ project_id: projectId }),
+  });
+export const renameCortexConversation = (id: string, title: string) =>
+  apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}/rename`, {
+    method: 'POST',
+    body: JSON.stringify({ title }),
   });
 export const sendCortexTurn = (id: string, body: object) =>
   apiFetch<CortexTurn>(`/marcellus/workspace/conversations/${id}/turns`, { method: 'POST', body: JSON.stringify(body) });

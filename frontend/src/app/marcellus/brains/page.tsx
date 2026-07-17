@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BrainCircuit,
@@ -27,14 +27,18 @@ import {
   startBrowserBrainPairing,
 } from '@/lib/api';
 
+type BrainReadinessStatus = 'ready' | 'needs_setup' | 'unavailable' | 'policy_blocked';
+
 type BrainStatus = {
   brain: string;
   available: boolean;
   authenticated: boolean;
+  status?: BrainReadinessStatus;
   runtime?: string | null;
   account_type?: string | null;
   detail?: string | null;
   models?: string[];
+  last_checked?: string | null;
 };
 
 type ProviderStatus = {
@@ -53,7 +57,16 @@ type ModelProfile = {
   allowed_data_classes?: string[];
 };
 
-function Status({ ready }: { ready: boolean }) {
+function Status({ ready, checking, status }: { ready: boolean; checking?: boolean; status?: BrainReadinessStatus }) {
+  if (checking) {
+    return <span className="inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--rc-text-3)' }}><Loader2 className="h-4 w-4 animate-spin" />Checking…</span>;
+  }
+  if (status === 'policy_blocked') {
+    return <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600"><XCircle className="h-4 w-4" />Policy blocked</span>;
+  }
+  if (status === 'unavailable' && !ready) {
+    return <span className="inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: 'var(--rc-text-3)' }}><XCircle className="h-4 w-4" />Unavailable</span>;
+  }
   return ready ? (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600"><CheckCircle2 className="h-4 w-4" />Ready</span>
   ) : (
@@ -61,8 +74,16 @@ function Status({ ready }: { ready: boolean }) {
   );
 }
 
+const LAUNCH_RETRY_ATTEMPTS = 3;
+const LAUNCH_RETRY_DELAY_MS = 700;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function BrainConnectionsPage() {
   const [loading, setLoading] = useState(true);
+  const [everLoaded, setEverLoaded] = useState(false);
   const [brains, setBrains] = useState<BrainStatus[]>([]);
   const [providers, setProviders] = useState<ProviderStatus[]>([]);
   const [profiles, setProfiles] = useState<ModelProfile[]>([]);
@@ -71,6 +92,7 @@ export default function BrainConnectionsPage() {
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [pairingBrowser, setPairingBrowser] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<'chat' | 'cowork'>('chat');
+  const loadInFlight = useRef(false);
 
   useEffect(() => {
     const hash = window.location.hash.slice(1);
@@ -78,28 +100,69 @@ export default function BrainConnectionsPage() {
     setWorkspaceMode(hash === 'cowork' || remembered === 'cowork' ? 'cowork' : 'chat');
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const results = await Promise.allSettled([
-      getBrainStatuses(),
-      getArcProviders(),
-      getModelClawProfiles(),
-      getArcModels(),
-    ]);
-    const nextWarnings: string[] = [];
-    if (results[0].status === 'fulfilled') setBrains(results[0].value || []);
-    else nextWarnings.push('Desktop subscription status is unavailable.');
-    if (results[1].status === 'fulfilled') setProviders(results[1].value || []);
-    else nextWarnings.push('Provider status is unavailable.');
-    if (results[2].status === 'fulfilled') setProfiles(results[2].value || []);
-    else nextWarnings.push('Model profiles are unavailable.');
-    if (results[3].status === 'fulfilled') setModels(results[3].value || {});
-    else nextWarnings.push('Live model discovery is unavailable.');
-    setWarnings(nextWarnings);
-    setLoading(false);
+  /** Retries the Brain status fetch a bounded number of times so a Brain
+   * Bridge that is still launching on app startup resolves to "ready"
+   * shortly after, instead of leaving the page stuck on a stale failure. */
+  const loadBrainsWithRetry = useCallback(async (): Promise<BrainStatus[] | null> => {
+    for (let attempt = 0; attempt < LAUNCH_RETRY_ATTEMPTS; attempt += 1) {
+      try {
+        const rows = await getBrainStatuses(true);
+        const bridgeUnavailable = rows.length > 0 && rows.every((row) => row.status === 'unavailable');
+        if (!bridgeUnavailable || attempt === LAUNCH_RETRY_ATTEMPTS - 1) return rows;
+        await delay(LAUNCH_RETRY_DELAY_MS);
+      } catch (fetchError) {
+        if (attempt === LAUNCH_RETRY_ATTEMPTS - 1) throw fetchError;
+        await delay(LAUNCH_RETRY_DELAY_MS);
+      }
+    }
+    return null;
   }, []);
 
+  const load = useCallback(async () => {
+    if (loadInFlight.current) return;
+    loadInFlight.current = true;
+    setLoading(true);
+    try {
+      const results = await Promise.allSettled([
+        loadBrainsWithRetry(),
+        getArcProviders(),
+        getModelClawProfiles(),
+        getArcModels(),
+      ]);
+      const nextWarnings: string[] = [];
+      if (results[0].status === 'fulfilled') setBrains(results[0].value || []);
+      else nextWarnings.push('Desktop subscription status is unavailable.');
+      if (results[1].status === 'fulfilled') setProviders(results[1].value || []);
+      else nextWarnings.push('Provider status is unavailable.');
+      if (results[2].status === 'fulfilled') setProfiles(results[2].value || []);
+      else nextWarnings.push('Model profiles are unavailable.');
+      if (results[3].status === 'fulfilled') setModels(results[3].value || {});
+      else nextWarnings.push('Live model discovery is unavailable.');
+      setWarnings(nextWarnings);
+    } finally {
+      loadInFlight.current = false;
+      setLoading(false);
+      setEverLoaded(true);
+    }
+  }, [loadBrainsWithRetry]);
+
   useEffect(() => { void load(); }, [load]);
+
+  /** Refreshes readiness whenever the user returns to this tab/window, since
+   * setup (CLI login, desktop sign-in, Accessibility grant) usually happens
+   * in another app or tab. */
+  useEffect(() => {
+    const onFocus = () => { void load(); };
+    const onVisibility = () => { if (document.visibilityState === 'visible') void load(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [load]);
+
+  const checkingBrains = loading && everLoaded;
 
   const subscriptionBrains = useMemo(() => [
     {
@@ -144,7 +207,15 @@ export default function BrainConnectionsPage() {
       icon: Cloud,
       instruction: 'Install the Enkstein browser companion, pair it once, and keep a signed-in Gemini tab open.',
     },
-  ].map((entry) => ({ ...entry, status: brains.find((brain) => brain.brain === entry.id) })), [brains]);
+  ].map((entry) => ({ ...entry, status: brains.find((brain) => brain.brain === entry.id) }))
+    /** Claude Code CLI is the preferred Claude Brain. Once it is genuinely
+     * ready, the browser fallback is redundant and is hidden; ChatGPT and
+     * Gemini browser sessions are always preserved as options. */
+    .filter((entry) => !(entry.id === 'claude_browser' && brains.find((brain) => brain.brain === 'claude_subscription')?.status === 'ready'))
+    /** Claude Desktop is only useful when the host Accessibility bridge can
+     * find a compatible message field in the installed app version. */
+    .filter((entry) => !(entry.id === 'claude_desktop' && (entry.status?.detail || '').includes('does not expose a compatible message field'))),
+  [brains]);
 
   const requestDesktopAccess = async () => {
     setRequestingAccess(true);
@@ -279,9 +350,10 @@ export default function BrainConnectionsPage() {
                 <article key={id} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3"><Icon className="h-5 w-5 text-red-500" /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{name}</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status?.runtime || 'Desktop runtime'}</p></div></div>
-                    <Status ready={ready} />
+                    <Status ready={ready} checking={checkingBrains} status={status?.status} />
                   </div>
                   <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{status?.detail || instruction}</p>
+                  {status?.last_checked && <p className="mt-1 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>Last checked {new Date(status.last_checked).toLocaleTimeString()}</p>}
                   {id.endsWith('_desktop') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option visibly opens the vendor app and remains subject to its normal plan and usage limits.</p>}
                   {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Enkstein.</p>}
                   {(status?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status!.models!.join(' · ')}</p>}

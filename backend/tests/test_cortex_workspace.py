@@ -119,6 +119,60 @@ async def test_workspace_turn_persists_encrypted_history(client, db_session, mon
 
 
 @pytest.mark.asyncio
+async def test_workspace_turn_passes_runtime_group_to_gateway(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+    captured = {}
+
+    async def fake_gateway(db, payload):
+        captured["runtime_group"] = payload.runtime_group
+        return _gateway_response("Local-only answer")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Summarize this", "runtime_group": "local"},
+    )
+    assert turn.status_code == 200, turn.text
+    assert captured["runtime_group"] == "local"
+
+    legacy_conversation = await _create_conversation(client, mode="chat")
+    legacy_turn = await client.post(
+        f"{BASE}/conversations/{legacy_conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Summarize this"},
+    )
+    assert legacy_turn.status_code == 200, legacy_turn.text
+    assert captured["runtime_group"] == "hybrid"
+
+
+@pytest.mark.asyncio
+async def test_conversation_rename_is_owner_and_tenant_scoped(client):
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    conversation = await _create_conversation(client, mode="chat")
+
+    renamed = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/rename",
+        json={"tenant_id": "tenant-a", "title": "Renamed by owner"},
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["title"] == "Renamed by owner"
+
+    _use_identity(_identity(sub="other-user", tenant_id="tenant-a", role="analyst"))
+    denied = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/rename",
+        json={"tenant_id": "tenant-a", "title": "Hijacked title"},
+    )
+    assert denied.status_code == 403
+
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-b"))
+    cross_tenant = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/rename",
+        json={"tenant_id": "tenant-b", "title": "Cross tenant title"},
+    )
+    assert cross_tenant.status_code in {403, 404}
+
+
+@pytest.mark.asyncio
 async def test_folder_artifacts_are_encrypted_versioned_and_reusable(client, db_session, monkeypatch):
     _use_identity(_identity())
     project = await _create_project(client)
@@ -454,6 +508,47 @@ async def test_conversation_branch_and_encrypted_search(client, monkeypatch):
     )
     assert search.status_code == 200
     assert search.json()[0]["conversation"]["id"] == turn.json()["conversation"]["id"]
+
+
+@pytest.mark.asyncio
+async def test_conversation_branch_is_trust_fabric_gated(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    async def fake_gateway(db, payload):
+        return _gateway_response("Rotate the exposed credential.")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Investigate credential exposure"},
+    )
+    assert turn.status_code == 200
+    message_id = turn.json()["assistant_message"]["id"]
+
+    actions: list[str] = []
+
+    async def allow(db, request, ip_address=None):
+        actions.append(request.action)
+        return type("Decision", (), {"allowed": True, "policy_name": "test"})()
+
+    monkeypatch.setattr(workspace, "enforce", allow)
+    allowed = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/branches",
+        json={"tenant_id": "tenant-a", "message_id": message_id, "title": "Allowed branch"},
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert actions[-1] == "workspace_conversation_branch"
+
+    async def deny(db, request, ip_address=None):
+        return type("Decision", (), {"allowed": False, "policy_name": "Branching denied"})()
+
+    monkeypatch.setattr(workspace, "enforce", deny)
+    denied = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/branches",
+        json={"tenant_id": "tenant-a", "message_id": message_id, "title": "Denied branch"},
+    )
+    assert denied.status_code == 403
 
 
 @pytest.mark.asyncio

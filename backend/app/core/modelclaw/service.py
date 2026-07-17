@@ -11,7 +11,10 @@ from app.core.modelclaw.schemas import ModelProfileCreate
 _PROVIDERS: dict[str, dict[str, Any]] = {
     "nvidia_nim": {"enabled": True, "default_model": "meta/llama-3.3-70b-instruct", "supports_tool_calling": True},
     "ollama": {"enabled": True, "default_model": "qwen2.5:14b-instruct", "supports_tool_calling": True},
-    "azure_openai": {"enabled": True, "default_model": "gpt-4o-mini", "supports_tool_calling": True},
+    # Azure remains available through the legacy sensitivity router, but the
+    # Model Cortex profile bridge has no native Azure adapter yet. Keep it
+    # visible but disabled rather than claiming executable readiness.
+    "azure_openai": {"enabled": False, "default_model": "gpt-4o-mini", "supports_tool_calling": True},
     "openai": {"enabled": True, "default_model": "gpt-4.1-mini", "supports_tool_calling": True},
     "anthropic": {"enabled": True, "default_model": "claude-3-5-sonnet", "supports_tool_calling": True},
     "gemini": {"enabled": True, "default_model": "gemini-2.5-flash", "supports_tool_calling": True},
@@ -95,6 +98,11 @@ _MODEL_CALLS: list[dict[str, Any]] = []
 _STATE_PATH = Path(".state/modelclaw_state.json")
 
 
+def _profile_storage_key(tenant_id: str, name: str) -> str:
+    """Keep tenant-owned profiles distinct without changing their public names."""
+    return name if tenant_id == "global" else f"{tenant_id}:{name}"
+
+
 def _serialize_dt(v: Any) -> Any:
     if isinstance(v, datetime):
         return v.isoformat()
@@ -136,7 +144,8 @@ def _load_state() -> None:
                     profile["created_at"] = datetime.utcnow()
             profile.setdefault("tenant_id", "global")
             profile.setdefault("allowed_models", [profile["model"]])
-            _PROFILES[name] = profile
+            public_name = profile.get("name", name)
+            _PROFILES[_profile_storage_key(profile["tenant_id"], public_name)] = profile
         _MODEL_CALLS.clear()
         for row in calls:
             ts = row.get("timestamp")
@@ -172,16 +181,16 @@ def list_profiles(tenant_id: str = "global") -> list[dict[str, Any]]:
 
 def get_profile(name: str | None, tenant_id: str = "global") -> dict[str, Any] | None:
     if not name:
-        d = _PROFILES.get("nim_fast_reasoning")
+        d = _PROFILES.get(_profile_storage_key(tenant_id, "nim_fast_reasoning"))
         return d if d and d.get("tenant_id", "global") == tenant_id else None
-    d = _PROFILES.get(name)
+    d = _PROFILES.get(_profile_storage_key(tenant_id, name))
     return d if d and d.get("tenant_id", "global") == tenant_id else None
 
 
 def upsert_profile(payload: ModelProfileCreate) -> dict[str, Any]:
     row = payload.model_dump()
     row["created_at"] = datetime.utcnow()
-    _PROFILES[payload.name] = row
+    _PROFILES[_profile_storage_key(payload.tenant_id, payload.name)] = row
     _persist_state()
     return row
 

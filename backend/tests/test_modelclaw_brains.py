@@ -3,16 +3,36 @@ import asyncio
 import pytest
 
 from app.core.deps import get_current_user
-from app.core.modelclaw import brain_bridge, gateway, routes
+from app.core.modelclaw import brain_bridge, gateway, routes, service
+from app.core.modelclaw.schemas import ModelProfileCreate
 from main import app
 
 
 BASE = "/api/v1/modelclaw"
 
 
+def test_same_profile_name_is_isolated_between_tenants(monkeypatch):
+    monkeypatch.setattr(service, "_persist_state", lambda: None)
+    name = "shared-profile-name"
+    keys = [f"tenant-a:{name}", f"tenant-b:{name}"]
+    try:
+        service.upsert_profile(
+            ModelProfileCreate(name=name, provider="ollama", model="tenant-a-model", tenant_id="tenant-a")
+        )
+        service.upsert_profile(
+            ModelProfileCreate(name=name, provider="ollama", model="tenant-b-model", tenant_id="tenant-b")
+        )
+
+        assert service.get_profile(name, "tenant-a")["model"] == "tenant-a-model"
+        assert service.get_profile(name, "tenant-b")["model"] == "tenant-b-model"
+    finally:
+        for key in keys:
+            service._PROFILES.pop(key, None)
+
+
 @pytest.mark.asyncio
 async def test_subscription_brain_status_is_explicit(client, monkeypatch):
-    async def fake_status():
+    async def fake_status(db, *, force=False, tenant_id="global", actor_id="brain-status-discovery"):
         return [
             {
                 "brain": "codex_subscription",
@@ -29,6 +49,32 @@ async def test_subscription_brain_status_is_explicit(client, monkeypatch):
     response = await client.get(f"{BASE}/brains/status")
     assert response.status_code == 200
     assert response.json()[0]["authenticated"] is True
+
+
+@pytest.mark.asyncio
+async def test_brain_status_route_passes_force_query_param_through(client, monkeypatch):
+    captured = {}
+
+    async def fake_status(db, *, force=False, tenant_id="global", actor_id="brain-status-discovery"):
+        captured["force"] = force
+        captured["tenant_id"] = tenant_id
+        captured["actor_id"] = actor_id
+        return []
+
+    monkeypatch.setattr(routes, "bridge_status", fake_status)
+    default_response = await client.get(f"{BASE}/brains/status")
+    assert default_response.status_code == 200
+    assert captured["force"] is False
+    assert captured["tenant_id"] == "global"
+    assert captured["actor_id"] != "brain-status-discovery"
+
+    forced_response = await client.get(f"{BASE}/brains/status?force=true")
+    assert forced_response.status_code == 200
+    assert captured["force"] is True
+
+    refreshed_response = await client.get(f"{BASE}/brains/status?refresh=true")
+    assert refreshed_response.status_code == 200
+    assert captured["force"] is True
 
 
 @pytest.mark.asyncio
@@ -57,6 +103,44 @@ async def test_browser_brain_pairing_is_started_by_authenticated_api(client, mon
     assert response.status_code == 200
     assert response.json()["available"] is True
     assert response.json()["setup_url"].startswith("http://127.0.0.1:")
+
+
+@pytest.mark.asyncio
+async def test_browser_brain_pairing_accepts_explicit_loopback_url(monkeypatch):
+    async def fake_request(method, path, payload=None):
+        return {
+            "setup_url": "http://127.0.0.1:47831/v1/browser/setup?code=one-time",
+            "opened": True,
+            "expires_in_seconds": 300,
+        }
+
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_bridge_request", fake_request)
+    result = await brain_bridge.create_browser_brain_pairing()
+    assert result["available"] is True
+    assert result["setup_url"] == "http://127.0.0.1:47831/v1/browser/setup?code=one-time"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "setup_url",
+    [
+        "http://user:pass@127.0.0.1:47831/v1/browser/setup",
+        "http://127.0.0.1:47831@evil.example/v1/browser/setup",
+        "http://evil.example/v1/browser/setup?code=one-time",
+        "http://127.0.0.1/v1/browser/setup",
+        "https://127.0.0.1:47831/v1/browser/setup",
+        "http://127.0.0.1:47831.evil.example/v1/browser/setup",
+    ],
+)
+async def test_browser_brain_pairing_rejects_userinfo_and_non_loopback_urls(monkeypatch, setup_url):
+    async def fake_request(method, path, payload=None):
+        return {"setup_url": setup_url, "opened": True, "expires_in_seconds": 300}
+
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_bridge_request", fake_request)
+    result = await brain_bridge.create_browser_brain_pairing()
+    assert result["available"] is False
 
 
 @pytest.mark.asyncio
@@ -199,6 +283,104 @@ async def test_consensus_excludes_unavailable_brains(client, monkeypatch):
     assert body["counted_votes"] == 1
     assert body["confidence"] == 0.35
     assert body["votes"][1]["counted"] is False
+
+
+@pytest.mark.asyncio
+async def test_consensus_local_runtime_group_excludes_subscription_and_api_sources(client, monkeypatch):
+    called: list[str] = []
+
+    async def fake_collect(db, sources, prompt, *, tenant_id, claw, data_classification):
+        called.extend(sources)
+        return [
+            {
+                "source": source,
+                "kind": "local",
+                "available": True,
+                "counted": True,
+                "provider": "ollama",
+                "model": "local-default",
+                "response": "Local-only evidence.",
+                "latency_ms": 5,
+                "token_count": 6,
+            }
+            for source in sources
+        ]
+
+    monkeypatch.setattr(routes, "collect_votes", fake_collect)
+    response = await client.post(
+        f"{BASE}/consensus",
+        json={
+            "prompt": "What should we do?",
+            "sources": ["codex_subscription", "claude_subscription", "profile:ollama_local_fallback"],
+            "runtime_group": "local",
+            "minimum_votes": 1,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert called == ["profile:ollama_local_fallback"]
+    assert body["requested_votes"] == 1
+    assert all(vote["source"] != "codex_subscription" and vote["source"] != "claude_subscription" for vote in body["votes"])
+
+
+@pytest.mark.asyncio
+async def test_consensus_local_runtime_group_fails_closed_without_a_local_source(client, monkeypatch):
+    async def empty_collect(db, sources, prompt, *, tenant_id, claw, data_classification):
+        assert sources == [], "Local runtime group must not invoke any Brain when no local source was requested"
+        return []
+
+    monkeypatch.setattr(routes, "collect_votes", empty_collect)
+    response = await client.post(
+        f"{BASE}/consensus",
+        json={
+            "prompt": "What should we do?",
+            "sources": ["codex_subscription", "claude_subscription"],
+            "runtime_group": "local",
+            "minimum_votes": 1,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["requested_votes"] == 0
+    assert body["votes"] == []
+    assert body["status"] == "insufficient_votes"
+
+
+@pytest.mark.asyncio
+async def test_consensus_cloud_runtime_group_excludes_browser_desktop_and_local(client, monkeypatch):
+    called: list[str] = []
+
+    async def fake_collect(db, sources, prompt, *, tenant_id, claw, data_classification):
+        called.extend(sources)
+        return [
+            {
+                "source": source,
+                "kind": "subscription",
+                "available": True,
+                "counted": True,
+                "provider": "openai_chatgpt_subscription",
+                "model": "subscription-default",
+                "response": "Cloud evidence.",
+                "latency_ms": 5,
+                "token_count": 6,
+            }
+            for source in sources
+        ]
+
+    monkeypatch.setattr(routes, "collect_votes", fake_collect)
+    response = await client.post(
+        f"{BASE}/consensus",
+        json={
+            "prompt": "What should we do?",
+            "sources": ["codex_subscription", "chatgpt_browser", "claude_desktop", "profile:ollama_local_fallback"],
+            "runtime_group": "cloud",
+            "minimum_votes": 1,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert called == ["codex_subscription"]
+    assert body["requested_votes"] == 1
 
 
 def test_deterministic_consensus_reports_agreement_without_hidden_reasoning():
@@ -516,3 +698,175 @@ async def test_modelclaw_rejects_cross_tenant_reads_and_execution(client):
     assert calls.status_code == 403
     assert invocation.status_code == 403
     assert profile_update.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_marks_installed_but_unauthenticated_as_needs_setup(monkeypatch, db_session):
+    async def fake_request(method, path):
+        return {
+            "brains": [
+                {
+                    "brain": "codex_subscription",
+                    "kind": "subscription",
+                    "available": True,
+                    "authenticated": False,
+                    "detail": "Run codex login on this host.",
+                },
+                {
+                    "brain": "claude_subscription",
+                    "kind": "subscription",
+                    "available": True,
+                    "authenticated": True,
+                    "detail": "Ready",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_bridge_request", fake_request)
+    brain_bridge._stale_status_cache = None
+    rows = await brain_bridge.bridge_status(db_session)
+    by_name = {row["brain"]: row for row in rows}
+    assert by_name["codex_subscription"]["status"] == "needs_setup"
+    assert by_name["codex_subscription"]["last_checked"] is not None
+    assert by_name["claude_subscription"]["status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_recovers_from_stale_unreachable_cache_to_ready(monkeypatch, db_session):
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_STALE_STATUS_CACHE_SECONDS", 0.0)
+    brain_bridge._stale_status_cache = None
+
+    async def failing_request(method, path):
+        raise ConnectionError("bridge offline")
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", failing_request)
+    down = await brain_bridge.bridge_status(db_session)
+    assert all(row["status"] == "unavailable" for row in down)
+    assert brain_bridge._stale_status_cache is not None
+
+    async def recovered_request(method, path):
+        return {
+            "brains": [
+                {"brain": "codex_subscription", "kind": "subscription", "available": True, "authenticated": True, "detail": "Ready"},
+            ]
+        }
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", recovered_request)
+    recovered = await brain_bridge.bridge_status(db_session)
+    assert recovered[0]["status"] == "ready"
+    brain_bridge._stale_status_cache = None
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_caches_unreachable_failure_briefly(monkeypatch, db_session):
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_STALE_STATUS_CACHE_SECONDS", 30.0)
+    brain_bridge._stale_status_cache = None
+    calls = 0
+
+    async def failing_request(method, path):
+        nonlocal calls
+        calls += 1
+        raise ConnectionError("bridge offline")
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", failing_request)
+    first = await brain_bridge.bridge_status(db_session)
+    second = await brain_bridge.bridge_status(db_session)
+    assert calls == 1
+    assert first == second
+    brain_bridge._stale_status_cache = None
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_force_bypasses_and_clears_negative_cache(monkeypatch, db_session):
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_STALE_STATUS_CACHE_SECONDS", 30.0)
+    brain_bridge._stale_status_cache = None
+    calls = 0
+
+    async def failing_request(method, path):
+        nonlocal calls
+        calls += 1
+        raise ConnectionError("bridge offline")
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", failing_request)
+    stale = await brain_bridge.bridge_status(db_session)
+    assert all(row["status"] == "unavailable" for row in stale)
+    assert calls == 1
+
+    async def recovered_request(method, path):
+        return {
+            "brains": [
+                {"brain": "codex_subscription", "kind": "subscription", "available": True, "authenticated": True, "detail": "Ready"},
+            ]
+        }
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", recovered_request)
+    # Without force, the negative cache would still be replayed here since
+    # _STALE_STATUS_CACHE_SECONDS is 30s; force must bypass and clear it.
+    forced = await brain_bridge.bridge_status(db_session, force=True)
+    assert forced[0]["status"] == "ready"
+    assert brain_bridge._stale_status_cache is None
+    brain_bridge._stale_status_cache = None
+
+
+@pytest.mark.asyncio
+async def test_bridge_status_blocked_by_trust_fabric_returns_policy_blocked_without_probing(monkeypatch, db_session):
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    brain_bridge._stale_status_cache = None
+    probed = False
+
+    async def probing_request(method, path):
+        nonlocal probed
+        probed = True
+        return {"brains": []}
+
+    class DeniedDecision:
+        allowed = False
+        reason = "Brain status discovery is denied for this tenant."
+
+    async def deny(db, request):
+        return DeniedDecision()
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", probing_request)
+    monkeypatch.setattr(brain_bridge, "enforce", deny)
+    rows = await brain_bridge.bridge_status(db_session, force=True)
+    assert probed is False
+    assert all(row["status"] == "policy_blocked" for row in rows)
+    assert rows[0]["detail"] == "Brain status discovery is denied for this tenant."
+
+
+def test_macos_claude_invocation_sends_prompt_via_stdin_not_argv() -> None:
+    """The prompt must never appear in the Claude CLI argument list: process
+    argument lists are visible to other local users (ps) and to crash/audit
+    logs, unlike stdin. Codex and the Windows bridge already use stdin."""
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2].joinpath(
+        "packaging", "macos", "MarcellusBrainBridge.swift"
+    ).read_text(encoding="utf-8")
+    start = source.index("private func invokeClaude(")
+    end = source.index("private func run(", start)
+    body = source[start:end]
+    assert 'arguments.append(' not in body
+    assert "input: governedPrompt" in body
+    assert "run(executable, arguments: arguments, input: governedPrompt" in body
+
+
+def test_windows_claude_invocation_sends_prompt_via_stdin_not_arguments() -> None:
+    """$governedPrompt must be Invoke-Process's third (stdin) positional
+    argument, never concatenated into the second (Arguments) string."""
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2].joinpath(
+        "packaging", "windows", "BrainBridge.ps1"
+    ).read_text(encoding="utf-8")
+    start = source.index('$Payload.brain -eq "claude_subscription"')
+    end = source.index('throw "Unknown Brain."', start)
+    body = source[start:end]
+    invocation_line = next(line for line in body.splitlines() if "Invoke-Process $runtime" in line)
+    arguments_expr, stdin_expr = invocation_line.split("Invoke-Process $runtime", 1)[1].rsplit(")", 1)
+    assert "governedPrompt" not in arguments_expr
+    assert stdin_expr.strip() == "$governedPrompt"

@@ -13,8 +13,8 @@ from app.core.modelclaw.brain_bridge import (
     invoke_profile_brain,
     invoke_subscription_brain,
 )
-from app.core.modelclaw.schemas import CortexGatewayRequest
-from app.core.modelclaw.service import record_model_call
+from app.core.modelclaw.schemas import CortexGatewayRequest, RuntimeGroup
+from app.core.modelclaw.service import get_profile, record_model_call
 from app.trust_fabric import ActionRequest, enforce
 from app.trust_fabric.agt_bridge import audit_prompt
 
@@ -257,7 +257,12 @@ def _best_failure_reason(votes: list[dict[str, Any]]) -> str:
     return "No governed Brain returned a usable response."
 
 
-def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = False) -> tuple[list[str], dict[str, Any]]:
+# Providers reachable only on the local host loopback. Approving a new local
+# runtime means adding its provider name here, not adding a second router.
+_LOCAL_PROVIDERS = {"ollama", "vllm_local"}
+
+
+def _base_requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = False) -> tuple[list[str], dict[str, Any]]:
     if payload.source == "consensus":
         sources = list(dict.fromkeys(payload.consensus_sources))
         return sources, {
@@ -266,10 +271,7 @@ def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = Fa
             "candidate_sources": sources,
         }
     if payload.source == "auto":
-        if payload.data_classification in {"restricted", "top_secret"}:
-            sources = [_LOCAL_SOURCE]
-            reason = "Restricted data is pinned to the approved local Brain boundary."
-        elif payload.mode == "security":
+        if payload.mode == "security":
             sources = [
                 "profile:nim_fast_reasoning",
                 "profile:gemini_general",
@@ -290,7 +292,7 @@ def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = Fa
         else:
             sources = _AUTO_SOURCES.copy()
             reason = "Chat mode uses the first available policy-approved Brain."
-        if is_sensitive and payload.data_classification not in {"restricted", "top_secret"}:
+        if is_sensitive:
             reason += " Sensitive values are redacted before any external invocation."
         return sources, {"strategy": "adaptive", "reason": reason, "candidate_sources": sources}
     return [payload.source], {
@@ -298,6 +300,110 @@ def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = Fa
         "reason": "The user selected this Brain explicitly.",
         "candidate_sources": [payload.source],
     }
+
+
+def _profile_provider(source: str, tenant_id: str) -> str | None:
+    if not source.startswith("profile:"):
+        return None
+    profile = get_profile(source.removeprefix("profile:"), tenant_id=tenant_id)
+    return profile.get("provider") if profile else None
+
+
+def _is_local_source(source: str, tenant_id: str) -> bool:
+    if source == _LOCAL_SOURCE:
+        return True
+    provider = _profile_provider(source, tenant_id)
+    return provider in _LOCAL_PROVIDERS
+
+
+def _restrict_to_local_group(sources: list[str], tenant_id: str, strategy: str) -> list[str]:
+    """Local group: only Ollama and approved loopback-local profiles; fail
+    closed rather than silently using any subscription/API/desktop/browser
+    Brain."""
+    restricted = [source for source in sources if _is_local_source(source, tenant_id)]
+    if not restricted and strategy != "explicit":
+        restricted = [_LOCAL_SOURCE]
+    return restricted
+
+
+def _local_first_partition(sources: list[str], tenant_id: str) -> list[str]:
+    """Hybrid group: stable-partitions the already mode-ordered candidate
+    list so every approved local profile is attempted before any CLI/API
+    fallback, while preserving relative order within each partition (so the
+    mode-specific fallback preference among the remote candidates is kept).
+    Each candidate still receives its own fresh Trust Fabric decision in the
+    invocation loop, so this only changes attempt order, not policy."""
+    local = [source for source in sources if _is_local_source(source, tenant_id)]
+    remote = [source for source in sources if not _is_local_source(source, tenant_id)]
+    return local + remote
+
+
+def _restrict_to_cloud_group(sources: list[str], tenant_id: str) -> list[str]:
+    """Cloud group: approved subscription CLI/API Brains only. Desktop and
+    browser sessions are never selected as an implicit group fallback, and
+    the local Ollama boundary is excluded since it is not a cloud Brain."""
+    restricted = []
+    for source in sources:
+        if _is_local_source(source, tenant_id):
+            continue
+        if source in _SUBSCRIPTION_BRAINS:
+            if source.endswith("_browser") or source.endswith("_desktop"):
+                continue
+            restricted.append(source)
+            continue
+        if source.startswith("profile:") and _profile_provider(source, tenant_id):
+            restricted.append(source)
+    return restricted
+
+
+def apply_runtime_group(
+    sources: list[str], group: RuntimeGroup, tenant_id: str, *, strategy: str = "adaptive"
+) -> tuple[list[str], str]:
+    """Applies the Local/Hybrid/Cloud runtime-group boundary to an arbitrary
+    candidate list. Shared by the Cortex Gateway and the /brains/consensus
+    route so both enforce the identical group semantics instead of the
+    consensus endpoint silently ignoring runtime_group."""
+    if group == "local":
+        return (
+            _restrict_to_local_group(sources, tenant_id, strategy),
+            "Local runtime group: restricted to the approved local Brain boundary; no subscription, API, desktop, or browser Brain is used.",
+        )
+    if group == "cloud":
+        return (
+            _restrict_to_cloud_group(sources, tenant_id),
+            "Cloud runtime group: restricted to approved subscription CLI/API Brains in configured fallback order; browser sessions are never selected implicitly.",
+        )
+    return (
+        _local_first_partition(sources, tenant_id),
+        "Hybrid runtime group: approved local Brains are attempted first, then CLI/API fallbacks in configured order; each fallback still receives its own fresh Trust Fabric decision.",
+    )
+
+
+def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = False) -> tuple[list[str], dict[str, Any]]:
+    sources, routing = _base_requested_sources(payload, is_sensitive=is_sensitive)
+    group: RuntimeGroup = payload.runtime_group
+    routing = {**routing, "runtime_group": group}
+    strategy = routing["strategy"]
+
+    # Restricted/top-secret data is pinned to the local boundary before any
+    # group containment is applied, and overrides the requested group. This
+    # only applies to system-chosen routing (adaptive/consensus); an
+    # explicit Brain selection is left alone here so the existing per-source
+    # classification checks reject (rather than silently reroute) it.
+    if strategy != "explicit" and payload.data_classification in {"restricted", "top_secret"}:
+        routing["reason"] = "Restricted data is pinned to the approved local Brain boundary, overriding the requested runtime group."
+        routing["candidate_sources"] = [_LOCAL_SOURCE]
+        return [_LOCAL_SOURCE], routing
+
+    sources, group_reason = apply_runtime_group(sources, group, payload.tenant_id, strategy=strategy)
+    # Hybrid reordering doesn't change which single Brain an explicit pick
+    # resolves to, so keep the "user selected this Brain explicitly" reason
+    # in that case; local/cloud group denials still need their own reason
+    # since they may reduce an explicit pick to zero candidates.
+    if group != "hybrid" or strategy != "explicit":
+        routing["reason"] = group_reason
+    routing["candidate_sources"] = sources
+    return sources, routing
 
 
 def _compose_transcript(payload: CortexGatewayRequest) -> str:

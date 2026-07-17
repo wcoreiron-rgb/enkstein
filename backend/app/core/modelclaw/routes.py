@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.marcellus.runtime_security import require_runtime_operator, resolve_tenant
+from app.core.marcellus.runtime_security import actor_id, require_runtime_operator, resolve_tenant
 from app.core.modelclaw.schemas import (
     BrainInvokeRequest,
     BrainInvokeResponse,
@@ -32,7 +32,7 @@ from app.core.modelclaw.brain_bridge import (
     open_browser_companion_folder,
     request_desktop_brain_access,
 )
-from app.core.modelclaw.gateway import execute_cortex_gateway
+from app.core.modelclaw.gateway import apply_runtime_group, execute_cortex_gateway
 from app.core.modelclaw.service import (
     get_profile,
     list_model_calls,
@@ -120,8 +120,20 @@ async def get_model_calls(
 
 
 @router.get("/brains/status", response_model=list[BrainStatusRead], summary="Native subscription Brain status")
-async def get_brain_status(user: dict = Depends(get_current_user)):
-    return await bridge_status()
+async def get_brain_status(
+    force: bool = False,
+    refresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = str(user.get("tenant_id") or user.get("tid") or "global")
+    tenant_id = resolve_tenant(user, tenant_id)
+    return await bridge_status(
+        db,
+        force=force or refresh,
+        tenant_id=tenant_id,
+        actor_id=actor_id(user),
+    )
 
 
 @router.post("/brains/desktop-access", summary="Request desktop Brain accessibility permission")
@@ -203,6 +215,12 @@ async def route_consensus(
     tenant_id = resolve_tenant(user, payload.tenant_id)
     payload = payload.model_copy(update={"tenant_id": tenant_id})
     unique_sources = list(dict.fromkeys(payload.sources))
+    # Same Local/Hybrid/Cloud boundary the Cortex Gateway enforces: Local
+    # excludes every CLI/API/desktop/browser source and fails closed (empty
+    # candidates) rather than silently substituting a source the caller
+    # didn't request; Cloud excludes local/browser/desktop implicitly;
+    # Hybrid stable-partitions any requested local source before the rest.
+    unique_sources, _group_reason = apply_runtime_group(unique_sources, payload.runtime_group, tenant_id, strategy="explicit")
     allowed_sources: list[str] = []
     allowed_decisions: dict[str, object] = {}
     denied_votes: list[dict] = []

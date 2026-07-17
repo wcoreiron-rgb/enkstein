@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.5` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.6` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -78,10 +78,39 @@ routing is mode-aware, records its candidate order and selection reason, and
 falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
 
-Version `0.3.5` also hardens the Model Cortex boundary: profile, audit, direct
+Version `0.3.6` also hardens the Model Cortex boundary: profile, audit, direct
 Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
+
+The Chat, Cowork, and Security workspaces are separate mounted state
+containers. Their URL hash, browser history, and remembered mode stay aligned;
+Chat never loads project state, while Cowork scopes conversations and encrypted
+artifacts to the selected tenant-owned Project. Conversation create, open,
+rename, archive, and project move operations update immediately.
+
+### Brain runtime groups
+
+Chat, Cowork, Security, and Model Cortex consensus expose three governed groups:
+
+- **Local** permits only the approved Ollama/local-profile boundary and fails
+  closed when no capable local model is ready.
+- **Hybrid** tries approved local Brains first, then policy-approved CLI/API
+  sources in ordered fallback sequence.
+- **Cloud** permits approved subscription CLI/API sources and never adds a
+  desktop or browser session implicitly.
+
+`restricted` and `top_secret` adaptive requests are pinned to Local before the
+selected group is evaluated. Trust Fabric evaluates Brain readiness discovery
+and every attempted source. Failed, unavailable, and policy-denied votes remain
+visible but never count toward consensus.
+
+Runtime-group selection is currently carried on every request and remembered
+locally by the console. It is **not yet persisted per conversation or Project**:
+the existing database schema has no compatible field and this release was not
+authorized to add a migration. Tenant-owned role-route configuration for
+Planner, Coder, Researcher, Security Analyst, Utility Parser, Reviewer, and
+Swarm Judge therefore remains planned rather than being represented as shipped.
 
 Chat and Cowork now persist encrypted, tenant-scoped conversation history.
 Cowork adds named Projects, encrypted versioned text artifacts, searchable

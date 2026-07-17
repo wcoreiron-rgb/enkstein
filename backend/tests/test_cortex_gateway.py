@@ -195,7 +195,9 @@ async def test_gateway_forces_restricted_auto_context_to_local_profile(client, m
 
 
 @pytest.mark.asyncio
-async def test_gateway_security_auto_prioritizes_governed_security_profile(client, monkeypatch):
+async def test_gateway_security_cloud_group_prioritizes_governed_security_profile(client, monkeypatch):
+    """With the local Brain excluded (cloud group), security-mode auto still
+    prefers the governed security reasoning profile over subscriptions."""
     captured = {}
 
     async def fake_profile(db, source, prompt, **kwargs):
@@ -208,6 +210,7 @@ async def test_gateway_security_auto_prioritizes_governed_security_profile(clien
         json={
             "mode": "security",
             "source": "auto",
+            "runtime_group": "cloud",
             "messages": [{"role": "user", "content": "Assess this security architecture"}],
         },
     )
@@ -216,6 +219,49 @@ async def test_gateway_security_auto_prioritizes_governed_security_profile(clien
     assert captured["source"] == "profile:nim_fast_reasoning"
     assert body["routing"]["selected_source"] == "profile:nim_fast_reasoning"
     assert body["routing"]["strategy"] == "adaptive"
+
+
+@pytest.mark.asyncio
+async def test_hybrid_runtime_group_attempts_local_before_cloud_fallback_in_mode_order(client, monkeypatch):
+    """Hybrid (the default) must be genuinely local-first: the approved
+    local profile is attempted before any CLI/API candidate, and when it is
+    unavailable the remaining attempts keep the mode's configured fallback
+    order rather than falling back to cloud-first."""
+    attempts: list[str] = []
+
+    async def fake_profile(db, source, prompt, **kwargs):
+        attempts.append(source)
+        if source == "profile:ollama_local_fallback":
+            return {
+                "source": source,
+                "kind": "local",
+                "available": False,
+                "counted": False,
+                "reason": "Local Brain temporarily unavailable",
+            }
+        return _vote(source, "Fallback profile response")
+
+    async def fake_subscription(source, prompt, *, model=None):
+        attempts.append(source)
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_profile_brain", fake_profile)
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "security",
+            "source": "auto",
+            "messages": [{"role": "user", "content": "Assess this security architecture"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["routing"]["runtime_group"] == "hybrid"
+    assert body["routing"]["candidate_sources"][0] == "profile:ollama_local_fallback"
+    assert attempts[0] == "profile:ollama_local_fallback"
+    assert attempts[1] == "profile:nim_fast_reasoning"
+    assert body["source"] == "profile:nim_fast_reasoning"
 
 
 @pytest.mark.asyncio
@@ -336,3 +382,124 @@ async def test_explicit_subscription_rejects_restricted_data_before_invocation(c
     assert body["status"] == "blocked"
     assert body["governance"]["outcome"] == "blocked"
     assert body["response"] is None
+
+
+@pytest.mark.asyncio
+async def test_gateway_omitted_runtime_group_defaults_to_hybrid(client, monkeypatch):
+    async def fake_subscription(source, prompt, *, model=None):
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={"mode": "chat", "messages": [{"role": "user", "content": "Explain this design"}]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["routing"]["runtime_group"] == "hybrid"
+
+
+@pytest.mark.asyncio
+async def test_local_runtime_group_never_reaches_subscription_or_api_brains(client, monkeypatch):
+    captured = {}
+
+    async def fake_profile(db, source, prompt, **kwargs):
+        captured["source"] = source
+        return _vote(source, "Local-only response")
+
+    async def fail_subscription(*args, **kwargs):
+        raise AssertionError("Local runtime group must never invoke a subscription Brain")
+
+    monkeypatch.setattr(gateway, "invoke_profile_brain", fake_profile)
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fail_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "auto",
+            "runtime_group": "local",
+            "messages": [{"role": "user", "content": "Draft a design note"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert captured["source"] == "profile:ollama_local_fallback"
+    assert body["routing"]["runtime_group"] == "local"
+    assert body["routing"]["candidate_sources"] == ["profile:ollama_local_fallback"]
+
+
+@pytest.mark.asyncio
+async def test_local_runtime_group_fails_closed_on_explicit_non_local_selection(client, monkeypatch):
+    async def fail_subscription(*args, **kwargs):
+        raise AssertionError("Local runtime group must never invoke a subscription Brain")
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fail_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "chat",
+            "source": "codex_subscription",
+            "runtime_group": "local",
+            "messages": [{"role": "user", "content": "Explain this design"}]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "unavailable"
+    assert body["routing"]["candidate_sources"] == []
+
+
+@pytest.mark.asyncio
+async def test_cloud_runtime_group_excludes_browser_and_desktop_and_local_fallback(client, monkeypatch):
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "chat",
+            "source": "consensus",
+            "runtime_group": "cloud",
+            "consensus_sources": [
+                "codex_subscription",
+                "chatgpt_browser",
+                "claude_desktop",
+                "profile:ollama_local_fallback",
+            ],
+            "minimum_votes": 1,
+            "messages": [{"role": "user", "content": "Assess options"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["routing"]["runtime_group"] == "cloud"
+    assert body["routing"]["candidate_sources"] == ["codex_subscription"]
+
+
+@pytest.mark.asyncio
+async def test_restricted_data_pins_local_and_overrides_cloud_group(client, monkeypatch):
+    captured = {}
+
+    async def fake_profile(db, source, prompt, **kwargs):
+        captured["source"] = source
+        return _vote(source, "Local-only response")
+
+    async def fail_subscription(*args, **kwargs):
+        raise AssertionError("restricted context must not reach a subscription Brain")
+
+    monkeypatch.setattr(gateway, "invoke_profile_brain", fake_profile)
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fail_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "chat",
+            "source": "auto",
+            "runtime_group": "cloud",
+            "data_classification": "restricted",
+            "messages": [{"role": "user", "content": "Review private context"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert captured["source"] == "profile:ollama_local_fallback"
+    assert body["routing"]["runtime_group"] == "cloud"
+    assert "overriding the requested runtime group" in body["routing"]["reason"]

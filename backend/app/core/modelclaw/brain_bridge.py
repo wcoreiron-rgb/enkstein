@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from hashlib import sha256
 import logging
 import os
 import socket
 import re
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 from urllib.parse import urlparse
 
@@ -17,9 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.claws.arcclaw.llm_proxy import call_llm, fetch_ollama_models
 from app.claws.arcclaw.scanner import scan_text
 from app.core.config import settings
+from app.core.modelclaw.schemas import BrainReadinessStatus
 from app.core.modelclaw.service import get_profile
 from app.models.connector import Connector, ConnectorStatus
 from app.services import secrets_manager
+from app.trust_fabric import ActionRequest, EnforcementDecision, enforce
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,32 @@ _MAX_SOURCE_BRAIN_CALLS = 2
 _BRAIN_TIMEOUT_SECONDS = 60.0
 _TENANT_SEMAPHORES: dict[tuple[int, str], asyncio.Semaphore] = {}
 _SOURCE_SEMAPHORES: dict[tuple[int, str, str], asyncio.Semaphore] = {}
+
+# A bridge-unreachable result is cached briefly so a transient blip doesn't
+# force every readiness poll to pay the full connection timeout, while still
+# recovering to "ready" promptly once the native bridge comes back.
+_STALE_STATUS_CACHE_SECONDS = 4.0
+_stale_status_cache: list[dict[str, Any]] | None = None
+_stale_status_cache_at: float = 0.0
+
+
+def _readiness_status_fields(status: BrainReadinessStatus, detail: str | None) -> dict[str, Any]:
+    return {
+        "status": status,
+        "detail": detail,
+        "last_checked": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _derive_readiness(available: bool, authenticated: bool) -> BrainReadinessStatus:
+    """Map a reachable bridge's per-Brain report to a readiness status.
+
+    Both "not installed" and "installed but not authenticated" are user
+    actionable (install, or run the vendor login) so both surface as
+    needs_setup; "unavailable" is reserved for when the bridge itself cannot
+    be reached, which no per-Brain setup step can fix.
+    """
+    return "ready" if available and authenticated else "needs_setup"
 
 
 def _execution_semaphores(tenant_id: str, source: str) -> tuple[asyncio.Semaphore, asyncio.Semaphore]:
@@ -92,35 +121,117 @@ def bridge_configured() -> bool:
     return bool(settings.BRAIN_BRIDGE_URL and settings.BRAIN_BRIDGE_SECRET)
 
 
-async def bridge_status() -> list[dict[str, Any]]:
+def _unconfigured_status() -> list[dict[str, Any]]:
+    detail = "Native Brain Bridge is not configured for this runtime."
+    return [
+        {
+            "brain": name,
+            "kind": _brain_kind(name),
+            "available": False,
+            "authenticated": False,
+            **_readiness_status_fields("unavailable", detail),
+        }
+        for name in sorted(_SUBSCRIPTION_BRAINS)
+    ]
+
+
+def _unreachable_status() -> list[dict[str, Any]]:
+    detail = "Native Brain Bridge is unreachable."
+    return [
+        {
+            "brain": name,
+            "kind": _brain_kind(name),
+            "available": False,
+            "authenticated": False,
+            **_readiness_status_fields("unavailable", detail),
+        }
+        for name in sorted(_SUBSCRIPTION_BRAINS)
+    ]
+
+
+def _policy_blocked_status(reason: str) -> list[dict[str, Any]]:
+    detail = reason or "Brain status discovery is blocked by Trust Fabric policy."
+    return [
+        {
+            "brain": name,
+            "kind": _brain_kind(name),
+            "available": False,
+            "authenticated": False,
+            **_readiness_status_fields("policy_blocked", detail),
+        }
+        for name in sorted(_SUBSCRIPTION_BRAINS)
+    ]
+
+
+async def _enforce_status_discovery(
+    db: AsyncSession,
+    *,
+    tenant_id: str,
+    actor_id: str,
+) -> EnforcementDecision:
+    """Native host probing (subprocess/network calls into the Brain Bridge)
+    is itself a governed action, not a free read — this runs the same
+    Trust Fabric decision path as a model call, before any host is probed."""
+    return await enforce(
+        db,
+        ActionRequest(
+            module="modelclaw",
+            actor_id=actor_id,
+            actor_name=actor_id,
+            actor_type="human",
+            action="brain_status_discovery",
+            target="native_brain_bridge",
+            target_type="brain_bridge",
+            context={"action_type": "BRAIN_STATUS_DISCOVERY", "tenant_id": tenant_id},
+        ),
+    )
+
+
+async def bridge_status(
+    db: AsyncSession,
+    *,
+    force: bool = False,
+    tenant_id: str = "global",
+    actor_id: str = "brain-status-discovery",
+) -> list[dict[str, Any]]:
+    global _stale_status_cache, _stale_status_cache_at
+
+    decision = await _enforce_status_discovery(db, tenant_id=tenant_id, actor_id=actor_id)
+    if not decision.allowed:
+        return _policy_blocked_status(decision.reason)
+
     if not bridge_configured():
-        detail = "Native Brain Bridge is not configured for this runtime."
-        return [
-            {
-                "brain": name,
-                "kind": _brain_kind(name),
-                "available": False,
-                "authenticated": False,
-                "detail": detail,
-            }
-            for name in sorted(_SUBSCRIPTION_BRAINS)
-        ]
+        return _unconfigured_status()
+
+    now = monotonic()
+    if force:
+        # A forced refresh (explicit user action, tab focus, setup
+        # completion) must bypass and clear any short negative cache rather
+        # than replaying a stale unavailable result.
+        _stale_status_cache = None
+    elif _stale_status_cache is not None and (now - _stale_status_cache_at) < _STALE_STATUS_CACHE_SECONDS:
+        return _stale_status_cache
 
     try:
         body = await _bridge_request("GET", "/v1/status")
-        return list(body.get("brains", []))
+        rows = [
+            {
+                **row,
+                **_readiness_status_fields(
+                    _derive_readiness(bool(row.get("available")), bool(row.get("authenticated"))),
+                    row.get("detail"),
+                ),
+            }
+            for row in body.get("brains", [])
+        ]
+        _stale_status_cache = None
+        return rows
     except Exception as exc:
         logger.warning("Native Brain Bridge status failed: %s", type(exc).__name__)
-        return [
-            {
-                "brain": name,
-                "kind": _brain_kind(name),
-                "available": False,
-                "authenticated": False,
-                "detail": "Native Brain Bridge is unreachable.",
-            }
-            for name in sorted(_SUBSCRIPTION_BRAINS)
-        ]
+        result = _unreachable_status()
+        _stale_status_cache = result
+        _stale_status_cache_at = now
+        return result
 
 
 async def request_desktop_brain_access() -> dict[str, Any]:
@@ -149,7 +260,7 @@ async def create_browser_brain_pairing() -> dict[str, Any]:
     try:
         body = await _bridge_request("POST", "/v1/browser/pair", {})
         setup_url = str(body.get("setup_url") or "")
-        if not setup_url.startswith("http://127.0.0.1:"):
+        if not _is_loopback_pairing_url(setup_url):
             raise ValueError("Invalid browser pairing URL")
         return {
             "available": True,
@@ -444,6 +555,21 @@ async def _bridge_request(method: str, path: str, payload: dict[str, Any] | None
         if not isinstance(body, dict):
             raise ValueError("Invalid Brain Bridge response")
         return body
+
+
+def _is_loopback_pairing_url(url: str) -> bool:
+    """Reject spoofable pairing URLs: only an explicit http://127.0.0.1:<port> origin,
+    with no embedded credentials, is trusted for the browser pairing handoff."""
+    parsed = urlparse(url)
+    if parsed.scheme != "http" or parsed.hostname != "127.0.0.1":
+        return False
+    if parsed.username or parsed.password:
+        return False
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
+    return port is not None
 
 
 def _bridge_endpoint(path: str) -> tuple[str, str]:

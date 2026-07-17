@@ -933,12 +933,10 @@ private final class BrainBridge {
         }
         var arguments = ["-p", "--output-format", "json", "--permission-mode", "dontAsk", "--tools", ""]
         if let model, !model.isEmpty { arguments += ["--model", model] }
-        arguments.append(
-            "You are a reasoning-only Brain inside Enkstein. Do not use tools or change systems. " +
+        let governedPrompt = "You are a reasoning-only Brain inside Enkstein. Do not use tools or change systems. " +
             "Answer concisely and identify uncertainty.\n\nQUESTION:\n" + prompt
-        )
         let started = Date()
-        let result = try run(executable, arguments: arguments, timeout: 180)
+        let result = try run(executable, arguments: arguments, input: governedPrompt, timeout: 180)
         guard result.code == 0 else { throw BridgeError.invocationFailed("Claude invocation failed.") }
         let data = Data(result.output.utf8)
         let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

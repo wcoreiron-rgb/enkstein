@@ -12,6 +12,7 @@ import {
   routeModelClawCall,
 } from '@/lib/api';
 import { capabilityName } from '@/lib/capability-names';
+import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 
 type Provider = {
   provider: string;
@@ -85,6 +86,13 @@ export default function ModelClawPage() {
   ]);
   const [consensusResult, setConsensusResult] = useState<any>(null);
   const [consensusRunning, setConsensusRunning] = useState(false);
+  const [runtimeGroup, setRuntimeGroup] = useState<RuntimeGroup>('hybrid');
+
+  useEffect(() => { setRuntimeGroup(readStoredRuntimeGroup()); }, []);
+  const selectRuntimeGroup = (group: RuntimeGroup) => {
+    setRuntimeGroup(group);
+    persistRuntimeGroup(group);
+  };
 
   const [profileForm, setProfileForm] = useState({
     name: '',
@@ -174,6 +182,7 @@ export default function ModelClawPage() {
         claw: 'executive',
         data_classification: 'internal',
         minimum_votes: Math.min(2, consensusSources.length),
+        runtime_group: runtimeGroup,
       }));
       await load();
     } catch (e: any) {
@@ -263,14 +272,27 @@ export default function ModelClawPage() {
               value={consensusPrompt}
               onChange={(event) => setConsensusPrompt(event.target.value)}
             />
-            <button
-              onClick={onConsensus}
-              disabled={consensusRunning || consensusSources.length === 0}
-              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
-            >
-              <Vote className="h-4 w-4" />
-              {consensusRunning ? 'Consulting Brains...' : 'Run Consensus'}
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                onClick={onConsensus}
+                disabled={consensusRunning || consensusSources.length === 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+              >
+                <Vote className="h-4 w-4" />
+                {consensusRunning ? 'Consulting Brains...' : 'Run Consensus'}
+              </button>
+              <select
+                value={runtimeGroup}
+                onChange={(event) => selectRuntimeGroup(event.target.value as RuntimeGroup)}
+                aria-label="Runtime group"
+                title="Local: only the on-device Brain. Hybrid: local-first with CLI/API fallback. Cloud: approved subscription CLI/API only."
+                className="rounded-lg border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-white"
+              >
+                <option value="local">Local only</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="cloud">Cloud only</option>
+              </select>
+            </div>
           </div>
           <div className="space-y-2">
             {[

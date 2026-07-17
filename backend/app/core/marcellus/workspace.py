@@ -24,6 +24,7 @@ from app.core.marcellus.workspace_schemas import (
     CortexConversationDetail,
     CortexConversationMove,
     CortexConversationRead,
+    CortexConversationRename,
     CortexChangeProposalRead,
     CortexChangeReview,
     CortexMessageRead,
@@ -549,6 +550,38 @@ async def move_conversation(
     )
     conversation.project_id = project.id
     conversation.mode = "cowork"
+    conversation.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(conversation)
+    return CortexConversationRead.model_validate(conversation)
+
+
+async def rename_conversation(
+    db: AsyncSession,
+    tenant_id: str,
+    conversation_id: uuid.UUID,
+    payload: CortexConversationRename,
+    *,
+    user: dict[str, Any],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
+) -> CortexConversationRead:
+    conversation = await _get_conversation(db, tenant_id, conversation_id)
+    _require_owner(user, conversation.owner_id)
+    await _authorize(
+        db,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_conversation_rename",
+        target=str(conversation.id),
+        target_type="cortex_conversation",
+        context={"mode": conversation.mode},
+        ip_address=ip_address,
+    )
+    title_scan = scan_text(payload.title.strip(), redact=True)
+    conversation.title = (title_scan.redacted if title_scan.is_sensitive else payload.title.strip())[:255]
     conversation.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(conversation)
@@ -1113,6 +1146,7 @@ async def execute_turn(
             source=source,
             model=payload.model,
             data_classification=classification,
+            runtime_group=payload.runtime_group or "hybrid",
             capability="executive",
             workspace_id=str(conversation.project_id or conversation.id),
             minimum_votes=payload.minimum_votes,
@@ -1222,9 +1256,22 @@ async def branch_conversation(
     *,
     user: dict[str, Any],
     actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
 ) -> CortexConversationDetail:
     source = await _get_conversation(db, tenant_id, conversation_id)
     _require_owner(user, source.owner_id)
+    await _authorize(
+        db,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_conversation_branch",
+        target=str(source.id),
+        target_type="cortex_conversation",
+        context={"mode": source.mode, "project_id": str(source.project_id) if source.project_id else None},
+        ip_address=ip_address,
+    )
     marker_result = await db.execute(
         select(CortexConversationMessage).where(
             CortexConversationMessage.tenant_id == tenant_id,

@@ -40,6 +40,12 @@ limit and 180-second deadline.
 Check the host session with `codex login status`. Authenticate using the
 official `codex login` flow when needed.
 
+Brain Connections performs a governed live status check on page open, explicit
+refresh, and when the console regains focus. A detected executable is never
+sufficient: Codex must report an authenticated ChatGPT session and Claude Code
+must pass its official `auth status` command. Short bridge failures are cached
+for at most four seconds; a forced refresh bypasses that negative cache.
+
 ## Claude Agent SDK Bridge
 
 The bridge detects the official `claude` host runtime and checks its
@@ -52,6 +58,13 @@ Anthropic's subscription and Agent SDK terms can change. Operators are
 responsible for using an account and distribution model allowed by current
 Anthropic terms. Enkstein does not extract browser cookies, desktop session
 tokens, OAuth tokens, or undocumented credentials.
+
+Claude Code CLI is the preferred Claude subscription path. When it is genuinely
+ready, Brain Connections hides the Claude Browser Session entry. ChatGPT and
+Gemini browser entries remain available for explicit migration/testing, and
+Claude Browser reappears if the CLI becomes unhealthy. CLI prompts are written
+to stdin; Codex runs read-only and Claude runs with an empty tool set. Prompt
+text is never placed in process arguments.
 
 ## Desktop App Session Bridge (macOS preview)
 
@@ -137,9 +150,31 @@ reports agreement and confidence without exposing private chain-of-thought.
 The primary response is selected with explicit provenance; all unavailable and
 denied sources remain visible to the operator.
 
+The request also accepts `runtime_group=local|hybrid|cloud`. Local retains only
+approved local profiles, Hybrid stable-partitions local profiles before CLI/API
+fallbacks, and Cloud excludes local, desktop, and browser sources. Browser and
+desktop sessions remain explicit-only. Restricted and top-secret adaptive
+requests are pinned to the local boundary regardless of group.
+
 Sensitive input patterns are redacted before any subscription invocation.
 `restricted` and `top_secret` requests are rejected for subscription Brains;
 they require an approved local model profile.
+
+### Provider maturity in 0.3.6
+
+Shipped Model Cortex execution paths are Codex CLI subscription, Claude Code
+CLI subscription, Ollama, OpenAI API, Anthropic API, Gemini API, and NVIDIA NIM.
+Azure OpenAI remains available through the legacy sensitivity router but is
+disabled in Model Cortex profiles until a native profile adapter is shipped.
+Gemini CLI OAuth, DeepSeek API, Moonshot/Kimi API, Kimi CLI, and configurable
+custom OpenAI-compatible endpoints are planned and are not reported ready by
+this release. Kimi CLI remains fail closed because no verified unattended,
+tool-disabled execution contract has been implemented.
+
+Runtime groups are carried on each request and remembered by the local console.
+They are not persisted per conversation/Project because the current schema has
+no compatible field and 0.3.6 introduces no migration. Per-tenant specialist
+role-route configuration is likewise planned.
 
 ### Multi-Brain Swarm execution
 

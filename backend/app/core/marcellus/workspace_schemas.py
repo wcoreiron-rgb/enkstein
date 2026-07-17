@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.modelclaw.schemas import RuntimeGroup
+
 
 Classification = Literal["public", "internal", "confidential", "restricted", "top_secret"]
 WorkspaceMode = Literal["chat", "cowork", "security"]
@@ -82,6 +84,11 @@ class CortexConversationMove(BaseModel):
     project_id: UUID
 
 
+class CortexConversationRename(BaseModel):
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=255)
+
+
 class CortexMessageRead(BaseModel):
     id: UUID
     tenant_id: str
@@ -107,6 +114,11 @@ class CortexTurnCreate(BaseModel):
     source: str | None = Field(default=None, max_length=128)
     model: str | None = Field(default=None, max_length=128)
     data_classification: Classification | None = None
+    # Request-level only: there is no compatible existing storage column to
+    # persist this per conversation/project without a migration, so the
+    # caller must resend it on every turn. Omitted => hybrid (unchanged
+    # legacy local-first-with-CLI/API-fallback behavior).
+    runtime_group: RuntimeGroup | None = None
     artifact_ids: list[UUID] = Field(default_factory=list, max_length=20)
     include_project_files: bool = True
     minimum_votes: int = Field(default=2, ge=1, le=8)

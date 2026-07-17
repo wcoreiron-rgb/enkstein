@@ -79,16 +79,21 @@ class ModelRouteResponse(BaseModel):
     token_count: int | None = None
 
 
+BrainReadinessStatus = Literal["ready", "needs_setup", "unavailable", "policy_blocked"]
+
+
 class BrainStatusRead(BaseModel):
     brain: str
     kind: str
     available: bool
     authenticated: bool
+    status: BrainReadinessStatus = "unavailable"
     runtime: str | None = None
     account_type: str | None = None
     models: list[str] = Field(default_factory=list)
     supports_custom_model: bool = False
     detail: str | None = None
+    last_checked: datetime | None = None
 
 
 class BrainInvokeRequest(BaseModel):
@@ -123,6 +128,9 @@ class BrainInvokeResponse(BrainVoteRead):
     pass
 
 
+RuntimeGroup = Literal["local", "hybrid", "cloud"]
+
+
 class ConsensusRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=24000)
     sources: list[str] = Field(
@@ -140,6 +148,9 @@ class ConsensusRequest(BaseModel):
     data_classification: str = Field(default="internal", max_length=64)
     tenant_id: str = Field(default="global", min_length=1, max_length=128)
     minimum_votes: int = Field(default=2, ge=1, le=8)
+    # Legacy requests omit this field entirely; the "hybrid" default keeps
+    # their existing local-first-with-CLI/API-fallback behavior unchanged.
+    runtime_group: RuntimeGroup = "hybrid"
     context: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -165,6 +176,9 @@ class CortexGatewayRequest(BaseModel):
     messages: list[CortexMessage] = Field(..., min_length=1, max_length=24)
     source: str = Field(default="auto", min_length=2, max_length=128)
     model: str | None = Field(default=None, max_length=128)
+    # Legacy requests omit this field entirely; the "hybrid" default keeps
+    # their existing local-first-with-CLI/API-fallback behavior unchanged.
+    runtime_group: RuntimeGroup = "hybrid"
     consensus_sources: list[str] = Field(
         default_factory=lambda: [
             "codex_subscription",

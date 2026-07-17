@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Shield, Cpu, Zap, Users, FileText,
   Activity, ScrollText, Plug, AlertTriangle, Sun, Moon,
@@ -12,7 +12,7 @@ import {
   GitBranch, Settings, RefreshCcw, Network, CalendarClock, Layers, Workflow, Webhook, Sparkles,
   MessageSquare, ShoppingBag, PanelLeftClose, ShieldAlert,
   Users2, Rocket, Container, BriefcaseBusiness, ShieldCheck,
-  Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder,
+  Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder, Pencil,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '@/components/ThemeProvider';
@@ -23,6 +23,7 @@ import {
   getCortexConversations,
   getCortexProjects,
 } from '@/lib/api';
+import { persistWorkspaceMode, pushWorkspaceModeState, resolveWorkspaceMode, syncWorkspaceHash, WORKSPACE_MODE_EVENT, WorkspaceMode } from '@/lib/workspace-mode';
 
 type NavItem = {
   label: string;
@@ -136,8 +137,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-type WorkspaceMode = 'chat' | 'cowork' | 'security';
-
 const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; icon: React.ElementType }> = [
   { id: 'chat', label: 'Chat', icon: MessageSquare },
   { id: 'cowork', label: 'Cowork', icon: BriefcaseBusiness },
@@ -159,9 +158,9 @@ function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMod
         {WORKSPACE_MODES.map(({ id, label, icon: Icon }) => {
           const active = mode === id;
           return (
-            <Link
+            <button
               key={id}
-              href={`/marcellus#${id}`}
+              type="button"
               title={label}
               aria-current={active ? 'page' : undefined}
               onClick={() => onModeChange(id)}
@@ -174,7 +173,7 @@ function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMod
             >
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="w-full truncate text-center text-[10px] font-medium">{label}</span>}
-            </Link>
+            </button>
           );
         })}
       </div>
@@ -191,7 +190,7 @@ type WorkspaceStateDetail = {
   nativeWorkspaceName?: string;
 };
 
-function dispatchWorkspaceAction(detail: { type: 'new-conversation' | 'open-conversation' | 'select-project' | 'request-archive-conversation' | 'request-move-conversation'; id?: string }) {
+function dispatchWorkspaceAction(detail: { type: 'new-conversation' | 'open-conversation' | 'select-project' | 'request-archive-conversation' | 'request-move-conversation' | 'request-rename-conversation'; id?: string }) {
   window.dispatchEvent(new CustomEvent('marcellus:workspace-action', { detail }));
 }
 
@@ -211,7 +210,7 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
     const load = async () => {
       setLoading(true);
       try {
-        const projectRows = await getCortexProjects();
+        const projectRows = mode === 'cowork' ? await getCortexProjects() : [];
         const rememberedProject = window.localStorage.getItem('marcellus-cowork-project');
         const selectedProject = mode === 'cowork'
           ? (projectRows.find((item) => item.id === rememberedProject)?.id || projectRows[0]?.id || '')
@@ -371,6 +370,11 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
               <p className="truncate text-xs font-medium" style={{ color: 'var(--rc-text-1)' }}>{conversation.title}</p>
               <p className="mt-1 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>{conversation.message_count} messages</p>
             </button>
+            <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-rename-conversation', id: conversation.id })}
+              aria-label={`Rename ${conversation.title}`} title="Rename conversation"
+              className="invisible flex h-7 w-7 items-center justify-center group-hover:visible">
+              <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />
+            </button>
             {projects.length > 0 && (
               <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-move-conversation', id: conversation.id })}
                 aria-label={`Move ${conversation.title} to project`} title="Move to project"
@@ -489,6 +493,7 @@ function SidebarGroup({
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, toggle } = useTheme();
   const isLight   = theme === 'light';
   const [collapsed, setCollapsed] = useState(false);
@@ -501,16 +506,29 @@ export default function Sidebar() {
         setWorkspaceMode('security');
         return;
       }
-      const value = window.location.hash.slice(1).toLowerCase();
-      const remembered = window.localStorage.getItem('marcellus-workspace-mode');
-      const next = value === 'chat' || value === 'cowork' || value === 'security'
-        ? value
-        : remembered === 'cowork' || remembered === 'security' ? remembered : 'chat';
+      const next = resolveWorkspaceMode();
       setWorkspaceMode(next);
+      persistWorkspaceMode(next);
+      syncWorkspaceHash(next);
+    };
+    // A same-tab mode switch is a pushState navigation and never fires
+    // "hashchange"; this applies the already-persisted mode directly.
+    const onModeEvent = (event: Event) => {
+      if (!pathname.startsWith('/marcellus')) return;
+      const detail = (event as CustomEvent<WorkspaceMode>).detail;
+      if (detail) setWorkspaceMode(detail);
     };
     syncMode();
     window.addEventListener('hashchange', syncMode);
-    return () => window.removeEventListener('hashchange', syncMode);
+    window.addEventListener('popstate', syncMode);
+    window.addEventListener('storage', syncMode);
+    window.addEventListener(WORKSPACE_MODE_EVENT, onModeEvent);
+    return () => {
+      window.removeEventListener('hashchange', syncMode);
+      window.removeEventListener('popstate', syncMode);
+      window.removeEventListener('storage', syncMode);
+      window.removeEventListener(WORKSPACE_MODE_EVENT, onModeEvent);
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -578,7 +596,11 @@ export default function Sidebar() {
       </div>
 
       <WorkspaceSwitch mode={workspaceMode} collapsed={collapsed} onModeChange={(mode) => {
-        window.localStorage.setItem('marcellus-workspace-mode', mode);
+        if (pathname === '/marcellus') {
+          pushWorkspaceModeState(mode);
+        } else {
+          router.push(`/marcellus#${mode}`);
+        }
         setWorkspaceMode(mode);
       }} />
 
@@ -590,7 +612,7 @@ export default function Sidebar() {
         {workspaceMode === 'security' ? NAV_GROUPS.map(group => (
           <SidebarGroup key={group.label} group={group} pathname={pathname} collapsed={collapsed} />
         )) : (
-          <WorkspaceModeNav mode={workspaceMode} collapsed={collapsed} />
+          <WorkspaceModeNav key={workspaceMode} mode={workspaceMode} collapsed={collapsed} />
         )}
       </nav>
 

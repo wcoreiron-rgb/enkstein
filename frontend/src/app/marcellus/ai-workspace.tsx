@@ -25,6 +25,7 @@ import {
   ExternalLink,
   Loader2,
   Paperclip,
+  Pencil,
   RefreshCcw,
   Save,
   Send,
@@ -38,6 +39,7 @@ import {
 import {
   archiveCortexConversation,
   branchCortexConversation,
+  renameCortexConversation,
   CortexArtifact,
   CortexChangeProposal,
   CortexConversation,
@@ -68,6 +70,7 @@ import {
   syncCortexNativeWorkspace,
   updateCortexArtifact,
 } from '@/lib/api';
+import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 
 declare global {
   interface Window {
@@ -82,6 +85,7 @@ type SourceOption = { value: string; label: string; ready: boolean; detail?: str
 type WorkspaceDialog =
   | { kind: 'archive-conversation'; conversation: CortexConversation }
   | { kind: 'move-conversation'; conversation: CortexConversation }
+  | { kind: 'rename-conversation'; conversation: CortexConversation }
   | { kind: 'trash-file'; artifact: CortexArtifact };
 
 const BASE_SOURCES: SourceOption[] = [
@@ -123,6 +127,13 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   const [model, setModel] = useState('');
   const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(BASE_SOURCES);
   const [classification, setClassification] = useState('internal');
+  const [runtimeGroup, setRuntimeGroup] = useState<RuntimeGroup>('hybrid');
+
+  useEffect(() => { setRuntimeGroup(readStoredRuntimeGroup()); }, []);
+  const selectRuntimeGroup = (group: RuntimeGroup) => {
+    setRuntimeGroup(group);
+    persistRuntimeGroup(group);
+  };
   const [busy, setBusy] = useState(false);
   const [agentMode, setAgentMode] = useState(mode === 'cowork');
   const [streamText, setStreamText] = useState('');
@@ -144,6 +155,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   const [dialog, setDialog] = useState<WorkspaceDialog | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
   const [moveProjectId, setMoveProjectId] = useState('');
+  const [renameTitle, setRenameTitle] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -249,7 +261,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       setLoading(true);
       setError(null);
       try {
-        const rows = await getCortexProjects();
+        const rows = mode === 'cowork' ? await getCortexProjects() : [];
         if (cancelled) return;
         setProjects(rows);
         const rememberedProject = typeof window !== 'undefined' ? window.localStorage.getItem('marcellus-cowork-project') : '';
@@ -423,12 +435,22 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         if (conversation) void openConversation(conversation);
       }
       if (detail.type === 'select-project' && mode === 'cowork') setProjectId(detail.id || '');
-      if ((detail.type === 'request-archive-conversation' || detail.type === 'request-move-conversation') && detail.id) {
+      if (
+        (detail.type === 'request-archive-conversation'
+          || detail.type === 'request-move-conversation'
+          || detail.type === 'request-rename-conversation')
+        && detail.id
+      ) {
         const conversation = conversations.find((item) => item.id === detail.id);
         if (conversation) {
           setMoveProjectId('');
+          setRenameTitle(conversation.title);
           setDialog({
-            kind: detail.type === 'request-archive-conversation' ? 'archive-conversation' : 'move-conversation',
+            kind: detail.type === 'request-archive-conversation'
+              ? 'archive-conversation'
+              : detail.type === 'request-move-conversation'
+                ? 'move-conversation'
+                : 'rename-conversation',
             conversation,
           });
         }
@@ -474,6 +496,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         source,
         model: model || undefined,
         data_classification: classification,
+        runtime_group: runtimeGroup,
         artifact_ids: Array.from(selectedArtifacts),
         include_project_files: mode === 'cowork' && selectedArtifacts.size > 0,
         minimum_votes: 2,
@@ -734,6 +757,12 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         await deleteCortexArtifact(dialog.artifact.id);
         closeEditor();
         await loadArtifacts();
+      } else if (dialog.kind === 'rename-conversation') {
+        const title = renameTitle.trim();
+        if (!title) return;
+        const renamed = await renameCortexConversation(dialog.conversation.id, title);
+        setConversations((current) => current.map((item) => (item.id === renamed.id ? renamed : item)));
+        setActive((current) => (current?.id === renamed.id ? { ...current, title: renamed.title } : current));
       } else {
         if (!moveProjectId) return;
         const moved = await moveCortexConversation(dialog.conversation.id, moveProjectId);
@@ -780,6 +809,13 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
               className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
               {['public', 'internal', 'confidential', 'restricted', 'top_secret'].map((value) => <option key={value} value={value}>{value.replace('_', ' ')}</option>)}
             </select>
+            <select value={runtimeGroup} onChange={(event) => selectRuntimeGroup(event.target.value as RuntimeGroup)} aria-label="Runtime group"
+              title="Local: only the on-device Brain. Hybrid: local-first with CLI/API fallback. Cloud: approved subscription CLI/API only."
+              className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
+              <option value="local">Local only</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="cloud">Cloud only</option>
+            </select>
             <select value={source} onChange={(event) => selectSource(event.target.value)} aria-label="Brain source"
               title={sourceOptions.find((item) => item.value === source)?.detail}
               className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
@@ -810,9 +846,11 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
                 Investigate
               </button>
             )}
-            {active && projects.length > 0 && <button type="button" onClick={() => { setMoveProjectId(''); setDialog({ kind: 'move-conversation', conversation: active }); }}
+            {active && mode === 'cowork' && projects.length > 0 && <button type="button" onClick={() => { setMoveProjectId(''); setDialog({ kind: 'move-conversation', conversation: active }); }}
               title="Move to project" aria-label="Move conversation to project" className="flex h-8 w-8 items-center justify-center rounded-md border"
               style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}><FolderOpen className="h-4 w-4" /></button>}
+            {active && <button type="button" onClick={() => { setRenameTitle(active.title); setDialog({ kind: 'rename-conversation', conversation: active }); }} title="Rename conversation" aria-label="Rename conversation"
+              className="flex h-8 w-8 items-center justify-center rounded-md border" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}><Pencil className="h-4 w-4" /></button>}
             {active && <button type="button" onClick={() => setDialog({ kind: 'archive-conversation', conversation: active })} title="Archive conversation" aria-label="Archive conversation"
               className="flex h-8 w-8 items-center justify-center rounded-md border" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}><Trash2 className="h-4 w-4" /></button>}
           </div>
@@ -1044,14 +1082,16 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="workspace-dialog-title" className="text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-                  {dialog.kind === 'move-conversation' ? 'Move conversation' : dialog.kind === 'trash-file' ? 'Move file to trash' : 'Archive conversation'}
+                  {dialog.kind === 'move-conversation' ? 'Move conversation' : dialog.kind === 'trash-file' ? 'Move file to trash' : dialog.kind === 'rename-conversation' ? 'Rename conversation' : 'Archive conversation'}
                 </h2>
                 <p className="mt-2 text-sm leading-6" style={{ color: 'var(--rc-text-3)' }}>
                   {dialog.kind === 'move-conversation'
                     ? `Choose the Cowork project for “${dialog.conversation.title}”.`
                     : dialog.kind === 'trash-file'
                       ? `${dialog.artifact.path} will leave the active project but remain recoverable.`
-                      : `“${dialog.conversation.title}” will leave your active history but remain recoverable.`}
+                      : dialog.kind === 'rename-conversation'
+                        ? `Choose a new title for “${dialog.conversation.title}”.`
+                        : `“${dialog.conversation.title}” will leave your active history but remain recoverable.`}
                 </p>
               </div>
               <button type="button" onClick={() => setDialog(null)} disabled={dialogBusy} aria-label="Close dialog"><X className="h-4 w-4" /></button>
@@ -1064,11 +1104,18 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
                 {projects.filter((project) => project.id !== dialog.conversation.project_id).map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             )}
+            {dialog.kind === 'rename-conversation' && (
+              <input value={renameTitle} onChange={(event) => setRenameTitle(event.target.value.slice(0, 255))} autoFocus aria-label="Conversation title"
+                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void completeDialog(); } }}
+                className="mt-4 h-10 w-full rounded-md border px-3 text-sm outline-none"
+                style={{ background: 'var(--rc-bg)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }} />
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setDialog(null)} disabled={dialogBusy} className="h-9 rounded-md border px-3 text-sm" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Cancel</button>
-              <button type="button" onClick={() => void completeDialog()} disabled={dialogBusy || (dialog.kind === 'move-conversation' && !moveProjectId)}
+              <button type="button" onClick={() => void completeDialog()}
+                disabled={dialogBusy || (dialog.kind === 'move-conversation' && !moveProjectId) || (dialog.kind === 'rename-conversation' && !renameTitle.trim())}
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
-                {dialogBusy && <Loader2 className="h-4 w-4 animate-spin" />}{dialog.kind === 'move-conversation' ? 'Move' : dialog.kind === 'trash-file' ? 'Move to trash' : 'Archive'}
+                {dialogBusy && <Loader2 className="h-4 w-4 animate-spin" />}{dialog.kind === 'move-conversation' ? 'Move' : dialog.kind === 'trash-file' ? 'Move to trash' : dialog.kind === 'rename-conversation' ? 'Rename' : 'Archive'}
               </button>
             </div>
           </section>

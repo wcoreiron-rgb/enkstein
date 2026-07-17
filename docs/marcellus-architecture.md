@@ -78,13 +78,26 @@ tenant, capability, and optional workspace context. Before inference it:
 5. records model-call outcome metadata without logging raw prompts; and
 6. scans provider output before returning it to the workspace.
 
-Automatic routing is mode-aware. Cowork prioritizes the Codex and Claude host
-bridges before approved Gemini/NVIDIA profiles and local fallback. Security
-prioritizes the governed security reasoning profile. Restricted and top-secret
-work remains pinned to the approved local profile. Every result records the
+Automatic routing is mode- and runtime-group-aware. Local retains only approved
+local profiles, Hybrid stable-partitions local profiles before CLI/API
+fallbacks, and Cloud excludes local, desktop, and browser sources. Restricted
+and top-secret work remains pinned to the approved local profile before group
+selection. Every result records the
 candidate order, attempted sources, selected source, and routing reason.
 Consensus mode invokes multiple independently governed sources and reports vote
 availability, confidence, and agreement.
+
+Brain readiness discovery is itself a Trust Fabric action. The host bridge uses
+official Codex and Claude authentication status commands; an installed binary
+alone is never ready. Explicit refresh and console focus bypass the bounded
+negative cache. Host prompts use stdin with read-only/tool-disabled execution.
+
+Chat, Cowork, and Security are separate mounted workspaces synchronized through
+URL history and remembered mode. Chat does not load Project state. Cowork
+requires a selected tenant-owned Project before project conversations, files,
+artifacts, proposals, or native-folder controls are active. Runtime-group choice
+is sent with each turn, but 0.3.6 does not persist it per conversation/Project
+because no compatible database field exists and no migration was authorized.
 
 Encrypted tenant-scoped Projects hold persistent Chat/Cowork conversations and
 versioned text artifacts. Folder access is explicit. In the desktop shell, the
