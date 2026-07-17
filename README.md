@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.4` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.5` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -77,6 +77,11 @@ NVIDIA NIM or Gemini API profile, a local Brain, or multi-Brain consensus. Auto
 routing is mode-aware, records its candidate order and selection reason, and
 falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
+
+Version `0.3.5` also hardens the Model Cortex boundary: profile, audit, direct
+Brain, consensus, and compatibility model routes are tenant-bound; profile
+mutation requires an operator identity; and Multi-Brain calls use bounded
+per-tenant/per-source concurrency with safe timeouts.
 
 Chat and Cowork now persist encrypted, tenant-scoped conversation history.
 Cowork adds named Projects, encrypted versioned text artifacts, searchable

@@ -28,9 +28,13 @@ PATTERNS = [
     ("Connection String", r"(?i)(Server=|Data Source=|mongodb\+srv://|postgresql://|mysql://)", "credential_access_attempt"),
     ("Secret/Token var", r"(?i)(secret|token|auth_token)\s*[:=]\s*['\"]?([A-Za-z0-9_\-]{10,})", "ai_sensitive_pattern"),
     ("Shell command", r"(?:bash|sh|cmd|powershell)\s+-c\s+['\"]", "shell_access_attempt"),
-    # Base64 payload — require at least one + or / to avoid flagging UUIDs/URLs/
-    # normal long alphanumeric strings. Must also end with = padding or a +//.
-    ("Base64 payload", r"(?:[A-Za-z0-9+/]{20,}[+/][A-Za-z0-9+/]{10,}={0,2})", "ai_sensitive_pattern"),
+    # Token boundaries and an atomic body keep this linear on large source files.
+    # Requiring + or / avoids flagging UUIDs, URLs, and normal identifiers.
+    (
+        "Base64 payload",
+        r"(?<![A-Za-z0-9+/])(?=[A-Za-z0-9+/]*[+/])(?>[A-Za-z0-9+/]{32,})={0,2}(?![A-Za-z0-9+/=])",
+        "ai_sensitive_pattern",
+    ),
 ]
 
 REDACT_REPLACEMENT = "[REDACTED]"

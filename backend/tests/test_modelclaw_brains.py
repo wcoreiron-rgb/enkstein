@@ -1,6 +1,10 @@
+import asyncio
+
 import pytest
 
+from app.core.deps import get_current_user
 from app.core.modelclaw import brain_bridge, gateway, routes
+from main import app
 
 
 BASE = "/api/v1/modelclaw"
@@ -420,3 +424,95 @@ async def test_profile_brain_rejects_model_outside_profile_allowlist(monkeypatch
     assert vote["counted"] is False
     assert "not allowed" in vote["reason"].lower()
     assert called is False
+
+
+@pytest.mark.asyncio
+async def test_multibrain_calls_are_bounded_per_tenant(monkeypatch):
+    active = 0
+    peak = 0
+
+    async def fake_invoke(source, prompt, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.02)
+        active -= 1
+        return {
+            "source": source,
+            "kind": "subscription",
+            "available": True,
+            "counted": True,
+            "response": source,
+        }
+
+    monkeypatch.setattr(brain_bridge, "_MAX_TENANT_BRAIN_CALLS", 2)
+    brain_bridge._TENANT_SEMAPHORES.clear()
+    brain_bridge._SOURCE_SEMAPHORES.clear()
+    votes = await brain_bridge.collect_votes(
+        object(),
+        ["codex_subscription", "claude_subscription", "chatgpt_desktop", "claude_desktop"],
+        "Review concurrently",
+        tenant_id="bounded-tenant",
+        claw="executive",
+        data_classification="internal",
+        subscription_invoker=fake_invoke,
+    )
+
+    assert len(votes) == 4
+    assert peak == 2
+
+
+@pytest.mark.asyncio
+async def test_multibrain_timeout_returns_safe_unavailable_vote(monkeypatch):
+    async def slow_invoke(source, prompt, **kwargs):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(brain_bridge, "_BRAIN_TIMEOUT_SECONDS", 0.01)
+    brain_bridge._TENANT_SEMAPHORES.clear()
+    brain_bridge._SOURCE_SEMAPHORES.clear()
+    votes = await brain_bridge.collect_votes(
+        object(),
+        ["codex_subscription"],
+        "Timeout safely",
+        tenant_id="timeout-tenant",
+        claw="executive",
+        data_classification="internal",
+        subscription_invoker=slow_invoke,
+    )
+
+    assert votes[0]["counted"] is False
+    assert "timed out" in votes[0]["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_modelclaw_rejects_cross_tenant_reads_and_execution(client):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "sub": "tenant-a-user",
+        "role": "analyst",
+        "tenant_id": "tenant-a",
+    }
+
+    profiles = await client.get(f"{BASE}/profiles?tenant_id=tenant-b")
+    calls = await client.get(f"{BASE}/calls?tenant_id=tenant-b")
+    invocation = await client.post(
+        f"{BASE}/brains/invoke",
+        json={
+            "brain": "codex_subscription",
+            "prompt": "Cross tenant request",
+            "tenant_id": "tenant-b",
+        },
+    )
+    profile_update = await client.post(
+        f"{BASE}/profiles",
+        json={
+            "name": "tenant-a-profile",
+            "provider": "ollama",
+            "model": "llama3.2",
+            "tenant_id": "tenant-a",
+        },
+    )
+
+    assert profiles.status_code == 403
+    assert calls.status_code == 403
+    assert invocation.status_code == 403
+    assert profile_update.status_code == 403

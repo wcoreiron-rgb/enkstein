@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.marcellus.runtime_security import resolve_tenant
+from app.core.marcellus.runtime_security import require_runtime_operator, resolve_tenant
 from app.core.modelclaw.schemas import (
     BrainInvokeRequest,
     BrainInvokeResponse,
@@ -86,47 +86,67 @@ async def _enforce_brain_call(
 
 
 @router.get("/providers", response_model=list[ModelProviderRead], summary="List model providers")
-async def get_model_providers():
+async def get_model_providers(user: dict = Depends(get_current_user)):
     return list_providers()
 
 
 @router.get("/profiles", response_model=list[ModelProfileRead], summary="List model profiles")
-async def get_model_profiles(tenant_id: str = "global"):
+async def get_model_profiles(
+    tenant_id: str = "global",
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, tenant_id)
     return list_profiles(tenant_id=tenant_id)
 
 
 @router.post("/profiles", response_model=ModelProfileRead, summary="Create/update model profile")
-async def put_model_profile(payload: ModelProfileCreate):
-    return upsert_profile(payload)
+async def put_model_profile(
+    payload: ModelProfileCreate,
+    user: dict = Depends(get_current_user),
+):
+    require_runtime_operator(user)
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return upsert_profile(payload.model_copy(update={"tenant_id": tenant_id}))
 
 
 @router.get("/calls", response_model=list[ModelCallRead], summary="Recent Model Cortex call audit")
-async def get_model_calls(limit: int = 50, tenant_id: str = "global"):
+async def get_model_calls(
+    limit: int = 50,
+    tenant_id: str = "global",
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, tenant_id)
     return list_model_calls(limit, tenant_id=tenant_id)
 
 
 @router.get("/brains/status", response_model=list[BrainStatusRead], summary="Native subscription Brain status")
-async def get_brain_status():
+async def get_brain_status(user: dict = Depends(get_current_user)):
     return await bridge_status()
 
 
 @router.post("/brains/desktop-access", summary="Request desktop Brain accessibility permission")
-async def request_desktop_access():
+async def request_desktop_access(user: dict = Depends(get_current_user)):
     return await request_desktop_brain_access()
 
 
 @router.post("/brains/browser-pair", summary="Start browser companion pairing")
-async def start_browser_pairing():
+async def start_browser_pairing(user: dict = Depends(get_current_user)):
     return await create_browser_brain_pairing()
 
 
 @router.post("/brains/browser-companion", summary="Open browser companion installation folder")
-async def open_browser_companion():
+async def open_browser_companion(user: dict = Depends(get_current_user)):
     return await open_browser_companion_folder()
 
 
 @router.post("/brains/invoke", response_model=BrainInvokeResponse, summary="Invoke a subscription Brain")
-async def invoke_brain(payload: BrainInvokeRequest, db: AsyncSession = Depends(get_db)):
+async def invoke_brain(
+    payload: BrainInvokeRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    payload = payload.model_copy(update={"tenant_id": tenant_id})
     if payload.data_classification in {"restricted", "top_secret"}:
         raise HTTPException(
             status_code=403,
@@ -175,7 +195,13 @@ async def invoke_brain(payload: BrainInvokeRequest, db: AsyncSession = Depends(g
 
 
 @router.post("/consensus", response_model=ConsensusResponse, summary="Run governed multi-Brain consensus")
-async def route_consensus(payload: ConsensusRequest, db: AsyncSession = Depends(get_db)):
+async def route_consensus(
+    payload: ConsensusRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    payload = payload.model_copy(update={"tenant_id": tenant_id})
     unique_sources = list(dict.fromkeys(payload.sources))
     allowed_sources: list[str] = []
     allowed_decisions: dict[str, object] = {}
@@ -281,7 +307,13 @@ async def route_cortex_gateway(
 
 
 @router.post("/route", response_model=ModelRouteResponse, summary="Route a model call through Trust Fabric")
-async def route_model_call(payload: ModelRouteRequest, db: AsyncSession = Depends(get_db)):
+async def route_model_call(
+    payload: ModelRouteRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    payload = payload.model_copy(update={"tenant_id": tenant_id})
     profile = get_profile(payload.model_profile, tenant_id=payload.tenant_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Model profile not found")

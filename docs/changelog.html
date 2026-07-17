@@ -334,6 +334,35 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.5 — Governed Multi-Brain Hardening -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Governed Multi-Brain Hardening</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.3.5</span>
+          <span class="tag tag-feat">Bounded consensus</span>
+          <span class="tag tag-sec">Tenant isolation</span>
+          <span class="release-date">July 17, 2026 &nbsp;·&nbsp; Enkstein v0.3.5</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The existing Enkstein Model Cortex now applies tenant authorization consistently across profile, audit, Brain, consensus, and compatibility routes, while bounding parallel Brain execution.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Tenant-bound Cortex:</strong> profile reads, model-call history, direct Brain invocation, consensus, and compatibility routing reject cross-tenant access.</li>
+          <li><strong>Operator-owned configuration:</strong> model profile mutation requires a runtime operator or administrator identity.</li>
+          <li><strong>Bounded Multi-Brain execution:</strong> per-tenant and per-source concurrency limits prevent one workload from saturating every Brain.</li>
+          <li><strong>Safe timeout behavior:</strong> slow Brains return an explicit unavailable vote without exposing provider details or blocking the remaining consensus.</li>
+          <li><strong>Architecture preserved:</strong> Chat, Cowork, Security, local Ollama, subscription bridges, browser sessions, and deterministic consensus retain their existing contracts.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.4 — Capability Presentation Migration -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

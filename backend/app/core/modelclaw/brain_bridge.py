@@ -39,6 +39,20 @@ _LOCAL_MODEL_PREFERENCES = (
     "llama3.2",
     "phi3",
 )
+_MAX_TENANT_BRAIN_CALLS = 4
+_MAX_SOURCE_BRAIN_CALLS = 2
+_BRAIN_TIMEOUT_SECONDS = 60.0
+_TENANT_SEMAPHORES: dict[tuple[int, str], asyncio.Semaphore] = {}
+_SOURCE_SEMAPHORES: dict[tuple[int, str, str], asyncio.Semaphore] = {}
+
+
+def _execution_semaphores(tenant_id: str, source: str) -> tuple[asyncio.Semaphore, asyncio.Semaphore]:
+    loop_id = id(asyncio.get_running_loop())
+    tenant_key = (loop_id, tenant_id)
+    source_key = (loop_id, tenant_id, source)
+    tenant = _TENANT_SEMAPHORES.setdefault(tenant_key, asyncio.Semaphore(_MAX_TENANT_BRAIN_CALLS))
+    provider = _SOURCE_SEMAPHORES.setdefault(source_key, asyncio.Semaphore(_MAX_SOURCE_BRAIN_CALLS))
+    return tenant, provider
 
 
 def _brain_kind(name: str) -> str:
@@ -359,7 +373,7 @@ async def collect_votes(
                 model=model,
             )
 
-    async def invoke(source: str) -> dict[str, Any]:
+    async def invoke_unbounded(source: str) -> dict[str, Any]:
         if source in _SUBSCRIPTION_BRAINS:
             invoker = subscription_invoker or invoke_subscription_brain
             kwargs: dict[str, Any] = {"model": model}
@@ -373,6 +387,14 @@ async def collect_votes(
                 return profile_call["unavailable_vote"]
             return await _invoke_prepared_profile(profile_call, prompt)
         return _unavailable_vote(source, "unknown", "Unsupported Brain source.")
+
+    async def invoke(source: str) -> dict[str, Any]:
+        tenant_semaphore, source_semaphore = _execution_semaphores(tenant_id, source)
+        async with tenant_semaphore, source_semaphore:
+            try:
+                return await asyncio.wait_for(invoke_unbounded(source), timeout=_BRAIN_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                return _unavailable_vote(source, _brain_kind(source), "The Brain timed out before returning a response.")
 
     return list(await asyncio.gather(*(invoke(source) for source in sources)))
 
