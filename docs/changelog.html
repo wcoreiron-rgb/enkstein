@@ -358,6 +358,7 @@
           <li><strong>Browser reliability:</strong> response identity replaces count-based correlation; delayed ChatGPT/Gemini SPA URLs are sanitized, persisted, and restored; durable journal errors use bounded codes only.</li>
           <li><strong>Task attribution:</strong> Project ids are server-resolved and owner/tenant checked; requester, orchestrator, specialist, classification, and dependency evidence ids reach policy and audit records.</li>
           <li><strong>Final provenance:</strong> context manifests are reconciled with actual ordered adapter attempts, policy outcomes, selected provider/model, fallback reason, effective classification, redaction, digests, and citations.</li>
+          <li><strong>Denied-call audit:</strong> explicit and consensus subscription Brains rejected by the restricted-data boundary now write a durable blocked model-call record without invoking the provider.</li>
           <li><strong>Known limits:</strong> task-graph timeouts and dependency skipping are implemented, but provider-side cancellation is not claimed; provenance records runtime adapter attempts, not vendor-side prompt retention.</li>
         </ul>
       </div>

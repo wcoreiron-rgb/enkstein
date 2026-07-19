@@ -364,10 +364,13 @@ async def test_gateway_context_cannot_override_trusted_policy_fields(client, mon
 
 @pytest.mark.asyncio
 async def test_explicit_subscription_rejects_restricted_data_before_invocation(client, monkeypatch):
+    audit_records = []
+
     async def fail_subscription(*args, **kwargs):
         raise AssertionError("restricted context must not reach a subscription Brain")
 
     monkeypatch.setattr(gateway, "invoke_subscription_brain", fail_subscription)
+    monkeypatch.setattr(gateway, "record_model_call", audit_records.append)
     response = await client.post(
         BASE,
         json={
@@ -382,6 +385,11 @@ async def test_explicit_subscription_rejects_restricted_data_before_invocation(c
     assert body["status"] == "blocked"
     assert body["governance"]["outcome"] == "blocked"
     assert body["response"] is None
+    assert len(audit_records) == 1
+    assert audit_records[0]["model_profile"] == "codex_subscription"
+    assert audit_records[0]["data_classification"] == "restricted"
+    assert audit_records[0]["outcome"] == "blocked"
+    assert audit_records[0]["policy_name"] == "Enkstein data boundary"
 
 
 @pytest.mark.asyncio

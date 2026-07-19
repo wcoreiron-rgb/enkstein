@@ -97,8 +97,16 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
         denied_votes: dict[str, dict[str, Any]] = {}
         for source in sources:
             if source in _SUBSCRIPTION_BRAINS and is_external_denied(payload.data_classification):
-                denied_votes[source] = _blocked_vote(
+                vote = _blocked_vote(
                     source, "External subscription Brains cannot receive this data classification."
+                )
+                denied_votes[source] = vote
+                _record_gateway_call(
+                    payload,
+                    source,
+                    vote,
+                    _data_boundary_governance(payload, scan, prompt_audit, risk_score),
+                    0,
                 )
                 continue
             decision = await _enforce_source(db, source, payload, classification, prompt_audit, scan.is_sensitive)
@@ -143,7 +151,15 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     else:
         for source in sources:
             if source in _SUBSCRIPTION_BRAINS and is_external_denied(payload.data_classification):
-                votes.append(_blocked_vote(source, "External subscription Brains cannot receive this data classification."))
+                vote = _blocked_vote(source, "External subscription Brains cannot receive this data classification.")
+                votes.append(vote)
+                _record_gateway_call(
+                    payload,
+                    source,
+                    vote,
+                    _data_boundary_governance(payload, scan, prompt_audit, risk_score),
+                    0,
+                )
                 continue
 
             decision = await _enforce_source(db, source, payload, classification, prompt_audit, scan.is_sensitive)
@@ -478,6 +494,23 @@ def _decision_governance(payload: CortexGatewayRequest, decision: Any, scan: Any
         policy_name=decision.policy_name,
         reason=decision.reason,
         risk_score=max(decision.risk_score, prompt_audit.risk_score, _scan_risk(scan.findings)),
+        payload=payload,
+        scan_sensitive=scan.is_sensitive,
+        prompt_audit=prompt_audit,
+    )
+
+
+def _data_boundary_governance(
+    payload: CortexGatewayRequest,
+    scan: Any,
+    prompt_audit: Any,
+    risk_score: float,
+) -> dict[str, Any]:
+    return _governance(
+        outcome="blocked",
+        policy_name="Enkstein data boundary",
+        reason="External subscription Brains cannot receive this data classification.",
+        risk_score=risk_score,
         payload=payload,
         scan_sensitive=scan.is_sensitive,
         prompt_audit=prompt_audit,
