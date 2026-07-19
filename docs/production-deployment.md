@@ -18,6 +18,8 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 | Release gates | Run production deployments through Release Governance preflight before CI/CD, GitOps, cloud CLI/SDK, script, full-stack, or AI-stack execution handoff. |
 | Terraform/IaC gates | Run Terraform Governance build/review/plan analysis before Terraform applies. Treat BLOCK decisions as release blockers unless explicitly overridden through governed approval. |
 | Frontend runtime | Build the Next.js frontend into the container image and serve it with `npm run start`; do not mount `.next` or run `next dev` in the production Compose path. |
+| Native model bridge | Keep the Brain Bridge loopback/private, protect its random shared secret with owner-only permissions, and never proxy it through a public ingress. Codex App Server session metadata must remain on the operator host. |
+| Model data boundary | Treat subscription CLIs as external processors. The tested Chat/Cowork, task-graph, Gateway, and native Codex paths compute effective classification and keep restricted/top-secret data local. Validate legacy connector paths separately; never log prompts, approval detail, CLI output, browser cookies, or native-folder grants. |
 
 ## Minimum Environment Checklist
 
@@ -30,6 +32,8 @@ Use this guide when moving RegentClaw from local Docker development into a produ
 - CORS allows only approved frontend origins.
 - Reverse proxy enforces TLS, request size limits, and sane timeouts.
 - Backend logs redact request bodies and secrets.
+- Native Codex permission requests remain deny-only; command/file approvals are
+  scoped to one request and receive Trust Fabric evaluation.
 - Release Governance preflight templates are reviewed for the target deployment path.
 - Production release handoff is approved by someone other than the requester.
 - Rollback plans/artifacts exist before non-dry-run deployments.

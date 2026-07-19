@@ -70,6 +70,15 @@ def test_native_brain_bridge_restricts_subscription_model_overrides() -> None:
     assert '"supports_custom_model": false' in bridge
 
 
+def test_codex_app_server_process_launches_without_prompt() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert "private final class CodexAppServerProcess" in bridge
+    assert '["app-server", "--listen", "stdio://"]' in bridge
+    assert "func start()" in bridge
+    assert "func stop()" in bridge
+
+
 def test_macos_bridge_exposes_opt_in_desktop_app_sessions() -> None:
     bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
     build = _read("scripts/build_macos_pkg.sh")
@@ -116,9 +125,8 @@ def test_browser_companion_is_scoped_paired_and_packaged() -> None:
     assert '"/v1/browser/poll"' in bridge
     assert '"/v1/browser/complete"' in bridge
     assert "pairingCodes" in bridge
-    assert "pendingTaskIDs" in bridge
-    assert 'task["session_id"]' in bridge
-    assert "queuedTasks.removeAll" in bridge
+    assert "sessionID: sessionID" in bridge
+    assert "queue.removeAll" in bridge
     assert "browser-bridge.token" in bridge
     assert 'cp -R "$ROOT_DIR/browser-extension"' in mac_build
     assert 'cp -R "$ROOT_DIR/browser-extension"' in bundle_build
@@ -310,6 +318,300 @@ def test_container_runtime_can_reach_only_configured_host_brain_bridge() -> None
         assert "BRAIN_BRIDGE_TIMEOUT_SECONDS" in compose
     assert "BRAIN_BRIDGE_URL" in config
     assert "BRAIN_BRIDGE_SECRET" in config
+
+
+def test_native_browser_broker_implements_leased_protocol_with_metadata_only_journal() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert '"protocol": 2' in bridge
+    assert '"lease", "submit_ack", "progress", "complete", "cancel"' in bridge
+    assert '"/v1/browser/capabilities"' in bridge
+    assert '"/v1/browser/ack"' in bridge
+    assert '"/v1/browser/progress"' in bridge
+    assert '"/v1/browser/cancel"' in bridge
+
+    assert "case queued, leased, submitted, streaming, completed, failed, cancelled, expired" in bridge
+
+    assert "browser-broker-journal.json" in bridge
+    assert "loadJournalAtStartup" in bridge
+    assert "payload is unavailable after a Brain Bridge restart" in bridge
+    assert "pruneTerminalHistory" in bridge
+    assert "maxTerminalHistory" in bridge
+    assert "SHA256.hash" in bridge
+    assert "promptDigest" in bridge
+    assert "posixPermissions: 0o600" in bridge
+    assert "journalURL" in bridge
+
+    journal_dict_start = bridge.index("var journalDictionary")
+    journal_dict_end = bridge.index("\n    }", journal_dict_start)
+    journal_dict_body = bridge[journal_dict_start:journal_dict_end]
+    for forbidden in ('"prompt"', "response", "credential", "token", "cookie"):
+        assert forbidden not in journal_dict_body.lower(), (
+            f"journalDictionary must never persist {forbidden!r}"
+        )
+    assert '"prompt_digest"' in journal_dict_body
+
+
+def test_browser_extension_acks_submission_and_reports_streaming_progress() -> None:
+    background = _read("browser-extension/background.js")
+
+    assert "'/v1/browser/ack'" in background
+    assert "'/v1/browser/progress'" in background
+    assert "task_id: entry.task_id" in background
+    assert "state: 'streaming'" in background
+
+
+def test_native_bridge_defines_reusable_codex_app_server_process() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # Reusable class located by the caller-supplied executable finder.
+    assert "final class CodexAppServerProcess" in bridge
+    assert "executableLocator: @escaping (String) -> String?" in bridge
+    assert 'executableLocator("codex")' in bridge
+
+    # app-server over stdio; prompt is never argv.
+    assert '["app-server", "--listen", "stdio://"]' in bridge
+
+    # stdin/stdout/stderr pipes.
+    assert "process.standardInput = stdinPipe" in bridge
+    assert "process.standardOutput = stdoutPipe" in bridge
+    assert "process.standardError = stderrPipe" in bridge
+
+    # Lifecycle.
+    assert "func start() throws" in bridge
+    assert "func stop()" in bridge
+    assert "var isRunning: Bool" in bridge
+
+    # JSON-RPC handshake.
+    assert 'request(method: "initialize"' in bridge
+    assert 'notify(method: "initialized", params: nil)' in bridge
+
+    # Synchronized newline-delimited writes with monotonic numeric IDs.
+    assert "writeLock.lock()" in bridge
+    assert "line.append(0x0A)" in bridge
+    assert "nextID += 1" in bridge
+
+    # Background stdout line reader separating the three channels.
+    assert "func readLoop()" in bridge
+    assert 'channel: "notification"' in bridge or 'let channel = hasID ? "serverRequest" : "notification"' in bridge
+
+    # Response waiters: 30s timeout and bounded 500-event ring.
+    assert "addingTimeInterval(30)" in bridge
+    assert "maxEvents = 500" in bridge
+
+    # Termination fails pending waiters.
+    assert ".failure(CodexProcessError.terminated)" in bridge
+
+    # Public surface.
+    assert "func request(method: String, params: [String: Any]?) throws -> Any?" in bridge
+    assert "func notify(method: String, params: [String: Any]?) throws" in bridge
+    assert "func drainEvents(after cursor: Int) -> [SanitizedEvent]" in bridge
+
+    # Sanitization retains routing/telemetry, discards free-text bodies.
+    for retained in ('"threadId"', '"turnId"', '"usage"', "safeItem"):
+        assert retained in bridge
+    sanitize_start = bridge.index("private func sanitize(")
+    sanitize_end = bridge.index("private func numericFields")
+    sanitize_body = bridge[sanitize_start:sanitize_end].lower()
+    for forbidden in ("prompt", "delta", "command", "arguments", "output", "patch"):
+        assert forbidden not in sanitize_body, f"sanitize must not retain {forbidden!r}"
+
+
+def test_codex_app_server_session_manager_governs_scoped_threads() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # One shared transport reused by a dedicated session manager.
+    assert "final class CodexAppServerSessionManager" in bridge
+    assert "private let process: CodexAppServerProcess" in bridge
+    assert "CodexAppServerProcess(executableLocator: findExecutable)" in bridge
+
+    # Exact JSON-RPC methods used against the generated schema.
+    for method in ('"thread/start"', '"thread/resume"', '"turn/start"', '"turn/interrupt"'):
+        assert method in bridge
+    assert 'method: "thread/start"' in bridge
+    assert 'method: "thread/resume"' in bridge
+    assert 'method: "turn/start"' in bridge
+    assert 'method: "turn/interrupt"' in bridge
+
+    # Scope digest regex and internal scope keying (digest + workspace token).
+    assert 'scopeDigestPattern = "^[a-f0-9]{64}$"' in bridge
+    assert "func scopeKey(scopeDigest: String, token: String)" in bridge
+    assert '"\\(scopeDigest):\\(token)"' in bridge
+
+    # cwd resolved only from the workspace token, never from the request.
+    assert "workspaceRootResolver: (String) throws -> URL" in bridge
+    assert "root = try workspaceRootResolver(token)" in bridge
+    assert '"cwd": root.path' in bridge
+    assert "workspaceRoot(token: token)" in bridge
+
+    # Restrictive approval policy and sandbox validation.
+    assert 'approvalPolicy = "untrusted"' in bridge
+    assert 'sandbox == "read-only" || sandbox == "workspace-write"' in bridge
+
+    # Prompt bounds; prompt only travels over stdin, never persisted.
+    assert "maxPromptLength = 128_000" in bridge
+    assert 'params: [String: Any] = [\n            "threadId": session.threadId,\n            "input": [["type": "text", "text": prompt]],' in bridge
+
+
+def test_codex_app_server_persists_only_opaque_metadata_owner_only() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert "codex-app-server-sessions.json" in bridge
+    assert "posixPermissions: 0o600" in bridge
+    assert "replaceItemAt(storeURL, withItemAt: temp)" in bridge
+
+    persist_start = bridge.index("private func persistSessions()")
+    persist_end = bridge.index("\n    }", bridge.index("guard let data = try? JSONSerialization.data", persist_start))
+    persist_body = bridge[persist_start:persist_end].lower()
+    assert '"scope_key"' in persist_body
+    assert '"thread_id"' in persist_body
+    for forbidden in ("prompt", "response", "credential", "cookie", "input", "event"):
+        assert forbidden not in persist_body, f"persistSessions must never write {forbidden!r}"
+
+
+def test_codex_app_server_approvals_are_allowlisted_and_declinable() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    for method in (
+        '"item/commandExecution/requestApproval"',
+        '"item/fileChange/requestApproval"',
+        '"item/permissions/requestApproval"',
+    ):
+        assert method in bridge
+
+    # Unsupported server requests are auto-declined without exposing a body.
+    assert 'respondError(id: requestId, code: -32601, message: "Unsupported request")' in bridge
+    assert "func respond(id: Int, result: [String: Any])" in bridge
+
+    # Approvals accept only accept/decline and never grant session scope.
+    assert 'decision == "accept" || decision == "decline"' in bridge
+    assert '"decision": accept ? "accept" : "decline"' in bridge
+    assert "acceptForSession" not in bridge
+
+    # Only allowlisted approval requests retain a routable numeric id.
+    assert "let approvalRequestId: Int?" in bridge
+    assert "approvalRequestId: requestId, approvalMethod: method" in bridge
+
+
+def test_codex_app_server_interrupt_and_resume_semantics() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # Persisted sessions load interrupted and resume on next start.
+    assert "interrupted: true" in bridge
+    assert 'method: "thread/resume", params: params' in bridge
+    assert '"status": running ? "running" : "interrupted"' in bridge
+    assert "session.interrupted = true" in bridge
+
+
+def test_codex_app_server_http_routes_are_token_guarded() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    for route in (
+        '"/v1/codex/start"',
+        '"/v1/codex/turn"',
+        '"/v1/codex/status"',
+        '"/v1/codex/approve"',
+        '"/v1/codex/cancel"',
+    ):
+        assert route in bridge
+
+    # Routes live after the bridge-token guard.
+    guard_index = bridge.index('x-marcellus-bridge-token')
+    assert bridge.index('"/v1/codex/start"') > guard_index
+    assert "codexSessions.start(scopeDigest: scope, token: token, sandbox: sandbox)" in bridge
+    assert "CodexAppServerSessionManager.SessionError.invalid(detail)" in bridge
+
+
+def test_codex_app_server_drains_stderr_and_cleans_up_failed_handshake() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # stderr is drained on a dedicated thread and never retained/logged.
+    assert "stderrThread" in bridge
+    assert "func stderrDrainLoop()" in bridge
+    assert "codex-app-server-stderr" in bridge
+
+    # A failed handshake cleanly terminates the transport.
+    handshake_call = bridge.index("try handshake()")
+    tail = bridge[handshake_call:handshake_call + 260]
+    assert "catch {" in tail
+    assert "stop()" in tail
+
+
+def test_codex_app_server_status_is_strictly_thread_scoped() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # Threadless notifications are dropped, never fanned out to every session.
+    assert 'guard let threadId = event.fields["threadId"] as? String else { return false }' in bridge
+    assert "return threadId == refreshed.threadId" in bridge
+
+    # Pending approvals require an exact thread match.
+    assert "$0.threadId == refreshed.threadId" in bridge
+
+    # approve() matches the current session thread, not approval_id alone.
+    assert "$0.approvalId == approvalId && $0.threadId == session.threadId" in bridge
+
+
+def test_codex_app_server_auto_declines_threadless_approvals() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    # PendingApproval carries a concrete (non-optional) threadId.
+    assert "let threadId: String\n" in bridge
+
+    ingest_start = bridge.index("private func ingestEventsLocked()")
+    ingest_body = bridge[ingest_start:bridge.index("private func updateTurnStateLocked")]
+    # Unknown/threadless allowlisted approvals are auto-declined, not enqueued.
+    assert "sessions.values.contains(where: { $0.threadId == threadId })" in ingest_body
+    assert "approvalResponse(method: method, accept: false)" in ingest_body
+
+
+def test_codex_app_server_surfaces_only_bounded_allowlisted_transient_content() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert "maxTextField = 32 * 1024" in bridge
+    assert "func transientContent(method: String?, params: [String: Any])" in bridge
+
+    transient_start = bridge.index("func transientContent(")
+    transient_body = bridge[transient_start:bridge.index("private func approvalDetail")]
+    for method in (
+        '"item/agentMessage/delta"',
+        '"item/plan/delta"',
+        '"turn/diff/updated"',
+    ):
+        assert method in transient_body
+    # Every non-allowlisted method returns nil (no other body retained).
+    assert "default:\n            return nil" in transient_body
+
+
+def test_codex_app_server_approval_detail_is_bounded_and_non_sensitive() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    detail_start = bridge.index("private func approvalDetail(method: String")
+    detail_body = bridge[detail_start:bridge.index("\n    }\n}", detail_start)]
+
+    # Command approvals may include command/reason/cwd-basename/itemId/turnId.
+    assert '"command"' in detail_body
+    assert '"reason"' in detail_body
+    assert "lastPathComponent" in detail_body
+    assert '"itemId"' in detail_body
+    assert '"turnId"' in detail_body
+
+    # File/permission approvals never leak a grant root or an absolute path.
+    assert "grantRoot" not in detail_body
+    assert '"path"' not in detail_body
+
+
+def test_codex_app_server_status_distinguishes_transport_session_and_turn() -> None:
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert '"transport": process.isRunning ? "running" : "interrupted"' in bridge
+    assert '"session": running ? "active" : "interrupted"' in bridge
+    assert '"turn": refreshed.turnState' in bridge
+
+    # Turn state advances from exact notifications only.
+    assert "func updateTurnStateLocked(threadId: String, method: String, fields: [String: Any])" in bridge
+    assert 'let finalStatus = (fields["turnStatus"] as? String ?? "").lowercased()' in bridge
+    assert 'case "turn/failed", "turn/interrupted", "turn/aborted"' not in bridge
+    assert 'case "turn/completed":' in bridge
 
 
 def test_release_bundle_carries_brain_bridge_operator_docs() -> None:

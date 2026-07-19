@@ -87,16 +87,45 @@ candidate order, attempted sources, selected source, and routing reason.
 Consensus mode invokes multiple independently governed sources and reports vote
 availability, confidence, and agreement.
 
+`POST /api/v1/modelclaw/task-graph` extends the same Gateway with an explicit
+acyclic execution contract rather than a model group chat. A graph can assign
+router, context-worker, planner, coder, researcher, security-reviewer,
+test-reviewer, reviewer, and final-judge work. Trust Fabric governs graph
+admission, each peer-evidence handoff, and each Gateway provider attempt.
+Dependencies execute in layers with at most three concurrent specialists; each
+parallel node uses an isolated database session. A supplied Project id is
+resolved server-side and checked against the authenticated tenant and owner.
+Requester subject/role, orchestrator, specialist, validated Project,
+classification, and dependency evidence ids accompany Trust Fabric and model
+call audit records. Ordered fallbacks, timeouts, blocked dependencies, evidence
+identifiers, route and fallback reasons, provider/model, policy, and latency are
+normalized in the result. Caller cancellation stops local waiting; the graph
+does not claim provider-side cancellation propagation.
+Persisted operator role presets and automatic risk-driven graph construction
+remain planned.
+
 Brain readiness discovery is itself a Trust Fabric action. The host bridge uses
 official Codex and Claude authentication status commands; an installed binary
 alone is never ready. Explicit refresh and console focus bypass the bounded
 negative cache. Host prompts use stdin with read-only/tool-disabled execution.
 
+Native Cowork can additionally use the official Codex App Server as a
+long-lived root-bound agent transport. Scope is derived server-side from the
+tenant, owner, Project, conversation, and opaque native-folder grant. The
+browser never receives raw paths, thread ids, or grant tokens. Only bounded
+allowlisted stream events are retained transiently. Agent deltas, plans, diffs,
+approval commands/reasons, and other free text are DLP-scanned,
+secret-redacted, checked as untrusted output, and stripped of absolute native
+paths before reaching the client; only aggregate scan metadata is returned.
+Command/file approvals are one-shot and general permission requests are
+deny-only. Effective restricted/top-secret Projects deny start, turn, status,
+approval, and cancel bridge invocations.
+
 Chat, Cowork, and Security are separate mounted workspaces synchronized through
 URL history and remembered mode. Chat does not load Project state. Cowork
 requires a selected tenant-owned Project before project conversations, files,
 artifacts, proposals, or native-folder controls are active. Runtime-group choice
-is sent with each turn, but 0.3.6 does not persist it per conversation/Project
+is sent with each turn, but 0.3.7 does not persist it per conversation/Project
 because no compatible database field exists and no migration was authorized.
 
 Encrypted tenant-scoped Projects hold persistent Chat/Cowork conversations and

@@ -104,7 +104,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
   await page.route('**/api/v1/arcclaw/agent/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route('**/api/v1/marcellus/architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ARCHITECTURE_STUB) }));
   await page.route('**/api/v1/marcellus/missions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.3.6' }) }));
+  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.3.7' }) }));
 
   await page.route('**/api/v1/marcellus/workspace/**', async (route) => {
     const request = route.request();
@@ -222,6 +222,28 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
       conversation.mode = 'cowork';
       conversation.updated_at = now;
       return json(200, conversation);
+    }
+
+    if (segments[0] === 'conversations' && segments[2] === 'codex') {
+      if (segments[3] === 'start') {
+        return json(200, { status: 'running', sandbox: 'workspace-write', resumed: false });
+      }
+      if (segments[3] === 'turn') {
+        return json(200, { status: 'running', cursor: 0, turn_active: true, policy: { input_redacted: false } });
+      }
+      if (segments[3] === 'status') {
+        return json(200, {
+          status: 'running', transport: 'running', session: 'active', turn: 'completed', cursor: 1,
+          events: [{
+            cursor: 1,
+            channel: 'notification',
+            fields: { transient: { kind: 'item/agentMessage/delta', text: 'Native Codex result' } },
+          }],
+          pending_approvals: [],
+        });
+      }
+      if (segments[3] === 'cancel') return json(200, { status: 'interrupted' });
+      if (segments[3] === 'approvals') return json(200, { status: 'ok', decision: request.postDataJSON().decision, governed: true });
     }
 
     return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ detail: 'unmocked route' }) });

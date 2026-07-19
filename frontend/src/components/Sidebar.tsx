@@ -23,7 +23,8 @@ import {
   getCortexConversations,
   getCortexProjects,
 } from '@/lib/api';
-import { persistWorkspaceMode, pushWorkspaceModeState, resolveWorkspaceMode, syncWorkspaceHash, WORKSPACE_MODE_EVENT, WorkspaceMode } from '@/lib/workspace-mode';
+import { persistWorkspaceMode, WorkspaceMode } from '@/lib/workspace-mode';
+import { workspaceModeBasePath, workspaceModeFromPath } from '@/lib/workspace-routes';
 
 type NavItem = {
   label: string;
@@ -347,7 +348,7 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
       )}
 
       <div className="p-2">
-        <Link href={`/marcellus/brains#${mode}`}
+        <Link href="/marcellus/brains"
           className="mb-2 flex h-9 items-center gap-2 rounded-md border px-2 text-xs transition-colors hover:bg-[var(--rc-bg-elevated)]"
           style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
           <BrainCircuit className="h-3.5 w-3.5 text-red-500" />
@@ -501,34 +502,13 @@ export default function Sidebar() {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
 
   useEffect(() => {
-    const syncMode = () => {
-      if (!pathname.startsWith('/marcellus')) {
-        setWorkspaceMode('security');
-        return;
-      }
-      const next = resolveWorkspaceMode();
-      setWorkspaceMode(next);
-      persistWorkspaceMode(next);
-      syncWorkspaceHash(next);
-    };
-    // A same-tab mode switch is a pushState navigation and never fires
-    // "hashchange"; this applies the already-persisted mode directly.
-    const onModeEvent = (event: Event) => {
-      if (!pathname.startsWith('/marcellus')) return;
-      const detail = (event as CustomEvent<WorkspaceMode>).detail;
-      if (detail) setWorkspaceMode(detail);
-    };
-    syncMode();
-    window.addEventListener('hashchange', syncMode);
-    window.addEventListener('popstate', syncMode);
-    window.addEventListener('storage', syncMode);
-    window.addEventListener(WORKSPACE_MODE_EVENT, onModeEvent);
-    return () => {
-      window.removeEventListener('hashchange', syncMode);
-      window.removeEventListener('popstate', syncMode);
-      window.removeEventListener('storage', syncMode);
-      window.removeEventListener(WORKSPACE_MODE_EVENT, onModeEvent);
-    };
+    const next = workspaceModeFromPath(pathname);
+    if (!next) {
+      setWorkspaceMode('security');
+      return;
+    }
+    setWorkspaceMode(next);
+    persistWorkspaceMode(next);
   }, [pathname]);
 
   useEffect(() => {
@@ -596,11 +576,8 @@ export default function Sidebar() {
       </div>
 
       <WorkspaceSwitch mode={workspaceMode} collapsed={collapsed} onModeChange={(mode) => {
-        if (pathname === '/marcellus') {
-          pushWorkspaceModeState(mode);
-        } else {
-          router.push(`/marcellus#${mode}`);
-        }
+        persistWorkspaceMode(mode);
+        router.push(workspaceModeBasePath(mode));
         setWorkspaceMode(mode);
       }} />
 

@@ -26,6 +26,8 @@ import {
   requestDesktopBrainAccess,
   startBrowserBrainPairing,
 } from '@/lib/api';
+import { readLastActiveConversation, workspaceRoutePath } from '@/lib/workspace-routes';
+import type { WorkspaceMode } from '@/lib/workspace-mode';
 
 type BrainReadinessStatus = 'ready' | 'needs_setup' | 'unavailable' | 'policy_blocked';
 
@@ -91,13 +93,15 @@ export default function BrainConnectionsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [pairingBrowser, setPairingBrowser] = useState(false);
-  const [workspaceMode, setWorkspaceMode] = useState<'chat' | 'cowork'>('chat');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('chat');
+  const [returnPath, setReturnPath] = useState('/marcellus/chat');
   const loadInFlight = useRef(false);
 
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
     const remembered = window.localStorage.getItem('marcellus-workspace-mode');
-    setWorkspaceMode(hash === 'cowork' || remembered === 'cowork' ? 'cowork' : 'chat');
+    const mode: WorkspaceMode = remembered === 'cowork' || remembered === 'security' ? remembered : 'chat';
+    setWorkspaceMode(mode);
+    setReturnPath(workspaceRoutePath(mode, readLastActiveConversation(mode)));
   }, []);
 
   /** Retries the Brain status fetch a bounded number of times so a Brain
@@ -264,8 +268,8 @@ export default function BrainConnectionsPage() {
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-5" style={{ borderColor: 'var(--rc-border)' }}>
           <div>
-            <Link href={`/marcellus#${workspaceMode}`} className="mb-3 inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--rc-text-3)' }}>
-              <ArrowLeft className="h-3.5 w-3.5" />Back to {workspaceMode === 'cowork' ? 'Cowork' : 'Chat'}
+            <Link href={returnPath} className="mb-3 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-medium" style={{ color: 'var(--rc-text-2)', borderColor: 'var(--rc-border)' }}>
+              <ArrowLeft className="h-3.5 w-3.5" />Return to {workspaceMode === 'cowork' ? 'Cowork' : workspaceMode === 'security' ? 'Security' : 'Chat'}
             </Link>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-600 text-white"><BrainCircuit className="h-5 w-5" /></div>

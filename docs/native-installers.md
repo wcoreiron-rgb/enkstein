@@ -10,6 +10,17 @@ needed, generate installation secrets, and launch the Enkstein containers.
 They do not bundle a hidden VM, database, or credential store outside the
 documented Compose runtime.
 
+### Native Codex App Server boundary
+
+The macOS Brain Bridge launches the authenticated official
+`codex app-server` over stdio for Cowork Agent tools. It stores only
+owner-readable opaque scope/thread metadata under Enkstein Application Support;
+it does not store prompts, CLI output, commands, patches, raw project paths, or
+vendor credentials. The helper binds execution to a desktop-approved project
+grant, so the container and web client cannot select an arbitrary cwd. Stopping
+the helper interrupts active turns; starting it again attempts to resume the
+persisted thread through the official protocol.
+
 ## macOS `.pkg`
 
 The package installs `/Applications/Enkstein.app`. Completing installation
@@ -82,7 +93,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.3.6 verifies Codex with `codex login status` and Claude Code with
+Version 0.3.7 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -93,11 +104,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.3.6
-open dist/Enkstein-0.3.6-macos.pkg
+./scripts/build_macos_pkg.sh 0.3.7
+open dist/Enkstein-0.3.7-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.3.6-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.3.7-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 

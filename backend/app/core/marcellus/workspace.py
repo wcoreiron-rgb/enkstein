@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import re
@@ -8,11 +9,19 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claws.arcclaw.scanner import scan_text
+from app.core.marcellus.context_compiler import (
+    ContextManifest,
+    UnknownClassification,
+    compile_context,
+    finalize_context_provenance,
+    highest_classification,
+)
 from app.core.marcellus.crypto import decrypt_json, encrypt_json
 from app.core.marcellus.workspace_schemas import (
     CortexArtifactBatchCreate,
@@ -21,6 +30,7 @@ from app.core.marcellus.workspace_schemas import (
     CortexArtifactUpdate,
     CortexBranchCreate,
     CortexConversationCreate,
+    CortexConversationDeleteRead,
     CortexConversationDetail,
     CortexConversationMove,
     CortexConversationRead,
@@ -28,6 +38,8 @@ from app.core.marcellus.workspace_schemas import (
     CortexChangeProposalRead,
     CortexChangeReview,
     CortexMessageRead,
+    CortexNativeProjectPickCreate,
+    CortexNativeProjectRead,
     CortexNativeWorkspaceBind,
     CortexNativeWorkspaceRead,
     CortexProjectCreate,
@@ -43,9 +55,11 @@ from app.core.modelclaw.gateway import execute_cortex_gateway
 from app.core.marcellus.native_workspace import (
     get_binding,
     list_native_files,
+    mirror_rename,
     mirror_trash,
     mirror_write,
     native_files_payload,
+    pick_native_root,
     set_binding,
 )
 from app.core.modelclaw.schemas import CortexGatewayRequest, CortexMessage
@@ -189,6 +203,7 @@ def _proposal_read(proposal: CortexArtifact, current: CortexArtifact | None = No
         proposed_content=envelope.get("content") if envelope["operation"] != "delete" else None,
         current_content=current_content,
         base_digest=envelope.get("base_digest"),
+        previous_path=envelope.get("previous_path"),
         created_by=proposal.created_by,
         created_at=proposal.created_at,
     )
@@ -316,27 +331,127 @@ async def connect_native_workspace(
         context={"folder_name": payload.name, "grant_type": "opaque_native_token"},
         ip_address=ip_address,
     )
-    set_binding(tenant_id, project.id, token=payload.token, name=payload.name)
+    set_binding(tenant_id, project.id, token=payload.token, name=payload.name, path_alias=payload.path_alias)
+    synced = await _sync_bound_root(
+        db, tenant_id, project, user=user, actor_id=actor_id, actor_name=actor_name, ip_address=ip_address
+    )
+    return CortexNativeWorkspaceRead(
+        connected=True,
+        name=payload.name,
+        path_alias=payload.path_alias,
+        file_count=synced["file_count"],
+        synced_files=synced["synced_files"],
+    )
+
+
+async def _sync_bound_root(
+    db: AsyncSession,
+    tenant_id: str,
+    project: CortexProject,
+    *,
+    user: dict[str, Any],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
+) -> dict[str, int]:
+    """Ingest the currently approved root's validated files into the project.
+
+    The host bridge is the authoritative boundary; ingest never mirrors back to
+    native so a read-only sync cannot mutate the approved folder.
+    """
     files = await list_native_files(tenant_id, project.id)
-    if files:
-        created = await ingest_artifacts(
-            db,
-            native_files_payload(
-                tenant_id=tenant_id,
-                project_id=project.id,
-                files=files,
-                classification=project.classification,
-            ),
-            user=user,
-            actor_id=actor_id,
-            actor_name=actor_name,
-            ip_address=ip_address,
-            mirror_to_native=False,
-        )
-        synced = len(created)
-    else:
-        synced = 0
-    return CortexNativeWorkspaceRead(connected=True, name=payload.name, file_count=len(files), synced_files=synced)
+    created = await ingest_artifacts(
+        db,
+        native_files_payload(
+            tenant_id=tenant_id,
+            project_id=project.id,
+            files=files,
+            classification=project.classification,
+        ),
+        user=user,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        ip_address=ip_address,
+        mirror_to_native=False,
+    ) if files else []
+    return {"file_count": len(files), "synced_files": len(created)}
+
+
+async def pick_and_create_native_project(
+    db: AsyncSession,
+    payload: CortexNativeProjectPickCreate,
+    *,
+    user: dict[str, Any],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
+) -> CortexNativeProjectRead:
+    """Open the host folder picker and, only on picker success, create a Cowork
+    project bound to the approved root, then sync its files.
+
+    ``pick_native_root`` raises before anything is created if the picker is
+    cancelled (or returns no opaque token), so cancellation persists nothing.
+    Only the opaque token/name/path_alias ever cross the bridge boundary.
+    """
+    grant = await pick_native_root()
+    await _authorize(
+        db,
+        tenant_id=payload.tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_project_create",
+        target=grant["name"],
+        target_type="cortex_project",
+        context={"classification": payload.classification, "grant_type": "opaque_native_token"},
+        ip_address=ip_address,
+    )
+    await _authorize(
+        db,
+        tenant_id=payload.tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_native_folder_bind",
+        target=grant["name"],
+        target_type="cortex_project",
+        context={"folder_name": grant["name"], "grant_type": "opaque_native_token"},
+        ip_address=ip_address,
+    )
+    name_scan = scan_text(grant["name"], redact=True)
+    project = CortexProject(
+        tenant_id=payload.tenant_id,
+        owner_id=actor_id,
+        name=(name_scan.redacted if name_scan.is_sensitive else grant["name"])[:255],
+        description="",
+        classification=payload.classification,
+        default_source=payload.default_source,
+    )
+    db.add(project)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A project with this name already exists")
+    await db.refresh(project)
+    set_binding(
+        payload.tenant_id,
+        project.id,
+        token=grant["token"],
+        name=grant["name"],
+        path_alias=grant.get("path_alias"),
+    )
+    synced = await _sync_bound_root(
+        db, payload.tenant_id, project, user=user, actor_id=actor_id, actor_name=actor_name, ip_address=ip_address
+    )
+    return CortexNativeProjectRead(
+        project=CortexProjectRead.model_validate(project),
+        workspace=CortexNativeWorkspaceRead(
+            connected=True,
+            name=grant["name"],
+            path_alias=grant.get("path_alias"),
+            file_count=synced["file_count"],
+            synced_files=synced["synced_files"],
+        ),
+    )
 
 
 async def native_workspace_status(
@@ -345,7 +460,11 @@ async def native_workspace_status(
     project = await _get_project(db, tenant_id, project_id)
     _require_owner(user, project.owner_id)
     binding = get_binding(tenant_id, project.id)
-    return CortexNativeWorkspaceRead(connected=bool(binding), name=binding.get("name") if binding else None)
+    return CortexNativeWorkspaceRead(
+        connected=bool(binding),
+        name=binding.get("name") if binding else None,
+        path_alias=binding.get("path_alias") if binding else None,
+    )
 
 
 async def sync_native_workspace(
@@ -374,22 +493,16 @@ async def sync_native_workspace(
     binding = get_binding(tenant_id, project.id)
     if not binding:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No local folder is connected")
-    files = await list_native_files(tenant_id, project.id)
-    created = await ingest_artifacts(
-        db,
-        native_files_payload(
-            tenant_id=tenant_id,
-            project_id=project.id,
-            files=files,
-            classification=project.classification,
-        ),
-        user=user,
-        actor_id=actor_id,
-        actor_name=actor_name,
-        ip_address=ip_address,
-        mirror_to_native=False,
-    ) if files else []
-    return CortexNativeWorkspaceRead(connected=True, name=binding.get("name"), file_count=len(files), synced_files=len(created))
+    synced = await _sync_bound_root(
+        db, tenant_id, project, user=user, actor_id=actor_id, actor_name=actor_name, ip_address=ip_address
+    )
+    return CortexNativeWorkspaceRead(
+        connected=True,
+        name=binding.get("name"),
+        path_alias=binding.get("path_alias"),
+        file_count=synced["file_count"],
+        synced_files=synced["synced_files"],
+    )
 
 
 async def list_projects(
@@ -586,6 +699,99 @@ async def rename_conversation(
     await db.commit()
     await db.refresh(conversation)
     return CortexConversationRead.model_validate(conversation)
+
+
+async def reopen_conversation(
+    db: AsyncSession,
+    tenant_id: str,
+    conversation_id: uuid.UUID,
+    *,
+    user: dict[str, Any],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
+) -> CortexConversationRead:
+    conversation = await _get_conversation(db, tenant_id, conversation_id)
+    _require_owner(user, conversation.owner_id)
+    if conversation.status == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    await _authorize(
+        db,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_conversation_reopen",
+        target=str(conversation.id),
+        target_type="cortex_conversation",
+        context={"mode": conversation.mode, "project_id": str(conversation.project_id) if conversation.project_id else None},
+        ip_address=ip_address,
+    )
+    conversation.status = "active"
+    conversation.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(conversation)
+    return CortexConversationRead.model_validate(conversation)
+
+
+async def permanently_delete_conversation(
+    db: AsyncSession,
+    tenant_id: str,
+    conversation_id: uuid.UUID,
+    *,
+    user: dict[str, Any],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None = None,
+) -> CortexConversationDeleteRead:
+    conversation = await _get_conversation(db, tenant_id, conversation_id)
+    _require_owner(user, conversation.owner_id)
+    await _authorize(
+        db,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_conversation_delete",
+        target=str(conversation.id),
+        target_type="cortex_conversation",
+        context={"mode": conversation.mode, "project_id": str(conversation.project_id) if conversation.project_id else None},
+        ip_address=ip_address,
+    )
+    # Conversation-specific proposed change artifacts are only meaningful
+    # alongside the conversation that proposed them; other artifacts remain
+    # part of the project and are only disassociated, not removed.
+    await db.execute(
+        sa_delete(CortexArtifact).where(
+            CortexArtifact.tenant_id == tenant_id,
+            CortexArtifact.conversation_id == conversation.id,
+            CortexArtifact.status == "proposed",
+        )
+    )
+    await db.execute(
+        update(CortexArtifact)
+        .where(
+            CortexArtifact.tenant_id == tenant_id,
+            CortexArtifact.conversation_id == conversation.id,
+        )
+        .values(conversation_id=None)
+    )
+    await db.execute(
+        update(CortexConversation)
+        .where(
+            CortexConversation.tenant_id == tenant_id,
+            CortexConversation.branch_of_id == conversation.id,
+        )
+        .values(branch_of_id=None, branch_message_id=None)
+    )
+    await db.execute(
+        sa_delete(CortexConversationMessage).where(
+            CortexConversationMessage.tenant_id == tenant_id,
+            CortexConversationMessage.conversation_id == conversation.id,
+        )
+    )
+    conversation_id_value = conversation.id
+    await db.delete(conversation)
+    await db.commit()
+    return CortexConversationDeleteRead(id=conversation_id_value)
 
 
 async def ingest_artifacts(
@@ -804,9 +1010,11 @@ async def update_artifact(
         },
         ip_address=ip_address,
     )
-    await mirror_write(tenant_id, project.id, path=payload.path, content=payload.content)
     if path_changed:
-        await mirror_trash(tenant_id, project.id, path=current.path)
+        # A move is mirrored as an in-place native rename (never a create-new +
+        # trash-old), then the moved file's contents are refreshed.
+        await mirror_rename(tenant_id, project.id, path=current.path, new_path=payload.path)
+    await mirror_write(tenant_id, project.id, path=payload.path, content=payload.content)
     version_result = await db.execute(
         select(func.max(CortexArtifact.version)).where(
             CortexArtifact.tenant_id == tenant_id,
@@ -899,12 +1107,15 @@ async def review_change_proposal(
     project = await _get_project(db, tenant_id, proposal.project_id)
     _require_owner(user, project.owner_id)
     envelope = decrypt_json(proposal.content_ciphertext, proposal.content_digest)
+    # For an approved move the base file lives at previous_path; the change is
+    # applied to the new path via an in-place native rename below.
+    base_path = envelope.get("previous_path") or envelope["path"]
     current_result = await db.execute(
         select(CortexArtifact)
         .where(
             CortexArtifact.tenant_id == tenant_id,
             CortexArtifact.project_id == proposal.project_id,
-            CortexArtifact.path == envelope["path"],
+            CortexArtifact.path == base_path,
             CortexArtifact.status == "active",
         )
         .order_by(desc(CortexArtifact.version))
@@ -951,9 +1162,15 @@ async def review_change_proposal(
         current.status = "deleted"
         proposal.status = "applied_delete"
     else:
+        previous_path = envelope.get("previous_path")
+        moved = bool(previous_path and previous_path != envelope["path"])
+        if moved:
+            # Approved move: mirror the host file in place with a rename before
+            # its refreshed contents are written to the new path.
+            await mirror_rename(tenant_id, project.id, path=previous_path, new_path=envelope["path"])
         await mirror_write(tenant_id, project.id, path=envelope["path"], content=content)
         if current is not None:
-            current.status = "superseded"
+            current.status = "moved" if moved else "superseded"
         ciphertext, digest = encrypt_json({"content": content})
         proposal.content_ciphertext = ciphertext
         proposal.content_digest = digest
@@ -1053,6 +1270,11 @@ async def execute_turn(
 ) -> CortexTurnRead:
     conversation = await _get_conversation(db, tenant_id, conversation_id)
     _require_owner(user, conversation.owner_id)
+    if conversation.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Reopen this conversation before sending new turns",
+        )
     message_result = await db.execute(
         select(CortexConversationMessage)
         .where(
@@ -1066,7 +1288,14 @@ async def execute_turn(
     previous = [_message_read(item) for item in previous_rows]
     parent_id = previous_rows[-1].id if previous_rows else None
 
-    artifact_context: list[str] = []
+    classification = payload.data_classification or conversation.classification
+    source = payload.source or conversation.selected_source
+    runtime_group = payload.runtime_group or "hybrid"
+
+    project: CortexProject | None = None
+    if conversation.project_id:
+        project = await _get_project(db, tenant_id, conversation.project_id)
+
     requested_artifact_ids = list(dict.fromkeys(payload.artifact_ids))
     explicit_artifacts = bool(requested_artifact_ids)
     if (
@@ -1076,16 +1305,17 @@ async def execute_turn(
         and conversation.project_id
     ):
         default_artifacts = await db.execute(
-            select(CortexArtifact.id)
-            .where(
+            select(CortexArtifact.id).where(
                 CortexArtifact.tenant_id == tenant_id,
                 CortexArtifact.project_id == conversation.project_id,
                 CortexArtifact.status == "active",
             )
-            .order_by(CortexArtifact.path)
-            .limit(20)
         )
         requested_artifact_ids = list(default_artifacts.scalars().all())
+
+    context_manifest: ContextManifest | None = None
+    latest_content = payload.content
+    selected_artifacts: list[CortexArtifact] = []
     if requested_artifact_ids:
         artifact_result = await db.execute(
             select(CortexArtifact).where(
@@ -1095,35 +1325,48 @@ async def execute_turn(
             )
         )
         artifacts_by_id = {item.id: item for item in artifact_result.scalars().all()}
-        artifacts = [artifacts_by_id[item_id] for item_id in requested_artifact_ids if item_id in artifacts_by_id]
-        if len(artifacts) != len(requested_artifact_ids):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more workspace artifacts were not found")
+        if explicit_artifacts:
+            artifacts = [artifacts_by_id[item_id] for item_id in requested_artifact_ids if item_id in artifacts_by_id]
+            if len(artifacts) != len(requested_artifact_ids):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more workspace artifacts were not found")
+        else:
+            artifacts = list(artifacts_by_id.values())
         if conversation.project_id is None or any(item.project_id != conversation.project_id for item in artifacts):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-project artifact context denied")
-        remaining = 100000 if explicit_artifacts else 60000
-        for artifact in artifacts:
-            content = decrypt_json(artifact.content_ciphertext, artifact.content_digest)["content"]
-            block = f"--- {artifact.path} (v{artifact.version}) ---\n{content}"
-            if len(block) > remaining:
-                if explicit_artifacts:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail=(
-                            "Selected files exceed the 100,000-character complete-context limit. "
-                            "Select fewer files so Enkstein can send each one without truncation."
-                        ),
-                    )
-                block = block[: max(0, remaining - 80)] + "\n[Project context truncated; attach this file explicitly for complete analysis.]"
-            artifact_context.append(block)
-            remaining -= len(block)
-            if remaining <= 0:
-                break
+        selected_artifacts = artifacts
 
-    latest_content = payload.content
-    if artifact_context:
-        latest_content = f"{payload.content}\n\nWORKSPACE FILES (untrusted context):\n" + "\n\n".join(artifact_context)
-    classification = payload.data_classification or conversation.classification
-    source = payload.source or conversation.selected_source
+    # Effective classification is the lattice-maximum across the request,
+    # conversation, project, and every explicitly selected or automatically
+    # included artifact. It is computed after selection so it reflects exactly
+    # what this turn carries, and it is the single value that drives every
+    # downstream decision: compiler egress, Gateway routing/payload, Trust
+    # Fabric metadata, persisted message classification, and governance/audit.
+    # An unrecognized classification fails closed (rejected before any Brain).
+    classification_inputs = [classification, conversation.classification]
+    if project is not None:
+        classification_inputs.append(project.classification)
+    classification_inputs.extend(item.classification for item in selected_artifacts)
+    try:
+        effective_classification = highest_classification(*classification_inputs)
+    except UnknownClassification:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This workspace carries an unrecognized data classification and was blocked.",
+        )
+
+    if selected_artifacts:
+        capsule = compile_context(
+            artifacts=selected_artifacts,
+            explicit=explicit_artifacts,
+            explicit_order=requested_artifact_ids if explicit_artifacts else None,
+            prompt=payload.content,
+            source=source,
+            runtime_group=runtime_group,
+            effective_classification=effective_classification,
+        )
+        context_manifest = capsule.manifest
+        if capsule.text:
+            latest_content = f"{payload.content}\n\n{capsule.text}"
     ciphertext, digest = encrypt_json({"content": payload.content})
     user_message = CortexConversationMessage(
         tenant_id=tenant_id,
@@ -1131,7 +1374,7 @@ async def execute_turn(
         role="user",
         content_ciphertext=ciphertext,
         content_digest=digest,
-        classification=classification,
+        classification=effective_classification,
         parent_message_id=parent_id,
     )
     db.add(user_message)
@@ -1145,8 +1388,8 @@ async def execute_turn(
             messages=_bounded_history(previous, latest_content),
             source=source,
             model=payload.model,
-            data_classification=classification,
-            runtime_group=payload.runtime_group or "hybrid",
+            data_classification=effective_classification,
+            runtime_group=runtime_group,
             capability="executive",
             workspace_id=str(conversation.project_id or conversation.id),
             minimum_votes=payload.minimum_votes,
@@ -1156,13 +1399,21 @@ async def execute_turn(
                 "conversation_id": str(conversation.id),
                 "project_id": str(conversation.project_id) if conversation.project_id else None,
                 "artifact_count": len(requested_artifact_ids),
+                "effective_classification": effective_classification,
                 "agent_mode": bool(payload.agent_mode and conversation.mode == "cowork"),
+                "context_manifest": context_manifest.to_dict() if context_manifest else None,
             },
             ),
         )
     except Exception:
         await db.rollback()
         raise
+    if context_manifest is not None:
+        context_manifest = finalize_context_provenance(
+            context_manifest,
+            gateway,
+            effective_classification,
+        )
     assistant_text = gateway.get("response")
     if not assistant_text:
         governance = gateway.get("governance") or {}
@@ -1186,7 +1437,7 @@ async def execute_turn(
                         "conversation_id": str(conversation.id),
                         "change_count": len(changes),
                         "operations": sorted({change["operation"] for change in changes}),
-                        "data_classification": classification,
+                        "data_classification": effective_classification,
                     },
                 ),
             )
@@ -1214,6 +1465,8 @@ async def execute_turn(
             for vote in gateway.get("votes", [])
         ],
         "change_proposal_ids": [str(item.id) for item in proposal_rows],
+        "context_manifest": context_manifest.to_dict() if context_manifest else None,
+        "effective_classification": effective_classification,
     }
     assistant = CortexConversationMessage(
         tenant_id=tenant_id,
@@ -1221,7 +1474,7 @@ async def execute_turn(
         role="assistant",
         content_ciphertext=assistant_ciphertext,
         content_digest=assistant_digest,
-        classification=classification,
+        classification=effective_classification,
         source=gateway.get("source"),
         provider=gateway.get("provider"),
         model=gateway.get("model"),

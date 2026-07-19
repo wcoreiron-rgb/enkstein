@@ -37,6 +37,25 @@ login. Invocations are ephemeral, use a new empty temporary directory, run in a
 read-only sandbox, inherit no project rules, and have a 24,000-character input
 limit and 180-second deadline.
 
+Desktop Cowork Agent tools use the official long-lived `codex app-server`
+stdio protocol when a project has an approved native folder and the runtime
+group is Hybrid or Cloud. Enkstein derives an opaque scope from tenant, owner,
+Project, conversation, and the native folder grant; the browser cannot provide
+a cwd, thread id, scope digest, or folder token. The bridge resumes one thread
+per scope, supports read-only and workspace-write sandboxes, streams only
+allowlisted agent/plan/diff events, and maps command/file approvals to governed
+one-shot decisions. General permission expansion is deny-only and unknown
+server requests are declined. Prompts travel in structured JSON-RPC over stdin,
+never argv, and session persistence contains only owner-readable opaque
+scope/thread metadata.
+
+Every start, turn, status poll, approval, and cancellation receives a Trust
+Fabric decision. Restricted and top-secret conversations are rejected before
+the external CLI is invoked. Sensitive patterns in otherwise permitted input
+are redacted. Transient App Server output is visible in Cowork but is not yet
+written into encrypted conversation history. App Server patches, tests, and
+artifacts are not yet normalized into durable structured records.
+
 Check the host session with `codex login status`. Authenticate using the
 official `codex login` flow when needed.
 
@@ -124,6 +143,13 @@ same tab for later turns in the conversation. Starting or branching an
 Enkstein conversation creates a separate provider thread. The companion stores
 the provider conversation URL locally, not the provider authentication token,
 so a closed tab or restarted browser can reopen the same provider thread.
+ChatGPT and Gemini mappings refresh after delayed SPA navigation and retain
+only sanitized origin plus pathname. Turn completion is correlated by provider
+message identity (or an extension marker), submission time, and the last known
+assistant identity; it does not depend on response counts or response text.
+The durable task journal stores only lifecycle metadata and bounded error codes.
+Detailed operator errors remain transient in memory, and prompts, responses,
+paths, cookies, tokens, and provider page content are excluded from the journal.
 
 Cowork sends explicitly selected text files in full up to a combined
 100,000-character limit. It does not silently truncate selected code. A larger
@@ -160,7 +186,7 @@ Sensitive input patterns are redacted before any subscription invocation.
 `restricted` and `top_secret` requests are rejected for subscription Brains;
 they require an approved local model profile.
 
-### Provider maturity in 0.3.6
+### Provider maturity in 0.3.7
 
 Shipped Model Cortex execution paths are Codex CLI subscription, Claude Code
 CLI subscription, Ollama, OpenAI API, Anthropic API, Gemini API, and NVIDIA NIM.
@@ -173,8 +199,18 @@ tool-disabled execution contract has been implemented.
 
 Runtime groups are carried on each request and remembered by the local console.
 They are not persisted per conversation/Project because the current schema has
-no compatible field and 0.3.6 introduces no migration. Per-tenant specialist
-role-route configuration is likewise planned.
+no compatible field and 0.3.7 introduces no migration. Per-tenant specialist
+role-route persistence is likewise planned. The bounded
+`/modelclaw/task-graph` contract does support explicit per-node roles,
+dependencies, ordered sources, timeouts, and provenance without adding a
+second model router.
+
+Context provenance is finalized after Gateway routing. It records the actual
+ordered adapter attempts, Trust Fabric outcome, selected provider/model,
+fallback reason, effective classification, and each artifact's compiled
+disposition, redaction state, digest, id, and line citations. This is runtime
+attempt provenance; it does not claim an upstream vendor accepted or retained a
+prompt when an adapter reports unavailable.
 
 ### Multi-Brain Swarm execution
 
@@ -265,7 +301,7 @@ and installed model names.
 - Gemini uses a restricted Gemini API key today. Google desktop OAuth is a
   viable future connector, but Enkstein does not extract Google browser or
   Gemini application sessions.
-- Free web chat pages are not treated as model APIs. Enkstein does not scrape
+- Consumer web chat pages are not treated as model APIs. Enkstein does not scrape
   consumer sessions, browser cookies, or undocumented private endpoints. The
   Desktop Session Bridge automates only a visible installed app after explicit
   operating-system permission.

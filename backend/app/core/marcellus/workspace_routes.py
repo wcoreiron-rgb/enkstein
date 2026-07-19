@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,21 +30,40 @@ from app.core.marcellus.workspace import (
     list_projects,
     move_conversation,
     native_workspace_status,
+    permanently_delete_conversation,
     rename_conversation,
+    reopen_conversation,
     review_change_proposal,
     search_workspace,
     sync_native_workspace,
     update_artifact,
     workspace_summary,
 )
+from app.core.marcellus.codex_workspace import (
+    codex_approval,
+    codex_cancel,
+    codex_start,
+    codex_status,
+    codex_turn,
+)
 from app.core.marcellus.workspace_schemas import (
     CortexArtifactBatchCreate,
+    CortexCodexApproval,
+    CortexCodexApprovalRead,
+    CortexCodexCancel,
+    CortexCodexCancelRead,
+    CortexCodexStart,
+    CortexCodexStartRead,
+    CortexCodexStatusRead,
+    CortexCodexTurn,
+    CortexCodexTurnRead,
     CortexArtifactRead,
     CortexArtifactUpdate,
     CortexChangeProposalRead,
     CortexChangeReview,
     CortexBranchCreate,
     CortexConversationCreate,
+    CortexConversationDeleteRead,
     CortexConversationDetail,
     CortexConversationMove,
     CortexConversationRead,
@@ -289,6 +308,54 @@ async def delete_conversation(
     )
 
 
+@router.delete(
+    "/conversations/{conversation_id}/permanent",
+    response_model=CortexConversationDeleteRead,
+    summary="Permanently delete a conversation and its dependent conversation-scoped data",
+)
+async def delete_conversation_permanent(
+    conversation_id: UUID,
+    request: Request,
+    tenant_id: str = Query(default="global", min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, tenant_id)
+    return await permanently_delete_conversation(
+        db,
+        tenant_id,
+        conversation_id,
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/reopen",
+    response_model=CortexConversationRead,
+    summary="Reopen an archived conversation",
+)
+async def post_conversation_reopen(
+    conversation_id: UUID,
+    request: Request,
+    tenant_id: str = Query(default="global", min_length=1, max_length=128),
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, tenant_id)
+    return await reopen_conversation(
+        db,
+        tenant_id,
+        conversation_id,
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
 @router.post(
     "/conversations/{conversation_id}/move",
     response_model=CortexConversationRead,
@@ -376,7 +443,6 @@ async def post_turn_stream(
 
     async def events():
         yield _sse("turn_started", {"conversation_id": conversation_id, "agent_mode": trusted_payload.agent_mode})
-        yield _sse("context_ready", {"artifact_count": len(trusted_payload.artifact_ids), "include_project_files": trusted_payload.include_project_files})
         try:
             turn = await execute_turn(
                 db,
@@ -390,6 +456,8 @@ async def post_turn_stream(
             await db.rollback()
             yield _sse("turn_failed", {"detail": "The governed turn could not be completed."})
             return
+        context_manifest = (turn.assistant_message.governance if turn.assistant_message else {}).get("context_manifest")
+        yield _sse("context_ready", {"context_manifest": context_manifest})
         for vote in turn.gateway.get("votes", []):
             yield _sse(
                 "brain_completed",
@@ -410,6 +478,133 @@ async def post_turn_stream(
         events(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/codex/start",
+    response_model=CortexCodexStartRead,
+    summary="Open or resume the governed Codex App Server thread",
+)
+async def post_codex_start(
+    conversation_id: UUID,
+    payload: CortexCodexStart,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await codex_start(
+        db,
+        tenant_id,
+        conversation_id,
+        payload.model_copy(update={"tenant_id": tenant_id}),
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/codex/turn",
+    response_model=CortexCodexTurnRead,
+    summary="Send a governed Codex App Server turn",
+)
+async def post_codex_turn(
+    conversation_id: UUID,
+    payload: CortexCodexTurn,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await codex_turn(
+        db,
+        tenant_id,
+        conversation_id,
+        payload.model_copy(update={"tenant_id": tenant_id}),
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.get(
+    "/conversations/{conversation_id}/codex/status",
+    response_model=CortexCodexStatusRead,
+    summary="Read bounded Codex App Server session status",
+)
+async def get_codex_status(
+    conversation_id: UUID,
+    request: Request,
+    tenant_id: str = Query(default="global", min_length=1, max_length=128),
+    cursor: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, tenant_id)
+    return await codex_status(
+        db,
+        tenant_id,
+        conversation_id,
+        cursor,
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/codex/approvals/{approval_id}",
+    response_model=CortexCodexApprovalRead,
+    summary="Govern a pending Codex App Server approval",
+)
+async def post_codex_approval(
+    conversation_id: UUID,
+    payload: CortexCodexApproval,
+    request: Request,
+    approval_id: str = Path(min_length=1, max_length=64, pattern=r"^apr-[A-Za-z0-9-]{1,60}$"),
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await codex_approval(
+        db,
+        tenant_id,
+        conversation_id,
+        approval_id,
+        payload.model_copy(update={"tenant_id": tenant_id}),
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/codex/cancel",
+    response_model=CortexCodexCancelRead,
+    summary="Cancel the active Codex App Server turn",
+)
+async def post_codex_cancel(
+    conversation_id: UUID,
+    payload: CortexCodexCancel,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    return await codex_cancel(
+        db,
+        tenant_id,
+        conversation_id,
+        user=user,
+        actor_id=actor_id(user),
+        actor_name=actor_name(user),
+        ip_address=_ip(request),
     )
 
 

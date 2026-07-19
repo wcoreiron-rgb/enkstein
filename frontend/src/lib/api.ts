@@ -724,6 +724,51 @@ export type CortexArtifact = {
   content?: string;
 };
 
+export type ContextCitation = {
+  path: string;
+  line_start: number;
+  line_end: number;
+};
+
+export type ContextManifestEntry = {
+  artifact_id: string;
+  path: string;
+  size_bytes: number;
+  content_digest: string;
+  selection_reason: string;
+  classification: string;
+  destination_brain: string;
+  disposition: 'sent_full' | 'summarized' | 'truncated' | 'omitted' | 'blocked_by_policy';
+  characters_sent: number;
+  estimated_tokens: number;
+  redacted: boolean;
+  citations: ContextCitation[];
+};
+
+export type ContextRouteAttempt = {
+  source: string;
+  provider?: string | null;
+  model?: string | null;
+  policy_outcome: string;
+  status: string;
+  reason?: string | null;
+};
+
+export type ContextManifest = {
+  entries: ContextManifestEntry[];
+  explicit: boolean;
+  destination: 'local' | 'external' | 'adaptive';
+  budget_characters: number;
+  total_characters_sent: number;
+  total_estimated_tokens: number;
+  blocked: boolean;
+  block_reason?: string | null;
+  effective_classification?: string | null;
+  attempts: ContextRouteAttempt[];
+  selected_destination?: string | null;
+  fallback_reason?: string | null;
+};
+
 export type CortexTurn = {
   conversation: CortexConversation;
   user_message: CortexMessageRecord;
@@ -732,6 +777,23 @@ export type CortexTurn = {
 };
 
 export type CortexStreamEvent = { event: string; data: any };
+
+export type CortexCodexApproval = {
+  approval_id: string;
+  method: string;
+  detail: Record<string, string>;
+  deny_only: boolean;
+};
+
+export type CortexCodexStatus = {
+  status: string;
+  transport: string;
+  session: string;
+  turn: 'idle' | 'running' | 'completed' | 'interrupted' | string;
+  cursor: number;
+  events: Array<{ cursor: number; channel: string; fields: Record<string, any> }>;
+  pending_approvals: CortexCodexApproval[];
+};
 
 export type CortexChangeProposal = {
   id: string;
@@ -775,10 +837,11 @@ export const connectCortexNativeWorkspace = (projectId: string, body: { token: s
   apiFetch<CortexNativeWorkspace>(`/marcellus/workspace/projects/${projectId}/native-workspace`, { method: 'POST', body: JSON.stringify(body) });
 export const syncCortexNativeWorkspace = (projectId: string) =>
   apiFetch<CortexNativeWorkspace>(`/marcellus/workspace/projects/${projectId}/native-workspace/sync`, { method: 'POST' });
-export const getCortexConversations = (mode?: string, projectId?: string) => {
+export const getCortexConversations = (mode?: string, projectId?: string, includeArchived = false) => {
   const params = new URLSearchParams();
   if (mode) params.set('mode', mode);
   if (projectId) params.set('project_id', projectId);
+  if (includeArchived) params.set('include_archived', 'true');
   const query = params.toString();
   return apiFetch<CortexConversation[]>(`/marcellus/workspace/conversations${query ? `?${query}` : ''}`);
 };
@@ -788,6 +851,10 @@ export const getCortexConversation = (id: string) =>
   apiFetch<CortexConversationDetail>(`/marcellus/workspace/conversations/${id}`);
 export const archiveCortexConversation = (id: string) =>
   apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}`, { method: 'DELETE' });
+export const reopenCortexConversation = (id: string) =>
+  apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}/reopen`, { method: 'POST' });
+export const permanentlyDeleteCortexConversation = (id: string) =>
+  apiFetch<{ id: string; status: 'deleted' }>(`/marcellus/workspace/conversations/${id}/permanent`, { method: 'DELETE' });
 export const moveCortexConversation = (id: string, projectId: string) =>
   apiFetch<CortexConversation>(`/marcellus/workspace/conversations/${id}/move`, {
     method: 'POST',
@@ -800,6 +867,28 @@ export const renameCortexConversation = (id: string, title: string) =>
   });
 export const sendCortexTurn = (id: string, body: object) =>
   apiFetch<CortexTurn>(`/marcellus/workspace/conversations/${id}/turns`, { method: 'POST', body: JSON.stringify(body) });
+export const startCortexCodex = (id: string, body: object) =>
+  apiFetch<{ status: string; sandbox: string; resumed: boolean }>(
+    `/marcellus/workspace/conversations/${id}/codex/start`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+export const sendCortexCodexTurn = (id: string, body: object) =>
+  apiFetch<{ status: string; cursor: number; turn_active: boolean; policy: Record<string, any> }>(
+    `/marcellus/workspace/conversations/${id}/codex/turn`,
+    { method: 'POST', body: JSON.stringify(body) },
+  );
+export const getCortexCodexStatus = (id: string, cursor = 0) =>
+  apiFetch<CortexCodexStatus>(`/marcellus/workspace/conversations/${id}/codex/status?cursor=${Math.max(0, cursor)}`);
+export const decideCortexCodexApproval = (id: string, approvalId: string, decision: 'accept' | 'decline') =>
+  apiFetch<{ status: string; decision: string; governed: boolean }>(
+    `/marcellus/workspace/conversations/${id}/codex/approvals/${encodeURIComponent(approvalId)}`,
+    { method: 'POST', body: JSON.stringify({ decision }) },
+  );
+export const cancelCortexCodex = (id: string) =>
+  apiFetch<{ status: string }>(`/marcellus/workspace/conversations/${id}/codex/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
 export async function streamCortexTurn(
   id: string,
   body: object,

@@ -334,11 +334,27 @@ async def invoke_subscription_brain(
 
 async def invoke_native_workspace(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Invoke a folder-scoped native workspace operation through the authenticated host bridge."""
-    if operation not in {"list", "write", "trash"}:
+    if operation not in {"list", "write", "trash", "pick", "rename", "move"}:
         raise ValueError("Unsupported native workspace operation")
     if not bridge_configured():
         raise RuntimeError("Native workspace bridge is not configured")
     return await _bridge_request("POST", f"/v1/workspace/{operation}", payload)
+
+
+# Codex App Server operations proxied to the native broker. These map to the
+# official Codex App Server protocol (JSON-RPC over stdio) that the broker
+# supervises per approved project root; the backend only ever sees the broker's
+# sanitized, structured result — never the raw stdio stream.
+_CODEX_OPERATIONS = {"start", "turn", "approve", "cancel", "status"}
+
+
+async def invoke_codex_bridge(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Drive one resumable, root-bound Codex App Server thread via the host broker."""
+    if operation not in _CODEX_OPERATIONS:
+        raise ValueError("Unsupported Codex App Server operation")
+    if not bridge_configured():
+        raise RuntimeError("Codex App Server bridge is not configured")
+    return await _bridge_request("POST", f"/v1/codex/{operation}", payload)
 
 
 async def invoke_profile_brain(

@@ -9,12 +9,16 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  Archive,
   Bot,
   BrainCircuit,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   File,
   FilePlus2,
   Folder,
@@ -27,6 +31,7 @@ import {
   Paperclip,
   Pencil,
   RefreshCcw,
+  RotateCcw,
   Save,
   Send,
   ShieldAlert,
@@ -40,7 +45,9 @@ import {
   archiveCortexConversation,
   branchCortexConversation,
   renameCortexConversation,
+  ContextManifest,
   CortexArtifact,
+  CortexCodexApproval,
   CortexChangeProposal,
   CortexConversation,
   CortexMessageRecord,
@@ -58,19 +65,32 @@ import {
   getCortexArtifacts,
   getCortexChangeProposals,
   getCortexConversation,
+  getCortexCodexStatus,
   getCortexConversations,
   getCortexProjects,
   getCortexNativeWorkspace,
   getModelClawProfiles,
   ingestCortexArtifacts,
   moveCortexConversation,
+  permanentlyDeleteCortexConversation,
+  reopenCortexConversation,
   reviewCortexChangeProposal,
   runCortexResearch,
+  startCortexCodex,
+  sendCortexCodexTurn,
+  decideCortexCodexApproval,
+  cancelCortexCodex,
   streamCortexTurn,
   syncCortexNativeWorkspace,
   updateCortexArtifact,
 } from '@/lib/api';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
+import {
+  persistLastActiveConversation,
+  readLastActiveConversation,
+  workspaceModeBasePath,
+  workspaceRoutePath,
+} from '@/lib/workspace-routes';
 
 declare global {
   interface Window {
@@ -78,12 +98,13 @@ declare global {
   }
 }
 
-type Mode = 'chat' | 'cowork';
+type Mode = 'chat' | 'cowork' | 'security';
 
 type ModelOption = { id: string; label: string };
 type SourceOption = { value: string; label: string; ready: boolean; detail?: string; models: ModelOption[] };
 type WorkspaceDialog =
   | { kind: 'archive-conversation'; conversation: CortexConversation }
+  | { kind: 'delete-conversation'; conversation: CortexConversation }
   | { kind: 'move-conversation'; conversation: CortexConversation }
   | { kind: 'rename-conversation'; conversation: CortexConversation }
   | { kind: 'trash-file'; artifact: CortexArtifact };
@@ -108,9 +129,18 @@ function isTextFile(file: File) {
   return file.type.startsWith('text/') || file.type.includes('json') || file.type.includes('xml') || TEXT_EXTENSIONS.has(extension);
 }
 
-export default function AIWorkspace({ mode }: { mode: Mode }) {
+export default function AIWorkspace({
+  mode,
+  initialProjectId,
+  initialConversationId,
+}: {
+  mode: Mode;
+  initialProjectId?: string;
+  initialConversationId?: string;
+}) {
+  const router = useRouter();
   const [projects, setProjects] = useState<CortexProject[]>([]);
-  const [projectId, setProjectId] = useState<string>('');
+  const [projectId, setProjectId] = useState<string>(mode === 'cowork' ? initialProjectId || '' : '');
   const [conversations, setConversations] = useState<CortexConversation[]>([]);
   const [active, setActive] = useState<CortexConversation | null>(null);
   const [messages, setMessages] = useState<CortexMessageRecord[]>([]);
@@ -137,7 +167,9 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(false);
   const [agentMode, setAgentMode] = useState(mode === 'cowork');
   const [streamText, setStreamText] = useState('');
+  const [nativeResult, setNativeResult] = useState('');
   const [activity, setActivity] = useState<string[]>([]);
+  const [codexApprovals, setCodexApprovals] = useState<CortexCodexApproval[]>([]);
   const [reviewingProposal, setReviewingProposal] = useState<string | null>(null);
   const [researchOpen, setResearchOpen] = useState(false);
   const [researchQuestion, setResearchQuestion] = useState('');
@@ -152,18 +184,36 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   const [nativeWorkspace, setNativeWorkspace] = useState<CortexNativeWorkspace | null>(null);
   const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState<string | null>(null);
   const [dialog, setDialog] = useState<WorkspaceDialog | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
   const [moveProjectId, setMoveProjectId] = useState('');
   const [renameTitle, setRenameTitle] = useState('');
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [archivedConversations, setArchivedConversations] = useState<CortexConversation[]>([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const turnAbort = useRef<AbortController | null>(null);
+  const nativeCodexConversation = useRef<string | null>(null);
 
   useEffect(() => {
     folderInput.current?.setAttribute('webkitdirectory', '');
   }, []);
+
+  /** Pushes (or replaces, for silent same-load syncing) the URL to match the
+   * conversation now active in this mode, and remembers it as this mode's
+   * (and, for Cowork, this project's) last active conversation. */
+  const navigateToConversation = useCallback((conversation: CortexConversation | null, opts: { replace?: boolean } = {}) => {
+    const targetProjectId = mode === 'cowork' ? (conversation?.project_id || projectId || undefined) : undefined;
+    const path = workspaceRoutePath(mode, { projectId: targetProjectId, conversationId: conversation?.id });
+    persistLastActiveConversation(mode, conversation?.id || null, targetProjectId);
+    if (typeof window !== 'undefined' && window.location.pathname === path) return;
+    if (opts.replace) router.replace(path);
+    else router.push(path);
+  }, [mode, projectId, router]);
 
   const loadConversations = useCallback(async (preferredId?: string) => {
     const rows = await getCortexConversations(mode, mode === 'cowork' && projectId ? projectId : undefined);
@@ -175,11 +225,12 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       setMessages(detail.messages);
       setSource(detail.selected_source);
       setClassification(detail.classification);
+      navigateToConversation(detail, { replace: true });
     } else {
       setActive(null);
       setMessages([]);
     }
-  }, [mode, projectId]);
+  }, [mode, navigateToConversation, projectId]);
 
   const loadArtifacts = useCallback(async () => {
     if (!projectId) {
@@ -203,6 +254,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
   useEffect(() => {
     setAgentMode(mode === 'cowork');
     setStreamText('');
+    setNativeResult('');
     setActivity([]);
   }, [mode]);
 
@@ -260,34 +312,78 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setNotFound(null);
       try {
         const rows = mode === 'cowork' ? await getCortexProjects() : [];
         if (cancelled) return;
         setProjects(rows);
-        const rememberedProject = typeof window !== 'undefined' ? window.localStorage.getItem('marcellus-cowork-project') : '';
+        const remembered = readLastActiveConversation(mode);
         const nextProject = mode === 'cowork'
-          ? (projectId || rows.find((item) => item.id === rememberedProject)?.id || rows[0]?.id || '')
+          ? (initialProjectId || projectId || rows.find((item) => item.id === remembered.projectId)?.id || rows[0]?.id || '')
           : '';
         if (mode === 'cowork' && nextProject !== projectId) {
           setProjectId(nextProject);
           return;
         }
+        if (mode === 'cowork' && initialProjectId && rows.length > 0 && !rows.some((item) => item.id === initialProjectId)) {
+          setNotFound('This Cowork project was not found, was moved, or is not owned by you.');
+          setConversations([]);
+          setActive(null);
+          setMessages([]);
+          setArtifacts([]);
+          setSelectedArtifacts(new Set());
+          return;
+        }
         const conversationRows = await getCortexConversations(mode, nextProject || undefined);
         if (cancelled) return;
         setConversations(conversationRows);
-        const pendingConversation = mode === 'cowork' ? window.localStorage.getItem('marcellus-cowork-conversation') : '';
-        const first = conversationRows.find((item) => item.id === pendingConversation) || conversationRows[0];
-        if (first) {
-          const detail = await getCortexConversation(first.id);
-          if (cancelled) return;
-          setActive(detail);
-          setMessages(detail.messages);
-          setSource(detail.selected_source);
-          setClassification(detail.classification);
-          if (pendingConversation === first.id) window.localStorage.removeItem('marcellus-cowork-conversation');
+
+        if (initialConversationId) {
+          try {
+            const detail = await getCortexConversation(initialConversationId);
+            if (cancelled) return;
+            const modeLabel = detail.mode === 'cowork' ? 'Cowork' : detail.mode === 'security' ? 'Security' : 'Chat';
+            const thisModeLabel = mode === 'cowork' ? 'Cowork' : mode === 'security' ? 'Security' : 'Chat';
+            if (detail.mode !== mode) {
+              setNotFound(`This conversation belongs to ${modeLabel}, not ${thisModeLabel}.`);
+              setActive(null);
+              setMessages([]);
+            } else if (mode === 'cowork' && detail.project_id !== nextProject) {
+              setNotFound('This conversation belongs to a different Cowork project.');
+              setActive(null);
+              setMessages([]);
+            } else {
+              setActive(detail);
+              setMessages(detail.messages);
+              setSource(detail.selected_source);
+              setClassification(detail.classification);
+              persistLastActiveConversation(mode, detail.id, detail.project_id || undefined);
+            }
+          } catch {
+            if (cancelled) return;
+            setNotFound('This conversation was not found, was deleted, or is not owned by you.');
+            setActive(null);
+            setMessages([]);
+          }
         } else {
-          setActive(null);
-          setMessages([]);
+          const first = conversationRows.find((item) => item.id === remembered.conversationId) || conversationRows[0];
+          if (first) {
+            const detail = await getCortexConversation(first.id);
+            if (cancelled) return;
+            setActive(detail);
+            setMessages(detail.messages);
+            setSource(detail.selected_source);
+            setClassification(detail.classification);
+            const canonical = workspaceRoutePath(mode, {
+              projectId: detail.project_id || undefined,
+              conversationId: detail.id,
+            });
+            persistLastActiveConversation(mode, detail.id, detail.project_id || undefined);
+            if (window.location.pathname !== canonical) router.replace(canonical);
+          } else {
+            setActive(null);
+            setMessages([]);
+          }
         }
         if (nextProject) {
           const artifactRows = await getCortexArtifacts(nextProject);
@@ -306,7 +402,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
     void load();
     return () => { cancelled = true; };
     // projectId is intentionally included so changing projects reloads its conversations and files.
-  }, [mode, projectId]);
+  }, [mode, projectId, initialProjectId, initialConversationId, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -401,6 +497,8 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
     setMessages([]);
     setPreview(null);
     setCreatingFile(false);
+    setNotFound(null);
+    navigateToConversation(conversation);
     return conversation;
   };
 
@@ -418,10 +516,47 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         setSelectedArtifacts(new Set(rows.slice(0, 20).map((item) => item.id)));
       }
       setError(null);
+      setNotFound(null);
+      navigateToConversation(detail);
     } catch (openError) {
       setError(openError instanceof Error ? openError.message : 'Conversation could not be opened.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadArchived = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const rows = await getCortexConversations(mode, mode === 'cowork' && projectId ? projectId : undefined, true);
+      setArchivedConversations(rows.filter((item) => item.status === 'archived'));
+    } catch {
+      setArchivedConversations([]);
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, [mode, projectId]);
+
+  const toggleArchived = () => {
+    setArchivedOpen((current) => {
+      const next = !current;
+      if (next) void loadArchived();
+      return next;
+    });
+  };
+
+  const reopenConversation = async (conversation: CortexConversation) => {
+    setReopeningId(conversation.id);
+    setError(null);
+    try {
+      const reopened = await reopenCortexConversation(conversation.id);
+      setArchivedConversations((current) => current.filter((item) => item.id !== reopened.id));
+      setConversations((current) => [reopened, ...current.filter((item) => item.id !== reopened.id)]);
+      await openConversation(reopened);
+    } catch (reopenError) {
+      setError(reopenError instanceof Error ? reopenError.message : 'Conversation could not be reopened.');
+    } finally {
+      setReopeningId(null);
     }
   };
 
@@ -434,9 +569,14 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         const conversation = conversations.find((item) => item.id === detail.id);
         if (conversation) void openConversation(conversation);
       }
-      if (detail.type === 'select-project' && mode === 'cowork') setProjectId(detail.id || '');
+      if (detail.type === 'select-project' && mode === 'cowork') {
+        setProjectId(detail.id || '');
+        setNotFound(null);
+        router.push(workspaceRoutePath('cowork', { projectId: detail.id || undefined }));
+      }
       if (
         (detail.type === 'request-archive-conversation'
+          || detail.type === 'request-delete-conversation'
           || detail.type === 'request-move-conversation'
           || detail.type === 'request-rename-conversation')
         && detail.id
@@ -448,12 +588,19 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
           setDialog({
             kind: detail.type === 'request-archive-conversation'
               ? 'archive-conversation'
-              : detail.type === 'request-move-conversation'
-                ? 'move-conversation'
-                : 'rename-conversation',
+              : detail.type === 'request-delete-conversation'
+                ? 'delete-conversation'
+                : detail.type === 'request-move-conversation'
+                  ? 'move-conversation'
+                  : 'rename-conversation',
             conversation,
           });
         }
+      }
+      if (detail.type === 'request-reopen-conversation' && detail.id) {
+        const conversation = conversations.find((item) => item.id === detail.id)
+          || archivedConversations.find((item) => item.id === detail.id);
+        if (conversation) void reopenConversation(conversation);
       }
     };
     window.addEventListener('marcellus:workspace-action', handleAction);
@@ -485,12 +632,72 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
     setError(null);
     setStreamText('');
     setActivity([]);
+    setCodexApprovals([]);
+    let keepTransientOutput = false;
     try {
       const conversation = active || await createConversation();
       if (!conversation) return;
       const controller = new AbortController();
       turnAbort.current = controller;
       setDraft('');
+      const useNativeCodex = mode === 'cowork'
+        && agentMode
+        && Boolean(nativeWorkspace?.connected)
+        && runtimeGroup !== 'local'
+        && (source === 'auto' || source === 'codex_subscription');
+      if (useNativeCodex) {
+        nativeCodexConversation.current = conversation.id;
+        setActivity(['Trust Fabric is authorizing the Codex subscription CLI']);
+        await startCortexCodex(conversation.id, {
+          sandbox: 'workspace-write',
+          runtime_group: runtimeGroup,
+        });
+        setActivity((current) => [...current, 'Official Codex App Server session ready']);
+        const started = await sendCortexCodexTurn(conversation.id, {
+          prompt: content,
+          runtime_group: runtimeGroup,
+        });
+        if (started.policy.input_redacted) {
+          setActivity((current) => [...current, 'Sensitive input redacted before CLI execution']);
+        }
+        let cursor = started.cursor;
+        let nativeText = '';
+        const deadline = Date.now() + 120_000;
+        while (Date.now() < deadline) {
+          if (controller.signal.aborted) throw new DOMException('Turn stopped', 'AbortError');
+          const status = await getCortexCodexStatus(conversation.id, cursor);
+          cursor = status.cursor;
+          setCodexApprovals(status.pending_approvals);
+          for (const nativeEvent of status.events) {
+            const transient = nativeEvent.fields?.transient;
+            if (transient?.kind === 'item/agentMessage/delta' && typeof transient.text === 'string') {
+              nativeText += transient.text;
+              setStreamText(nativeText);
+            }
+            if (transient?.kind === 'item/plan/delta' && typeof transient.text === 'string') {
+              setActivity((current) => [...current.slice(-7), `Plan: ${transient.text.slice(0, 160)}`]);
+            }
+            if (transient?.kind === 'turn/diff/updated') {
+              setActivity((current) => [...current, 'Workspace diff updated; changes remain approval-governed']);
+            }
+          }
+          if (status.turn === 'completed') {
+            keepTransientOutput = true;
+            setNativeResult(nativeText || 'Codex completed without a textual response. Review the governed workspace diff and activity record.');
+            setActivity((current) => [...current, 'Codex completed through the governed native bridge']);
+            break;
+          }
+          if (status.turn === 'interrupted' || status.transport === 'interrupted') {
+            throw new Error('The Codex App Server turn was interrupted. Restart the desktop bridge and retry.');
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+        }
+        if (!keepTransientOutput) {
+          await cancelCortexCodex(conversation.id).catch(() => undefined);
+          throw new Error('The Codex App Server turn timed out after 120 seconds and was cancelled.');
+        }
+        return;
+      }
       const turn = await streamCortexTurn(conversation.id, {
         content,
         source,
@@ -530,12 +737,28 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       }
     } finally {
       turnAbort.current = null;
+      nativeCodexConversation.current = null;
       setBusy(false);
       setStreamText('');
     }
   };
 
-  const stopTurn = () => turnAbort.current?.abort();
+  const stopTurn = () => {
+    turnAbort.current?.abort();
+    const conversationId = nativeCodexConversation.current;
+    if (conversationId) void cancelCortexCodex(conversationId).catch(() => undefined);
+  };
+
+  const decideCodexApproval = async (approval: CortexCodexApproval, decision: 'accept' | 'decline') => {
+    if (!active) return;
+    try {
+      await decideCortexCodexApproval(active.id, approval.approval_id, decision);
+      setCodexApprovals((current) => current.filter((item) => item.approval_id !== approval.approval_id));
+      setActivity((current) => [...current, `Codex ${approval.method.split('/')[1] || 'action'} ${decision}ed`]);
+    } catch (approvalError) {
+      setError(approvalError instanceof Error ? approvalError.message : 'The governed approval failed.');
+    }
+  };
 
   const runResearch = async () => {
     const urls = researchUrls.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
@@ -738,6 +961,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       setActive(branch);
       setMessages(branch.messages);
       setError(null);
+      navigateToConversation(branch);
     } catch (branchError) {
       setError(branchError instanceof Error ? branchError.message : 'Conversation could not be branched.');
     } finally {
@@ -753,6 +977,21 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       if (dialog.kind === 'archive-conversation') {
         await archiveCortexConversation(dialog.conversation.id);
         await loadConversations();
+        setArchivedConversations((current) => [dialog.conversation, ...current.filter((item) => item.id !== dialog.conversation.id)]);
+        if (active?.id === dialog.conversation.id) {
+          setActive(null);
+          setMessages([]);
+          navigateToConversation(null, { replace: true });
+        }
+      } else if (dialog.kind === 'delete-conversation') {
+        await permanentlyDeleteCortexConversation(dialog.conversation.id);
+        setConversations((current) => current.filter((item) => item.id !== dialog.conversation.id));
+        setArchivedConversations((current) => current.filter((item) => item.id !== dialog.conversation.id));
+        if (active?.id === dialog.conversation.id) {
+          setActive(null);
+          setMessages([]);
+          navigateToConversation(null, { replace: true });
+        }
       } else if (dialog.kind === 'trash-file') {
         await deleteCortexArtifact(dialog.artifact.id);
         closeEditor();
@@ -766,10 +1005,10 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
       } else {
         if (!moveProjectId) return;
         const moved = await moveCortexConversation(dialog.conversation.id, moveProjectId);
-        window.localStorage.setItem('marcellus-cowork-project', moveProjectId);
-        window.localStorage.setItem('marcellus-cowork-conversation', moved.id);
-        window.location.hash = 'cowork';
+        setConversations((current) => current.filter((item) => item.id !== dialog.conversation.id));
         if (mode === 'cowork') setProjectId(moveProjectId);
+        router.push(workspaceRoutePath('cowork', { projectId: moveProjectId, conversationId: moved.id }));
+        persistLastActiveConversation('cowork', moved.id, moveProjectId);
       }
       setDialog(null);
     } catch (dialogError) {
@@ -857,7 +1096,7 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         </header>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
-          {!messages.length && !busy ? (
+          {!messages.length && !busy && !nativeResult ? (
             <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border" style={{ borderColor: 'var(--rc-border-2)' }}>
                 {mode === 'chat' ? <BrainCircuit className="h-6 w-6 text-red-500" /> : <FolderOpen className="h-6 w-6 text-red-500" />}
@@ -895,6 +1134,31 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
                     </div>
                   )}
                   {streamText && <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{streamText}</p>}
+                  {codexApprovals.map((approval) => (
+                    <div key={approval.approval_id} className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+                      <div className="font-medium" style={{ color: 'var(--rc-text-1)' }}>
+                        Codex requests {approval.method.includes('commandExecution') ? 'command execution' : approval.method.includes('fileChange') ? 'a file change' : 'additional permissions'}
+                      </div>
+                      {approval.detail.command && <code className="mt-2 block max-h-24 overflow-auto whitespace-pre-wrap rounded p-2" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-2)' }}>{approval.detail.command}</code>}
+                      {approval.detail.reason && <p className="mt-2" style={{ color: 'var(--rc-text-3)' }}>{approval.detail.reason}</p>}
+                      {approval.detail.cwd && <p className="mt-1" style={{ color: 'var(--rc-text-3)' }}>Folder: {approval.detail.cwd}</p>}
+                      {approval.deny_only && <p className="mt-2 text-amber-600">This permission request is deny-only because the bridge cannot safely scope a grant.</p>}
+                      <div className="mt-3 flex gap-2">
+                        {!approval.deny_only && (
+                          <button type="button" onClick={() => void decideCodexApproval(approval, 'accept')} className="rounded bg-red-600 px-2.5 py-1.5 text-white">Approve once</button>
+                        )}
+                        <button type="button" onClick={() => void decideCodexApproval(approval, 'decline')} className="rounded border px-2.5 py-1.5" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Decline</button>
+                      </div>
+                    </div>
+                  ))}
+                </article>
+              )}
+              {!busy && nativeResult && (
+                <article className="rounded-lg border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+                  <div className="mb-2 flex items-center gap-2 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
+                    <ShieldCheck className="h-3.5 w-3.5 text-green-600" />Codex subscription CLI · native App Server · Trust Fabric governed
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{nativeResult}</p>
                 </article>
               )}
             </div>
@@ -904,8 +1168,10 @@ export default function AIWorkspace({ mode }: { mode: Mode }) {
         <form onSubmit={submit} className="px-3 py-3 md:px-6">
           {error && <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-red-500"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div>}
           {selectedArtifacts.size > 0 && (
-            <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-1.5 text-xs" style={{ color: 'var(--rc-text-3)' }}>
-              <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} complete file{selectedArtifacts.size === 1 ? '' : 's'} · {Math.ceil(selectedArtifactBytes / 1024)} KB
+            <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-1.5 text-xs" style={{ color: selectedArtifactBytes > 100_000 ? '#dc2626' : 'var(--rc-text-3)' }}>
+              <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} complete file{selectedArtifacts.size === 1 ? '' : 's'} ·{' '}
+              {selectedArtifactBytes.toLocaleString()} chars / {Math.ceil(selectedArtifactBytes / 1024)} KB · ~{Math.ceil(selectedArtifactBytes / 4).toLocaleString()} tokens ·{' '}
+              {selectedArtifactBytes.toLocaleString()} / 100,000 char budget
               <button type="button" onClick={() => setSelectedArtifacts(new Set())} className="ml-1 text-red-500">clear</button>
             </div>
           )}
@@ -1130,6 +1396,7 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
   const routing = governance.routing as { strategy?: string; reason?: string } | undefined;
   const votes = Array.isArray(governance.votes) ? governance.votes : [];
   const citations = Array.isArray(governance.citations) ? governance.citations : [];
+  const contextManifest = governance.context_manifest as ContextManifest | null | undefined;
   const allowed = governance.outcome === 'allowed';
   return (
     <div className="min-w-0 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
@@ -1168,6 +1435,52 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
                 className="flex items-center gap-2 rounded border px-2 py-1 hover:text-red-500" style={{ borderColor: 'var(--rc-border)' }}>
                 <span>[{citation.id}]</span><span className="min-w-0 flex-1 truncate">{citation.title}</span><ExternalLink className="h-3 w-3 shrink-0" />
               </a>
+            ))}
+          </div>
+        </details>
+      )}
+      {contextManifest && (
+        <details className="mt-2">
+          <summary className="cursor-pointer text-red-500">
+            Context sent · {contextManifest.entries.length} file{contextManifest.entries.length === 1 ? '' : 's'} ·{' '}
+            {contextManifest.total_characters_sent.toLocaleString()}/{contextManifest.budget_characters.toLocaleString()} chars ·{' '}
+            ~{contextManifest.total_estimated_tokens.toLocaleString()} tokens · {contextManifest.selected_destination || contextManifest.destination}
+            {contextManifest.explicit ? ' · explicit' : ' · automatic'}
+            {contextManifest.effective_classification && ` · ${contextManifest.effective_classification}`}
+            {contextManifest.blocked && ' · blocked'}
+          </summary>
+          <div className="mt-1.5 space-y-1">
+            {contextManifest.blocked && contextManifest.block_reason && (
+              <div className="rounded border px-2 py-1 text-amber-500" style={{ borderColor: 'var(--rc-border)' }}>{contextManifest.block_reason}</div>
+            )}
+            {contextManifest.attempts?.map((attempt, index) => (
+              <div key={`${attempt.source}-${index}`} className="rounded border px-2 py-1" style={{ borderColor: 'var(--rc-border)' }}>
+                attempt {index + 1}: {attempt.source}{attempt.provider ? ` · ${attempt.provider}` : ''}{attempt.model ? ` · ${attempt.model}` : ''}
+                {' · '}{attempt.policy_outcome} · {attempt.status}{attempt.reason ? ` · ${attempt.reason}` : ''}
+              </div>
+            ))}
+            {contextManifest.fallback_reason && (
+              <div className="rounded border px-2 py-1 text-amber-500" style={{ borderColor: 'var(--rc-border)' }}>
+                fallback: {contextManifest.fallback_reason}
+              </div>
+            )}
+            {contextManifest.entries.map((entry) => (
+              <div key={entry.artifact_id} className="rounded border px-2 py-1" style={{ borderColor: 'var(--rc-border)' }}>
+                <div className="flex flex-wrap items-center gap-x-2">
+                  <span className="min-w-0 flex-1 truncate">{entry.path}</span>
+                  <span style={{ color: entry.disposition === 'sent_full' ? '#16a34a' : entry.disposition === 'blocked_by_policy' ? '#dc2626' : '#d97706' }}>
+                    {entry.disposition.replaceAll('_', ' ')}
+                  </span>
+                  <span>{entry.characters_sent.toLocaleString()} chars</span>
+                  <span>~{entry.estimated_tokens.toLocaleString()} tok</span>
+                  {entry.redacted && <span className="text-amber-500">redacted</span>}
+                </div>
+                <div className="mt-0.5 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>
+                  {entry.selection_reason.replaceAll('_', ' ')}
+                  {entry.citations.length > 0 &&
+                    ` · lines ${entry.citations.map((citation) => `${citation.line_start}-${citation.line_end}`).join(', ')}`}
+                </div>
+              </div>
             ))}
           </div>
         </details>

@@ -334,6 +334,36 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.7 — Pre-release Governance Hardening -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Pre-release Governance Hardening</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.3.7</span>
+          <span class="tag tag-sec">Fail-closed classification</span>
+          <span class="tag tag-feat">Actual route provenance</span>
+          <span class="release-date">July 18, 2026 &nbsp;·&nbsp; Enkstein v0.3.7</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The pre-release runtime now closes classification, streamed-output, browser lifecycle, workspace attribution, and routing-provenance gaps found during final review.</div>
+      <div class="change-section">
+        <div class="change-section-title">Included</div>
+        <ul class="change-list">
+          <li><strong>Effective classification:</strong> governed workspace and native Codex paths use the highest request, conversation, Project, and included-artifact classification; restricted/top-secret paths fail closed without an approved local Brain.</li>
+          <li><strong>Safe Codex output:</strong> agent deltas, plans, diffs, command approvals, and reasons are bounded, DLP-scanned, secret-redacted, injection-checked, and stripped of absolute native paths before client delivery.</li>
+          <li><strong>Browser reliability:</strong> response identity replaces count-based correlation; delayed ChatGPT/Gemini SPA URLs are sanitized, persisted, and restored; durable journal errors use bounded codes only.</li>
+          <li><strong>Task attribution:</strong> Project ids are server-resolved and owner/tenant checked; requester, orchestrator, specialist, classification, and dependency evidence ids reach policy and audit records.</li>
+          <li><strong>Final provenance:</strong> context manifests are reconciled with actual ordered adapter attempts, policy outcomes, selected provider/model, fallback reason, effective classification, redaction, digests, and citations.</li>
+          <li><strong>Known limits:</strong> task-graph timeouts and dependency skipping are implemented, but provider-side cancellation is not claimed; provenance records runtime adapter attempts, not vendor-side prompt retention.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.6 — Governed Workspaces and Runtime Groups -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
@@ -354,10 +384,12 @@
         <div class="change-section-title">Included</div>
         <ul class="change-list">
           <li><strong>Workspace isolation:</strong> Chat never loads Cowork Projects/files, Cowork state remounts independently, and conversation/project/folder changes appear immediately.</li>
-          <li><strong>Governed runtime groups:</strong> Local fails closed at the local profile boundary, Hybrid is local-first, Cloud excludes local/desktop/browser fallbacks, and restricted data remains local.</li>
+          <li><strong>Governed runtime groups:</strong> Local fails closed at the local profile boundary, Hybrid is local-first, Cloud excludes local/desktop/browser fallbacks, and covered restricted workspace requests are pinned local.</li>
           <li><strong>Live Brain readiness:</strong> status discovery passes through Trust Fabric, forced refresh bypasses stale failures, and installed-but-unauthenticated CLIs remain Needs setup.</li>
           <li><strong>Safe CLI bridges:</strong> Claude Code is preferred; Codex and Claude prompts use stdin with read-only/tool-disabled execution. Claude Browser hides only while Claude CLI is healthy.</li>
-          <li><strong>Known limits:</strong> runtime groups are request-level/local-console preferences, not yet persisted per conversation/Project; specialist role routes and additional provider adapters remain planned.</li>
+          <li><strong>Native Codex agent:</strong> connected Cowork projects use one resumable, root-scoped official Codex App Server thread with bounded streamed events, governed one-shot command/file approvals, deny-only permission expansion, cancellation, and recovery.</li>
+          <li><strong>Bounded task graph:</strong> explicit specialist DAGs use the existing Cortex Gateway with graph and peer-message policy checks, ordered fallback, isolated bounded concurrency, timeouts, dependency skipping, and per-node attempt provenance.</li>
+          <li><strong>Known limits:</strong> runtime groups and role presets are not persisted per conversation/Project; native agent output is transient rather than conversation history; hardware-aware model recommendations/confirmed pulls and additional provider adapters remain planned.</li>
         </ul>
       </div>
     </div>
@@ -2887,7 +2919,7 @@
     <div class="release-body">
       <div class="release-description">
         Security Copilot now supports <strong>NVIDIA NIM</strong> — 80+ frontier models with a
-        free API tier, no credit card required. Add your free key from
+        API free tier, subject to NVIDIA's current terms. Add your API key from
         <a href="https://build.nvidia.com/models" target="_blank" rel="noopener" style="color:var(--nvidia); text-decoration:underline;">build.nvidia.com/models</a>
         via the Connector Marketplace and Security Copilot activates immediately with full
         live tool calling: CVE lookups, CISA KEV feed, MITRE ATT&amp;CK search, findings queries,
@@ -2897,7 +2929,7 @@
       <div class="change-section">
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
-          <li><strong>NVIDIA NIM connector</strong> added to Connector Marketplace — configure your free API key in 4 steps.</li>
+          <li><strong>NVIDIA NIM connector</strong> added to Connector Marketplace — configure an NVIDIA API key in 4 steps.</li>
           <li><strong>Security Copilot auto-activates</strong> when a ready provider is detected on page load.</li>
           <li><strong>Live model list</strong> fetched from the NIM API on each page load — only models confirmed to support tool calling are shown.</li>
           <li><strong>8 tool-capable models</strong> available: Llama 3.3 70B (recommended), Llama 3.1 70B, Nemotron 70B, Nemotron Super 49B, Mistral Large 2, Mistral Nemo, Qwen 2.5 72B, Llama 3.1 8B.</li>
@@ -2919,7 +2951,7 @@
       <div class="change-section">
         <div class="change-section-title">How to Enable</div>
         <ul class="change-list">
-          <li>Get a free NVIDIA NIM key at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener" style="color:var(--nvidia);">build.nvidia.com/models</a> — no credit card needed.</li>
+          <li>Review NVIDIA's current API free-tier terms and obtain a key at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener" style="color:var(--nvidia);">build.nvidia.com/models</a>.</li>
           <li>Open RegentClaw → <strong>Connectors</strong> → search <em>NVIDIA NIM</em> → click <strong>Configure</strong>.</li>
           <li>Paste your key → complete the 4-step flow → done.</li>
           <li>Navigate to <strong>AI Security</strong> → Security Copilot auto-activates with NVIDIA NIM selected.</li>
@@ -2936,7 +2968,7 @@
         </a>
         <span class="divider">|</span>
         <a href="https://build.nvidia.com/models" target="_blank" rel="noopener">
-          &#9655; Get free NVIDIA NIM key
+          &#9655; Review NVIDIA NIM API access
         </a>
       </div>
     </div>

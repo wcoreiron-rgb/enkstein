@@ -2,6 +2,7 @@ import Foundation
 import Network
 import AppKit
 import ApplicationServices
+import CryptoKit
 
 private struct BridgeConfig {
     let port: NWEndpoint.Port
@@ -30,21 +31,105 @@ private enum BridgeError: Error {
     case invocationFailed(String)
 }
 
+// Native protocol version advertised by /v1/browser/capabilities. Lets the extension detect
+// lease/ack/progress/cancel support and fall back to the legacy poll/complete-only flow otherwise.
+private enum BrowserTaskState: String {
+    case queued, leased, submitted, streaming, completed, failed, cancelled, expired
+
+    static let terminal: Set<BrowserTaskState> = [.completed, .failed, .cancelled, .expired]
+}
+
+// Durable journal record: metadata and digests only. Never add prompt/response/credentials/
+// token/cookie/raw-data fields here — the journal file survives broker restarts on disk.
+private struct BrowserTaskRecord {
+    let taskID: String
+    let brain: String
+    let provider: String
+    let sessionID: String?
+    let sequence: Int
+    let promptDigest: String
+    var state: BrowserTaskState
+    var createdAt: Date
+    var leasedAt: Date?
+    var leaseExpiresAt: Date?
+    var attempts: Int
+    var progressAt: Date?
+    var detail: String
+
+    // Volatile only: never written to the journal file.
+    var prompt: String
+    var response: String?
+    var success: Bool?
+
+    private var safeJournalDetail: String {
+        guard !detail.isEmpty else { return "" }
+        let safeDetails = [
+            "Task lease exceeded the maximum retry attempts.",
+            "Task cancelled.",
+            "Browser session invocation timed out before the extension completed the task.",
+            "Task payload is unavailable after a Brain Bridge restart; ask the extension to resubmit.",
+        ]
+        return safeDetails.contains(detail)
+            ? detail
+            : "Task has an operator-visible detail that was not persisted."
+    }
+
+    var journalDictionary: [String: Any] {
+        var dict: [String: Any] = [
+            "task_id": taskID,
+            "brain": brain,
+            "provider": provider,
+            "sequence": sequence,
+            "prompt_digest": promptDigest,
+            "state": state.rawValue,
+            "attempts": attempts,
+            "created_at": createdAt.timeIntervalSince1970,
+            "detail": safeJournalDetail,
+        ]
+        if let sessionID { dict["session_id"] = sessionID }
+        if let leasedAt { dict["leased_at"] = leasedAt.timeIntervalSince1970 }
+        if let leaseExpiresAt { dict["lease_expires_at"] = leaseExpiresAt.timeIntervalSince1970 }
+        if let progressAt { dict["progress_at"] = progressAt.timeIntervalSince1970 }
+        return dict
+    }
+}
+
 private final class BrowserSessionBroker {
+    // Advertised on /v1/browser/capabilities so the extension can detect the lease/ack/progress/
+    // cancel protocol and fall back to legacy poll+complete-only behavior when absent.
+    static let capabilities: [String: Any] = [
+        "protocol": 2,
+        "features": ["lease", "submit_ack", "progress", "complete", "cancel"],
+        "endpoints": [
+            "poll": "/v1/browser/poll",
+            "ack": "/v1/browser/ack",
+            "progress": "/v1/browser/progress",
+            "complete": "/v1/browser/complete",
+            "cancel": "/v1/browser/cancel",
+        ],
+    ]
+
+    private static let leaseDuration: TimeInterval = 20
+    private static let maxAttempts = 2
+    private static let maxTerminalHistory = 200
+
     private let condition = NSCondition()
     private var pairingCodes: [String: Date] = [:]
-    private var queuedTasks: [[String: Any]] = []
-    private var pendingTaskIDs: Set<String> = []
-    private var completedTasks: [String: [String: Any]] = [:]
+    private var tasks: [String: BrowserTaskRecord] = [:]
+    private var queue: [String] = []
+    private var sessionSequences: [String: Int] = [:]
+    private var pendingCancelSignals: [String] = []
     private var providers: Set<String> = []
     private var lastSeen: Date?
     private var token: String
     private let tokenURL: URL
+    private let journalURL: URL
 
     init() {
         let directory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Marcellus", isDirectory: true)
         tokenURL = directory.appendingPathComponent("browser-bridge.token")
+        journalURL = directory.appendingPathComponent("browser-broker-journal.json")
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         if let existing = try? String(contentsOf: tokenURL, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines), existing.count >= 48 {
@@ -53,6 +138,7 @@ private final class BrowserSessionBroker {
             token = Self.newToken()
             persistToken()
         }
+        loadJournalAtStartup()
     }
 
     func createPairingCode() -> String {
@@ -83,27 +169,115 @@ private final class BrowserSessionBroker {
         return difference == 0
     }
 
-    func poll(availableProviders: [String]) -> [String: Any]? {
+    // poll re-leases an explicit task_id (service-worker restart recovery) when provided, otherwise
+    // leases the next queued task matching the extension's currently available providers. Returns a
+    // cancel_task_id when an invoke timeout/cancel needs to be signalled back to the extension.
+    func poll(availableProviders: [String], requestedTaskID: String?) -> (task: [String: Any]?, cancelTaskID: String?) {
         condition.lock()
         defer { condition.unlock() }
         providers = Set(availableProviders.filter { ["chatgpt", "claude", "gemini"].contains($0) })
         lastSeen = Date()
-        guard let index = queuedTasks.firstIndex(where: { task in
-            guard let brain = task["brain"] as? String else { return false }
-            return providers.contains(Self.provider(for: brain))
-        }) else { return nil }
-        return queuedTasks.remove(at: index)
+
+        let cancelSignal = pendingCancelSignals.isEmpty ? nil : pendingCancelSignals.removeFirst()
+
+        if let requestedTaskID {
+            guard var record = tasks[requestedTaskID] else { return (nil, cancelSignal) }
+            if BrowserTaskState.terminal.contains(record.state) { return (nil, requestedTaskID) }
+            let leaseExpired = record.leaseExpiresAt.map { $0 < Date() } ?? true
+            if leaseExpired, record.attempts >= Self.maxAttempts {
+                record.state = .expired
+                record.detail = "Task lease exceeded the maximum retry attempts."
+                record.progressAt = Date()
+                record.prompt = ""
+                tasks[requestedTaskID] = record
+                persistJournal()
+                return (nil, requestedTaskID)
+            }
+            if record.state == .queued || leaseExpired { record.attempts += 1 }
+            record.state = .leased
+            record.leasedAt = Date()
+            record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
+            tasks[requestedTaskID] = record
+            persistJournal()
+            return (payload(for: record), cancelSignal)
+        }
+
+        guard let index = queue.firstIndex(where: { id in
+            guard let task = tasks[id], task.state == .queued else { return false }
+            return providers.contains(task.provider)
+        }) else { return (nil, cancelSignal) }
+
+        let taskID = queue.remove(at: index)
+        guard var record = tasks[taskID] else { return (nil, cancelSignal) }
+        record.state = .leased
+        record.attempts += 1
+        record.leasedAt = Date()
+        record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
+        tasks[taskID] = record
+        persistJournal()
+        return (payload(for: record), cancelSignal)
+    }
+
+    // ACK transitions leased -> submitted once the extension has written the prompt into the page.
+    func ack(taskID: String) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard var record = tasks[taskID], record.state == .leased else { return false }
+        record.state = .submitted
+        record.progressAt = Date()
+        record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
+        tasks[taskID] = record
+        persistJournal()
+        return true
+    }
+
+    // progress only accepts submitted/streaming states with bounded detail text, and extends the lease.
+    func progress(taskID: String, state: String, detail: String?) -> Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        guard var record = tasks[taskID],
+              record.state == .submitted || record.state == .streaming,
+              let newState = BrowserTaskState(rawValue: state),
+              newState == .submitted || newState == .streaming else { return false }
+        record.state = newState
+        record.progressAt = Date()
+        record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
+        if let detail { record.detail = String(detail.prefix(500)) }
+        tasks[taskID] = record
+        persistJournal()
+        return true
     }
 
     func complete(taskID: String, success: Bool, response: String?, detail: String?) {
         condition.lock()
         defer { condition.unlock() }
-        guard pendingTaskIDs.contains(taskID) else { return }
-        completedTasks[taskID] = [
-            "success": success,
-            "response": response?.prefix(120_000).description ?? "",
-            "detail": detail?.prefix(500).description ?? "",
-        ]
+        guard var record = tasks[taskID],
+              [.leased, .submitted, .streaming].contains(record.state) else { return }
+        record.state = success ? .completed : .failed
+        record.response = response?.prefix(120_000).description ?? ""
+        record.detail = detail?.prefix(500).description ?? ""
+        record.success = success
+        record.progressAt = Date()
+        record.prompt = ""
+        tasks[taskID] = record
+        queue.removeAll { $0 == taskID }
+        persistJournal()
+        condition.broadcast()
+    }
+
+    // Idempotent: cancelling an already-terminal task is a no-op. Never persists response content.
+    func cancel(taskID: String) {
+        condition.lock()
+        defer { condition.unlock() }
+        guard var record = tasks[taskID], !BrowserTaskState.terminal.contains(record.state) else { return }
+        record.state = .cancelled
+        record.progressAt = Date()
+        record.detail = "Task cancelled."
+        record.prompt = ""
+        record.response = nil
+        tasks[taskID] = record
+        queue.removeAll { $0 == taskID }
+        persistJournal()
         condition.broadcast()
     }
 
@@ -117,24 +291,50 @@ private final class BrowserSessionBroker {
                 "The Enkstein browser companion is not connected to a signed-in \(provider.capitalized) tab."
             )
         }
-        let taskID = UUID().uuidString.lowercased()
-        pendingTaskIDs.insert(taskID)
-        var task: [String: Any] = [
-            "task_id": taskID,
-            "brain": brain,
-            "provider": provider,
-            "prompt": prompt,
-        ]
-        if let sessionID { task["session_id"] = sessionID }
-        queuedTasks.append(task)
+        let generated = nextTaskID(provider: provider, sessionID: sessionID, prompt: prompt)
+        let record = BrowserTaskRecord(
+            taskID: generated.id, brain: brain, provider: provider, sessionID: sessionID,
+            sequence: generated.sequence, promptDigest: generated.digest, state: .queued,
+            createdAt: Date(), leasedAt: nil, leaseExpiresAt: nil, attempts: 0,
+            progressAt: nil, detail: "", prompt: prompt, response: nil, success: nil
+        )
+        tasks[record.taskID] = record
+        queue.append(record.taskID)
+        persistJournal()
         condition.broadcast()
+
         let deadline = Date().addingTimeInterval(timeout)
-        while completedTasks[taskID] == nil && condition.wait(until: deadline) && Date() < deadline {}
-        let result = completedTasks.removeValue(forKey: taskID)
-        pendingTaskIDs.remove(taskID)
-        queuedTasks.removeAll { ($0["task_id"] as? String) == taskID }
+        while true {
+            guard let current = tasks[record.taskID] else { break }
+            if BrowserTaskState.terminal.contains(current.state) { break }
+            if !condition.wait(until: deadline) || Date() >= deadline { break }
+        }
+
+        var result: [String: Any]?
+        if let final = tasks[record.taskID], final.state == .completed || final.state == .failed {
+            result = ["success": final.success ?? false, "response": final.response ?? "", "detail": final.detail]
+            var retained = final
+            retained.prompt = ""
+            retained.response = nil
+            retained.success = nil
+            tasks[record.taskID] = retained
+        } else if var timedOut = tasks[record.taskID] {
+            timedOut.state = timedOut.attempts > 0 ? .cancelled : .expired
+            timedOut.detail = "Browser session invocation timed out before the extension completed the task."
+            timedOut.progressAt = Date()
+            timedOut.prompt = ""
+            timedOut.response = nil
+            tasks[record.taskID] = timedOut
+            pendingCancelSignals.append(record.taskID)
+            queue.removeAll { $0 == record.taskID }
+        }
+        persistJournal()
         condition.unlock()
-        guard let result else { throw BridgeError.invocationFailed("Browser session invocation timed out.") }
+        guard let result else {
+            throw BridgeError.invocationFailed(
+                "Browser session invocation timed out. The Enkstein browser companion was signalled to cancel the task."
+            )
+        }
         return result
     }
 
@@ -156,6 +356,90 @@ private final class BrowserSessionBroker {
                 ? "Ready through a visible signed-in \(label) browser tab."
                 : "Install and pair the Enkstein browser companion, then sign in to \(label).",
         ]
+    }
+
+    private func payload(for record: BrowserTaskRecord) -> [String: Any] {
+        var dict: [String: Any] = [
+            "task_id": record.taskID,
+            "brain": record.brain,
+            "provider": record.provider,
+            "prompt": record.prompt,
+        ]
+        if let sessionID = record.sessionID { dict["session_id"] = sessionID }
+        return dict
+    }
+
+    // Stable scoped SHA-256 task IDs: provider + opaque session ID + per-session monotonic sequence +
+    // prompt digest. Only the sequence and digest are persisted; the prompt itself never is.
+    private func nextTaskID(provider: String, sessionID: String?, prompt: String) -> (id: String, sequence: Int, digest: String) {
+        let sessionKey = "\(provider)|\(sessionID ?? "-")"
+        let sequence = (sessionSequences[sessionKey] ?? 0) + 1
+        sessionSequences[sessionKey] = sequence
+        let digest = SHA256.hash(data: Data(prompt.utf8)).map { String(format: "%02x", $0) }.joined()
+        let scope = "\(sessionKey)|\(sequence)|\(digest)"
+        let id = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
+        return (id, sequence, digest)
+    }
+
+    // Runs once at broker startup: any journaled task that was not already terminal had its volatile
+    // prompt lost when the process exited, so it is converted to expired with an actionable detail
+    // instead of being left stuck or silently re-leased with a payload that no longer exists.
+    private func loadJournalAtStartup() {
+        guard let data = try? Data(contentsOf: journalURL),
+              let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+        for record in records {
+            guard let taskID = record["task_id"] as? String,
+                  let brain = record["brain"] as? String,
+                  let provider = record["provider"] as? String,
+                  let sequence = record["sequence"] as? Int,
+                  let promptDigest = record["prompt_digest"] as? String,
+                  let stateRaw = record["state"] as? String else { continue }
+            let sessionID = record["session_id"] as? String
+            let createdAt = (record["created_at"] as? Double).map { Date(timeIntervalSince1970: $0) } ?? Date()
+            var loaded = BrowserTaskRecord(
+                taskID: taskID, brain: brain, provider: provider, sessionID: sessionID,
+                sequence: sequence, promptDigest: promptDigest, state: .expired,
+                createdAt: createdAt, leasedAt: nil, leaseExpiresAt: nil,
+                attempts: record["attempts"] as? Int ?? 0, progressAt: Date(),
+                detail: "", prompt: "", response: nil, success: nil
+            )
+            if let resolved = BrowserTaskState(rawValue: stateRaw), BrowserTaskState.terminal.contains(resolved) {
+                loaded.state = resolved
+                loaded.detail = (record["detail"] as? String).map { String($0.prefix(500)) } ?? ""
+            } else {
+                loaded.state = .expired
+                loaded.detail = "Task payload is unavailable after a Brain Bridge restart; ask the extension to resubmit."
+            }
+            tasks[taskID] = loaded
+            if let sessionID {
+                let key = "\(provider)|\(sessionID)"
+                sessionSequences[key] = max(sessionSequences[key] ?? 0, sequence)
+            }
+        }
+        persistJournal()
+    }
+
+    // Bounds the journal to the most recent terminal tasks so the file and in-memory map cannot grow
+    // without limit across a long-running broker process.
+    private func pruneTerminalHistory() {
+        let terminalIDs = tasks.values
+            .filter { BrowserTaskState.terminal.contains($0.state) }
+            .sorted { ($0.progressAt ?? $0.createdAt) < ($1.progressAt ?? $1.createdAt) }
+            .map { $0.taskID }
+        guard terminalIDs.count > Self.maxTerminalHistory else { return }
+        for id in terminalIDs.prefix(terminalIDs.count - Self.maxTerminalHistory) {
+            tasks.removeValue(forKey: id)
+        }
+    }
+
+    // Atomic, owner-only (0600) write. journalDictionary only ever carries metadata/digests — see its
+    // definition above for the allowlist of fields; prompt/response/credentials/token/cookie are excluded.
+    private func persistJournal() {
+        pruneTerminalHistory()
+        let records = tasks.values.map { $0.journalDictionary }
+        guard let data = try? JSONSerialization.data(withJSONObject: records) else { return }
+        try? data.write(to: journalURL, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: journalURL.path)
     }
 
     private static func provider(for brain: String) -> String {
@@ -186,6 +470,14 @@ private final class BrainBridge {
         "java", "js", "json", "jsx", "kt", "kts", "log", "md", "mjs", "ps1", "py", "rb", "rs",
         "sh", "sql", "tf", "tfvars", "toml", "ts", "tsx", "txt", "xml", "yaml", "yml",
     ])
+
+    private lazy var codexSessions = CodexAppServerSessionManager(
+        findExecutable: { [weak self] name in self?.findExecutable(name) },
+        workspaceRoot: { [weak self] token in
+            guard let self else { throw BridgeError.invalidRequest }
+            return try self.workspaceRoot(token: token)
+        }
+    )
 
     init(config: BridgeConfig) {
         self.config = config
@@ -280,6 +572,15 @@ private final class BrainBridge {
             return
         }
 
+        if request.method == "POST", request.path == "/v1/browser/capabilities" {
+            guard browserBroker.validate(candidate: request.headers["x-marcellus-browser-token"] ?? "") else {
+                send(connection, status: 401, body: ["detail": "Browser companion is not paired"])
+                return
+            }
+            send(connection, status: 200, body: BrowserSessionBroker.capabilities)
+            return
+        }
+
         if request.method == "POST", request.path == "/v1/browser/poll" {
             guard browserBroker.validate(candidate: request.headers["x-marcellus-browser-token"] ?? ""),
                   let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
@@ -287,7 +588,47 @@ private final class BrainBridge {
                 return
             }
             let providers = payload["providers"] as? [String] ?? []
-            send(connection, status: 200, body: ["task": browserBroker.poll(availableProviders: providers) ?? NSNull()])
+            let requestedTaskID = payload["task_id"] as? String
+            let result = browserBroker.poll(availableProviders: providers, requestedTaskID: requestedTaskID)
+            var body: [String: Any] = ["task": result.task ?? NSNull()]
+            if let cancelTaskID = result.cancelTaskID { body["cancel_task_id"] = cancelTaskID }
+            send(connection, status: 200, body: body)
+            return
+        }
+
+        if request.method == "POST", request.path == "/v1/browser/ack" {
+            guard browserBroker.validate(candidate: request.headers["x-marcellus-browser-token"] ?? ""),
+                  let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let taskID = payload["task_id"] as? String else {
+                send(connection, status: 401, body: ["detail": "Browser companion is not paired"])
+                return
+            }
+            send(connection, status: 200, body: ["accepted": browserBroker.ack(taskID: taskID)])
+            return
+        }
+
+        if request.method == "POST", request.path == "/v1/browser/progress" {
+            guard browserBroker.validate(candidate: request.headers["x-marcellus-browser-token"] ?? ""),
+                  let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let taskID = payload["task_id"] as? String,
+                  let state = payload["state"] as? String else {
+                send(connection, status: 401, body: ["detail": "Browser companion is not paired"])
+                return
+            }
+            let detail = payload["detail"] as? String
+            send(connection, status: 200, body: ["accepted": browserBroker.progress(taskID: taskID, state: state, detail: detail)])
+            return
+        }
+
+        if request.method == "POST", request.path == "/v1/browser/cancel" {
+            guard browserBroker.validate(candidate: request.headers["x-marcellus-browser-token"] ?? ""),
+                  let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let taskID = payload["task_id"] as? String else {
+                send(connection, status: 401, body: ["detail": "Browser companion is not paired"])
+                return
+            }
+            browserBroker.cancel(taskID: taskID)
+            send(connection, status: 200, body: ["accepted": true])
             return
         }
 
@@ -422,6 +763,55 @@ private final class BrainBridge {
                     self.send(connection, status: 200, body: body)
                 } catch {
                     self.send(connection, status: 400, body: ["detail": "Workspace operation rejected"])
+                }
+            }
+            return
+        }
+
+        if request.method == "POST", request.path.hasPrefix("/v1/codex/") {
+            guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any] else {
+                send(connection, status: 400, body: ["detail": "Invalid Codex payload"])
+                return
+            }
+            queue.async { [weak self] in
+                guard let self else { return }
+                do {
+                    let body: [String: Any]
+                    switch request.path {
+                    case "/v1/codex/start":
+                        guard let scope = payload["scope_digest"] as? String,
+                              let token = payload["token"] as? String,
+                              let sandbox = payload["sandbox"] as? String else { throw BridgeError.invalidRequest }
+                        body = try self.codexSessions.start(scopeDigest: scope, token: token, sandbox: sandbox)
+                    case "/v1/codex/turn":
+                        guard let scope = payload["scope_digest"] as? String,
+                              let token = payload["token"] as? String,
+                              let prompt = payload["prompt"] as? String else { throw BridgeError.invalidRequest }
+                        body = try self.codexSessions.turn(scopeDigest: scope, token: token, prompt: prompt)
+                    case "/v1/codex/status":
+                        guard let scope = payload["scope_digest"] as? String,
+                              let token = payload["token"] as? String else { throw BridgeError.invalidRequest }
+                        let cursor = (payload["cursor"] as? NSNumber)?.intValue ?? 0
+                        body = try self.codexSessions.status(scopeDigest: scope, token: token, cursor: cursor)
+                    case "/v1/codex/approve":
+                        guard let scope = payload["scope_digest"] as? String,
+                              let token = payload["token"] as? String,
+                              let approvalId = payload["approval_id"] as? String,
+                              let decision = payload["decision"] as? String else { throw BridgeError.invalidRequest }
+                        body = try self.codexSessions.approve(scopeDigest: scope, token: token, approvalId: approvalId, decision: decision)
+                    case "/v1/codex/cancel":
+                        guard let scope = payload["scope_digest"] as? String,
+                              let token = payload["token"] as? String else { throw BridgeError.invalidRequest }
+                        body = try self.codexSessions.cancel(scopeDigest: scope, token: token)
+                    default:
+                        self.send(connection, status: 404, body: ["detail": "Not found"])
+                        return
+                    }
+                    self.send(connection, status: 200, body: body)
+                } catch let CodexAppServerSessionManager.SessionError.invalid(detail) {
+                    self.send(connection, status: 400, body: ["detail": detail])
+                } catch {
+                    self.send(connection, status: 400, body: ["detail": "Codex session request rejected"])
                 }
             }
             return
@@ -1044,6 +1434,954 @@ private final class BrainBridge {
         var difference: UInt8 = 0
         for index in a.indices { difference |= a[index] ^ b[index] }
         return difference == 0
+    }
+}
+
+/// A reusable, long-lived Codex `app-server` connection spoken over stdio using
+/// newline-delimited JSON-RPC. The prompt (and every other free-text body) is
+/// never passed on argv and is never retained inside this process: events are
+/// sanitized down to routing/telemetry metadata the moment they are ingested.
+private final class CodexAppServerProcess {
+    struct SanitizedEvent {
+        let cursor: Int
+        let channel: String  // "notification" or "serverRequest"
+        let fields: [String: Any]
+        // Numeric JSON-RPC id retained ONLY for allowlisted approval server
+        // requests so the session manager can respond exactly once. Every other
+        // server request drops its id (and body) at the boundary.
+        let approvalRequestId: Int?
+        let approvalMethod: String?
+        // Bounded, non-sensitive approval detail surfaced transiently to the
+        // matching thread for an informed decision. Never persisted or logged.
+        let approvalDetail: [String: Any]?
+
+        /// A dictionary guaranteed to contain only JSON-serialisable values so it
+        /// can be handed straight to callers over HTTP.
+        var jsonSafe: [String: Any] {
+            CodexAppServerProcess.jsonSafe(fields)
+        }
+    }
+
+    /// Server-initiated requests we are willing to surface for an operator
+    /// decision. Anything else is auto-declined with a bodiless response.
+    static let approvalMethods: Set<String> = [
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+        "item/permissions/requestApproval",
+    ]
+
+    static func jsonSafe(_ value: Any) -> [String: Any] {
+        func coerce(_ any: Any) -> Any? {
+            switch any {
+            case let number as NSNumber: return number
+            case let string as String: return string
+            case let flag as Bool: return flag
+            case let dict as [String: Any]:
+                var out: [String: Any] = [:]
+                for (key, inner) in dict { if let safe = coerce(inner) { out[key] = safe } }
+                return out
+            case let array as [Any]:
+                return array.compactMap { coerce($0) }
+            default:
+                return nil
+            }
+        }
+        return (coerce(value) as? [String: Any]) ?? [:]
+    }
+
+    private enum CodexProcessError: Error {
+        case executableMissing
+        case notRunning
+        case writeFailed
+        case timedOut
+        case terminated
+    }
+
+    private let executableLocator: (String) -> String?
+    private let clientInfo: [String: Any]
+
+    private let writeLock = NSLock()
+    private let stateLock = NSLock()
+    private let waiterCondition = NSCondition()
+
+    private var process: Process?
+    private var stdinPipe: Pipe?
+    private var stdoutPipe: Pipe?
+    private var stderrPipe: Pipe?
+    private var readerThread: Thread?
+    private var stderrThread: Thread?
+
+    private var nextID: Int = 0
+    private var running = false
+
+    // Response routing: id -> completed result or nil while pending.
+    private var pendingResponses: [Int: Result<Any?, Error>] = [:]
+    private var awaitedIDs: Set<Int> = []
+
+    // Bounded ring of sanitized events surfaced to callers via drainEvents.
+    private let maxEvents = 500
+    // Hard cap on any single retained text field (transient delta / diff /
+    // approval detail). Keeps the in-memory ring bounded and non-abusive.
+    static let maxTextField = 32 * 1024
+    private var events: [SanitizedEvent] = []
+    private var eventCursor = 0
+    private var readBuffer = Data()
+
+    init(executableLocator: @escaping (String) -> String?) {
+        self.executableLocator = executableLocator
+        self.clientInfo = [
+            "name": "EnksteinBrainBridge",
+            "version": "1",
+        ]
+    }
+
+    // MARK: Lifecycle
+
+    var isRunning: Bool {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return running && (process?.isRunning ?? false)
+    }
+
+    func start() throws {
+        stateLock.lock()
+        if running {
+            stateLock.unlock()
+            return
+        }
+        stateLock.unlock()
+
+        guard let executable = executableLocator("codex") else {
+            throw CodexProcessError.executableMissing
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = ["app-server", "--listen", "stdio://"]
+        process.environment = [
+            "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
+            "PATH": "/Applications/ChatGPT.app/Contents/Resources:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            "LANG": "en_US.UTF-8",
+        ]
+
+        let stdinPipe = Pipe()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+        process.terminationHandler = { [weak self] _ in
+            self?.handleTermination()
+        }
+
+        try process.run()
+
+        stateLock.lock()
+        self.process = process
+        self.stdinPipe = stdinPipe
+        self.stdoutPipe = stdoutPipe
+        self.stderrPipe = stderrPipe
+        self.running = true
+        stateLock.unlock()
+
+        let reader = Thread { [weak self] in self?.readLoop() }
+        reader.name = "codex-app-server-reader"
+        reader.stackSize = 1 << 20
+        stateLock.lock(); self.readerThread = reader; stateLock.unlock()
+        reader.start()
+
+        // Concurrently drain and discard stderr so the app-server can never
+        // deadlock on a full stderr pipe. Diagnostics may be sensitive, so we
+        // never retain, journal, or log them.
+        let stderrReader = Thread { [weak self] in self?.stderrDrainLoop() }
+        stderrReader.name = "codex-app-server-stderr"
+        stderrReader.stackSize = 1 << 18
+        stateLock.lock(); self.stderrThread = stderrReader; stateLock.unlock()
+        stderrReader.start()
+
+        do {
+            try handshake()
+        } catch {
+            // A failed handshake must cleanly terminate the transport rather
+            // than leave an orphaned process attached to live pipes.
+            stop()
+            throw error
+        }
+    }
+
+    /// Reads stderr to EOF and discards every byte. Retaining stderr risks
+    /// leaking prompt/response fragments, so nothing here is kept.
+    private func stderrDrainLoop() {
+        guard let handle = stderrPipe?.fileHandleForReading else { return }
+        while true {
+            let chunk = handle.availableData
+            if chunk.isEmpty { break }
+            // Intentionally discarded.
+        }
+    }
+
+    func stop() {
+        stateLock.lock()
+        let process = self.process
+        running = false
+        stateLock.unlock()
+        process?.terminationHandler = nil
+        if process?.isRunning ?? false {
+            process?.terminate()
+        }
+        handleTermination()
+    }
+
+    private func handshake() throws {
+        var params: [String: Any] = ["clientInfo": clientInfo]
+        params["capabilities"] = ["experimentalApi": false]
+        _ = try request(method: "initialize", params: params)
+        try notify(method: "initialized", params: nil)
+    }
+
+    // MARK: Public JSON-RPC surface
+
+    @discardableResult
+    func request(method: String, params: [String: Any]?) throws -> Any? {
+        stateLock.lock()
+        guard running else { stateLock.unlock(); throw CodexProcessError.notRunning }
+        nextID += 1
+        let id = nextID
+        stateLock.unlock()
+
+        waiterCondition.lock()
+        awaitedIDs.insert(id)
+        waiterCondition.unlock()
+
+        var message: [String: Any] = ["id": id, "method": method]
+        if let params { message["params"] = params }
+        do {
+            try writeMessage(message)
+        } catch {
+            waiterCondition.lock()
+            awaitedIDs.remove(id)
+            pendingResponses.removeValue(forKey: id)
+            waiterCondition.unlock()
+            throw error
+        }
+
+        let deadline = Date().addingTimeInterval(30)
+        waiterCondition.lock()
+        defer { waiterCondition.unlock() }
+        while pendingResponses[id] == nil {
+            if !waiterCondition.wait(until: deadline) {
+                awaitedIDs.remove(id)
+                throw CodexProcessError.timedOut
+            }
+        }
+        let result = pendingResponses.removeValue(forKey: id)
+        awaitedIDs.remove(id)
+        switch result {
+        case .success(let value)?: return value
+        case .failure(let error)?: throw error
+        case nil: throw CodexProcessError.terminated
+        }
+    }
+
+    func notify(method: String, params: [String: Any]?) throws {
+        stateLock.lock()
+        guard running else { stateLock.unlock(); throw CodexProcessError.notRunning }
+        stateLock.unlock()
+        var message: [String: Any] = ["method": method]
+        if let params { message["params"] = params }
+        try writeMessage(message)
+    }
+
+    func drainEvents(after cursor: Int) -> [SanitizedEvent] {
+        stateLock.lock(); defer { stateLock.unlock() }
+        return events.filter { $0.cursor > cursor }
+    }
+
+    // MARK: Writing
+
+    private func writeMessage(_ message: [String: Any]) throws {
+        guard let data = try? JSONSerialization.data(withJSONObject: message) else {
+            throw CodexProcessError.writeFailed
+        }
+        var line = data
+        line.append(0x0A)  // newline-delimited framing
+        writeLock.lock()
+        defer { writeLock.unlock() }
+        stateLock.lock()
+        let handle = stdinPipe?.fileHandleForWriting
+        stateLock.unlock()
+        guard let handle else { throw CodexProcessError.notRunning }
+        do {
+            try handle.write(contentsOf: line)
+        } catch {
+            throw CodexProcessError.writeFailed
+        }
+    }
+
+    // MARK: Reading
+
+    private func readLoop() {
+        guard let handle = stdoutPipe?.fileHandleForReading else { return }
+        while true {
+            let chunk = handle.availableData
+            if chunk.isEmpty { break }
+            readBuffer.append(chunk)
+            while let newlineIndex = readBuffer.firstIndex(of: 0x0A) {
+                let lineData = readBuffer.subdata(in: readBuffer.startIndex..<newlineIndex)
+                readBuffer.removeSubrange(readBuffer.startIndex...newlineIndex)
+                if lineData.isEmpty { continue }
+                handleLine(lineData)
+            }
+        }
+        handleTermination()
+    }
+
+    private func handleLine(_ data: Data) {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let message = object as? [String: Any] else { return }
+
+        let hasID = message["id"] != nil
+        let hasMethod = message["method"] != nil
+
+        if hasID && !hasMethod {
+            // Response to one of our requests.
+            guard let id = numericID(message["id"]) else { return }
+            let result: Result<Any?, Error>
+            if let errorObject = message["error"] as? [String: Any] {
+                result = .failure(CodexRPCError(sanitizedError(errorObject)))
+            } else {
+                result = .success(message["result"])
+            }
+            waiterCondition.lock()
+            if awaitedIDs.contains(id) {
+                pendingResponses[id] = result
+                waiterCondition.broadcast()
+            }
+            waiterCondition.unlock()
+            return
+        }
+
+        // Server-initiated request (has id + method) or notification (method only).
+        if hasID {
+            let method = message["method"] as? String
+            let requestId = numericID(message["id"])
+            if let method, let requestId, CodexAppServerProcess.approvalMethods.contains(method) {
+                let params = (message["params"] as? [String: Any]) ?? [:]
+                ingest(channel: "serverRequest", message: message,
+                       approvalRequestId: requestId, approvalMethod: method,
+                       approvalDetail: approvalDetail(method: method, params: params))
+            } else {
+                // Auto-decline every unsupported server request without ever
+                // exposing its body, and never retain a routable id for it.
+                if let requestId {
+                    respondError(id: requestId, code: -32601, message: "Unsupported request")
+                }
+                ingest(channel: "serverRequest",
+                       message: ["method": method as Any].compactMapValues { $0 },
+                       approvalRequestId: nil, approvalMethod: nil, approvalDetail: nil)
+            }
+            return
+        }
+        ingest(channel: "notification", message: message,
+               approvalRequestId: nil, approvalMethod: nil, approvalDetail: nil)
+    }
+
+    /// Writes a JSON-RPC response for a server-initiated request. Used only to
+    /// answer allowlisted approval requests (accept/decline) exactly once.
+    func respond(id: Int, result: [String: Any]) {
+        try? writeMessage(["id": id, "result": result])
+    }
+
+    func respondError(id: Int, code: Int, message: String) {
+        try? writeMessage(["id": id, "error": ["code": code, "message": message]])
+    }
+
+    private func ingest(channel: String, message: [String: Any],
+                        approvalRequestId: Int?, approvalMethod: String?,
+                        approvalDetail: [String: Any]?) {
+        let fields = sanitize(message)
+        stateLock.lock()
+        eventCursor += 1
+        events.append(SanitizedEvent(cursor: eventCursor, channel: channel, fields: fields,
+                                     approvalRequestId: approvalRequestId,
+                                     approvalMethod: approvalMethod,
+                                     approvalDetail: approvalDetail))
+        if events.count > maxEvents {
+            events.removeFirst(events.count - maxEvents)
+        }
+        stateLock.unlock()
+    }
+
+    // MARK: Termination
+
+    private func handleTermination() {
+        stateLock.lock()
+        running = false
+        stateLock.unlock()
+        // Fail every pending and awaited request so callers unblock.
+        waiterCondition.lock()
+        for id in awaitedIDs where pendingResponses[id] == nil {
+            pendingResponses[id] = .failure(CodexProcessError.terminated)
+        }
+        waiterCondition.broadcast()
+        waiterCondition.unlock()
+    }
+
+    // MARK: Sanitization
+
+    private func numericID(_ raw: Any?) -> Int? {
+        if let value = raw as? Int { return value }
+        if let value = raw as? NSNumber { return value.intValue }
+        if let value = raw as? String { return Int(value) }
+        return nil
+    }
+
+    /// Retains only routing/telemetry metadata. Every free-text body — prompts,
+    /// text, deltas, commands, arguments, content, output, and raw patch bodies —
+    /// is discarded at the boundary and never stored.
+    private func sanitize(_ message: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let method = message["method"] as? String { out["method"] = method }
+
+        let params = (message["params"] as? [String: Any]) ?? message
+        if let threadId = params["threadId"] as? String { out["threadId"] = threadId }
+        if let turnId = params["turnId"] as? String { out["turnId"] = turnId }
+
+        // `turn/completed` carries the authoritative lifecycle inside a nested
+        // Turn object. Retain only its opaque id and enum status; never retain
+        // the turn body or any model content.
+        if let turn = params["turn"] as? [String: Any] {
+            if out["turnId"] == nil, let id = turn["id"] as? String { out["turnId"] = id }
+            if let status = turn["status"] as? String { out["turnStatus"] = status }
+        }
+
+        if let item = params["item"] as? [String: Any] {
+            var safeItem: [String: Any] = [:]
+            if let type = (item["type"] ?? item["itemType"]) as? String { safeItem["type"] = type }
+            if let status = item["status"] as? String { safeItem["status"] = status }
+            if let id = (item["id"] ?? item["itemId"]) as? String { safeItem["id"] = id }
+            if !safeItem.isEmpty { out["item"] = safeItem }
+        } else {
+            if let type = (params["type"] ?? params["itemType"]) as? String { out["type"] = type }
+            if let status = params["status"] as? String { out["status"] = status }
+        }
+
+        if let usage = (params["usage"] ?? params["tokenUsage"]) as? [String: Any] {
+            out["usage"] = numericFields(usage)
+        }
+
+        if let errorObject = message["error"] as? [String: Any] {
+            out["error"] = sanitizedError(errorObject)
+        }
+
+        // Transiently surface bounded response/plan/diff content for the exact
+        // allowlisted streaming methods only. Held in the in-memory ring and
+        // routed to the matching thread via status; never persisted or logged.
+        if let transient = transientContent(method: out["method"] as? String, params: params) {
+            out["transient"] = transient
+        }
+        return out
+    }
+
+    private func numericFields(_ source: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        for (key, value) in source {
+            if let number = value as? NSNumber {
+                out[key] = number
+            } else if let nested = value as? [String: Any] {
+                let inner = numericFields(nested)
+                if !inner.isEmpty { out[key] = inner }
+            }
+        }
+        return out
+    }
+
+    private func sanitizedError(_ error: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let code = error["code"] as? NSNumber { out["code"] = code }
+        return out
+    }
+
+    /// Truncates any free-text value to `maxTextField` UTF-8 bytes so no single
+    /// retained field can grow unbounded. Returns nil for empty/non-string.
+    private func boundedString(_ value: Any?) -> String? {
+        guard let text = value as? String, !text.isEmpty else { return nil }
+        let bytes = Array(text.utf8)
+        if bytes.count <= CodexAppServerProcess.maxTextField { return text }
+        return String(decoding: bytes.prefix(CodexAppServerProcess.maxTextField), as: UTF8.self)
+    }
+
+    /// Bounded transient content for the exact allowlisted streaming methods.
+    /// Every other method returns nil, so no other body is ever retained.
+    private func transientContent(method: String?, params: [String: Any]) -> [String: Any]? {
+        guard let method else { return nil }
+        switch method {
+        case "item/agentMessage/delta", "item/plan/delta":
+            guard let text = boundedString(params["delta"] ?? params["text"] ?? params["content"]) else { return nil }
+            return ["kind": method, "text": text]
+        case "turn/diff/updated":
+            guard let text = boundedString(params["diff"] ?? params["unifiedDiff"] ?? params["content"]) else { return nil }
+            return ["kind": method, "diff": text]
+        default:
+            return nil
+        }
+    }
+
+    /// Bounded, non-sensitive detail for an allowlisted approval request so a
+    /// same-thread operator can decide. File approvals never expose grantRoot or
+    /// absolute paths; permissions approvals carry no free text (deny-only).
+    private func approvalDetail(method: String, params: [String: Any]) -> [String: Any] {
+        var out: [String: Any] = [:]
+        if let itemId = (params["itemId"] ?? params["item_id"]) as? String { out["itemId"] = itemId }
+        if let turnId = (params["turnId"] ?? params["turn_id"]) as? String { out["turnId"] = turnId }
+        switch method {
+        case "item/commandExecution/requestApproval":
+            if let command = boundedString(params["command"]) {
+                out["command"] = command
+            } else if let parts = params["command"] as? [Any] {
+                let joined = parts.compactMap { $0 as? String }.joined(separator: " ")
+                if let command = boundedString(joined) { out["command"] = command }
+            }
+            if let reason = boundedString(params["reason"]) { out["reason"] = reason }
+            // Only the working-directory basename — never the absolute path.
+            if let cwd = params["cwd"] as? String, !cwd.isEmpty {
+                out["cwd"] = URL(fileURLWithPath: cwd).lastPathComponent
+            }
+        case "item/fileChange/requestApproval":
+            if let reason = boundedString(params["reason"]) { out["reason"] = reason }
+        default:
+            break
+        }
+        return out
+    }
+}
+
+private struct CodexRPCError: Error {
+    let fields: [String: Any]
+    init(_ fields: [String: Any]) { self.fields = fields }
+}
+
+/// Governs Codex `app-server` sessions over a single shared transport. Every
+/// scope maps to one persisted thread. No prompt, event body, or approval body
+/// is ever journalled — only an opaque thread id, sandbox, and timestamps.
+private final class CodexAppServerSessionManager {
+    enum SessionError: Error {
+        case invalid(String)
+    }
+
+    private struct Session {
+        var scopeKey: String
+        var threadId: String
+        var sandbox: String
+        var updatedAt: Double
+        var currentTurnId: String?
+        var interrupted: Bool
+        // Turn lifecycle, tracked from exact notifications and distinct from the
+        // transport/session state. "idle" | "running" | "completed" | "interrupted".
+        var turnState: String
+    }
+
+    private struct PendingApproval {
+        let approvalId: String
+        let requestId: Int
+        let method: String
+        // Always the concrete thread this approval belongs to. Approvals without
+        // a valid, known thread are auto-declined and never enqueued.
+        let threadId: String
+        let detail: [String: Any]
+    }
+
+    private static let scopeDigestPattern = "^[a-f0-9]{64}$"
+    private static let maxPromptLength = 128_000
+    // The most restrictive approval policy the generated schema supports so the
+    // agent must ask before running anything (untrusted / on-request family).
+    private static let approvalPolicy = "untrusted"
+
+    private let process: CodexAppServerProcess
+    private let workspaceRootResolver: (String) throws -> URL
+
+    private let lock = NSLock()
+    private var sessions: [String: Session] = [:]  // keyed by SHA256 scope key
+    private var pendingApprovals: [PendingApproval] = []
+    private var processedCursor = 0
+
+    private let storeURL: URL
+
+    init(findExecutable: @escaping (String) -> String?,
+         workspaceRoot: @escaping (String) throws -> URL) {
+        self.process = CodexAppServerProcess(executableLocator: findExecutable)
+        self.workspaceRootResolver = workspaceRoot
+        self.storeURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Marcellus/codex-app-server-sessions.json")
+        loadPersistedSessions()
+    }
+
+    // MARK: Scope keying
+
+    /// Combines the caller-provided scope digest and the internal workspace
+    /// token, then hashes them so only an opaque key is ever persisted.
+    private static func scopeKey(scopeDigest: String, token: String) -> String {
+        let combined = "\(scopeDigest):\(token)"
+        return SHA256.hash(data: Data(combined.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func requireScope(_ scopeDigest: String) throws {
+        guard scopeDigest.range(of: Self.scopeDigestPattern, options: .regularExpression) != nil else {
+            throw SessionError.invalid("scope_digest must be a 64-character lowercase hex digest")
+        }
+    }
+
+    // MARK: start
+
+    func start(scopeDigest: String, token: String, sandbox: String) throws -> [String: Any] {
+        try requireScope(scopeDigest)
+        guard sandbox == "read-only" || sandbox == "workspace-write" else {
+            throw SessionError.invalid("sandbox must be read-only or workspace-write")
+        }
+        let root: URL
+        do {
+            root = try workspaceRootResolver(token)
+        } catch {
+            throw SessionError.invalid("Workspace token is not registered")
+        }
+        let key = Self.scopeKey(scopeDigest: scopeDigest, token: token)
+
+        lock.lock(); defer { lock.unlock() }
+
+        if !process.isRunning {
+            do { try process.start() } catch {
+                throw SessionError.invalid("Codex app-server is unavailable")
+            }
+        }
+
+        var resumed = false
+        var threadId = sessions[key]?.threadId
+
+        if let existing = threadId {
+            let params: [String: Any] = [
+                "threadId": existing,
+                "approvalPolicy": Self.approvalPolicy,
+                "sandbox": sandbox,
+            ]
+            do {
+                _ = try process.request(method: "thread/resume", params: params)
+                resumed = true
+            } catch {
+                threadId = nil  // resume failed; start a fresh thread below
+            }
+        }
+
+        if threadId == nil {
+            let params: [String: Any] = [
+                "cwd": root.path,
+                "approvalPolicy": Self.approvalPolicy,
+                "sandbox": sandbox,
+            ]
+            let result = try process.request(method: "thread/start", params: params)
+            guard let started = extractId(result, keys: ["threadId", "thread_id"], container: "thread") else {
+                throw SessionError.invalid("Codex did not return a thread")
+            }
+            threadId = started
+        }
+
+        let session = Session(
+            scopeKey: key,
+            threadId: threadId!,
+            sandbox: sandbox,
+            updatedAt: Date().timeIntervalSince1970,
+            currentTurnId: nil,
+            interrupted: false,
+            turnState: "idle"
+        )
+        sessions[key] = session
+        persistSessions()
+
+        return [
+            "status": "running",
+            "sandbox": sandbox,
+            "resumed": resumed,
+            "threadId": threadId!,
+        ]
+    }
+
+    // MARK: turn
+
+    func turn(scopeDigest: String, token: String, prompt: String) throws -> [String: Any] {
+        try requireScope(scopeDigest)
+        guard !prompt.isEmpty, prompt.count <= Self.maxPromptLength else {
+            throw SessionError.invalid("prompt must be between 1 and 128000 characters")
+        }
+        let key = Self.scopeKey(scopeDigest: scopeDigest, token: token)
+
+        lock.lock(); defer { lock.unlock() }
+        guard var session = sessions[key] else {
+            throw SessionError.invalid("No active Codex session; call start first")
+        }
+        guard process.isRunning else {
+            session.interrupted = true
+            sessions[key] = session
+            throw SessionError.invalid("Codex session is interrupted; call start to resume")
+        }
+
+        // The prompt is passed over JSON-RPC stdin only and never journalled.
+        let params: [String: Any] = [
+            "threadId": session.threadId,
+            "input": [["type": "text", "text": prompt]],
+        ]
+        let result = try process.request(method: "turn/start", params: params)
+        let turnId = extractId(result, keys: ["turnId", "turn_id"], container: "turn")
+        session.currentTurnId = turnId
+        session.turnState = "running"
+        session.updatedAt = Date().timeIntervalSince1970
+        sessions[key] = session
+
+        var body: [String: Any] = [
+            "status": "running",
+            "threadId": session.threadId,
+            "cursor": currentCursorLocked(),
+        ]
+        if let turnId { body["turnId"] = turnId }
+        return body
+    }
+
+    // MARK: status
+
+    func status(scopeDigest: String, token: String, cursor: Int) throws -> [String: Any] {
+        try requireScope(scopeDigest)
+        let key = Self.scopeKey(scopeDigest: scopeDigest, token: token)
+
+        lock.lock(); defer { lock.unlock() }
+        guard let session = sessions[key] else {
+            throw SessionError.invalid("No active Codex session; call start first")
+        }
+        ingestEventsLocked()
+
+        // reflect any turn completion/interruption picked up during ingest.
+        let refreshed = sessions[key] ?? session
+        let running = process.isRunning && !refreshed.interrupted
+        let boundedCursor = max(0, cursor)
+        // Only events explicitly scoped to this thread are ever returned. A
+        // threadless notification is dropped, never fanned out to every session.
+        let safeEvents = process.drainEvents(after: boundedCursor)
+            .filter { $0.channel == "notification" || $0.approvalRequestId != nil }
+            .filter { event in
+                guard let threadId = event.fields["threadId"] as? String else { return false }
+                return threadId == refreshed.threadId
+            }
+            .map { ["cursor": $0.cursor, "channel": $0.channel, "fields": $0.jsonSafe] as [String: Any] }
+
+        // Approvals require an exact thread match; approval_id alone never routes.
+        let pending = pendingApprovals
+            .filter { $0.threadId == refreshed.threadId }
+            .map { approval -> [String: Any] in
+                var entry: [String: Any] = ["approval_id": approval.approvalId, "method": approval.method]
+                if !approval.detail.isEmpty { entry["detail"] = CodexAppServerProcess.jsonSafe(approval.detail) }
+                return entry
+            }
+
+        var body: [String: Any] = [
+            // Preserve the coarse transport/session verdict for compatibility.
+            "status": running ? "running" : "interrupted",
+            // Distinguish transport, session, and turn lifecycle explicitly.
+            "transport": process.isRunning ? "running" : "interrupted",
+            "session": running ? "active" : "interrupted",
+            "turn": refreshed.turnState,
+            "threadId": refreshed.threadId,
+            "cursor": currentCursorLocked(),
+            "events": safeEvents,
+            "pending_approvals": pending,
+        ]
+        if let turnId = refreshed.currentTurnId { body["turnId"] = turnId }
+        return body
+    }
+
+    // MARK: approve
+
+    func approve(scopeDigest: String, token: String, approvalId: String, decision: String) throws -> [String: Any] {
+        try requireScope(scopeDigest)
+        guard decision == "accept" || decision == "decline" else {
+            throw SessionError.invalid("decision must be accept or decline")
+        }
+        let key = Self.scopeKey(scopeDigest: scopeDigest, token: token)
+
+        lock.lock(); defer { lock.unlock() }
+        guard let session = sessions[key] else {
+            throw SessionError.invalid("No active Codex session; call start first")
+        }
+        ingestEventsLocked()
+        // The approval must belong to this caller's current thread — approval_id
+        // alone is never sufficient to route a decision.
+        guard let index = pendingApprovals.firstIndex(where: {
+            $0.approvalId == approvalId && $0.threadId == session.threadId
+        }) else {
+            throw SessionError.invalid("Unknown or already-answered approval")
+        }
+        let approval = pendingApprovals.remove(at: index)
+        guard approval.method != "item/permissions/requestApproval" || decision == "decline" else {
+            // The generated permissions response does not provide a safe
+            // one-shot grant shape. Keep this request explicitly deny-only.
+            pendingApprovals.insert(approval, at: index)
+            throw SessionError.invalid("Permissions approvals are deny-only")
+        }
+        // Respond exactly once with the protocol response shape. We never grant a
+        // session-scoped approval, only this single accept/decline decision.
+        process.respond(id: approval.requestId, result: approvalResponse(method: approval.method, accept: decision == "accept"))
+        return ["status": "ok", "decision": decision]
+    }
+
+    // MARK: cancel
+
+    func cancel(scopeDigest: String, token: String) throws -> [String: Any] {
+        try requireScope(scopeDigest)
+        let key = Self.scopeKey(scopeDigest: scopeDigest, token: token)
+
+        lock.lock(); defer { lock.unlock() }
+        guard var session = sessions[key] else {
+            throw SessionError.invalid("No active Codex session; call start first")
+        }
+        guard let turnId = session.currentTurnId, process.isRunning else {
+            return ["status": "idle"]
+        }
+        let params: [String: Any] = ["threadId": session.threadId, "turnId": turnId]
+        _ = try? process.request(method: "turn/interrupt", params: params)
+        session.currentTurnId = nil
+        session.turnState = "interrupted"
+        sessions[key] = session
+        pendingApprovals.removeAll { $0.threadId == session.threadId }
+        return ["status": "interrupted"]
+    }
+
+    // MARK: Approval response shapes
+
+    private func approvalResponse(method: String, accept: Bool) -> [String: Any] {
+        switch method {
+        case "item/permissions/requestApproval":
+            // Grant no additional permissions in either case; scope to this turn.
+            return ["permissions": [String: Any](), "scope": "turn"]
+        default:
+            return ["decision": accept ? "accept" : "decline"]
+        }
+    }
+
+    // MARK: Event ingestion
+
+    private func ingestEventsLocked() {
+        let newEvents = process.drainEvents(after: processedCursor)
+        for event in newEvents {
+            if event.cursor > processedCursor { processedCursor = event.cursor }
+
+            if event.channel == "notification" {
+                if let threadId = event.fields["threadId"] as? String,
+                   let method = event.fields["method"] as? String {
+                    updateTurnStateLocked(threadId: threadId, method: method, fields: event.fields)
+                }
+                continue
+            }
+
+            guard let requestId = event.approvalRequestId,
+                  let method = event.approvalMethod else { continue }
+
+            // An allowlisted approval must carry a threadId that matches a known
+            // session. Otherwise auto-decline it and never enqueue it.
+            guard let threadId = event.fields["threadId"] as? String,
+                  sessions.values.contains(where: { $0.threadId == threadId }) else {
+                process.respond(id: requestId, result: approvalResponse(method: method, accept: false))
+                continue
+            }
+            pendingApprovals.append(PendingApproval(
+                approvalId: "apr-" + UUID().uuidString,
+                requestId: requestId,
+                method: method,
+                threadId: threadId,
+                detail: event.approvalDetail ?? [:]
+            ))
+        }
+    }
+
+    /// Marks a turn completed or interrupted from exact turn notifications.
+    private func updateTurnStateLocked(threadId: String, method: String, fields: [String: Any]) {
+        guard let key = sessions.first(where: { $0.value.threadId == threadId })?.key,
+              var session = sessions[key] else { return }
+        switch method {
+        case "turn/completed":
+            let finalStatus = (fields["turnStatus"] as? String ?? "").lowercased()
+            switch finalStatus {
+            case "completed":
+                session.turnState = "completed"
+            case "interrupted", "failed", "cancelled", "canceled":
+                session.turnState = "interrupted"
+            default:
+                // Unknown future statuses fail closed rather than presenting an
+                // unverified result as completed.
+                session.turnState = "interrupted"
+            }
+            session.currentTurnId = nil
+        default:
+            return
+        }
+        sessions[key] = session
+    }
+
+    private func currentCursorLocked() -> Int {
+        process.drainEvents(after: 0).last?.cursor ?? processedCursor
+    }
+
+    // MARK: Result parsing
+
+    private func extractId(_ result: Any?, keys: [String], container: String) -> String? {
+        guard let dict = result as? [String: Any] else { return nil }
+        for key in keys { if let value = dict[key] as? String { return value } }
+        if let nested = dict[container] as? [String: Any], let id = nested["id"] as? String {
+            return id
+        }
+        return nil
+    }
+
+    // MARK: Persistence (opaque metadata only, atomic, owner-only)
+
+    private func loadPersistedSessions() {
+        guard let data = try? Data(contentsOf: storeURL),
+              let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
+        for record in records {
+            guard let key = record["scope_key"] as? String,
+                  let threadId = record["thread_id"] as? String,
+                  let sandbox = record["sandbox"] as? String else { continue }
+            let updatedAt = (record["updated_at"] as? NSNumber)?.doubleValue ?? 0
+            // A persisted session has no live transport, so it starts interrupted
+            // and is resumed on the next start.
+            sessions[key] = Session(
+                scopeKey: key,
+                threadId: threadId,
+                sandbox: sandbox,
+                updatedAt: updatedAt,
+                currentTurnId: nil,
+                interrupted: true,
+                turnState: "idle"
+            )
+        }
+    }
+
+    private func persistSessions() {
+        var records: [[String: Any]] = []
+        for session in sessions.values {
+            records.append([
+                "scope_key": session.scopeKey,
+                "thread_id": session.threadId,
+                "sandbox": session.sandbox,
+                "updated_at": session.updatedAt,
+            ])
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: records) else { return }
+        let directory = storeURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let temp = directory.appendingPathComponent(".codex-app-server-sessions.\(UUID().uuidString).tmp")
+        do {
+            try data.write(to: temp, options: .atomic)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: temp.path)
+            _ = try FileManager.default.replaceItemAt(storeURL, withItemAt: temp)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: storeURL.path)
+        } catch {
+            try? FileManager.default.removeItem(at: temp)
+        }
     }
 }
 

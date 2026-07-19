@@ -1,5 +1,20 @@
 # RegentClaw — Tenant Isolation Model
 
+## Enkstein native Brain and task-graph isolation
+
+Codex App Server sessions are keyed from a server-derived digest containing the
+tenant, owner, Project, and conversation plus the opaque native-folder grant.
+The web client cannot supply or retrieve that key, thread id, grant, or raw cwd.
+Every native operation is owner/tenant/Project checked before Trust Fabric and
+bridge invocation. A task graph never trusts client workspace ownership: the
+route parses the Project id, resolves it inside the authenticated tenant, checks
+the owner (or administrator role), and computes classification from the request,
+Project, and active artifacts. Nodes inherit that validated scope, use isolated
+database sessions under bounded parallelism, and receive dependency evidence
+only after an explicit peer-agent-message policy decision. Trust Fabric and
+model-call audit metadata carry requester, orchestrator, specialist, tenant,
+validated Project, classification, and dependency evidence ids.
+
 ## Current Isolation Model
 
 RegentClaw does not have an explicit `tenant_id` column. Ownership is expressed

@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.6` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.7` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -78,7 +78,7 @@ routing is mode-aware, records its candidate order and selection reason, and
 falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
 
-Version `0.3.6` also hardens the Model Cortex boundary: profile, audit, direct
+Version `0.3.7` also hardens the Model Cortex boundary: profile, audit, direct
 Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
@@ -109,8 +109,23 @@ Runtime-group selection is currently carried on every request and remembered
 locally by the console. It is **not yet persisted per conversation or Project**:
 the existing database schema has no compatible field and this release was not
 authorized to add a migration. Tenant-owned role-route configuration for
-Planner, Coder, Researcher, Security Analyst, Utility Parser, Reviewer, and
-Swarm Judge therefore remains planned rather than being represented as shipped.
+persisted operator presets remains planned. `POST /api/v1/modelclaw/task-graph`
+now executes an explicit acyclic graph of bounded specialist roles through the
+existing Cortex Gateway. It validates any supplied Project against the resolved
+tenant and requester, applies Trust Fabric to graph admission, peer evidence,
+and every ordered provider fallback, and uses isolated database sessions for at
+most three parallel nodes. Timeouts and dependency skipping are bounded; caller
+cancellation stops local waiting, but provider-side cancellation is not claimed.
+Results record actual provider attempts plus model, policy, latency, requester,
+specialist, workspace, and dependency-evidence attribution.
+
+For Chat/Cowork turns and native Codex operations, effective classification is
+the highest of the request, conversation, Project, and every included active
+artifact. The covered runtime paths deny external Brains for `restricted` and
+`top_secret` data and fail closed when no approved local Brain is available.
+This is a tested application-layer boundary for those paths, not a blanket
+certification of every legacy connector or data flow in the compatibility
+platform.
 
 Chat and Cowork now persist encrypted, tenant-scoped conversation history.
 Cowork adds named Projects, encrypted versioned text artifacts, searchable
@@ -138,7 +153,10 @@ the desktop without copying subscription tokens into Docker:
 
 - **Codex Subscription Bridge:** detects the official Codex runtime, verifies
   that it is authenticated with ChatGPT, and runs ephemeral, read-only,
-  reasoning-only invocations.
+  reasoning-only invocations. Desktop Cowork Agent tools instead use one
+  resumable official `codex app-server` thread per governed project/conversation
+  scope, with streamed events, one-shot command/file approvals, deny-only
+  permission expansion, cancellation, and interrupted-session recovery.
 - **Claude Agent SDK Bridge:** detects an authenticated Claude Code/Agent SDK
   host runtime and invokes it with tools disabled. It remains unavailable until
   the official host runtime is installed and authenticated.

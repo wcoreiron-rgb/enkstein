@@ -2,23 +2,23 @@ import { expect, test } from './fixtures';
 import { mockMarcellusWorkspace } from './marcellus-workspace-mocks';
 
 test.describe('Enkstein workspace mode separation', () => {
-  test('mode selector switches immediately and keeps the hash synchronized', async ({ page }) => {
+  test('mode selector switches immediately and keeps the route synchronized', async ({ page }) => {
     await mockMarcellusWorkspace(page);
     await page.goto('/marcellus');
 
-    await expect(page).toHaveURL(/#chat$/);
+    await expect(page).toHaveURL(/\/marcellus\/chat$/);
     await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
 
     await page.getByTitle('Cowork').click();
-    await expect(page).toHaveURL(/#cowork$/);
+    await expect(page).toHaveURL(/\/marcellus\/cowork$/);
     await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
 
     await page.getByTitle('Security').click();
-    await expect(page).toHaveURL(/#security$/);
+    await expect(page).toHaveURL(/\/marcellus\/security$/);
     await expect(page.getByRole('link', { name: 'Control Center' })).toBeVisible();
 
     await page.getByTitle('Chat').click();
-    await expect(page).toHaveURL(/#chat$/);
+    await expect(page).toHaveURL(/\/marcellus\/chat$/);
     await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
   });
 
@@ -34,31 +34,58 @@ test.describe('Enkstein workspace mode separation', () => {
     await mockMarcellusWorkspace(page);
     await page.goto('/marcellus');
     await page.getByTitle('Security').click();
-    await expect(page).toHaveURL(/#security$/);
+    await expect(page).toHaveURL(/\/marcellus\/security$/);
 
     await page.goto('/marcellus');
-    await expect(page).toHaveURL(/#security$/);
+    await expect(page).toHaveURL(/\/marcellus\/security$/);
     await expect(page.getByRole('link', { name: 'Control Center' })).toBeVisible();
+  });
+
+  test('base conversation workspaces canonicalize remembered or default conversations with replace', async ({ page }) => {
+    const store = await mockMarcellusWorkspace(page);
+    const now = new Date().toISOString();
+    store.projects.push({
+      id: 'project-canonical', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Canonical Project',
+      description: '', classification: 'internal', default_source: 'auto', status: 'active',
+      created_at: now, updated_at: now,
+    });
+    store.conversations.push(
+      {
+        id: 'chat-canonical', tenant_id: 'default', owner_id: 'e2e-owner', project_id: null,
+        title: 'Canonical Chat', mode: 'chat', classification: 'internal', selected_source: 'auto',
+        status: 'active', message_count: 0, created_at: now, updated_at: now,
+      },
+      {
+        id: 'cowork-canonical', tenant_id: 'default', owner_id: 'e2e-owner', project_id: 'project-canonical',
+        title: 'Canonical Cowork', mode: 'cowork', classification: 'internal', selected_source: 'auto',
+        status: 'active', message_count: 0, created_at: now, updated_at: now,
+      },
+    );
+
+    await page.goto('/marcellus/chat');
+    await expect(page).toHaveURL(/\/marcellus\/chat\/chat-canonical$/);
+    await page.goto('/marcellus/cowork');
+    await expect(page).toHaveURL(/\/marcellus\/cowork\/project-canonical\/cowork-canonical$/);
   });
 
   test('back and forward navigation stay synchronized with the visible workspace', async ({ page }) => {
     await mockMarcellusWorkspace(page);
     await page.goto('/marcellus#chat');
     await page.getByTitle('Cowork').click();
-    await expect(page).toHaveURL(/#cowork$/);
+    await expect(page).toHaveURL(/\/marcellus\/cowork$/);
     await page.getByTitle('Security').click();
-    await expect(page).toHaveURL(/#security$/);
+    await expect(page).toHaveURL(/\/marcellus\/security$/);
 
     await page.goBack();
-    await expect(page).toHaveURL(/#cowork$/);
+    await expect(page).toHaveURL(/\/marcellus\/cowork$/);
     await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
 
     await page.goBack();
-    await expect(page).toHaveURL(/#chat$/);
+    await expect(page).toHaveURL(/\/marcellus\/chat$/);
     await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
 
     await page.goForward();
-    await expect(page).toHaveURL(/#cowork$/);
+    await expect(page).toHaveURL(/\/marcellus\/cowork$/);
   });
 
   test('chat and cowork workspaces do not leak draft state between each other', async ({ page }) => {
@@ -116,6 +143,30 @@ test.describe('Enkstein workspace mode separation', () => {
 
     await expect(page.getByText('Local folder: client-repo')).toBeVisible();
     await expect(page.getByText('client-repo', { exact: true })).toBeVisible();
+  });
+
+  test('Cowork agent tools use the governed native Codex App Server when a folder is connected', async ({ page }) => {
+    const store = await mockMarcellusWorkspace(page);
+    const now = new Date().toISOString();
+    store.projects.push({
+      id: 'project-codex', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Codex Project',
+      description: '', classification: 'internal', default_source: 'auto', status: 'active',
+      created_at: now, updated_at: now,
+    });
+    store.conversations.push({
+      id: 'conversation-codex', tenant_id: 'default', owner_id: 'e2e-owner', project_id: 'project-codex',
+      title: 'Native agent task', mode: 'cowork', classification: 'internal', selected_source: 'auto',
+      status: 'active', message_count: 0, created_at: now, updated_at: now,
+    });
+    store.nativeWorkspace['project-codex'] = { connected: true, name: 'native-repo', file_count: 4, synced_files: 4 };
+
+    await page.goto('/marcellus/cowork/project-codex/conversation-codex');
+    await expect(page.getByText('Local folder: native-repo')).toBeVisible();
+    await page.getByPlaceholder('Ask about this project').fill('Inspect the project safely');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(page.getByText('Native Codex result')).toBeVisible();
+    await expect(page.getByText(/Codex subscription CLI · native App Server/)).toBeVisible();
   });
 
   test('conversation create, rename, and archive apply immediately', async ({ page }) => {

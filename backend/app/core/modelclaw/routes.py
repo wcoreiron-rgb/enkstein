@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.marcellus.runtime_security import actor_id, require_runtime_operator, resolve_tenant
+from app.core.marcellus.context_compiler import UnknownClassification, highest_classification
 from app.core.modelclaw.schemas import (
     BrainInvokeRequest,
     BrainInvokeResponse,
@@ -15,6 +19,8 @@ from app.core.modelclaw.schemas import (
     ConsensusResponse,
     CortexGatewayRequest,
     CortexGatewayResponse,
+    CortexTaskGraphRequest,
+    CortexTaskGraphResponse,
     ModelCallRead,
     ModelProfileCreate,
     ModelProfileRead,
@@ -33,6 +39,7 @@ from app.core.modelclaw.brain_bridge import (
     request_desktop_brain_access,
 )
 from app.core.modelclaw.gateway import apply_runtime_group, execute_cortex_gateway
+from app.core.modelclaw.task_graph import TaskGraphRequester, execute_task_graph
 from app.core.modelclaw.service import (
     get_profile,
     list_model_calls,
@@ -42,6 +49,7 @@ from app.core.modelclaw.service import (
     upsert_profile,
 )
 from app.trust_fabric import ActionRequest, enforce
+from app.models.marcellus import CortexArtifact, CortexProject
 
 router = APIRouter(prefix="/modelclaw", tags=["Model Cortex"])
 _EXTERNAL_BRAINS = {
@@ -53,6 +61,72 @@ _EXTERNAL_BRAINS = {
     "claude_browser",
     "gemini_browser",
 }
+
+
+@router.post(
+    "/task-graph",
+    response_model=CortexTaskGraphResponse,
+    summary="Execute a governed bounded specialist task graph",
+)
+async def run_cortex_task_graph(
+    payload: CortexTaskGraphRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    tenant_id = resolve_tenant(user, payload.tenant_id)
+    requester_subject = actor_id(user)
+    requester_role = str(user.get("role") or "viewer").lower()[:64]
+    workspace_id: str | None = None
+    effective_classification = payload.data_classification
+    if payload.workspace_id:
+        try:
+            project_id = uuid.UUID(payload.workspace_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Workspace not found") from exc
+        project_result = await db.execute(
+            select(CortexProject).where(
+                CortexProject.id == project_id,
+                CortexProject.tenant_id == tenant_id,
+                CortexProject.status == "active",
+            )
+        )
+        project = project_result.scalar_one_or_none()
+        if project is None:
+            raise HTTPException(status_code=404, detail="Workspace not found")
+        is_admin = requester_role in {"admin", "security_admin", "super_admin"}
+        if project.owner_id != requester_subject and not is_admin:
+            raise HTTPException(status_code=403, detail="Workspace access denied")
+        artifact_result = await db.execute(
+            select(CortexArtifact.classification).where(
+                CortexArtifact.project_id == project.id,
+                CortexArtifact.tenant_id == tenant_id,
+                CortexArtifact.status == "active",
+            )
+        )
+        try:
+            effective_classification = highest_classification(
+                payload.data_classification,
+                project.classification,
+                *artifact_result.scalars().all(),
+            )
+        except UnknownClassification as exc:
+            raise HTTPException(status_code=403, detail="Workspace classification is not recognized") from exc
+        workspace_id = str(project.id)
+    governed_payload = payload.model_copy(update={
+        "tenant_id": tenant_id,
+        "workspace_id": workspace_id,
+        "data_classification": effective_classification,
+    })
+    return await execute_task_graph(
+        db,
+        governed_payload,
+        TaskGraphRequester(
+            subject=requester_subject,
+            role=requester_role,
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+        ),
+    )
 
 
 async def _enforce_brain_call(

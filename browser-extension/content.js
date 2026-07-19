@@ -16,6 +16,74 @@ const RESPONSE_SELECTORS = {
   gemini: ['model-response .markdown', 'model-response', '.model-response-text'],
 };
 
+const STREAMING_SELECTORS = {
+  chatgpt: ['button[data-testid="stop-button"]', 'button[aria-label*="Stop generating" i]', 'button[aria-label*="Stop streaming" i]'],
+  claude: ['[data-is-streaming="true"]', 'button[aria-label*="Stop response" i]'],
+  gemini: ['button[aria-label*="Stop response" i]', 'button[aria-label*="Stop generating" i]'],
+};
+
+// Keyed by task_id. Holds only ephemeral submission/observation state — never
+// persists the prompt or response text. Element correlation uses provider IDs
+// when available, otherwise an extension-owned opaque marker placed on the
+// assistant element. It never relies on response counts or response content.
+const taskRecords = new Map();
+const TASK_SESSION_PREFIX = 'enkstein-browser-task:';
+const MESSAGE_MARKER = 'data-enkstein-message-fingerprint';
+const SAFE_MESSAGE_ID_ATTRIBUTES = ['data-message-id', 'data-turn-id', 'data-response-id'];
+const elementFirstSeen = new WeakMap();
+
+const messageObserver = new MutationObserver((mutations) => {
+  const seenAt = Date.now();
+  for (const mutation of mutations) {
+    for (const node of mutation.addedNodes) {
+      if (!(node instanceof Element)) continue;
+      elementFirstSeen.set(node, seenAt);
+      for (const child of node.querySelectorAll('*')) elementFirstSeen.set(child, seenAt);
+    }
+  }
+});
+messageObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+function sessionTaskKey(taskId) {
+  return `${TASK_SESSION_PREFIX}${taskId}`;
+}
+
+function persistTaskMetadata(taskId, record) {
+  try {
+    sessionStorage.setItem(sessionTaskKey(taskId), JSON.stringify({
+      provider: record.provider,
+      status: record.status,
+      submittedAt: record.submittedAt,
+      lastAssistantId: record.lastAssistantId || null,
+      lastAssistantFingerprint: record.lastAssistantFingerprint || null,
+      responseIdentity: record.responseIdentity || null,
+    }));
+  } catch {}
+}
+
+function recoverTaskMetadata(taskId) {
+  try {
+    const raw = sessionStorage.getItem(sessionTaskKey(taskId));
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (!saved || saved.provider !== provider() || !Number.isFinite(saved.submittedAt)) return null;
+    const record = {
+      provider: saved.provider,
+      status: saved.status === 'cancelled' ? 'cancelled' : 'submitted',
+      submittedAt: saved.submittedAt,
+      lastAssistantId: typeof saved.lastAssistantId === 'string' ? saved.lastAssistantId : null,
+      lastAssistantFingerprint: typeof saved.lastAssistantFingerprint === 'string' ? saved.lastAssistantFingerprint : null,
+      responseIdentity: typeof saved.responseIdentity === 'string' ? saved.responseIdentity : null,
+      recovered: true,
+      sample: { previous: '', identity: null, stable: 0 },
+    };
+    taskRecords.set(taskId, record);
+    return record;
+  } catch {
+    return null;
+  }
+}
+
 const SEND_SELECTORS = {
   chatgpt: [
     'button[data-testid="send-button"]',
@@ -211,16 +279,79 @@ async function waitForSendButton(kind, timeoutMs = 10000) {
   throw new Error('The provider message field did not enable its Send button. Reload the provider tab and try again.');
 }
 
-function responseTexts(kind) {
+function responseElements(kind) {
   const values = [];
+  const seen = new Set();
   for (const selector of RESPONSE_SELECTORS[kind]) {
     for (const element of document.querySelectorAll(selector)) {
-      if (!visible(element)) continue;
-      const text = (element.innerText || element.textContent || '').trim();
-      if (text.length >= 2) values.push(text);
+      if (!visible(element) || seen.has(element)) continue;
+      seen.add(element);
+      values.push(element);
     }
   }
-  return [...new Set(values)];
+  return values;
+}
+
+function boundedSafeId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,160}$/.test(value) ? value : null;
+}
+
+function providerMessageId(element) {
+  for (const candidate of [element, element.closest('[data-message-id],[data-turn-id],[data-response-id]')]) {
+    if (!candidate) continue;
+    for (const attribute of SAFE_MESSAGE_ID_ATTRIBUTES) {
+      const value = boundedSafeId(candidate.getAttribute(attribute));
+      if (value) return `${attribute}:${value}`;
+    }
+    const id = boundedSafeId(candidate.id);
+    if (id) return `id:${id}`;
+  }
+  return null;
+}
+
+function elementFingerprint(element) {
+  const providerId = providerMessageId(element);
+  if (providerId) return `provider:${providerId}`;
+  let marker = boundedSafeId(element.getAttribute(MESSAGE_MARKER));
+  if (!marker) {
+    marker = crypto.randomUUID();
+    element.setAttribute(MESSAGE_MARKER, marker);
+  }
+  return `marker:${marker}`;
+}
+
+function assistantDescriptor(element) {
+  return {
+    element,
+    id: providerMessageId(element),
+    fingerprint: elementFingerprint(element),
+    seenAt: elementFirstSeen.get(element) || 0,
+  };
+}
+
+function lastAssistantDescriptor(kind) {
+  const elements = responseElements(kind);
+  return elements.length ? assistantDescriptor(elements[elements.length - 1]) : null;
+}
+
+function correlatedAssistant(kind, record) {
+  const descriptors = responseElements(kind).map(assistantDescriptor);
+  if (!descriptors.length) return null;
+
+  if (record.responseIdentity) {
+    const retained = descriptors.find((item) => item.id === record.responseIdentity || item.fingerprint === record.responseIdentity);
+    if (retained) return retained;
+  }
+
+  const candidates = descriptors.filter((item) => {
+    if (record.lastAssistantId && item.id === record.lastAssistantId) return false;
+    if (record.lastAssistantFingerprint && item.fingerprint === record.lastAssistantFingerprint) return false;
+    // A live MutationObserver timestamp is strong evidence. After a content
+    // script restart, the persisted last-assistant identity is the boundary and
+    // safely distinguishes the newly submitted turn without response counts.
+    return item.seenAt >= record.submittedAt || record.recovered === true;
+  });
+  return candidates[candidates.length - 1] || null;
 }
 
 async function waitForSubmission(input, originalText, timeoutMs = 15000) {
@@ -239,44 +370,145 @@ async function submit(kind, input, text) {
   await waitForSubmission(input, text);
 }
 
-async function waitForResponse(kind, baseline, timeoutMs = 180000) {
-  const deadline = Date.now() + timeoutMs;
-  let previous = '';
-  let stable = 0;
+function isStreaming(kind) {
+  const selectors = STREAMING_SELECTORS[kind] || [];
+  return selectors.some((selector) => [...document.querySelectorAll(selector)].some(visible));
+}
+
+async function handleSubmit(task) {
+  const taskId = task?.task_id;
+  const taskProvider = task?.provider;
+  if (!taskId || typeof taskId !== 'string') {
+    return { success: false, detail: 'A task_id is required.' };
+  }
+  if (!taskProvider) {
+    return { success: false, detail: 'A provider is required.' };
+  }
+  const kind = provider();
+  if (kind !== taskProvider) {
+    return { success: false, detail: 'The active tab does not match the requested provider.' };
+  }
+
+  const existing = taskRecords.get(taskId) || recoverTaskMetadata(taskId);
+  if (existing) {
+    return { success: true, submitted: true, task_id: taskId };
+  }
+
+  try {
+    // A provider can expose its composer before React/ProseMirror has attached
+    // the controlled-editor handlers. Give the visible app a moment to hydrate.
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const input = findInput(kind);
+    if (!input) throw new Error('No compatible signed-in message field is visible on this provider page.');
+    const lastAssistant = lastAssistantDescriptor(kind);
+    const submittedAt = Date.now();
+    await setInput(input, task.prompt, kind);
+    if (!inputMatches(input, task.prompt)) {
+      const editor = `${input.tagName.toLowerCase()}${input.id ? `#${input.id}` : ''}`;
+      throw new Error(
+        `The complete prompt could not be inserted into the provider message field `
+        + `(provider=${kind}, editor=${editor}, expected=${normalizedInputText(task.prompt).length}, `
+        + `observed=${normalizedInputText(inputText(input)).length}).`,
+      );
+    }
+    await submit(kind, input, task.prompt);
+    // Some provider test/builds append the assistant node synchronously inside
+    // the send click before MutationObserver delivery. Mark only elements beyond
+    // the captured last-assistant boundary as post-submission candidates.
+    for (const element of responseElements(kind)) {
+      const descriptor = assistantDescriptor(element);
+      if (descriptor.id === lastAssistant?.id || descriptor.fingerprint === lastAssistant?.fingerprint) continue;
+      if (!elementFirstSeen.has(element)) elementFirstSeen.set(element, Date.now());
+    }
+    const record = {
+      provider: kind,
+      status: 'submitted',
+      submittedAt,
+      lastAssistantId: lastAssistant?.id || null,
+      lastAssistantFingerprint: lastAssistant?.fingerprint || null,
+      responseIdentity: null,
+      recovered: false,
+      sample: { previous: '', identity: null, stable: 0 },
+    };
+    taskRecords.set(taskId, record);
+    persistTaskMetadata(taskId, record);
+    return { success: true, submitted: true, task_id: taskId };
+  } catch (error) {
+    return { success: false, detail: error instanceof Error ? error.message : 'Browser invocation failed.' };
+  }
+}
+
+function handleObserve(taskId) {
+  const record = taskRecords.get(taskId) || recoverTaskMetadata(taskId);
+  if (!record) return { state: 'failed', detail: 'Unknown or already-finalized task_id.' };
+  if (record.status === 'cancelled') return { state: 'cancelled' };
+
+  const kind = record.provider;
+  const streaming = isStreaming(kind);
+  const descriptor = correlatedAssistant(kind, record);
+  const candidate = descriptor ? (descriptor.element.innerText || descriptor.element.textContent || '').trim() : '';
+  const identity = descriptor?.id || descriptor?.fingerprint || null;
+
+  if (identity && !record.responseIdentity) {
+    record.responseIdentity = identity;
+    persistTaskMetadata(taskId, record);
+  }
+
+  if (streaming) {
+    if (candidate && (candidate !== record.sample.previous || identity !== record.sample.identity)) {
+      record.sample.previous = candidate;
+      record.sample.identity = identity;
+      record.sample.stable = 0;
+    }
+    record.status = 'streaming';
+    return { state: 'streaming' };
+  }
+
+  if (candidate.length >= 12) {
+    if (candidate === record.sample.previous) record.sample.stable += 1;
+    else { record.sample.previous = candidate; record.sample.stable = 0; }
+    record.sample.identity = identity;
+    if (record.sample.stable >= 1) {
+      record.status = 'completed';
+      persistTaskMetadata(taskId, record);
+      return { state: 'completed', response: candidate };
+    }
+  }
+
+  record.status = 'streaming';
+  return { state: 'streaming' };
+}
+
+function handleCancel(taskId) {
+  // Replace with a minimal tombstone: keeps the cancellation visible to a pending
+  // observe call while discarding the baseline/sample state (the volatile record).
+  taskRecords.set(taskId, { status: 'cancelled' });
+  try {
+    sessionStorage.setItem(sessionTaskKey(taskId), JSON.stringify({
+      provider: provider(), status: 'cancelled', submittedAt: Date.now(),
+      lastAssistantId: null, lastAssistantFingerprint: null, responseIdentity: null,
+    }));
+  } catch {}
+  return { success: true, task_id: taskId };
+}
+
+async function composeExecute(task) {
+  const taskId = typeof task?.task_id === 'string' && task.task_id
+    ? task.task_id
+    : `compat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const submitResult = await handleSubmit({ ...task, task_id: taskId });
+  if (!submitResult.success) throw new Error(submitResult.detail || 'Browser invocation failed.');
+
+  const deadline = Date.now() + 180000;
   await new Promise((resolve) => setTimeout(resolve, 2000));
   while (Date.now() < deadline) {
-    const candidates = responseTexts(kind).filter((text) => !baseline.has(text));
-    const candidate = candidates[candidates.length - 1] || '';
-    if (candidate.length >= 12) {
-      if (candidate === previous) stable += 1;
-      else { previous = candidate; stable = 0; }
-      if (stable >= 4) return candidate;
-    }
+    const observation = handleObserve(taskId);
+    if (observation.state === 'completed') return observation.response;
+    if (observation.state === 'cancelled') throw new Error('The task was cancelled.');
+    if (observation.state === 'failed' && !taskRecords.has(taskId)) throw new Error(observation.detail || 'Browser invocation failed.');
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error('The visible provider response did not complete before the Enkstein timeout.');
-}
-
-async function execute(task) {
-  const kind = provider();
-  if (kind !== task.provider) throw new Error('The active tab does not match the requested provider.');
-  // A provider can expose its composer before React/ProseMirror has attached
-  // the controlled-editor handlers. Give the visible app a moment to hydrate.
-  await new Promise((resolve) => setTimeout(resolve, 750));
-  const input = findInput(kind);
-  if (!input) throw new Error('No compatible signed-in message field is visible on this provider page.');
-  const baseline = new Set(responseTexts(kind));
-  await setInput(input, task.prompt, kind);
-  if (!inputMatches(input, task.prompt)) {
-    const editor = `${input.tagName.toLowerCase()}${input.id ? `#${input.id}` : ''}`;
-    throw new Error(
-      `The complete prompt could not be inserted into the provider message field `
-      + `(provider=${kind}, editor=${editor}, expected=${normalizedInputText(task.prompt).length}, `
-      + `observed=${normalizedInputText(inputText(input)).length}).`,
-    );
-  }
-  await submit(kind, input, task.prompt);
-  return waitForResponse(kind, baseline);
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -284,11 +516,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ready: Boolean(findInput(provider())) });
     return false;
   }
-  if (message?.type !== 'marcellus-execute') return false;
-  execute(message.task).then((response) => sendResponse({ success: true, response })).catch((error) => {
-    sendResponse({ success: false, detail: error instanceof Error ? error.message : 'Browser invocation failed.' });
-  });
-  return true;
+  if (message?.type === 'marcellus-submit') {
+    handleSubmit(message.task).then(sendResponse);
+    return true;
+  }
+  if (message?.type === 'marcellus-observe') {
+    sendResponse(handleObserve(message.task_id));
+    return false;
+  }
+  if (message?.type === 'marcellus-cancel') {
+    sendResponse(handleCancel(message.task_id));
+    return false;
+  }
+  if (message?.type === 'marcellus-execute') {
+    composeExecute(message.task).then((response) => sendResponse({ success: true, response })).catch((error) => {
+      sendResponse({ success: false, detail: error instanceof Error ? error.message : 'Browser invocation failed.' });
+    });
+    return true;
+  }
+  return false;
 });
 
 setInterval(() => chrome.runtime.sendMessage({ type: 'marcellus-heartbeat' }), 2000);

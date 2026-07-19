@@ -42,13 +42,43 @@ class CortexNativeWorkspaceBind(BaseModel):
     tenant_id: str = Field(default="global", min_length=1, max_length=128)
     token: str = Field(pattern=r"^[a-f0-9-]{36}$")
     name: str = Field(min_length=1, max_length=255)
+    # A short, non-reversible display alias for the approved root (e.g. the
+    # folder name plus its parent segment) so the UI can confirm which folder
+    # was granted without the absolute host path ever crossing the boundary.
+    path_alias: str | None = Field(default=None, max_length=255)
 
 
 class CortexNativeWorkspaceRead(BaseModel):
     connected: bool
     name: str | None = None
+    path_alias: str | None = None
     file_count: int = 0
     synced_files: int = 0
+
+
+class CortexNativePickRead(BaseModel):
+    """Opaque result of a host folder-picker grant: never carries a raw path."""
+
+    token: str = Field(pattern=r"^[a-f0-9-]{36}$")
+    name: str = Field(min_length=1, max_length=255)
+    path_alias: str | None = Field(default=None, max_length=255)
+
+
+class CortexNativeProjectPickCreate(BaseModel):
+    """Request to open the host folder picker and, only on picker success,
+    create a Cowork project bound to the approved root."""
+
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    classification: Classification = "internal"
+    default_source: str = Field(default="auto", min_length=2, max_length=128)
+
+
+class CortexNativeProjectRead(BaseModel):
+    """Combined result of a picker-and-create: the new project plus the opaque
+    local-folder binding state. No absolute host path is ever included."""
+
+    project: CortexProjectRead
+    workspace: CortexNativeWorkspaceRead
 
 
 class CortexConversationCreate(BaseModel):
@@ -87,6 +117,11 @@ class CortexConversationMove(BaseModel):
 class CortexConversationRename(BaseModel):
     tenant_id: str = Field(default="global", min_length=1, max_length=128)
     title: str = Field(min_length=1, max_length=255)
+
+
+class CortexConversationDeleteRead(BaseModel):
+    id: UUID
+    status: Literal["deleted"] = "deleted"
 
 
 class CortexMessageRead(BaseModel):
@@ -209,6 +244,19 @@ class CortexChangeProposalRead(BaseModel):
     proposed_content: str | None = None
     current_content: str | None = None
     base_digest: str | None = None
+    # Set when the approved change moves an existing file: the prior project
+    # path whose approved application is a native ``rename`` rather than a
+    # create-then-trash, so the host file is moved in place.
+    previous_path: str | None = None
+    # Review-surface metadata for a pending write: a unified diff, the files a
+    # reviewer must approve, heuristic test targets, and the metadata needed to
+    # undo the change after it is applied. All are derived (never persisted raw
+    # host state) so an approver can judge a consequential write before it
+    # reaches the approved root.
+    diff: str | None = None
+    affected_paths: list[str] = Field(default_factory=list)
+    suggested_tests: list[str] = Field(default_factory=list)
+    rollback: dict[str, Any] = Field(default_factory=dict)
     created_by: str
     created_at: datetime
 
@@ -299,6 +347,104 @@ class CortexWorkspaceSummary(BaseModel):
     active_conversations: int
     artifacts: int
     messages: int
+
+
+CodexSandbox = Literal["read-only", "workspace-write"]
+
+
+def _reject_local_runtime(value: RuntimeGroup | None) -> RuntimeGroup | None:
+    # The Codex App Server is an external subscription CLI, so a local-only
+    # runtime group must never reach it. Omitted => hybrid (governed default).
+    if value == "local":
+        raise ValueError("Codex App Server cannot run in a local-only runtime group")
+    return value
+
+
+class CortexCodexStart(BaseModel):
+    """Open (or resume) the root-bound Codex App Server thread for a Cowork
+    conversation. The server derives the scope digest and native binding token;
+    the web client never supplies a cwd, thread id, token, or scope digest."""
+
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    sandbox: CodexSandbox = "read-only"
+    runtime_group: RuntimeGroup | None = None
+
+    @field_validator("runtime_group")
+    @classmethod
+    def reject_local(cls, value: RuntimeGroup | None) -> RuntimeGroup | None:
+        return _reject_local_runtime(value)
+
+
+class CortexCodexTurn(BaseModel):
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    prompt: str = Field(min_length=1, max_length=12000)
+    runtime_group: RuntimeGroup | None = None
+
+    @field_validator("runtime_group")
+    @classmethod
+    def reject_local(cls, value: RuntimeGroup | None) -> RuntimeGroup | None:
+        return _reject_local_runtime(value)
+
+
+class CortexCodexApproval(BaseModel):
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    decision: Literal["accept", "decline"]
+
+
+class CortexCodexCancel(BaseModel):
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+
+
+class CortexCodexStartRead(BaseModel):
+    status: str
+    sandbox: str
+    resumed: bool = False
+
+
+class CortexCodexTurnRead(BaseModel):
+    status: str
+    cursor: int = 0
+    turn_active: bool = False
+    # Safe policy/redaction metadata only: never the prompt, command, or CLI text.
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class CortexCodexEvent(BaseModel):
+    cursor: int
+    channel: str
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+
+class CortexCodexPendingApproval(BaseModel):
+    approval_id: str
+    method: str
+    # Native bridge allowlist: bounded command/reason/cwd basename and opaque
+    # item/turn identifiers only. Permissions requests remain detail-free.
+    detail: dict[str, Any] = Field(default_factory=dict)
+    deny_only: bool = False
+
+
+class CortexCodexStatusRead(BaseModel):
+    status: str
+    transport: str
+    session: str
+    turn: str
+    cursor: int = 0
+    events: list[CortexCodexEvent] = Field(default_factory=list)
+    pending_approvals: list[CortexCodexPendingApproval] = Field(default_factory=list)
+    # Safe aggregate scan metadata for the redacted native status: counts and
+    # boolean signals only — never any streamed raw command/diff/plan text.
+    scan: dict[str, Any] = Field(default_factory=dict)
+
+
+class CortexCodexApprovalRead(BaseModel):
+    status: str
+    decision: str
+    governed: bool = True
+
+
+class CortexCodexCancelRead(BaseModel):
+    status: str
 
 
 class CortexSecurityInvestigationCreate(BaseModel):

@@ -64,6 +64,12 @@ class ModelCallRead(BaseModel):
     reason: str
     latency_ms: int
     token_count: int
+    requester_subject: str | None = None
+    requester_role: str | None = None
+    orchestrator_identity: str | None = None
+    specialist_identity: str | None = None
+    workspace_id: str | None = None
+    dependency_evidence_ids: list[str] = Field(default_factory=list)
 
 
 class ModelRouteResponse(BaseModel):
@@ -242,3 +248,89 @@ class CortexGatewayResponse(BaseModel):
     agreement: str | None = None
     routing: dict[str, Any] | None = None
     latency_ms: int | None = None
+
+
+SpecialistRole = Literal[
+    "router",
+    "context_worker",
+    "planner",
+    "coder",
+    "researcher",
+    "security_analyst",
+    "security_reviewer",
+    "utility_parser",
+    "reviewer",
+    "test_reviewer",
+    "swarm_judge",
+    "final_judge",
+]
+
+
+class CortexTaskNode(BaseModel):
+    id: str = Field(pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    role: SpecialistRole
+    instruction: str = Field(min_length=1, max_length=12000)
+    depends_on: list[str] = Field(default_factory=list, max_length=6)
+    sources: list[str] = Field(default_factory=lambda: ["auto"], min_length=1, max_length=4)
+    timeout_seconds: int = Field(default=90, ge=5, le=180)
+
+
+class CortexTaskGraphRequest(BaseModel):
+    objective: str = Field(min_length=1, max_length=12000)
+    nodes: list[CortexTaskNode] = Field(min_length=1, max_length=7)
+    mode: Literal["chat", "cowork", "security"] = "cowork"
+    runtime_group: RuntimeGroup = "hybrid"
+    data_classification: str = Field(default="internal", max_length=64)
+    tenant_id: str = Field(default="global", min_length=1, max_length=128)
+    workspace_id: str | None = Field(default=None, max_length=128)
+    parallelism: int = Field(default=3, ge=1, le=3)
+
+    @model_validator(mode="after")
+    def validate_graph(self):
+        ids = [node.id for node in self.nodes]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Task node ids must be unique")
+        known = set(ids)
+        for node in self.nodes:
+            if node.id in node.depends_on or any(dep not in known for dep in node.depends_on):
+                raise ValueError("Task dependencies must reference another node")
+            for source in node.sources:
+                valid = source in {
+                    "auto", "codex_subscription", "claude_subscription",
+                    "chatgpt_desktop", "claude_desktop", "chatgpt_browser",
+                    "claude_browser", "gemini_browser",
+                } or source.startswith("profile:")
+                if not valid:
+                    raise ValueError("Unsupported specialist source")
+        remaining = {node.id: set(node.depends_on) for node in self.nodes}
+        resolved: set[str] = set()
+        while remaining:
+            ready = {node_id for node_id, deps in remaining.items() if deps <= resolved}
+            if not ready:
+                raise ValueError("Task graph must be acyclic")
+            resolved |= ready
+            for node_id in ready:
+                remaining.pop(node_id)
+        return self
+
+
+class CortexTaskResult(BaseModel):
+    id: str
+    role: SpecialistRole
+    status: Literal["completed", "blocked", "unavailable", "timed_out", "skipped"]
+    response: str | None = None
+    evidence_from: list[str] = Field(default_factory=list)
+    source: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    route_reason: str | None = None
+    fallback_reason: str | None = None
+    latency_ms: int = 0
+    policy: dict[str, Any] = Field(default_factory=dict)
+    attempts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CortexTaskGraphResponse(BaseModel):
+    status: Literal["completed", "partial", "blocked"]
+    results: list[CortexTaskResult]
+    execution_order: list[str]

@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claws.arcclaw.scanner import classify_prompt, scan_text
+from app.core.marcellus.context_compiler import is_external_denied
 from app.core.modelclaw.brain_bridge import (
     collect_votes,
     derive_brain_session_id,
@@ -95,7 +96,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
         allowed_sources: list[str] = []
         denied_votes: dict[str, dict[str, Any]] = {}
         for source in sources:
-            if source in _SUBSCRIPTION_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
+            if source in _SUBSCRIPTION_BRAINS and is_external_denied(payload.data_classification):
                 denied_votes[source] = _blocked_vote(
                     source, "External subscription Brains cannot receive this data classification."
                 )
@@ -141,7 +142,7 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
             votes.append(vote)
     else:
         for source in sources:
-            if source in _SUBSCRIPTION_BRAINS and payload.data_classification in {"restricted", "top_secret"}:
+            if source in _SUBSCRIPTION_BRAINS and is_external_denied(payload.data_classification):
                 votes.append(_blocked_vote(source, "External subscription Brains cannot receive this data classification."))
                 continue
 
@@ -390,7 +391,7 @@ def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = Fa
     # only applies to system-chosen routing (adaptive/consensus); an
     # explicit Brain selection is left alone here so the existing per-source
     # classification checks reject (rather than silently reroute) it.
-    if strategy != "explicit" and payload.data_classification in {"restricted", "top_secret"}:
+    if strategy != "explicit" and is_external_denied(payload.data_classification):
         routing["reason"] = "Restricted data is pinned to the approved local Brain boundary, overriding the requested runtime group."
         routing["candidate_sources"] = [_LOCAL_SOURCE]
         return [_LOCAL_SOURCE], routing
@@ -550,5 +551,11 @@ def _record_gateway_call(
             "reason": vote.get("reason") or governance["reason"],
             "latency_ms": int(latency_ms or 0),
             "token_count": int(vote.get("token_count") or 0),
+            "requester_subject": payload.context.get("requester_subject"),
+            "requester_role": payload.context.get("requester_role"),
+            "orchestrator_identity": payload.context.get("orchestrator_identity"),
+            "specialist_identity": payload.context.get("specialist_identity"),
+            "workspace_id": payload.context.get("validated_workspace_id") or payload.workspace_id,
+            "dependency_evidence_ids": payload.context.get("dependency_evidence_ids") or [],
         }
     )

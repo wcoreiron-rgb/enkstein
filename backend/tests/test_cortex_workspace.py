@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.deps import get_current_user
-from app.core.marcellus import workspace
+from app.core.marcellus import codex_workspace, workspace
 from app.core.swarm.dispatcher import _hydrate_cortex_context
 from app.models.marcellus import CortexArtifact, CortexConversationMessage
 from app.models.swarm import SwarmJob, SwarmJobStatus
@@ -262,7 +262,7 @@ async def test_explicit_script_attachment_is_sent_complete_without_silent_trunca
     )
     assert turn.status_code == 200, turn.text
     assert script in captured["prompt"]
-    assert captured["prompt"].endswith(script)
+    assert f"{script}\n=== END FILE scripts/review.ps1 ===" in captured["prompt"]
 
 
 @pytest.mark.asyncio
@@ -397,8 +397,12 @@ async def test_cowork_edit_and_move_mirror_to_native_workspace(client, monkeypat
     async def mirror_trash(tenant_id, project_id, *, path):
         calls.append(("trash", path))
 
+    async def mirror_rename(tenant_id, project_id, *, path, new_path):
+        calls.append(("rename", f"{path}->{new_path}"))
+
     monkeypatch.setattr(workspace, "mirror_write", mirror_write)
     monkeypatch.setattr(workspace, "mirror_trash", mirror_trash)
+    monkeypatch.setattr(workspace, "mirror_rename", mirror_rename)
     updated = await client.patch(
         f"{BASE}/artifacts/{created.json()[0]['id']}",
         json={"tenant_id": "tenant-a", "path": "notes/new.md", "content": "second"},
@@ -406,7 +410,10 @@ async def test_cowork_edit_and_move_mirror_to_native_workspace(client, monkeypat
     assert updated.status_code == 200, updated.text
     assert updated.json()["path"] == "notes/new.md"
     assert updated.json()["content"] == "second"
-    assert calls == [("write", "notes/new.md"), ("trash", "notes/old.md")]
+    assert calls == [
+        ("rename", "notes/old.md->notes/new.md"),
+        ("write", "notes/new.md"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -415,8 +422,8 @@ async def test_native_folder_binding_syncs_only_validated_bridge_files(client, m
     project = await _create_project(client)
     binding: dict[str, str] = {}
 
-    def set_binding(tenant_id, project_id, *, token, name):
-        binding.update({"token": token, "name": name})
+    def set_binding(tenant_id, project_id, *, token, name, path_alias=None):
+        binding.update({"token": token, "name": name, "path_alias": path_alias})
 
     async def list_files(tenant_id, project_id):
         return [{"path": "src/main.py", "content": "print('ready')", "mime_type": "text/plain"}]
@@ -782,3 +789,574 @@ async def test_change_apply_fails_closed_when_trust_fabric_denies(client, monkey
     )
     assert denied.status_code == 403
     assert wrote is False
+
+
+@pytest.mark.asyncio
+async def test_reopen_conversation_restores_active_status_and_is_owner_scoped(client, monkeypatch):
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    conversation = await _create_conversation(client, mode="chat")
+    archived = await client.delete(f"{BASE}/conversations/{conversation['id']}", params={"tenant_id": "tenant-a"})
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["status"] == "archived"
+
+    async def fake_gateway(db, payload):
+        return _gateway_response("Should not run while archived")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    blocked_turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Hello while archived"},
+    )
+    assert blocked_turn.status_code == 409
+
+    _use_identity(_identity(sub="other-user", tenant_id="tenant-a", role="analyst"))
+    denied = await client.post(f"{BASE}/conversations/{conversation['id']}/reopen", params={"tenant_id": "tenant-a"})
+    assert denied.status_code == 403
+
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    reopened = await client.post(f"{BASE}/conversations/{conversation['id']}/reopen", params={"tenant_id": "tenant-a"})
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["status"] == "active"
+
+    allowed_turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Hello after reopen"},
+    )
+    assert allowed_turn.status_code == 200, allowed_turn.text
+
+
+@pytest.mark.asyncio
+async def test_permanent_delete_is_tenant_and_owner_scoped(client):
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    conversation = await _create_conversation(client, mode="chat")
+
+    _use_identity(_identity(sub="other-user", tenant_id="tenant-a", role="analyst"))
+    denied = await client.delete(f"{BASE}/conversations/{conversation['id']}/permanent", params={"tenant_id": "tenant-a"})
+    assert denied.status_code == 403
+
+    _use_identity(_identity(sub="owner-b", tenant_id="tenant-b"))
+    cross_tenant = await client.delete(
+        f"{BASE}/conversations/{conversation['id']}/permanent", params={"tenant_id": "tenant-b"}
+    )
+    assert cross_tenant.status_code == 404
+
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    still_readable = await client.get(f"{BASE}/conversations/{conversation['id']}", params={"tenant_id": "tenant-a"})
+    assert still_readable.status_code == 200
+
+    deleted = await client.delete(f"{BASE}/conversations/{conversation['id']}/permanent", params={"tenant_id": "tenant-a"})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["status"] == "deleted"
+
+    gone = await client.get(f"{BASE}/conversations/{conversation['id']}", params={"tenant_id": "tenant-a"})
+    assert gone.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_permanent_delete_cleans_dependent_data_without_touching_other_tenants(client, db_session, monkeypatch):
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    project = await _create_project(client, "Deletable project")
+    conversation = await _create_conversation(client, project["id"])
+
+    active_artifact = await client.post(
+        f"{BASE}/artifacts",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "conversation_id": conversation["id"],
+            "files": [{"path": "docs/keep.md", "content": "Stays in the project"}],
+        },
+    )
+    assert active_artifact.status_code == 200, active_artifact.text
+    active_artifact_id = active_artifact.json()[0]["id"]
+
+    async def fake_gateway(db, payload):
+        return _gateway_response(
+            "Proposed.\n```marcellus_changes\n"
+            '[{"operation":"create","path":"pending.txt","content":"proposed"}]\n```'
+        )
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Propose a file", "agent_mode": True},
+    )
+    assert turn.status_code == 200, turn.text
+    proposals = await client.get(f"{BASE}/projects/{project['id']}/change-proposals", params={"tenant_id": "tenant-a"})
+    assert len(proposals.json()) == 1
+    proposal_id = proposals.json()[0]["id"]
+
+    branch = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/branches",
+        json={"tenant_id": "tenant-a", "message_id": turn.json()["user_message"]["id"]},
+    )
+    assert branch.status_code == 200, branch.text
+    branch_id = branch.json()["id"]
+
+    # An identical conversation in a different tenant must be unaffected by the delete below.
+    _use_identity(_identity(sub="owner-b", tenant_id="tenant-b"))
+    other_tenant_project_response = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-b", "name": "Deletable project", "classification": "internal"},
+    )
+    assert other_tenant_project_response.status_code == 200, other_tenant_project_response.text
+    other_tenant_conversation_response = await client.post(
+        f"{BASE}/conversations",
+        json={
+            "tenant_id": "tenant-b",
+            "project_id": other_tenant_project_response.json()["id"],
+            "title": "New conversation",
+            "mode": "cowork",
+            "classification": "internal",
+        },
+    )
+    assert other_tenant_conversation_response.status_code == 200, other_tenant_conversation_response.text
+    other_tenant_conversation = other_tenant_conversation_response.json()
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+
+    deleted = await client.delete(f"{BASE}/conversations/{conversation['id']}/permanent", params={"tenant_id": "tenant-a"})
+    assert deleted.status_code == 200, deleted.text
+
+    message_rows = (
+        await db_session.execute(
+            select(CortexConversationMessage).where(CortexConversationMessage.conversation_id == UUID(conversation["id"]))
+        )
+    ).scalars().all()
+    assert message_rows == []
+
+    proposal_row = (
+        await db_session.execute(select(CortexArtifact).where(CortexArtifact.id == UUID(proposal_id)))
+    ).scalar_one_or_none()
+    assert proposal_row is None
+
+    kept_artifact = (
+        await db_session.execute(select(CortexArtifact).where(CortexArtifact.id == UUID(active_artifact_id)))
+    ).scalar_one()
+    assert kept_artifact.status == "active"
+    assert kept_artifact.conversation_id is None
+    assert kept_artifact.project_id == UUID(project["id"])
+
+    branch_detail = await client.get(f"{BASE}/conversations/{branch_id}", params={"tenant_id": "tenant-a"})
+    assert branch_detail.status_code == 200, branch_detail.text
+    assert branch_detail.json()["branch_of_id"] is None
+    assert branch_detail.json()["branch_message_id"] is None
+    assert len(branch_detail.json()["messages"]) == 1
+
+    _use_identity(_identity(sub="owner-b", tenant_id="tenant-b"))
+    other_tenant_still_there = await client.get(
+        f"{BASE}/conversations/{other_tenant_conversation['id']}", params={"tenant_id": "tenant-b"}
+    )
+    assert other_tenant_still_there.status_code == 200
+
+
+# --- Codex App Server control plane ----------------------------------------
+
+async def _make_awaitable(value):
+    return value
+
+
+def _allow_decision():
+    return type("Decision", (), {"allowed": True, "policy_name": "test", "reason": "ok"})()
+
+
+def _deny_decision(policy_name: str = "Codex denied"):
+    return type("Decision", (), {"allowed": False, "policy_name": policy_name, "reason": "denied"})()
+
+
+def _bind_codex(monkeypatch, token: str = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") -> None:
+    monkeypatch.setattr(codex_workspace, "get_binding", lambda tenant_id, project_id: {"token": token, "name": "Local"})
+
+
+async def _codex_conversation(client, classification: str = "internal") -> tuple[dict, dict]:
+    project = await _create_project(client, f"Codex {classification}")
+    response = await client.post(
+        f"{BASE}/conversations",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "title": "New conversation",
+            "mode": "cowork",
+            "classification": classification,
+        },
+    )
+    assert response.status_code == 200, response.text
+    return project, response.json()
+
+
+@pytest.mark.asyncio
+async def test_codex_start_and_turn_scope_server_side_without_leaking_token_or_digest(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_bridge(operation, payload):
+        calls.append((operation, payload))
+        if operation == "start":
+            return {"status": "running", "sandbox": payload["sandbox"], "resumed": False, "threadId": "th-secret"}
+        return {"status": "running", "cursor": 7, "turnId": "tn-1", "threadId": "th-secret"}
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fake_bridge)
+
+    started = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/start",
+        json={"tenant_id": "tenant-a", "sandbox": "workspace-write"},
+    )
+    assert started.status_code == 200, started.text
+    assert started.json() == {"status": "running", "sandbox": "workspace-write", "resumed": False}
+
+    turned = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/turn",
+        json={"tenant_id": "tenant-a", "prompt": "Refactor the module"},
+    )
+    assert turned.status_code == 200, turned.text
+    body = turned.json()
+    assert body["status"] == "running"
+    assert body["cursor"] == 7
+    assert body["turn_active"] is True
+
+    # The derived digest and opaque token cross the bridge, never the client.
+    start_payload = calls[0][1]
+    assert start_payload["token"] == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    assert len(start_payload["scope_digest"]) == 64
+    assert all(character in "0123456789abcdef" for character in start_payload["scope_digest"])
+    assert start_payload["scope_digest"] == calls[1][1]["scope_digest"]
+    assert calls[1][1]["prompt"] == "Refactor the module"
+
+    for response_body in (started.json(), turned.json()):
+        serialized = str(response_body)
+        assert "th-secret" not in serialized
+        assert "scope_digest" not in serialized
+        assert start_payload["token"] not in serialized
+        assert start_payload["scope_digest"] not in serialized
+
+
+@pytest.mark.asyncio
+async def test_codex_rejects_local_only_runtime_group_before_bridge(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+
+    async def fail_bridge(operation, payload):
+        raise AssertionError("local-only runtime must never invoke Codex")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fail_bridge)
+
+    start_local = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/start",
+        json={"tenant_id": "tenant-a", "sandbox": "read-only", "runtime_group": "local"},
+    )
+    assert start_local.status_code == 422
+
+    turn_local = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/turn",
+        json={"tenant_id": "tenant-a", "prompt": "hi", "runtime_group": "local"},
+    )
+    assert turn_local.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_codex_denies_restricted_turn_before_bridge(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client, classification="restricted")
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    async def fail_bridge(operation, payload):
+        raise AssertionError("restricted data must never reach the external Codex CLI")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fail_bridge)
+
+    requests = [
+        ("post", f"{BASE}/conversations/{conversation['id']}/codex/start", {"tenant_id": "tenant-a"}),
+        ("post", f"{BASE}/conversations/{conversation['id']}/codex/turn", {"tenant_id": "tenant-a", "prompt": "Investigate"}),
+        ("get", f"{BASE}/conversations/{conversation['id']}/codex/status?tenant_id=tenant-a", None),
+        ("post", f"{BASE}/conversations/{conversation['id']}/codex/approvals/apr-safe", {"tenant_id": "tenant-a", "decision": "decline"}),
+        ("post", f"{BASE}/conversations/{conversation['id']}/codex/cancel", {"tenant_id": "tenant-a"}),
+    ]
+    for method, url, body in requests:
+        denied = await client.request(method, url, json=body)
+        assert denied.status_code == 403, (method, url, denied.text)
+        assert "restricted" in denied.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_codex_is_owner_and_tenant_scoped(client, monkeypatch):
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    async def fail_bridge(operation, payload):
+        raise AssertionError("isolation must be enforced before the bridge")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fail_bridge)
+
+    _use_identity(_identity(sub="other-user", tenant_id="tenant-a", role="analyst"))
+    other_owner = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/start",
+        json={"tenant_id": "tenant-a", "sandbox": "read-only"},
+    )
+    assert other_owner.status_code == 403
+
+    _use_identity(_identity(sub="owner-a", tenant_id="tenant-b"))
+    cross_tenant = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/start",
+        json={"tenant_id": "tenant-b", "sandbox": "read-only"},
+    )
+    assert cross_tenant.status_code in {403, 404}
+
+
+@pytest.mark.asyncio
+async def test_codex_turn_fails_closed_on_policy_denial(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_deny_decision()))
+
+    async def fail_bridge(operation, payload):
+        raise AssertionError("a denied turn must not reach the bridge")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fail_bridge)
+    denied = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/turn",
+        json={"tenant_id": "tenant-a", "prompt": "Refactor"},
+    )
+    assert denied.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_codex_denied_accept_sends_native_decline(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    decisions = iter([_deny_decision("Approvals denied"), _allow_decision()])
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(next(decisions)))
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_bridge(operation, payload):
+        calls.append((operation, payload))
+        return {"status": "ok", "decision": payload["decision"]}
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fake_bridge)
+    approval_id = "apr-" + "0" * 8 + "-0000-0000-0000-000000000000"
+    denied = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/approvals/{approval_id}",
+        json={"tenant_id": "tenant-a", "decision": "accept"},
+    )
+    assert denied.status_code == 403
+    # The operator's accept was overridden with a governed native decline so the
+    # turn cannot hang on the pending approval.
+    assert calls == [("approve", calls[0][1])]
+    assert calls[0][1]["decision"] == "decline"
+    assert calls[0][1]["approval_id"] == approval_id
+
+
+@pytest.mark.asyncio
+async def test_codex_status_is_bounded_and_sanitized(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    async def fake_bridge(operation, payload):
+        assert operation == "status"
+        return {
+            "status": "running",
+            "transport": "running",
+            "session": "active",
+            "turn": "running",
+            "cursor": 120,
+            "events": [
+                {"cursor": index, "channel": "notification", "fields": {"text": "x" * 9000}}
+                for index in range(120)
+            ],
+            "pending_approvals": [
+                {"approval_id": "apr-1", "method": "item/permissions/requestApproval", "detail": {"command": "rm -rf /"}}
+            ],
+        }
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fake_bridge)
+    status_response = await client.get(
+        f"{BASE}/conversations/{conversation['id']}/codex/status",
+        params={"tenant_id": "tenant-a", "cursor": 0},
+    )
+    assert status_response.status_code == 200, status_response.text
+    body = status_response.json()
+    assert len(body["events"]) == 50
+    assert all(len(event["fields"]["text"]) <= 4000 for event in body["events"])
+    assert body["pending_approvals"] == [
+        {
+            "approval_id": "apr-1",
+            "method": "item/permissions/requestApproval",
+            "detail": {},
+            "deny_only": True,
+        }
+    ]
+    assert "rm -rf" not in str(body)
+
+
+@pytest.mark.asyncio
+async def test_codex_maps_unavailable_bridge_to_503(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    async def unavailable_bridge(operation, payload):
+        raise RuntimeError("Codex App Server bridge is not configured")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", unavailable_bridge)
+    started = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/start",
+        json={"tenant_id": "tenant-a", "sandbox": "read-only"},
+    )
+    assert started.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_codex_cancel_is_governed_and_normalized(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_bridge(operation, payload):
+        calls.append((operation, payload))
+        return {"status": "interrupted"}
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fake_bridge)
+    cancelled = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/cancel",
+        json={"tenant_id": "tenant-a"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json() == {"status": "interrupted"}
+    assert calls[0][0] == "cancel"
+    assert len(calls[0][1]["scope_digest"]) == 64
+
+
+@pytest.mark.asyncio
+async def test_codex_denies_turn_when_project_block_is_restricted(client, monkeypatch):
+    _use_identity(_identity())
+    project, conversation = await _codex_conversation(client)  # conversation is internal
+    # A single restricted artifact block escalates the whole project's effective
+    # classification, so the external Codex CLI must be denied even though the
+    # conversation itself is only internal.
+    restricted = await client.post(
+        f"{BASE}/artifacts",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "classification": "restricted",
+            "files": [{"path": "secrets/keys.txt", "content": "top secret material"}],
+        },
+    )
+    assert restricted.status_code == 200, restricted.text
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    async def fail_bridge(operation, payload):
+        raise AssertionError("restricted project data must never reach the external Codex CLI")
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fail_bridge)
+    denied = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/codex/turn",
+        json={"tenant_id": "tenant-a", "prompt": "Investigate"},
+    )
+    assert denied.status_code == 403
+    assert "restricted" in denied.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_codex_status_redacts_streamed_free_text_and_preserves_ids(client, monkeypatch):
+    _use_identity(_identity())
+    _, conversation = await _codex_conversation(client)
+    _bind_codex(monkeypatch)
+    monkeypatch.setattr(codex_workspace, "enforce", lambda *a, **k: _make_awaitable(_allow_decision()))
+
+    secret_key = "AKIA" + "IOSFODNN7EXAMPLE"
+    fixture_value = "Hunter2Secret"
+
+    async def fake_bridge(operation, payload):
+        assert operation == "status"
+        return {
+            "status": "running",
+            "transport": "running",
+            "session": "active",
+            "turn": "running",
+            "cursor": 42,
+            "events": [
+                {
+                    "cursor": 1,
+                    "channel": "notification",
+                    "fields": {
+                        "type": "agent_message",
+                        "itemId": "item-42",
+                        "delta": f"here is the aws key {secret_key} from /Users/alice/private-repo do not share",
+                    },
+                },
+                {
+                    "cursor": 2,
+                    "channel": "notification",
+                    "fields": {
+                        "type": "plan",
+                        "turnId": "turn-9",
+                        "plan": [f"step uses password={fixture_value} now"],
+                    },
+                },
+                {
+                    "cursor": 3,
+                    "channel": "notification",
+                    "fields": {"type": "diff", "diff": f"+ password={fixture_value}\n- old line"},
+                },
+            ],
+            "pending_approvals": [
+                {
+                    "approval_id": "apr-1",
+                    "method": "item/commands/requestApproval",
+                    "detail": {
+                        "command": f"deploy --token {secret_key}",
+                        "reason": f"needs password={fixture_value}",
+                        "cwd": "/srv/app",
+                        "itemId": "item-77",
+                        "turnId": "turn-3",
+                    },
+                }
+            ],
+        }
+
+    monkeypatch.setattr(codex_workspace, "invoke_codex_bridge", fake_bridge)
+    status_response = await client.get(
+        f"{BASE}/conversations/{conversation['id']}/codex/status",
+        params={"tenant_id": "tenant-a", "cursor": 0},
+    )
+    assert status_response.status_code == 200, status_response.text
+    body = status_response.json()
+    serialized = str(body)
+    # Every streamed secret is redacted out of delta, plan, diff, command, reason.
+    assert secret_key not in serialized
+    assert "Hunter2Secret" not in serialized
+    assert "[REDACTED]" in serialized
+    # Cursor, method, lifecycle, and opaque correlation IDs survive intact.
+    assert body["cursor"] == 42
+    assert body["events"][0]["fields"]["itemId"] == "item-42"
+    assert body["events"][1]["fields"]["turnId"] == "turn-9"
+    approval = body["pending_approvals"][0]
+    assert approval["approval_id"] == "apr-1"
+    assert approval["method"] == "item/commands/requestApproval"
+    assert approval["detail"]["itemId"] == "item-77"
+    assert approval["detail"]["turnId"] == "turn-3"
+    assert approval["detail"]["cwd"] == "app"
+    assert "/srv/app" not in serialized
+    assert "/Users/alice/private-repo" not in serialized
+    assert "[LOCAL_PATH]" in serialized
+    # Only safe aggregate scan metadata is emitted; no raw streamed text.
+    assert body["scan"]["output_redacted"] is True
+    assert body["scan"]["fields_redacted"] >= 3
+    assert body["scan"]["sensitive_findings"] >= 3
