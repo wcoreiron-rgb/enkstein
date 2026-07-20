@@ -30,6 +30,7 @@ from app.core.marcellus.context_compiler import (
     is_external_denied,
 )
 from app.core.marcellus.native_workspace import get_binding
+from app.core.marcellus.token_hygiene import compact_tool_output
 from app.core.marcellus.workspace import _get_conversation, _get_project, _require_owner
 from app.core.marcellus.workspace_schemas import (
     CortexCodexApproval,
@@ -278,6 +279,11 @@ class _NativeScanAccumulator:
 
     def observe(self, text: str) -> str:
         safe_text = _remove_native_paths(text)
+        # RTK-style compaction runs before this text is retained/redacted: it
+        # only collapses noise (duplicate lines, progress redraws, info-level
+        # log spam), so it cannot hide or reorder anything a later redaction
+        # pass needs to see, and it shrinks what _MAX_FIELD_CHARS then cuts.
+        safe_text = compact_tool_output(safe_text).text
         self.free_text.append(safe_text)
         scan = scan_text(safe_text, redact=True)
         if scan.is_sensitive:

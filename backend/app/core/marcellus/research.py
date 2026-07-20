@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.claws.arcclaw.scanner import scan_text
 from app.core.marcellus.crypto import decrypt_json, encrypt_json
+from app.core.marcellus.token_hygiene import compact_tool_output
 from app.core.marcellus.workspace import _get_project, _require_owner, execute_turn, ingest_artifacts
 from app.core.marcellus.workspace_schemas import (
     CortexArtifactBatchCreate,
@@ -153,7 +154,12 @@ def _extract_text(body: bytes, content_type: str, url: str) -> tuple[str, str]:
         text = decoded
         title = ""
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text).strip()[:_MAX_SOURCE_TEXT]
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    # RTK-style compaction before the size cap: fetched pages (especially
+    # HTML nav/boilerplate and repeated site chrome) often carry duplicate
+    # lines that would otherwise burn into _MAX_SOURCE_TEXT for no benefit,
+    # leaving less room for the source's actual content.
+    text = compact_tool_output(text, max_chars=_MAX_SOURCE_TEXT).text
     return title or (urlparse(url).hostname or "Research source"), text
 
 
