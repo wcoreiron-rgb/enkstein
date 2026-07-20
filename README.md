@@ -89,6 +89,20 @@ Chat never loads project state, while Cowork scopes conversations and encrypted
 artifacts to the selected tenant-owned Project. Conversation create, open,
 rename, archive, and project move operations update immediately.
 
+Assistant responses in Chat and Cowork render as safe GitHub-flavored Markdown —
+headings, paragraphs, lists, tables, links (opened with `rel="noopener noreferrer"`),
+inline code, blockquotes, and citations — with raw HTML never enabled and dangerous
+URL protocols stripped. Fenced code blocks show a language label, light/dark styling,
+exact whitespace with horizontal scrolling for long PowerShell/Python/Terraform, and
+an accessible Copy button. Change proposals, Codex approvals, and terminal
+failed/timeout/interrupted turns render as compact operational blocks rather than raw
+JSON; a terminal turn offers **Retry** (replays the preserved message as a fresh turn,
+which is safe because a failed turn rolls back server-side) and **Continue** (returns
+the message to the composer), preserving the draft and conversation without duplicate
+submission. Each assistant reply carries a compact provenance record —
+source/provider/model, runtime group, policy outcome, latency, confidence,
+input/output redaction, and fallback reason.
+
 ### Brain runtime groups
 
 Chat, Cowork, Security, and Model Cortex consensus expose three governed groups:

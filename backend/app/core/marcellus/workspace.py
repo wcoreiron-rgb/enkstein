@@ -1467,6 +1467,11 @@ async def execute_turn(
         "change_proposal_ids": [str(item.id) for item in proposal_rows],
         "context_manifest": context_manifest.to_dict() if context_manifest else None,
         "effective_classification": effective_classification,
+        # Surfaced for compact response provenance in the workspace UI. Both are
+        # real values from this turn, not synthesized: the runtime group the turn
+        # ran under and the gateway's measured latency.
+        "runtime_group": runtime_group,
+        "latency_ms": gateway.get("latency_ms"),
     }
     assistant = CortexConversationMessage(
         tenant_id=tenant_id,

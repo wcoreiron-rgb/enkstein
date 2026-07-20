@@ -21,6 +21,14 @@
   --rc-border-2:    #374151;
   --rc-chat-canvas: #0b0d10;
   --rc-chat-panel:  #111317;
+
+  /* Fenced-code surface (dark) */
+  --rc-code-bg:     #0b1220;
+  --rc-code-head:   #111827;
+  --rc-code-fg:     #e5e7eb;
+  --rc-code-border: #1f2937;
+  --rc-inline-bg:   rgba(148,163,184,0.16);
+  --rc-inline-fg:   #e5e7eb;
 }
 
 /* ── Light theme variables ───────────────────────────────────────────────── */
@@ -36,6 +44,14 @@ html.light {
   --rc-border-2:    #cbd5e1;
   --rc-chat-canvas: #fcfcfd;
   --rc-chat-panel:  #ffffff;
+
+  /* Fenced-code surface (light) */
+  --rc-code-bg:     #f8fafc;
+  --rc-code-head:   #eef2f7;
+  --rc-code-fg:     #0f172a;
+  --rc-code-border: #e2e8f0;
+  --rc-inline-bg:   rgba(15,23,42,0.06);
+  --rc-inline-fg:   #0f172a;
 }
 
 body {
@@ -217,3 +233,83 @@ html.light .text-indigo-400      { color: #4338ca !important; }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--rc-bg-surface); }
 ::-webkit-scrollbar-thumb { background: var(--rc-bg-elevated); border-radius: 3px; }
+
+/* ── Safe assistant Markdown (Enkstein Chat / Cowork) ────────────────────────
+ * Scoped typography for GitHub-flavored Markdown rendered from untrusted model
+ * output. No raw HTML is ever enabled; these rules only style the sanitized
+ * element tree ReactMarkdown emits. */
+.rc-md { color: var(--rc-text-1); font-size: 0.875rem; line-height: 1.75; }
+.rc-md > *:first-child { margin-top: 0; }
+.rc-md > *:last-child { margin-bottom: 0; }
+.rc-md p { margin: 0.5rem 0; }
+.rc-md h1, .rc-md h2, .rc-md h3, .rc-md h4, .rc-md h5, .rc-md h6 {
+  color: var(--rc-text-1); font-weight: 600; line-height: 1.3;
+  margin: 1.1rem 0 0.5rem;
+}
+.rc-md h1 { font-size: 1.35rem; }
+.rc-md h2 { font-size: 1.2rem; }
+.rc-md h3 { font-size: 1.05rem; }
+.rc-md h4 { font-size: 0.95rem; }
+.rc-md h5, .rc-md h6 { font-size: 0.875rem; color: var(--rc-text-2); }
+.rc-md ul, .rc-md ol { margin: 0.5rem 0; padding-left: 1.4rem; }
+.rc-md ul { list-style: disc; }
+.rc-md ol { list-style: decimal; }
+.rc-md li { margin: 0.2rem 0; }
+.rc-md li > ul, .rc-md li > ol { margin: 0.2rem 0; }
+.rc-md li::marker { color: var(--rc-text-3); }
+.rc-md input[type="checkbox"] { margin-right: 0.4rem; accent-color: #dc2626; }
+.rc-md a { color: #ef4444; text-decoration: underline; text-underline-offset: 2px; word-break: break-word; }
+.rc-md a:hover { color: #dc2626; }
+.rc-md strong { font-weight: 600; color: var(--rc-text-1); }
+.rc-md em { font-style: italic; }
+.rc-md hr { border: 0; border-top: 1px solid var(--rc-border); margin: 1rem 0; }
+.rc-md blockquote {
+  margin: 0.6rem 0; padding: 0.1rem 0.9rem; color: var(--rc-text-2);
+  border-left: 3px solid var(--rc-border-2);
+}
+.rc-md blockquote p { margin: 0.3rem 0; }
+.rc-md .rc-md-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em; padding: 0.1em 0.35em; border-radius: 4px;
+  background: var(--rc-inline-bg) !important; color: var(--rc-inline-fg) !important;
+  word-break: break-word;
+}
+.rc-md-table-wrap { overflow-x: auto; margin: 0.7rem 0; border: 1px solid var(--rc-border); border-radius: 8px; }
+.rc-md table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+.rc-md th, .rc-md td { border: 1px solid var(--rc-border); padding: 0.4rem 0.65rem; text-align: left; vertical-align: top; }
+.rc-md th { background: var(--rc-bg-elevated); font-weight: 600; color: var(--rc-text-1); }
+.rc-md td { color: var(--rc-text-2); }
+
+/* ── Fenced code block (governed, presentation-only) ─────────────────────── */
+.rc-code-block {
+  margin: 0.7rem 0; border: 1px solid var(--rc-code-border); border-radius: 8px;
+  overflow: hidden; background: var(--rc-code-bg);
+}
+.rc-code-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.3rem 0.5rem 0.3rem 0.75rem; background: var(--rc-code-head);
+  border-bottom: 1px solid var(--rc-code-border);
+}
+.rc-code-lang {
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--rc-text-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.rc-code-copy {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 5px;
+  color: var(--rc-text-2); background: transparent; border: 1px solid transparent;
+  cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.rc-code-copy:hover { background: var(--rc-bg-elevated); color: var(--rc-text-1); border-color: var(--rc-code-border); }
+.rc-code-copy:focus-visible { outline: 2px solid #ef4444; outline-offset: 1px; }
+.rc-code-body {
+  margin: 0; padding: 0.75rem 0.85rem; overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem; line-height: 1.55; tab-size: 4;
+  color: var(--rc-code-fg) !important; background: var(--rc-code-bg);
+  white-space: pre; word-wrap: normal;
+}
+.rc-code-body code { background: transparent !important; color: inherit !important; padding: 0 !important; font: inherit; white-space: pre; }
+.rc-code-body:focus-visible { outline: 2px solid #ef4444; outline-offset: -2px; }
+.rc-code-body-compact { max-height: 14rem; overflow: auto; }

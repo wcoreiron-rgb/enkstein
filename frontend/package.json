@@ -16,7 +16,9 @@
     "qrcode": "^1.5.4",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^2.12.7"
+    "react-markdown": "^10.1.0",
+    "recharts": "^2.12.7",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",

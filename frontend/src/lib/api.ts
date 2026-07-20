@@ -916,21 +916,50 @@ export async function streamCortexTurn(
   const decoder = new TextDecoder();
   let buffer = '';
   let completed: CortexTurn | null = null;
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const frames = buffer.split('\n\n');
-    buffer = frames.pop() || '';
-    for (const frame of frames) {
-      const event = frame.split('\n').find((line) => line.startsWith('event: '))?.slice(7) || 'message';
-      const encoded = frame.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
-      if (!encoded) continue;
-      const data = JSON.parse(encoded);
-      onEvent({ event, data });
-      if (event === 'turn_failed') throw new Error(data.detail || 'The governed turn failed.');
-      if (event === 'turn_completed') completed = data as CortexTurn;
+  // The server heartbeats the stream while a turn runs, so any live turn keeps
+  // the socket producing frames. If no frame (not even a heartbeat) arrives for
+  // this long, the stream is presumed dead and is abandoned rather than hanging
+  // the UI indefinitely.
+  const IDLE_TIMEOUT_MS = 45_000;
+  try {
+    while (true) {
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_, reject) => {
+        idleTimer = setTimeout(
+          () => reject(new Error('The governed turn stream stalled with no server activity and was stopped.')),
+          IDLE_TIMEOUT_MS,
+        );
+      });
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await Promise.race([reader.read(), idle]);
+      } finally {
+        if (idleTimer) clearTimeout(idleTimer);
+      }
+      const { done, value } = chunk;
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() || '';
+      for (const frame of frames) {
+        const event = frame.split('\n').find((line) => line.startsWith('event: '))?.slice(7) || 'message';
+        const encoded = frame.split('\n').filter((line) => line.startsWith('data: ')).map((line) => line.slice(6)).join('\n');
+        if (!encoded) continue;
+        const data = JSON.parse(encoded);
+        onEvent({ event, data });
+        if (event === 'turn_failed') throw new Error(data.detail || 'The governed turn failed.');
+        if (event === 'turn_timeout') throw new Error(data.detail || 'The governed turn timed out and was stopped.');
+        if (event === 'turn_completed') completed = data as CortexTurn;
+      }
+      if (done) break;
     }
-    if (done) break;
+  } finally {
+    // Release the underlying connection on any exit path (error, abort, idle
+    // timeout) so a stalled turn never leaks a held reader.
+    try {
+      await reader.cancel();
+    } catch {
+      /* reader already closed */
+    }
   }
   if (!completed) throw new Error('The stream ended before the governed turn completed.');
   return completed;

@@ -251,3 +251,67 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
 
   return store;
 }
+
+type TurnOutcome = 'completed' | 'failed' | 'timeout';
+
+function sse(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+/** Mocks the governed streaming turn endpoint. `outcomes` is consumed one entry
+ * per request (the final entry repeats), so a test can make the first attempt
+ * fail and a Retry succeed. Returns a getter for the number of stream requests
+ * so tests can assert there was no duplicate submission. */
+export async function mockTurnStream(
+  page: Page,
+  store: WorkspaceStore,
+  options: { conversationId: string; assistantContent: string; outcomes?: TurnOutcome[] },
+): Promise<() => number> {
+  const outcomes = options.outcomes && options.outcomes.length ? options.outcomes : ['completed'];
+  let calls = 0;
+
+  await page.route(`**/marcellus/workspace/conversations/${options.conversationId}/turns/stream`, async (route) => {
+    const outcome = outcomes[Math.min(calls, outcomes.length - 1)];
+    calls += 1;
+    const now = new Date().toISOString();
+    const conversation = store.conversations.find((item) => item.id === options.conversationId);
+    const body: string[] = [sse('turn_started', { conversation_id: options.conversationId, agent_mode: false })];
+
+    if (outcome === 'failed') {
+      body.push(sse('turn_failed', { detail: 'The governed turn could not be completed.' }));
+    } else if (outcome === 'timeout') {
+      body.push(sse('turn_timeout', { detail: 'The governed turn exceeded the streaming deadline and was stopped.', elapsed_ms: 30000 }));
+    } else {
+      const userMessage = {
+        id: nextId('message'), tenant_id: 'default', conversation_id: options.conversationId,
+        role: 'user', content: 'user prompt', classification: 'internal', governance: {}, created_at: now,
+      };
+      const assistantMessage = {
+        id: nextId('message'), tenant_id: 'default', conversation_id: options.conversationId,
+        role: 'assistant', content: options.assistantContent, classification: 'internal',
+        source: 'auto', provider: 'test-provider', model: 'test-model',
+        governance: {
+          outcome: 'allowed', policy_name: 'default', reason: 'ok', risk_score: 3,
+          input_redacted: false, output_redacted: false, confidence: 0.92,
+          runtime_group: 'hybrid', latency_ms: 812, votes: [], context_manifest: null,
+        },
+        created_at: now,
+      };
+      body.push(sse('response_delta', { delta: options.assistantContent.slice(0, 16) }));
+      body.push(sse('turn_completed', {
+        conversation: conversation || {
+          id: options.conversationId, tenant_id: 'default', owner_id: 'e2e-owner', project_id: null,
+          title: 'Streamed turn', mode: 'chat', classification: 'internal', selected_source: 'auto',
+          status: 'active', message_count: 2, created_at: now, updated_at: now,
+        },
+        user_message: userMessage,
+        assistant_message: assistantMessage,
+        gateway: { status: 'ok', mode: 'chat', governance: {}, votes: [] },
+      }));
+    }
+
+    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: body.join('') });
+  });
+
+  return () => calls;
+}

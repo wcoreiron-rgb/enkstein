@@ -135,6 +135,11 @@ async def test_workspace_turn_passes_runtime_group_to_gateway(client, monkeypatc
     )
     assert turn.status_code == 200, turn.text
     assert captured["runtime_group"] == "local"
+    # The runtime group and gateway latency are surfaced in the persisted
+    # assistant governance so the workspace UI can show accurate provenance.
+    assistant_governance = turn.json()["assistant_message"]["governance"]
+    assert assistant_governance["runtime_group"] == "local"
+    assert assistant_governance["latency_ms"] == 2
 
     legacy_conversation = await _create_conversation(client, mode="chat")
     legacy_turn = await client.post(
@@ -749,6 +754,136 @@ async def test_streamed_turn_emits_lifecycle_brain_and_completion_events(client,
     assert "event: brain_completed" in body
     assert "event: response_delta" in body
     assert "event: turn_completed" in body
+
+
+def _sse_events(body: str) -> list[str]:
+    return [line[len("event: ") :] for line in body.splitlines() if line.startswith("event: ")]
+
+
+def _sse_deltas(body: str) -> str:
+    import json as _json
+
+    frames = body.split("\n\n")
+    parts: list[str] = []
+    for frame in frames:
+        lines = frame.split("\n")
+        event = next((line[len("event: ") :] for line in lines if line.startswith("event: ")), None)
+        if event != "response_delta":
+            continue
+        encoded = "".join(line[len("data: ") :] for line in lines if line.startswith("data: "))
+        parts.append(_json.loads(encoded)["delta"])
+    return "".join(parts)
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_emits_heartbeats_while_running(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_HEARTBEAT_SECONDS", 0.02)
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_DEADLINE_SECONDS", 30.0)
+
+    async def slow_gateway(db, payload):
+        import asyncio as _asyncio
+
+        await _asyncio.sleep(0.15)
+        return _gateway_response("Answer after a slow governed Brain")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", slow_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={"tenant_id": "tenant-a", "content": "Take your time"},
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    events = _sse_events(body)
+    # A heartbeat must be delivered before the terminal event so proxies and the
+    # browser never observe an idle connection during a long turn.
+    assert "heartbeat" in events
+    assert events.index("heartbeat") < events.index("turn_completed")
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_deadline_yields_terminal_timeout(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_HEARTBEAT_SECONDS", 0.02)
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_DEADLINE_SECONDS", 0.1)
+
+    async def stalled_gateway(db, payload):
+        import asyncio as _asyncio
+
+        await _asyncio.sleep(5)
+        return _gateway_response("never reached")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", stalled_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={"tenant_id": "tenant-a", "content": "Stall forever"},
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    events = _sse_events(body)
+    # The stream must terminate rather than hang: exactly one terminal event, and
+    # it is the timeout — never turn_completed.
+    assert "turn_timeout" in events
+    assert "turn_completed" not in events
+    assert events[-1] == "turn_timeout"
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_failure_yields_terminal_failed(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    async def broken_gateway(db, payload):
+        raise RuntimeError("gateway exploded")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", broken_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={"tenant_id": "tenant-a", "content": "Break it"},
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    events = _sse_events(body)
+    assert events[-1] == "turn_failed"
+    assert "turn_completed" not in events
+    # The failure detail must not leak the underlying exception text.
+    assert "gateway exploded" not in body
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_preserves_large_multiline_script(client, monkeypatch):
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    script_lines = [f"print('governed line {index:04d} with padding to force chunk splits')" for index in range(400)]
+    script = "```python\n" + "\n".join(script_lines) + "\n```"
+
+    async def script_gateway(db, payload):
+        return _gateway_response(script)
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", script_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={"tenant_id": "tenant-a", "content": "Generate a long script"},
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    # The bounded chunked deltas must reconstruct the full script byte-for-byte —
+    # nothing is dropped or truncated by the chunk boundary.
+    assert _sse_deltas(body) == script
+    assert _sse_events(body)[-1] == "turn_completed"
 
 
 @pytest.mark.asyncio

@@ -334,6 +334,60 @@
     </div>
   </div>
 
+  <!-- Enkstein — Unreleased: Professional safe message rendering -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Professional safe message rendering &amp; operational blocks</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">Unreleased</span>
+          <span class="release-date">Enkstein Chat &amp; Cowork &nbsp;·&nbsp; assistant rendering</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein Chat and Cowork now render assistant responses as safe GitHub-flavored Markdown with professional operational blocks, replacing plain-text and raw-JSON output. Raw HTML is never enabled.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Safe Markdown:</strong> headings, paragraphs, lists, tables, links, inline code, blockquotes, and citations render through a sanitized renderer (no raw HTML; dangerous URL protocols stripped; links carry <code>rel="noopener noreferrer"</code>).</li>
+          <li><strong>Code blocks:</strong> fenced code shows a language label, readable light/dark styling, exact whitespace with horizontal scrolling for long PowerShell/Python/Terraform, and an accessible Copy button with tooltip and copied state.</li>
+          <li><strong>Operational blocks:</strong> change proposals, Codex approvals, and terminal failed/timeout/interrupted turns render as compact professional blocks instead of raw JSON.</li>
+          <li><strong>Retry &amp; Continue:</strong> terminal failed/timeout/interrupted normal turns offer Retry (replays the preserved message as a fresh turn — safe because the turn rolled back server-side) and Continue (returns the message to the composer), preserving draft and conversation without duplicate submission.</li>
+          <li><strong>Response provenance:</strong> a compact record shows source/provider/model, runtime group, policy outcome, latency, confidence, input/output redaction, and fallback reason.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enkstein — Unreleased: Bounded Cowork turn streaming -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Bounded Cowork turn streaming</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Unreleased</span>
+          <span class="release-date">Enkstein Cowork &nbsp;·&nbsp; streaming reliability</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The governed Cowork turn stream can no longer stall a long prompt, response, or generated script: it stays warm with heartbeats, is hard-bounded by a deadline, and always resolves to a terminal state.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Heartbeats:</strong> while a governed turn is still running the SSE stream emits a periodic heartbeat (configurable via <code>WORKSPACE_STREAM_HEARTBEAT_SECONDS</code>) so proxies and browsers never see an idle connection during long turns.</li>
+          <li><strong>Hard deadline:</strong> a turn that outruns <code>WORKSPACE_STREAM_DEADLINE_SECONDS</code> is cancelled, its transaction rolled back, and a terminal <code>turn_timeout</code> event delivered — the stream can never run indefinitely.</li>
+          <li><strong>Guaranteed terminal state:</strong> every stream ends in exactly one of <code>turn_completed</code>, <code>turn_failed</code>, or <code>turn_timeout</code>; failures carry a bounded non-leaking detail rather than raw exception text.</li>
+          <li><strong>Client-disconnect release:</strong> if the client goes away mid-turn the governed work is cancelled and the transaction released instead of streaming into a dead socket.</li>
+          <li><strong>Preserved chunk integrity:</strong> the persisted permitted assistant output is re-chunked into bounded deltas that reconstruct long multiline scripts byte-for-byte, and the web client now enforces its own idle-read watchdog so a dead stream cannot hang the UI.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.7 — Pre-release Governance Hardening -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

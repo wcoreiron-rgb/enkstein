@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import time
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Path, Query, Request
@@ -8,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.marcellus.runtime_security import actor_id, actor_name, resolve_tenant
@@ -96,6 +99,39 @@ def _ip(request: Request) -> str | None:
 
 def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(jsonable_encoder(payload), separators=(',', ':'))}\n\n"
+
+
+# Bounded chunk size for streamed assistant deltas. Small enough that the first
+# visible token arrives promptly and a single frame can never balloon the wire,
+# large enough to avoid per-character frame overhead on long scripts.
+_STREAM_CHUNK_CHARS = 96
+
+
+def _turn_content_frames(turn):
+    """Yield the ordered content/governance SSE frames for a completed turn.
+
+    Emitted only after ``execute_turn`` has resolved, so the full permitted
+    assistant output is already persisted encrypted; the deltas here are a
+    presentation re-chunking of that persisted content and carry no state the
+    client cannot recover from the terminal ``turn_completed`` payload.
+    """
+    governance = (turn.assistant_message.governance if turn.assistant_message else {}) or {}
+    yield _sse("context_ready", {"context_manifest": governance.get("context_manifest")})
+    for vote in turn.gateway.get("votes", []):
+        yield _sse(
+            "brain_completed",
+            {
+                key: vote.get(key)
+                for key in ("source", "provider", "model", "counted", "reason", "latency_ms", "policy_outcome")
+            },
+        )
+    content = turn.assistant_message.content if turn.assistant_message else ""
+    for offset in range(0, len(content), _STREAM_CHUNK_CHARS):
+        yield _sse("response_delta", {"delta": content[offset : offset + _STREAM_CHUNK_CHARS]})
+    proposal_ids = governance.get("change_proposal_ids", [])
+    if proposal_ids:
+        yield _sse("changes_proposed", {"proposal_ids": proposal_ids, "count": len(proposal_ids)})
+    yield _sse("turn_completed", turn.model_dump(mode="json"))
 
 
 @router.get("/tools", response_model=list[CortexToolRead], summary="List governed Cowork MCP tools")
@@ -435,16 +471,28 @@ async def post_turn(
 async def post_turn_stream(
     conversation_id: UUID,
     payload: CortexTurnCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     tenant_id = resolve_tenant(user, payload.tenant_id)
     trusted_payload = payload.model_copy(update={"tenant_id": tenant_id})
+    # A small positive floor prevents a misconfigured 0/negative interval from
+    # busy-looping; the deadline can never be shorter than one heartbeat.
+    heartbeat = max(0.05, float(settings.WORKSPACE_STREAM_HEARTBEAT_SECONDS))
+    deadline = max(heartbeat, float(settings.WORKSPACE_STREAM_DEADLINE_SECONDS))
 
     async def events():
-        yield _sse("turn_started", {"conversation_id": conversation_id, "agent_mode": trusted_payload.agent_mode})
-        try:
-            turn = await execute_turn(
+        yield _sse(
+            "turn_started",
+            {"conversation_id": conversation_id, "agent_mode": trusted_payload.agent_mode},
+        )
+        # Run the governed turn as a supervised task so the request coroutine can
+        # keep the wire warm with heartbeats and enforce a hard deadline. The turn
+        # is executed exactly once; the terminal event (completed/failed/timeout)
+        # is emitted exactly once and the stream then closes — it never hangs.
+        task = asyncio.ensure_future(
+            execute_turn(
                 db,
                 tenant_id,
                 conversation_id,
@@ -452,27 +500,61 @@ async def post_turn_stream(
                 user=user,
                 actor_id=actor_id(user),
             )
+        )
+        started = time.monotonic()
+        try:
+            while True:
+                await asyncio.wait({task}, timeout=heartbeat)
+                if task.done():
+                    break
+                elapsed = time.monotonic() - started
+                # If the client has gone away, stop the governed work and release
+                # the transaction rather than streaming into a dead socket.
+                if await request.is_disconnected():
+                    task.cancel()
+                    try:
+                        await task
+                    except BaseException:  # noqa: BLE001 - cancellation/teardown
+                        pass
+                    await db.rollback()
+                    return
+                if elapsed >= deadline:
+                    # Hard bound reached: cancel the stalled turn, roll back, and
+                    # deliver a terminal state so the client never streams forever.
+                    task.cancel()
+                    try:
+                        await task
+                    except BaseException:  # noqa: BLE001 - cancellation/teardown
+                        pass
+                    await db.rollback()
+                    yield _sse(
+                        "turn_timeout",
+                        {
+                            "detail": "The governed turn exceeded the streaming deadline and was stopped.",
+                            "elapsed_ms": int(elapsed * 1000),
+                        },
+                    )
+                    return
+                yield _sse("heartbeat", {"elapsed_ms": int(elapsed * 1000)})
+        except asyncio.CancelledError:
+            # The server is tearing down the response (client disconnect at the
+            # transport layer): abandon the turn without leaving it running.
+            task.cancel()
+            raise
+
+        try:
+            turn = task.result()
+        except asyncio.CancelledError:
+            await db.rollback()
+            yield _sse("turn_failed", {"detail": "The governed turn was cancelled."})
+            return
         except Exception:
             await db.rollback()
             yield _sse("turn_failed", {"detail": "The governed turn could not be completed."})
             return
-        context_manifest = (turn.assistant_message.governance if turn.assistant_message else {}).get("context_manifest")
-        yield _sse("context_ready", {"context_manifest": context_manifest})
-        for vote in turn.gateway.get("votes", []):
-            yield _sse(
-                "brain_completed",
-                {
-                    key: vote.get(key)
-                    for key in ("source", "provider", "model", "counted", "reason", "latency_ms", "policy_outcome")
-                },
-            )
-        content = turn.assistant_message.content if turn.assistant_message else ""
-        for offset in range(0, len(content), 96):
-            yield _sse("response_delta", {"delta": content[offset : offset + 96]})
-        proposal_ids = (turn.assistant_message.governance if turn.assistant_message else {}).get("change_proposal_ids", [])
-        if proposal_ids:
-            yield _sse("changes_proposed", {"proposal_ids": proposal_ids, "count": len(proposal_ids)})
-        yield _sse("turn_completed", turn.model_dump(mode="json"))
+
+        for frame in _turn_content_frames(turn):
+            yield frame
 
     return StreamingResponse(
         events(),

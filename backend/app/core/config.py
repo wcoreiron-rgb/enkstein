@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     BRAIN_BRIDGE_SECRET: str = ""
     BRAIN_BRIDGE_TIMEOUT_SECONDS: int = 180
 
+    # Cowork/Cortex turn streaming bounds. The SSE turn stream emits a heartbeat
+    # every HEARTBEAT seconds while the governed turn is still running so proxies
+    # and browsers never see an idle connection, and it is hard-bounded by
+    # DEADLINE so a stalled Brain can never leave the client streaming forever —
+    # the deadline always resolves to a terminal turn_timeout event.
+    WORKSPACE_STREAM_HEARTBEAT_SECONDS: float = 10.0
+    WORKSPACE_STREAM_DEADLINE_SECONDS: float = 180.0
+
     def validate_security(self) -> None:
         """Call at startup. Raises if running in production with insecure defaults."""
         if not self.DEBUG and self.SECRET_KEY in _INSECURE_DEFAULTS:

@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Clock,
+  Ban,
   File,
   FilePlus2,
   Folder,
@@ -84,6 +86,8 @@ import {
   syncCortexNativeWorkspace,
   updateCortexArtifact,
 } from '@/lib/api';
+import SafeMarkdown from '@/components/markdown/SafeMarkdown';
+import CodeBlock from '@/components/markdown/CodeBlock';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 import {
   persistLastActiveConversation,
@@ -99,6 +103,20 @@ declare global {
 }
 
 type Mode = 'chat' | 'cowork' | 'security';
+
+type TurnFailureKind = 'failed' | 'timeout' | 'interrupted';
+type TurnFailure = { content: string; kind: TurnFailureKind; detail: string };
+
+/** Maps a terminal turn error message to a compact operational state so the UI
+ * can present failed / timeout / interrupted turns distinctly. The strings come
+ * from the governed backend events (turn_failed / turn_timeout) and the idle
+ * stream guard in streamCortexTurn. */
+function classifyTurnFailure(detail: string): TurnFailureKind {
+  const text = detail.toLowerCase();
+  if (text.includes('timed out') || text.includes('timeout') || text.includes('deadline') || text.includes('stalled')) return 'timeout';
+  if (text.includes('interrupted') || text.includes('cancelled') || text.includes('canceled')) return 'interrupted';
+  return 'failed';
+}
 
 type ModelOption = { id: string; label: string };
 type SourceOption = { value: string; label: string; ready: boolean; detail?: string; models: ModelOption[] };
@@ -184,6 +202,7 @@ export default function AIWorkspace({
   const [nativeWorkspace, setNativeWorkspace] = useState<CortexNativeWorkspace | null>(null);
   const [investigating, setInvestigating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailure, setLastFailure] = useState<TurnFailure | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
   const [dialog, setDialog] = useState<WorkspaceDialog | null>(null);
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -195,6 +214,7 @@ export default function AIWorkspace({
   const [archivedLoading, setArchivedLoading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const turnAbort = useRef<AbortController | null>(null);
   const nativeCodexConversation = useRef<string | null>(null);
@@ -620,9 +640,9 @@ export default function AIWorkspace({
     }));
   }, [active?.id, conversations, mode, nativeWorkspace, projectId, projects]);
 
-  const submit = async (event?: FormEvent) => {
+  const submit = async (event?: FormEvent, retryContent?: string) => {
     event?.preventDefault();
-    const content = draft.trim();
+    const content = (retryContent ?? draft).trim();
     if (!content || busy) return;
     if (selectedArtifactBytes > 100_000) {
       setError('Selected files exceed the complete-context limit. Select fewer files so no code is truncated.');
@@ -630,6 +650,7 @@ export default function AIWorkspace({
     }
     setBusy(true);
     setError(null);
+    setLastFailure(null);
     setStreamText('');
     setActivity([]);
     setCodexApprovals([]);
@@ -639,7 +660,9 @@ export default function AIWorkspace({
       if (!conversation) return;
       const controller = new AbortController();
       turnAbort.current = controller;
-      setDraft('');
+      // A retry replays a preserved message, so it must not disturb whatever the
+      // operator may have since typed into the composer.
+      if (retryContent === undefined) setDraft('');
       const useNativeCodex = mode === 'cowork'
         && agentMode
         && Boolean(nativeWorkspace?.connected)
@@ -733,7 +756,11 @@ export default function AIWorkspace({
       if (requestError instanceof Error && requestError.name === 'AbortError') {
         setActivity((current) => [...current, 'Turn stopped by operator']);
       } else {
-        setError(requestError instanceof Error ? requestError.message : 'The governed request failed.');
+        const detail = requestError instanceof Error ? requestError.message : 'The governed request failed.';
+        // The governed backend rolls the turn back on failed/timeout/cancelled,
+        // so nothing was persisted — the preserved content can be replayed as a
+        // fresh turn without duplicating a submission.
+        setLastFailure({ content, kind: classifyTurnFailure(detail), detail });
       }
     } finally {
       turnAbort.current = null;
@@ -747,6 +774,23 @@ export default function AIWorkspace({
     turnAbort.current?.abort();
     const conversationId = nativeCodexConversation.current;
     if (conversationId) void cancelCortexCodex(conversationId).catch(() => undefined);
+  };
+
+  /** Replays the preserved message as a brand-new governed turn on the same
+   * conversation. Safe because the failed turn rolled back server-side. */
+  const retryFailedTurn = () => {
+    if (!lastFailure || busy) return;
+    void submit(undefined, lastFailure.content);
+  };
+
+  /** Returns the preserved message to the composer so the operator can adjust
+   * and continue, without clobbering anything already typed there. */
+  const continueFailedTurn = () => {
+    if (!lastFailure) return;
+    const content = lastFailure.content;
+    setLastFailure(null);
+    setDraft((current) => (current.trim() ? current : content));
+    requestAnimationFrame(() => draftRef.current?.focus());
   };
 
   const decideCodexApproval = async (approval: CortexCodexApproval, decision: 'accept' | 'decline') => {
@@ -1096,7 +1140,7 @@ export default function AIWorkspace({
         </header>
 
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-6 md:px-8">
-          {!messages.length && !busy && !nativeResult ? (
+          {!messages.length && !busy && !nativeResult && !lastFailure ? (
             <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border" style={{ borderColor: 'var(--rc-border-2)' }}>
                 {mode === 'chat' ? <BrainCircuit className="h-6 w-6 text-red-500" /> : <FolderOpen className="h-6 w-6 text-red-500" />}
@@ -1110,9 +1154,11 @@ export default function AIWorkspace({
             <div className="mx-auto max-w-3xl space-y-7">
               {messages.map((message) => (
                 <article key={message.id} className={`group flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={message.role === 'user' ? 'max-w-[82%] rounded-2xl px-4 py-3' : 'w-full'}
+                  <div className={message.role === 'user' ? 'max-w-[82%] rounded-2xl px-4 py-3' : 'w-full min-w-0'}
                     style={message.role === 'user' ? { background: 'var(--rc-bg-elevated)' } : undefined}>
-                    <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{message.content}</p>
+                    {message.role === 'assistant'
+                      ? <SafeMarkdown content={message.content} />
+                      : <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{message.content}</p>}
                     {message.role === 'assistant' && (
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <GovernanceRecord message={message} />
@@ -1133,13 +1179,17 @@ export default function AIWorkspace({
                       {activity.map((item, index) => <span key={`${item}-${index}`} className="rounded border px-2 py-1 text-[10px]" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}>{item}</span>)}
                     </div>
                   )}
-                  {streamText && <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{streamText}</p>}
+                  {streamText && <SafeMarkdown content={streamText} />}
                   {codexApprovals.map((approval) => (
                     <div key={approval.approval_id} className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
                       <div className="font-medium" style={{ color: 'var(--rc-text-1)' }}>
                         Codex requests {approval.method.includes('commandExecution') ? 'command execution' : approval.method.includes('fileChange') ? 'a file change' : 'additional permissions'}
                       </div>
-                      {approval.detail.command && <code className="mt-2 block max-h-24 overflow-auto whitespace-pre-wrap rounded p-2" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-2)' }}>{approval.detail.command}</code>}
+                      {approval.detail.command && (
+                        <div className="mt-2">
+                          <CodeBlock language="bash" value={approval.detail.command} compact />
+                        </div>
+                      )}
                       {approval.detail.reason && <p className="mt-2" style={{ color: 'var(--rc-text-3)' }}>{approval.detail.reason}</p>}
                       {approval.detail.cwd && <p className="mt-1" style={{ color: 'var(--rc-text-3)' }}>Folder: {approval.detail.cwd}</p>}
                       {approval.deny_only && <p className="mt-2 text-amber-600">This permission request is deny-only because the bridge cannot safely scope a grant.</p>}
@@ -1158,8 +1208,16 @@ export default function AIWorkspace({
                   <div className="mb-2 flex items-center gap-2 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
                     <ShieldCheck className="h-3.5 w-3.5 text-green-600" />Codex subscription CLI · native App Server · Trust Fabric governed
                   </div>
-                  <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{nativeResult}</p>
+                  <SafeMarkdown content={nativeResult} />
                 </article>
+              )}
+              {!busy && lastFailure && (
+                <TurnFailureBlock
+                  failure={lastFailure}
+                  onRetry={retryFailedTurn}
+                  onContinue={continueFailedTurn}
+                  onDismiss={() => setLastFailure(null)}
+                />
               )}
             </div>
           )}
@@ -1177,7 +1235,7 @@ export default function AIWorkspace({
           )}
           <div className="mx-auto max-w-3xl rounded-2xl border p-2 shadow-sm"
             style={{ background: mode === 'chat' ? 'var(--rc-chat-panel)' : 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
-            <textarea value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 12000))} onKeyDown={handleKey} rows={3}
+            <textarea ref={draftRef} value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 12000))} onKeyDown={handleKey} rows={3}
               placeholder={mode === 'chat' ? 'Message Enkstein' : 'Ask about this project'}
               className="w-full resize-none bg-transparent px-2 py-1 text-sm leading-6 outline-none" style={{ color: 'var(--rc-text-1)' }} />
             <div className="flex items-center justify-between gap-3">
@@ -1237,9 +1295,13 @@ export default function AIWorkspace({
                         <span className="min-w-0 flex-1 truncate text-[11px]" title={proposal.path} style={{ color: 'var(--rc-text-2)' }}>{proposal.path}</span>
                       </div>
                     </summary>
-                    <pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap border-t pt-2 text-[9px] leading-4" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}>
-                      {proposal.operation === 'delete' ? proposal.current_content : proposal.proposed_content}
-                    </pre>
+                    <div className="mt-2">
+                      <CodeBlock
+                        language={proposal.path.split('.').pop() || 'text'}
+                        value={(proposal.operation === 'delete' ? proposal.current_content : proposal.proposed_content) || ''}
+                        compact
+                      />
+                    </div>
                     <div className="mt-2 flex justify-end gap-1.5">
                       <button type="button" onClick={() => void reviewProposal(proposal, 'reject')} disabled={reviewingProposal === proposal.id}
                         className="flex h-7 items-center gap-1 rounded border px-2 text-[10px] disabled:opacity-50" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}><X className="h-3 w-3" />Reject</button>
@@ -1391,6 +1453,56 @@ export default function AIWorkspace({
   );
 }
 
+const FAILURE_PRESENTATION: Record<TurnFailureKind, { label: string; Icon: typeof AlertTriangle; accent: string }> = {
+  failed: { label: 'Turn failed', Icon: AlertTriangle, accent: '#dc2626' },
+  timeout: { label: 'Turn timed out', Icon: Clock, accent: '#d97706' },
+  interrupted: { label: 'Turn interrupted', Icon: Ban, accent: '#d97706' },
+};
+
+/** Compact terminal-state block for a failed / timed-out / interrupted normal
+ * turn. Retry replays the preserved message as a fresh governed turn; Continue
+ * returns it to the composer. Neither duplicates a submission because the turn
+ * rolled back server-side. */
+function TurnFailureBlock({
+  failure,
+  onRetry,
+  onContinue,
+  onDismiss,
+}: {
+  failure: TurnFailure;
+  onRetry: () => void;
+  onContinue: () => void;
+  onDismiss: () => void;
+}) {
+  const { label, Icon, accent } = FAILURE_PRESENTATION[failure.kind];
+  return (
+    <article role="alert" className="rounded-lg border p-3.5" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: accent }} aria-hidden="true" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{label}</div>
+            <p className="mt-0.5 text-xs leading-5" style={{ color: 'var(--rc-text-3)' }}>{failure.detail}</p>
+          </div>
+        </div>
+        <button type="button" onClick={onDismiss} aria-label="Dismiss failure notice" title="Dismiss"
+          className="shrink-0 rounded p-1" style={{ color: 'var(--rc-text-3)' }}><X className="h-3.5 w-3.5" /></button>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onRetry} title="Re-run this turn" aria-label="Retry the failed turn"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-medium text-white">
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />Retry
+        </button>
+        <button type="button" onClick={onContinue} title="Return the message to the composer to adjust and continue"
+          aria-label="Continue from the failed turn in the composer"
+          className="inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />Continue
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
   const governance = message.governance || {};
   const routing = governance.routing as { strategy?: string; reason?: string } | undefined;
@@ -1398,17 +1510,27 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
   const citations = Array.isArray(governance.citations) ? governance.citations : [];
   const contextManifest = governance.context_manifest as ContextManifest | null | undefined;
   const allowed = governance.outcome === 'allowed';
+  const runtimeGroup = typeof governance.runtime_group === 'string' ? governance.runtime_group : undefined;
+  const latencyMs = typeof governance.latency_ms === 'number' ? governance.latency_ms : undefined;
+  const confidence = typeof governance.confidence === 'number' ? governance.confidence : undefined;
+  const fallbackReason = contextManifest?.fallback_reason || undefined;
   return (
     <div className="min-w-0 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="inline-flex items-center gap-1" style={{ color: allowed ? '#16a34a' : '#d97706' }}>
+        <span className="inline-flex items-center gap-1" title={governance.policy_name ? `Policy: ${governance.policy_name}` : undefined} style={{ color: allowed ? '#16a34a' : '#d97706' }}>
           {allowed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
           {(governance.outcome || 'recorded').replaceAll('_', ' ')}
         </span>
         <span title={routing?.reason}>{routing?.strategy === 'adaptive' ? 'auto → ' : ''}{message.source || 'no Brain'}</span>
+        {message.provider && <span className="truncate">{message.provider}</span>}
         {message.model && <span className="truncate">{message.model}</span>}
+        {runtimeGroup && <span title="Runtime group used for this turn">{runtimeGroup}</span>}
+        {typeof confidence === 'number' && <span title="Response confidence">{Math.round(confidence * 100)}% conf</span>}
+        {typeof latencyMs === 'number' && <span>{latencyMs}ms</span>}
         {typeof governance.risk_score === 'number' && <span>risk {Math.round(governance.risk_score)}</span>}
         {governance.input_redacted && <span className="text-amber-500">input redacted</span>}
+        {governance.output_redacted && <span className="text-amber-500">output redacted</span>}
+        {fallbackReason && <span className="text-amber-500" title={`Fallback: ${fallbackReason}`}>fallback</span>}
       </div>
       {votes.length > 1 && (
         <details className="mt-2">
