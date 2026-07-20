@@ -407,6 +407,7 @@ export default function AIWorkspace({
         }
         if (nextProject) {
           const artifactRows = await getCortexArtifacts(nextProject);
+          if (cancelled) return;
           setArtifacts(artifactRows);
           setSelectedArtifacts(new Set(artifactRows.slice(0, 20).map((item) => item.id)));
         } else {

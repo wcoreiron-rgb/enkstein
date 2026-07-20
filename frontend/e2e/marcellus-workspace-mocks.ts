@@ -30,10 +30,28 @@ export type MockConversation = {
   updated_at: string;
 };
 
+export type MockArtifact = {
+  id: string;
+  project_id: string;
+  path: string;
+  status: string;
+  classification: string;
+  mime_type: string;
+  size_bytes: number;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type WorkspaceStore = {
   projects: MockProject[];
   conversations: MockConversation[];
   nativeWorkspace: Record<string, { connected: boolean; name?: string; file_count: number; synced_files: number }>;
+  // Keyed by project_id, so the artifacts route can return exactly the
+  // active project's files instead of a fixed empty list, which is what a
+  // stale-panel regression (an old project's files surviving a project
+  // switch) would otherwise hide.
+  artifacts: Record<string, MockArtifact[]>;
 };
 
 const ARCHITECTURE_STUB = {
@@ -60,7 +78,24 @@ function nextId(prefix: string): string {
 }
 
 export function createWorkspaceStore(): WorkspaceStore {
-  return { projects: [], conversations: [], nativeWorkspace: {} };
+  return { projects: [], conversations: [], nativeWorkspace: {}, artifacts: {} };
+}
+
+/** Seeds a project's mock artifact list with one file per given path. */
+export function seedArtifacts(store: WorkspaceStore, projectId: string, paths: string[]): void {
+  const now = new Date().toISOString();
+  store.artifacts[projectId] = paths.map((path, index) => ({
+    id: `artifact-${projectId}-${index}`,
+    project_id: projectId,
+    path,
+    status: 'active',
+    classification: 'internal',
+    mime_type: 'text/plain',
+    size_bytes: 32,
+    version: 1,
+    created_at: now,
+    updated_at: now,
+  }));
 }
 
 /** Mocks every Marcellus workspace endpoint AIWorkspace/Sidebar rely on, backed
@@ -157,7 +192,8 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
     }
 
     if (segments[0] === 'projects' && segments[2] === 'artifacts') {
-      return json(200, []);
+      const projectId = segments[1];
+      return json(200, store.artifacts[projectId] || []);
     }
 
     if (segments[0] === 'projects' && segments[2] === 'change-proposals') {

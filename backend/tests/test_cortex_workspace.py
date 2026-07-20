@@ -1495,3 +1495,113 @@ async def test_codex_status_redacts_streamed_free_text_and_preserves_ids(client,
     assert body["scan"]["output_redacted"] is True
     assert body["scan"]["fields_redacted"] >= 3
     assert body["scan"]["sensitive_findings"] >= 3
+
+
+@pytest.mark.asyncio
+async def test_cowork_scanner_summarizes_project_before_heavy_brain(client, monkeypatch):
+    """With enough project files and a non-local runtime group, a bounded
+    local-only scanner pre-pass runs first (pinned to source=profile:gemma_scanner
+    and runtime_group=local regardless of the turn's own runtime group), and its
+    summary is folded into the prompt the heavy Brain actually receives."""
+    _use_identity(_identity())
+    project = await _create_project(client)
+    conversation = await _create_conversation(client, project["id"])
+    files = [{"path": f"src/module_{index}.py", "content": f"# module {index}\ndef handler_{index}():\n    return {index}\n"} for index in range(8)]
+    artifact = await client.post(
+        f"{BASE}/artifacts",
+        json={"tenant_id": "tenant-a", "project_id": project["id"], "files": files},
+    )
+    assert artifact.status_code == 200, artifact.text
+
+    calls: list[dict] = []
+
+    async def fake_gateway(db, payload):
+        calls.append({
+            "source": payload.source,
+            "runtime_group": payload.runtime_group,
+            "prompt": payload.messages[-1].content,
+        })
+        if payload.source == "profile:gemma_scanner":
+            return _gateway_response("Scanner index: 8 handler modules, no notable risk.")
+        return _gateway_response("The project has 8 handler modules.")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Summarize this project.",
+            "runtime_group": "hybrid",
+            "include_project_files": True,
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    assert len(calls) == 2
+    scanner_call = next(call for call in calls if call["source"] == "profile:gemma_scanner")
+    heavy_call = next(call for call in calls if call["source"] != "profile:gemma_scanner")
+    # The scanner call is pinned to the local boundary even though the turn's
+    # own runtime_group is hybrid.
+    assert scanner_call["runtime_group"] == "local"
+    assert "module_0" in scanner_call["prompt"]
+    # The heavy Brain sees the scanner's summary folded into its own prompt,
+    # clearly labeled as untrusted reference material rather than instructions.
+    assert "LOCAL SCANNER SUMMARY" in heavy_call["prompt"]
+    assert "Scanner index: 8 handler modules" in heavy_call["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_cowork_scanner_skips_below_threshold_and_when_local(client, monkeypatch):
+    """The scanner pre-pass only engages once there is real navigation value
+    (enough selected files) and never for an already-local turn, where the
+    full local capsule is already safe and a second local call would only add
+    latency without benefit."""
+    _use_identity(_identity())
+    project = await _create_project(client)
+    conversation = await _create_conversation(client, project["id"])
+    few_files = [{"path": f"src/module_{index}.py", "content": f"# module {index}\n"} for index in range(2)]
+    artifact = await client.post(
+        f"{BASE}/artifacts",
+        json={"tenant_id": "tenant-a", "project_id": project["id"], "files": few_files},
+    )
+    assert artifact.status_code == 200, artifact.text
+
+    calls: list[str] = []
+
+    async def fake_gateway(db, payload):
+        calls.append(payload.source)
+        return _gateway_response("Answer without a scanner pass.")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+
+    below_threshold = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Summarize this project.",
+            "runtime_group": "hybrid",
+            "include_project_files": True,
+        },
+    )
+    assert below_threshold.status_code == 200, below_threshold.text
+    assert "profile:gemma_scanner" not in calls
+
+    calls.clear()
+    many_files = [{"path": f"src/extra_{index}.py", "content": f"# extra {index}\n"} for index in range(8)]
+    extra = await client.post(
+        f"{BASE}/artifacts",
+        json={"tenant_id": "tenant-a", "project_id": project["id"], "files": many_files},
+    )
+    assert extra.status_code == 200, extra.text
+
+    local_turn_conversation = await _create_conversation(client, project["id"])
+    local_turn = await client.post(
+        f"{BASE}/conversations/{local_turn_conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Summarize this project.",
+            "runtime_group": "local",
+            "include_project_files": True,
+        },
+    )
+    assert local_turn.status_code == 200, local_turn.text
+    assert "profile:gemma_scanner" not in calls

@@ -62,6 +62,28 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "tenant_id": "global",
         "created_at": datetime.utcnow(),
     },
+    "gemma_scanner": {
+        "name": "gemma_scanner",
+        "provider": "ollama",
+        "model": "gemma2:9b",
+        # Local Ollama Gemma only — distinct from any Gemini API/CLI provider,
+        # which is intentionally not offered under this profile name. An empty
+        # allowlist means any model reported by the local Ollama runtime, so a
+        # host without gemma2:9b installed still resolves to a real installed
+        # model rather than failing on a missing exact tag.
+        "allowed_models": [],
+        "allowed_claws": ["executive", "arcclaw"],
+        # Never leaves the loopback-local Ollama runtime, so every
+        # classification level is safe for this profile specifically.
+        "allowed_data_classes": ["public", "internal", "confidential", "restricted", "top_secret"],
+        "temperature": 0.1,
+        "max_tokens": 1200,
+        "tool_calling": False,
+        "requires_redaction": True,
+        "fallback_profile": None,
+        "tenant_id": "global",
+        "created_at": datetime.utcnow(),
+    },
     "swarm_judge_profile": {
         "name": "swarm_judge_profile",
         "provider": "nvidia_nim",

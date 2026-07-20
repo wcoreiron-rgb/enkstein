@@ -1,5 +1,6 @@
 import { expect, test } from './fixtures';
-import { mockMarcellusWorkspace, mockTurnStream, type WorkspaceStore } from './marcellus-workspace-mocks';
+import { createWorkspaceStore, mockMarcellusWorkspace, mockTurnStream, seedArtifacts } from './marcellus-workspace-mocks';
+import type { WorkspaceStore } from './marcellus-workspace-mocks';
 
 const POWERSHELL = [
   '$ErrorActionPreference = "Stop"',
@@ -129,5 +130,32 @@ test.describe('Enkstein safe message rendering', () => {
 
     // Chat stays simple: the Cowork-only project/file panel never appears.
     await expect(page.getByText('Project files')).toHaveCount(0);
+  });
+});
+
+test.describe('Enkstein Cowork project file panel', () => {
+  test('the file panel binds to the active project and refreshes on project switch', async ({ page }) => {
+    const store = createWorkspaceStore();
+    const now = new Date().toISOString();
+    store.projects.push(
+      { id: 'proj-a', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Alpha project', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-b', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Beta project', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+    );
+    seedArtifacts(store, 'proj-a', ['alpha/only-in-a.py']);
+    seedArtifacts(store, 'proj-b', ['beta/only-in-b.py']);
+    await mockMarcellusWorkspace(page, store);
+
+    await page.goto('/marcellus/cowork/proj-a');
+
+    // Project A's file panel shows only its own file.
+    await expect(page.getByTitle('alpha/only-in-a.py')).toBeVisible();
+    await expect(page.getByTitle('beta/only-in-b.py')).toHaveCount(0);
+
+    // Switching the active project via the sidebar selector refreshes the
+    // panel to the newly selected project's files, with no stale carryover
+    // from the previous project (the artifact-load race this guards against).
+    await page.getByLabel('Cowork project').selectOption('proj-b');
+    await expect(page.getByTitle('beta/only-in-b.py')).toBeVisible();
+    await expect(page.getByTitle('alpha/only-in-a.py')).toHaveCount(0);
   });
 });
