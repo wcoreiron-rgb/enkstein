@@ -157,8 +157,23 @@ class CortexTurnCreate(BaseModel):
     artifact_ids: list[UUID] = Field(default_factory=list, max_length=20)
     include_project_files: bool = True
     minimum_votes: int = Field(default=2, ge=1, le=8)
+    # Only used when source="consensus": lets the operator build a custom
+    # swarm (any mix of browser/API/local/subscription Brains) instead of
+    # the Gateway's own fixed default list. None => the Gateway's existing
+    # default consensus_sources is used unchanged.
+    consensus_sources: list[str] | None = Field(default=None, max_length=8)
     agent_mode: bool = False
     context: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("consensus_sources")
+    @classmethod
+    def _dedupe_consensus_sources(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        deduped = list(dict.fromkeys(value))
+        if not deduped:
+            raise ValueError("consensus_sources must include at least one Brain")
+        return deduped
 
 
 class CortexTurnRead(BaseModel):

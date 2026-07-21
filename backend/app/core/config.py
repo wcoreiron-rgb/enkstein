@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # the deadline always resolves to a terminal turn_timeout event.
     WORKSPACE_STREAM_HEARTBEAT_SECONDS: float = 10.0
     WORKSPACE_STREAM_DEADLINE_SECONDS: float = 180.0
+    # Browser Companion sessions run at human/page speed and need a longer
+    # deadline than a direct API/CLI Brain call; this stays comfortably above
+    # brain_bridge._BROWSER_BRAIN_TIMEOUT_SECONDS (170s) so the per-Brain
+    # timeout there always resolves before this outer turn deadline would.
+    WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS: float = 210.0
 
     def validate_security(self) -> None:
         """Call at startup. Raises if running in production with insecure defaults."""

@@ -89,6 +89,11 @@ _SECURITY_HANDOFF_PARTICIPANTS = {
     "privacyclaw",
 }
 _CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*?)```", re.IGNORECASE | re.DOTALL)
+# Matches an opened-but-never-closed change block: the response was cut off
+# (timeout, provider truncation, network interruption) before the closing
+# fence was ever generated. Used only as a fallback when _CHANGE_BLOCK finds
+# no complete block, so it can never match inside an already-complete one.
+_UNCLOSED_CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*)\Z", re.IGNORECASE | re.DOTALL)
 _CHANGE_MIME = "application/vnd.marcellus.change+json"
 
 
@@ -146,17 +151,82 @@ def _artifact_read(artifact: CortexArtifact, *, include_content: bool = False) -
     )
 
 
+def _recover_partial_change_objects(raw_array_text: str) -> list[Any]:
+    """Best-effort recovery of complete JSON objects from a truncated
+    ``[{...}, {...}, ...`` array body.
+
+    Walks the text tracking string/escape state and brace depth so a brace
+    inside a quoted ``content`` string never miscounts as a real object
+    boundary. Every top-level ``{...}`` that closes cleanly is parsed on its
+    own; a trailing partial object (the one still being generated when the
+    response was cut off) simply never closes and is dropped, rather than
+    invalidating everything that came before it.
+    """
+    recovered: list[Any] = []
+    depth = 0
+    start: int | None = None
+    in_string = False
+    escape = False
+    for index, char in enumerate(raw_array_text):
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    candidate = raw_array_text[start : index + 1]
+                    try:
+                        recovered.append(json.loads(candidate))
+                    except (TypeError, json.JSONDecodeError):
+                        pass
+                    start = None
+    return recovered
+
+
 def _extract_change_requests(text: str) -> tuple[str, list[dict[str, Any]]]:
     """Extract the bounded change protocol without trusting free-form model output."""
     match = _CHANGE_BLOCK.search(text)
+    was_truncated = False
     if not match:
-        return text, []
-    try:
-        raw_changes = json.loads(match.group(1))
-    except (TypeError, json.JSONDecodeError):
-        return text, []
-    if not isinstance(raw_changes, list):
-        return text, []
+        # No complete fenced block. Check whether one was opened but never
+        # closed -- the signature of a response that was cut off mid-block
+        # (a browser Companion timeout, provider truncation, or dropped
+        # connection) -- and recover whatever complete change objects it
+        # already contains instead of silently returning zero changes.
+        unclosed = _UNCLOSED_CHANGE_BLOCK.search(text)
+        if not unclosed:
+            return text, []
+        raw_changes = _recover_partial_change_objects(unclosed.group(1))
+        was_truncated = True
+        block_span = unclosed.span()
+    else:
+        block_span = match.span()
+        try:
+            raw_changes = json.loads(match.group(1))
+        except (TypeError, json.JSONDecodeError):
+            # The fence closed, but the JSON body itself is malformed rather
+            # than simply incomplete (e.g. a stray comma). Still attempt
+            # object-level recovery rather than discarding every change.
+            raw_changes = _recover_partial_change_objects(match.group(1))
+            was_truncated = True
+        if not isinstance(raw_changes, list):
+            if isinstance(raw_changes, dict):
+                raw_changes = [raw_changes]
+            else:
+                return text, []
 
     changes: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -185,8 +255,21 @@ def _extract_change_requests(text: str) -> tuple[str, list[dict[str, Any]]]:
             }
         )
     cleaned = _CHANGE_BLOCK.sub("", text).strip()
+    if was_truncated:
+        cleaned = f"{text[: block_span[0]]}{text[block_span[1] :]}".strip()
     if changes:
-        cleaned = f"{cleaned}\n\nPrepared {len(changes)} governed file change{'s' if len(changes) != 1 else ''} for review.".strip()
+        note = f"Prepared {len(changes)} governed file change{'s' if len(changes) != 1 else ''} for review."
+        if was_truncated:
+            recovered_count = len(raw_changes) if isinstance(raw_changes, list) else 0
+            note += (
+                f" The response was cut off before finishing; {len(changes)} complete change"
+                f"{'s were' if len(changes) != 1 else ' was'} recovered"
+                + (f" out of {recovered_count} attempted" if recovered_count > len(changes) else "")
+                + "."
+            )
+        cleaned = f"{cleaned}\n\n{note}".strip()
+    elif was_truncated:
+        cleaned = f"{cleaned}\n\nThe response was cut off before any complete file change could be recovered.".strip()
     return cleaned or "Prepared governed file changes for review.", changes
 
 
@@ -1449,6 +1532,7 @@ async def execute_turn(
             workspace_id=str(conversation.project_id or conversation.id),
             minimum_votes=payload.minimum_votes,
             tenant_id=tenant_id,
+            **({"consensus_sources": payload.consensus_sources} if payload.consensus_sources else {}),
             context={
                 **payload.context,
                 "conversation_id": str(conversation.id),

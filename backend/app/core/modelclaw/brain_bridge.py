@@ -45,6 +45,16 @@ _LOCAL_MODEL_PREFERENCES = (
 _MAX_TENANT_BRAIN_CALLS = 4
 _MAX_SOURCE_BRAIN_CALLS = 2
 _BRAIN_TIMEOUT_SECONDS = 60.0
+# Browser Companion sessions run at human/page speed (the native bridge's own
+# browser broker call already waits up to 180s -- see invokeBrowser in
+# MarcellusBrainBridge.swift) and can legitimately take far longer than a
+# direct API/CLI call to produce a long response. A uniform 60s timeout cut
+# these off before the native bridge's own patience window even elapsed, so
+# a genuinely-in-progress long browser response was silently discarded
+# rather than returned. This budget must stay at or below the native
+# bridge's own browser wait so a timeout here always fires before (never
+# after) the bridge itself would have given up.
+_BROWSER_BRAIN_TIMEOUT_SECONDS = 170.0
 _TENANT_SEMAPHORES: dict[tuple[int, str], asyncio.Semaphore] = {}
 _SOURCE_SEMAPHORES: dict[tuple[int, str, str], asyncio.Semaphore] = {}
 
@@ -518,8 +528,12 @@ async def collect_votes(
     async def invoke(source: str) -> dict[str, Any]:
         tenant_semaphore, source_semaphore = _execution_semaphores(tenant_id, source)
         async with tenant_semaphore, source_semaphore:
+            # Browser Companion sources get a longer budget than a direct
+            # API/CLI call; every other source kind keeps the original,
+            # unchanged timeout.
+            budget = _BROWSER_BRAIN_TIMEOUT_SECONDS if source.endswith("_browser") else _BRAIN_TIMEOUT_SECONDS
             try:
-                return await asyncio.wait_for(invoke_unbounded(source), timeout=_BRAIN_TIMEOUT_SECONDS)
+                return await asyncio.wait_for(invoke_unbounded(source), timeout=budget)
             except asyncio.TimeoutError:
                 return _unavailable_vote(source, _brain_kind(source), "The Brain timed out before returning a response.")
 

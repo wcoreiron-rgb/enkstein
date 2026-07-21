@@ -667,6 +667,73 @@ async def test_multibrain_timeout_returns_safe_unavailable_vote(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_browser_brain_survives_beyond_the_direct_call_timeout(monkeypatch):
+    """A browser Companion source must not be cut off by the same short
+    budget used for a direct API/CLI call: it needs to survive a delay that
+    would already have failed a codex_subscription/claude_subscription call,
+    proving the two timeouts are genuinely independent."""
+    calls: list[str] = []
+
+    async def slow_browser_invoke(source, prompt, **kwargs):
+        calls.append(source)
+        await asyncio.sleep(0.05)
+        return {
+            "source": source,
+            "kind": "browser_session",
+            "available": True,
+            "counted": True,
+            "provider": "openai_chatgpt_browser",
+            "model": "browser-selected",
+            "response": "A long response that took a while to stream.",
+            "reason": None,
+            "latency_ms": 50,
+            "token_count": None,
+        }
+
+    monkeypatch.setattr(brain_bridge, "_BRAIN_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(brain_bridge, "_BROWSER_BRAIN_TIMEOUT_SECONDS", 5.0)
+    brain_bridge._TENANT_SEMAPHORES.clear()
+    brain_bridge._SOURCE_SEMAPHORES.clear()
+    votes = await brain_bridge.collect_votes(
+        object(),
+        ["chatgpt_browser"],
+        "Ask something that takes a while to answer",
+        tenant_id="browser-timeout-tenant",
+        claw="executive",
+        data_classification="internal",
+        subscription_invoker=slow_browser_invoke,
+    )
+
+    assert calls == ["chatgpt_browser"]
+    assert votes[0]["counted"] is True
+    assert votes[0]["response"] == "A long response that took a while to stream."
+
+
+@pytest.mark.asyncio
+async def test_browser_brain_still_times_out_eventually(monkeypatch):
+    """The browser budget is longer, not unbounded: a browser session that
+    never returns must still fail safely rather than hang the turn."""
+    async def never_returns(source, prompt, **kwargs):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(brain_bridge, "_BROWSER_BRAIN_TIMEOUT_SECONDS", 0.01)
+    brain_bridge._TENANT_SEMAPHORES.clear()
+    brain_bridge._SOURCE_SEMAPHORES.clear()
+    votes = await brain_bridge.collect_votes(
+        object(),
+        ["claude_browser"],
+        "Timeout safely",
+        tenant_id="browser-timeout-tenant-2",
+        claw="executive",
+        data_classification="internal",
+        subscription_invoker=never_returns,
+    )
+
+    assert votes[0]["counted"] is False
+    assert "timed out" in votes[0]["reason"].lower()
+
+
+@pytest.mark.asyncio
 async def test_modelclaw_rejects_cross_tenant_reads_and_execution(client):
     app.dependency_overrides[get_current_user] = lambda: {
         "sub": "tenant-a-user",

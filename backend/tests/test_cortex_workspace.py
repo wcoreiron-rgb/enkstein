@@ -633,6 +633,114 @@ async def test_cortex_security_handoff_is_redacted_and_approval_gated(client, db
     assert "cortex_context" not in denied
 
 
+def test_change_extraction_recovers_complete_objects_from_a_truncated_block():
+    """A response cut off mid-generation (browser timeout, provider
+    truncation, dropped connection) leaves a change block that opens but
+    never closes. Complete objects before the cutoff must still be
+    recovered instead of the whole change set silently vanishing."""
+    truncated = (
+        "Here are the changes.\n"
+        "```marcellus_changes\n"
+        '[{"operation":"create","path":"a.py","content":"print(1)"},'
+        ' {"operation":"create","path":"b.py","content":"still gener'
+    )
+    cleaned, changes = workspace._extract_change_requests(truncated)
+    assert [item["path"] for item in changes] == ["a.py"]
+    assert changes[0]["content"] == "print(1)"
+    assert "cut off" in cleaned
+    assert "1 complete change was recovered" in cleaned
+    # The unclosed fence marker itself must not leak into the cleaned text
+    # shown to the operator.
+    assert "marcellus_changes" not in cleaned
+
+
+def test_change_extraction_handles_a_brace_inside_recovered_content():
+    """A literal '{' or '}' inside a quoted content string (e.g. generated
+    Python/JSON source) must not be mistaken for a JSON object boundary
+    while recovering a truncated block."""
+    truncated = (
+        "```marcellus_changes\n"
+        '[{"operation":"create","path":"a.py","content":"def f(): return {1: 2}"},'
+        ' {"operation":"create","path":"b.py","content":"still gener'
+    )
+    _cleaned, changes = workspace._extract_change_requests(truncated)
+    assert [item["path"] for item in changes] == ["a.py"]
+    assert changes[0]["content"] == "def f(): return {1: 2}"
+
+
+def test_change_extraction_unchanged_for_a_complete_block():
+    """A normal, fully-generated change block keeps its exact prior
+    behavior: no truncation note, every change recovered."""
+    complete = (
+        "Here are the changes.\n"
+        "```marcellus_changes\n"
+        '[{"operation":"create","path":"a.py","content":"print(1)"},'
+        ' {"operation":"create","path":"b.py","content":"print(2)"}]\n'
+        "```\n"
+        "Done."
+    )
+    cleaned, changes = workspace._extract_change_requests(complete)
+    assert [item["path"] for item in changes] == ["a.py", "b.py"]
+    assert "cut off" not in cleaned
+    assert "Prepared 2 governed file changes for review." in cleaned
+
+
+def test_change_extraction_with_no_block_is_unaffected():
+    plain = "Just a normal answer with no proposed changes."
+    cleaned, changes = workspace._extract_change_requests(plain)
+    assert changes == []
+    assert cleaned == plain
+
+
+def test_change_extraction_empty_cutoff_reports_no_recovery_without_crashing():
+    """The fence opened but generation stopped before any object body was
+    produced at all -- this must still report the truncation clearly rather
+    than raising or silently returning an empty, unexplained answer."""
+    empty_cutoff = "Here we go.\n```marcellus_changes\n["
+    cleaned, changes = workspace._extract_change_requests(empty_cutoff)
+    assert changes == []
+    assert "cut off" in cleaned
+
+
+@pytest.mark.asyncio
+async def test_agent_file_change_recovers_from_a_truncated_browser_response(client, monkeypatch):
+    """End-to-end: a response that was cut off mid-change-block (the shape
+    the browser-timeout bug produced) must still yield an approvable
+    proposal for the change that completed before the cutoff, with a clear
+    note about the truncation, instead of the operator seeing zero changes
+    with no explanation."""
+    _use_identity(_identity())
+    project = await _create_project(client, "Recovered truncated changes")
+    conversation = await _create_conversation(client, project["id"])
+
+    async def truncated_gateway(db, payload):
+        assert payload.context["agent_mode"] is True
+        return _gateway_response(
+            "I prepared the requested files.\n"
+            "```marcellus_changes\n"
+            '[{"operation":"create","path":"src/app.py","content":"print(\\"hello\\")"},'
+            ' {"operation":"create","path":"src/util.py","content":"def helper(): retur'
+        )
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", truncated_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Create these files", "agent_mode": True},
+    )
+    assert turn.status_code == 200, turn.text
+    body = turn.json()["assistant_message"]["content"]
+    assert "Prepared 1 governed file change" in body
+    assert "cut off" in body
+
+    pending = await client.get(
+        f"{BASE}/projects/{project['id']}/change-proposals",
+        params={"tenant_id": "tenant-a"},
+    )
+    assert pending.status_code == 200
+    paths = [item["path"] for item in pending.json()]
+    assert paths == ["src/app.py"]
+
+
 @pytest.mark.asyncio
 async def test_agent_file_change_requires_review_before_native_write(client, monkeypatch):
     _use_identity(_identity())
@@ -836,6 +944,82 @@ async def test_streamed_turn_deadline_yields_terminal_timeout(client, monkeypatc
     assert "turn_timeout" in events
     assert "turn_completed" not in events
     assert events[-1] == "turn_timeout"
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_uses_the_longer_browser_deadline(client, monkeypatch):
+    """A turn whose source is a Browser Companion session must survive a
+    delay that would already exceed the normal (non-browser) deadline,
+    proving the stream picks the browser-specific budget rather than the
+    default one whenever a browser source is requested."""
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_HEARTBEAT_SECONDS", 0.02)
+    # The normal deadline is far shorter than the delay below; only picking
+    # the browser deadline lets this turn complete instead of timing out.
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_DEADLINE_SECONDS", 0.05)
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS", 5.0)
+
+    async def slow_browser_gateway(db, payload):
+        import asyncio as _asyncio
+
+        assert payload.source == "chatgpt_browser"
+        await _asyncio.sleep(0.15)
+        return _gateway_response("A long answer that streamed slowly from the browser tab")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", slow_browser_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={"tenant_id": "tenant-a", "content": "Ask the browser tab", "source": "chatgpt_browser"},
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    events = _sse_events(body)
+    assert "turn_completed" in events
+    assert "turn_timeout" not in events
+
+
+@pytest.mark.asyncio
+async def test_streamed_turn_uses_the_browser_deadline_for_a_custom_swarm(client, monkeypatch):
+    """A consensus turn whose custom consensus_sources includes a browser
+    session also gets the longer deadline, not just a direct single-source
+    browser request."""
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_HEARTBEAT_SECONDS", 0.02)
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_DEADLINE_SECONDS", 0.05)
+    monkeypatch.setattr(settings, "WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS", 5.0)
+
+    async def slow_swarm_gateway(db, payload):
+        import asyncio as _asyncio
+
+        assert payload.consensus_sources == ["codex_subscription", "chatgpt_browser"]
+        await _asyncio.sleep(0.15)
+        return _gateway_response("Swarm answer")
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", slow_swarm_gateway)
+    async with client.stream(
+        "POST",
+        f"{BASE}/conversations/{conversation['id']}/turns/stream",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Ask my custom swarm",
+            "source": "consensus",
+            "consensus_sources": ["codex_subscription", "chatgpt_browser"],
+        },
+    ) as response:
+        body = (await response.aread()).decode()
+    assert response.status_code == 200
+    events = _sse_events(body)
+    assert "turn_completed" in events
+    assert "turn_timeout" not in events
 
 
 @pytest.mark.asyncio

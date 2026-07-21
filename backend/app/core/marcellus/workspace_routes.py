@@ -480,7 +480,21 @@ async def post_turn_stream(
     # A small positive floor prevents a misconfigured 0/negative interval from
     # busy-looping; the deadline can never be shorter than one heartbeat.
     heartbeat = max(0.05, float(settings.WORKSPACE_STREAM_HEARTBEAT_SECONDS))
-    deadline = max(heartbeat, float(settings.WORKSPACE_STREAM_DEADLINE_SECONDS))
+    # A Browser Companion session runs at human/page speed and can
+    # legitimately take longer than the default deadline to produce a full
+    # response (see _BROWSER_BRAIN_TIMEOUT_SECONDS in brain_bridge.py, which
+    # this stays comfortably above). When any requested source is a browser
+    # session -- either directly or as part of a consensus/swarm request --
+    # the turn gets the longer budget instead of silently being cancelled
+    # while the browser tab is still legitimately generating.
+    requested_sources = trusted_payload.consensus_sources or [trusted_payload.source or ""]
+    includes_browser_source = any(str(item).endswith("_browser") for item in requested_sources)
+    deadline_setting = (
+        settings.WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS
+        if includes_browser_source
+        else settings.WORKSPACE_STREAM_DEADLINE_SECONDS
+    )
+    deadline = max(heartbeat, float(deadline_setting))
 
     async def events():
         yield _sse(
