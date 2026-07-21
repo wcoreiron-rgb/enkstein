@@ -322,7 +322,7 @@ export default function BrainConnectionsPage() {
 
         {warnings.length > 0 && (
           <div className="mb-5 rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-            {warnings.join(' ')} Refresh after the Enkstein runtime is available.
+            {warnings.join(' ')}
           </div>
         )}
 

@@ -532,8 +532,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return false;
 });
 
-chrome.runtime.onInstalled.addListener(() => chrome.alarms.create('marcellus-poll', { periodInMinutes: 0.5 }));
+// chrome.alarms.create is idempotent (re-creating with the same name just
+// resets its schedule), so this runs on every event that can wake the
+// service worker -- not only onInstalled, which does not fire on ordinary
+// worker restarts/suspend-resume cycles -- to make sure the alarm always
+// exists even if it was somehow lost.
+function ensurePollAlarm() { chrome.alarms.create('marcellus-poll', { periodInMinutes: 0.5 }); }
+chrome.runtime.onInstalled.addListener(ensurePollAlarm);
+chrome.runtime.onStartup?.addListener(ensurePollAlarm);
+ensurePollAlarm();
 chrome.alarms.onAlarm.addListener((alarm) => { if (alarm.name === 'marcellus-poll') void poll(); });
+// Switching back to (or opening) a signed-in provider tab should reflect as
+// connected immediately rather than waiting for the next alarm tick, since
+// chrome.alarms has a 30-second floor and this is the moment the user is
+// most likely to actually use the Brain.
+chrome.tabs.onActivated?.addListener(() => void poll());
+chrome.windows?.onFocusChanged?.addListener((windowId) => {
+  if (windowId !== chrome.windows.WINDOW_ID_NONE) void poll();
+});
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const stored = await storageGet('marcellusSessionTabs');
   const mappings = stored.marcellusSessionTabs || {};
@@ -553,6 +569,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   const candidateUrl = changeInfo?.url || tab?.url;
   if (candidateUrl) void refreshSessionMappingsForTab(tabId, candidateUrl);
+  if (changeInfo?.status === 'complete' && candidateUrl && providerForUrl(candidateUrl)) void poll();
 });
 // Runs on every service-worker load, including restarts: resumes any nonterminal journal entries.
 void poll();

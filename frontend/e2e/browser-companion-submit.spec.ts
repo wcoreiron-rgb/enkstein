@@ -660,6 +660,85 @@ test('browser companion preserves multiline prompts in the Gemini editor', async
     .toBe(prompt);
 });
 
+test('tab activation and window focus events re-poll the native bridge immediately', async ({ page }) => {
+  // Chrome suspends the MV3 background service worker (stopping any plain
+  // setInterval) and enforces a 30-second floor on chrome.alarms periods, so
+  // relying on the alarm alone leaves a real gap where a genuinely connected
+  // provider tab is reported as disconnected. onActivated/onFocusChanged
+  // give an immediate re-poll the moment the user is most likely to actually
+  // use a Brain, instead of waiting for the next alarm tick.
+  await page.addInitScript(() => {
+    const store: Record<string, unknown> = { marcellusBrowserToken: 'test-token' };
+    const listeners: Record<string, ((...args: unknown[]) => void) | undefined> = {};
+    const pollCalls: string[] = [];
+    Object.defineProperty(window, '__pollTestState', { value: { listeners, pollCalls }, configurable: true });
+    const chromeStub = {
+      storage: {
+        local: {
+          get(keys: unknown, callback: (value: Record<string, unknown>) => void) {
+            const list = Array.isArray(keys) ? keys : [keys];
+            callback(Object.fromEntries((list as string[]).map((key) => [key, store[key]])));
+          },
+          set(values: Record<string, unknown>, callback?: () => void) { Object.assign(store, values); callback?.(); },
+          remove(_key: string, callback?: () => void) { callback?.(); },
+        },
+      },
+      tabs: {
+        query(_query: unknown, callback: (tabs: unknown[]) => void) { callback([]); },
+        onRemoved: { addListener() {} },
+        onUpdated: { addListener() {} },
+        onActivated: { addListener(listener: (...args: unknown[]) => void) { listeners.activated = listener; } },
+      },
+      windows: {
+        WINDOW_ID_NONE: -1,
+        onFocusChanged: { addListener(listener: (...args: unknown[]) => void) { listeners.focusChanged = listener; } },
+      },
+      alarms: { create() {}, onAlarm: { addListener() {} } },
+      runtime: { onMessage: { addListener() {} }, onInstalled: { addListener() {} }, onStartup: { addListener() {} }, lastError: null },
+    };
+    Object.defineProperty(window, 'chrome', { value: chromeStub, configurable: true });
+    // getCapabilities checks fetch first; stub it to record calls and reject
+    // (fast/simple path) so poll() falls into the legacy branch's single
+    // /v1/browser/poll fetch without needing full task-shaped responses.
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      (window as unknown as { __pollTestState: { pollCalls: string[] } }).__pollTestState.pollCalls.push(url);
+      if (url.includes('/v1/browser/capabilities')) return new Response('{}', { status: 500 });
+      if (url.includes('/v1/browser/poll')) return new Response(JSON.stringify({}), { status: 200 });
+      return originalFetch(input, init);
+    }) as typeof window.fetch;
+  });
+
+  await page.goto('about:blank');
+  await page.addScriptTag({ path: BACKGROUND_SCRIPT });
+  await page.evaluate(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+
+  const pollCountBefore = await page.evaluate(() => (window as unknown as {
+    __pollTestState: { pollCalls: string[] };
+  }).__pollTestState.pollCalls.filter((url) => url.includes('/v1/browser/poll')).length);
+
+  await page.evaluate(async () => {
+    const state = (window as unknown as { __pollTestState: { listeners: Record<string, (...args: unknown[]) => void> } }).__pollTestState;
+    state.listeners.activated?.({ tabId: 1, windowId: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  const pollCountAfterActivated = await page.evaluate(() => (window as unknown as {
+    __pollTestState: { pollCalls: string[] };
+  }).__pollTestState.pollCalls.filter((url) => url.includes('/v1/browser/poll')).length);
+  expect(pollCountAfterActivated).toBeGreaterThan(pollCountBefore);
+
+  await page.evaluate(async () => {
+    const state = (window as unknown as { __pollTestState: { listeners: Record<string, (...args: unknown[]) => void> } }).__pollTestState;
+    state.listeners.focusChanged?.(1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  const pollCountAfterFocus = await page.evaluate(() => (window as unknown as {
+    __pollTestState: { pollCalls: string[] };
+  }).__pollTestState.pollCalls.filter((url) => url.includes('/v1/browser/poll')).length);
+  expect(pollCountAfterFocus).toBeGreaterThan(pollCountAfterActivated);
+});
+
 test('browser companion recovers from Gemini silently truncating a large single insertText call', async ({ page }) => {
   await page.addInitScript(installRuntimeStub);
   await page.route('https://gemini.google.com/**', async (route) => {

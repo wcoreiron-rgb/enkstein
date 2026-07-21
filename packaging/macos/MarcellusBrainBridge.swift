@@ -112,6 +112,14 @@ private final class BrowserSessionBroker {
     private static let leaseDuration: TimeInterval = 20
     private static let maxAttempts = 2
     private static let maxTerminalHistory = 200
+    // The extension keeps this fresh primarily through chrome.alarms, since
+    // Chrome suspends the MV3 background service worker (stopping any plain
+    // setInterval) and throttles content-script timers heavily once their
+    // tab is backgrounded. Chrome enforces a 30-second floor on alarm
+    // periods, so this must comfortably exceed that floor plus scheduling
+    // jitter/service-worker cold-start time, or a perfectly healthy,
+    // still-open tab gets reported as disconnected between alarm ticks.
+    private static let connectionStalenessSeconds: TimeInterval = 50
 
     private let condition = NSCondition()
     private var pairingCodes: [String: Date] = [:]
@@ -284,7 +292,7 @@ private final class BrowserSessionBroker {
     func invoke(brain: String, prompt: String, sessionID: String?, timeout: TimeInterval) throws -> [String: Any] {
         let provider = Self.provider(for: brain)
         condition.lock()
-        let live = lastSeen.map { Date().timeIntervalSince($0) < 15 && providers.contains(provider) } ?? false
+        let live = lastSeen.map { Date().timeIntervalSince($0) < Self.connectionStalenessSeconds && providers.contains(provider) } ?? false
         guard live else {
             condition.unlock()
             throw BridgeError.runtimeUnavailable(
@@ -342,7 +350,7 @@ private final class BrowserSessionBroker {
         condition.lock()
         defer { condition.unlock() }
         let provider = Self.provider(for: brain)
-        let connected = lastSeen.map { Date().timeIntervalSince($0) < 15 && providers.contains(provider) } ?? false
+        let connected = lastSeen.map { Date().timeIntervalSince($0) < Self.connectionStalenessSeconds && providers.contains(provider) } ?? false
         return [
             "brain": brain,
             "kind": "browser_session",

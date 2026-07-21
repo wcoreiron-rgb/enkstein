@@ -150,6 +150,15 @@ changes can temporarily break a selector; Enkstein fails closed and leaves
 CLI, API, and local Brains available. Provider plan limits and account terms
 continue to apply.
 
+The extension re-polls the native bridge immediately on tab activation and
+window focus change, in addition to its regular schedule, so switching back
+to a provider tab reflects as connected right away instead of waiting for the
+next scheduled check. Chrome/Edge can suspend the extension's background
+service worker when idle and enforces a floor on how often its own scheduled
+wake-ups can fire, so the native bridge treats a companion as connected for
+50 seconds after its last check-in (not 15) to comfortably cover that gap
+without reporting a genuinely open, signed-in tab as disconnected.
+
 Each Enkstein conversation receives an opaque tenant-scoped browser session
 key. The companion opens one provider tab for the first turn and reuses that
 same tab for later turns in the conversation. Starting or branching an

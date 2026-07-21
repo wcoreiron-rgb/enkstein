@@ -388,6 +388,29 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.14 — Browser Companion connection no longer drops with the tab still open -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Browser Companion connection no longer drops with the tab still open</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Companion connection fix</span>
+          <span class="release-date">July 21, 2026 &nbsp;·&nbsp; Enkstein v0.3.14</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">A signed-in ChatGPT/Claude/Gemini tab would report as disconnected on Brain Connections after roughly 15-30 seconds, even while the tab stayed open, because of how Chrome/Edge manage extension background processes.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Connection dropping with the tab still open:</strong> Chrome suspends the extension's MV3 background service worker when idle, silently stopping its plain interval-based check-in, and only wakes it back up on its own scheduled alarm -- which has a 30-second floor. The native bridge previously only considered a companion connected for 15 seconds since its last check-in, a window shorter than that floor, so a perfectly healthy, still-open tab was guaranteed to be reported as disconnected between wake-ups. The bridge now allows 50 seconds, and the extension additionally re-checks in immediately whenever a tab is activated, a window regains focus, or a provider tab finishes loading, instead of only on its regular schedule.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.13 — One-click CLI sign-in and richer Markdown formatting guidance -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
