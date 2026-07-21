@@ -334,15 +334,15 @@
     </div>
   </div>
 
-  <!-- Enkstein — Unreleased: Professional safe message rendering -->
+  <!-- Enkstein v0.3.8 — Professional safe message rendering -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
       <div>
         <div class="release-title">Professional safe message rendering &amp; operational blocks</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-new">Unreleased</span>
-          <span class="release-date">Enkstein Chat &amp; Cowork &nbsp;·&nbsp; assistant rendering</span>
+          <span class="tag tag-new">v0.3.8</span>
+          <span class="release-date">July 20, 2026 &nbsp;·&nbsp; Enkstein Chat &amp; Cowork &nbsp;·&nbsp; assistant rendering</span>
         </div>
       </div>
     </div>
@@ -361,15 +361,15 @@
     </div>
   </div>
 
-  <!-- Enkstein — Unreleased: Bounded Cowork turn streaming -->
+  <!-- Enkstein v0.3.8 — Bounded Cowork turn streaming -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
       <div>
         <div class="release-title">Bounded Cowork turn streaming</div>
         <div class="release-meta" style="margin-top:6px;">
-          <span class="tag tag-fix">Unreleased</span>
-          <span class="release-date">Enkstein Cowork &nbsp;·&nbsp; streaming reliability</span>
+          <span class="tag tag-fix">v0.3.8</span>
+          <span class="release-date">July 20, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; streaming reliability</span>
         </div>
       </div>
     </div>
@@ -383,6 +383,42 @@
           <li><strong>Guaranteed terminal state:</strong> every stream ends in exactly one of <code>turn_completed</code>, <code>turn_failed</code>, or <code>turn_timeout</code>; failures carry a bounded non-leaking detail rather than raw exception text.</li>
           <li><strong>Client-disconnect release:</strong> if the client goes away mid-turn the governed work is cancelled and the transaction released instead of streaming into a dead socket.</li>
           <li><strong>Preserved chunk integrity:</strong> the persisted permitted assistant output is re-chunked into bounded deltas that reconstruct long multiline scripts byte-for-byte, and the web client now enforces its own idle-read watchdog so a dead stream cannot hang the UI.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.8 — Custom Brain swarms, local scanner, and truncated-response recovery -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Custom Brain swarms, local scanner, and truncated-response recovery</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.8</span>
+          <span class="tag tag-fix">Browser timeout fix</span>
+          <span class="tag tag-perf">Token hygiene</span>
+          <span class="release-date">July 20, 2026 &nbsp;·&nbsp; Enkstein v0.3.8</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Cowork's local-folder file panel now stays correct across project switches, a local scanner Brain summarizes large projects before a heavier Brain sees them, tool/log output is compacted before it reaches a Brain's context, two independent timeouts that could silently drop a long Browser Companion response are fixed, truncated file-change proposals are now recovered instead of vanishing, and operators can build a custom swarm from any mix of browser, subscription, API, and local Brains.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Custom Brain swarm builder:</strong> a new "Build a Swarm…" option in the existing Brain source picker (Chat, Cowork, and Security all share it) opens a checklist of every ready Browser Companion session, subscription CLI/desktop app, and API/local profile. Pick any mix, set how many must agree, and the turn runs them concurrently through the existing consensus/vote mechanism. The selection is remembered locally and can be reopened from a compact toolbar button.</li>
+          <li><strong>Local scanner Brain:</strong> a bounded, local-only Ollama Gemma profile (<code>gemma_scanner</code>) pre-summarizes a Cowork project's files into a compact index before a heavier Brain sees them, engaging only once a project has enough files to make navigation worthwhile and never on an already-local turn.</li>
+          <li><strong>RTK-style token hygiene:</strong> a pure, deterministic compactor strips terminal noise, collapses long runs of duplicate lines, and folds log-shaped info/debug spam into an omission count while preserving every error/warning line verbatim — applied ahead of the existing size caps on native Codex output and fetched research pages.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Lost long browser responses:</strong> Browser Companion sessions (ChatGPT/Claude/Gemini tabs) were cut off by a uniform 60-second timeout well before the native bridge's own 180-second patience window elapsed, silently discarding an in-progress long response. Browser sources now get a dedicated, longer budget; every other source kind is unchanged.</li>
+          <li><strong>Stream deadline awareness:</strong> the turn-stream route's overall deadline now extends automatically whenever any requested source — direct or inside a custom swarm — is a browser session, instead of applying the same tight ceiling regardless of what was requested.</li>
+          <li><strong>Truncated file-change recovery:</strong> when an agent-mode response proposing file changes was cut off mid-generation, the change block never closed and every proposed change was silently dropped. A truncation-tolerant recovery pass now salvages whichever individual changes completed before the cutoff and reports the truncation clearly instead of showing zero changes with no explanation.</li>
+          <li><strong>Stale Cowork file panel:</strong> switching Cowork projects while a slower request for the previous project's files was still in flight could let that stale response land last and show the wrong project's files. The load effect now guards against this the same way the rest of its lifecycle already does.</li>
         </ul>
       </div>
     </div>

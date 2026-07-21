@@ -74,8 +74,7 @@ test.describe('Enkstein custom Brain swarm builder', () => {
     await page.getByRole('button', { name: 'Send' }).click();
     await expect(page.getByText('Swarm answer')).toBeVisible();
 
-    expect(captured).not.toBeNull();
-    const payload = captured as Record<string, unknown>;
+    const payload: Record<string, unknown> = captured ?? (() => { throw new Error('The swarm turn request body was never captured.'); })();
     expect(payload.source).toBe('consensus');
     expect(payload.consensus_sources).toEqual(['codex_subscription', 'chatgpt_browser', 'gemini_browser']);
     expect(payload.minimum_votes).toBe(2);
