@@ -388,6 +388,38 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.10 — Fixed folder-picking accumulation; Chat gets its own projects -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Fixed folder-picking accumulation; Chat gets its own projects</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Folder-picking fix</span>
+          <span class="tag tag-new">Chat projects</span>
+          <span class="release-date">July 21, 2026 &nbsp;·&nbsp; Enkstein v0.3.10</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Picking a new local folder no longer silently reuses an old, unrelated project just because its name matches; "New Project" can now pick a local folder directly; and Chat gets its own separate project/folder concept for organizing conversations, entirely independent from Cowork's projects.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Folder-picking accumulation:</strong> when no Cowork project was active, picking a folder that happened to share a name with an older, unrelated project silently rebound that old project (with all its history) instead of starting fresh -- the actual cause of "keeps adding on top of old projects/folders." Both the native-folder-picker handler and the plain-file-input fallback now always create a brand-new project in that case; the name-matching lookup is removed entirely.</li>
+          <li><strong>Scope leaks fixed while making this change:</strong> native-workspace-status and artifact-loading effects were reachable for any project regardless of mode, so a Chat project could trigger folder-sync/artifact fetches it has no business making; both are now explicitly Cowork-only.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Pick a folder from New Project:</strong> the left blade's "New Project" form can now open the native folder picker directly instead of only accepting a typed name, using the same proven folder-picker mechanism Cowork's "Import folder" already relies on.</li>
+          <li><strong>Separate Chat projects:</strong> Chat now has its own lightweight project/folder concept for organizing conversations, walled off from Cowork's projects -- different list, different dropdown, different remembered selection, and the same name can be reused in both without colliding. Chat's project is sidebar-organizational only (no local folder binding, no URL segment) and is optional.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.9 — VS Code-style file tree, message copy, and folder-sync/browser-agent fixes -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
