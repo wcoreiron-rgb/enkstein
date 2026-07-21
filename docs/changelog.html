@@ -388,6 +388,29 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.11 — Fixed Gemini prompt insertion silently truncating long messages -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Fixed Gemini prompt insertion silently truncating long messages</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Browser Companion fix</span>
+          <span class="release-date">July 21, 2026 &nbsp;·&nbsp; Enkstein v0.3.11</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Sending a longer message through the Gemini Browser Companion could fail with "The complete prompt could not be inserted into the provider message field," reporting far fewer characters observed than were sent. The root cause and fix are below.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Silent truncation on long single inserts:</strong> the browser's native <code>execCommand('insertText')</code> can silently truncate a large single call while still reporting success, and the previous Gemini-specific line-by-line fallback only verified the result once, after every line had already been attempted -- so a truncation partway through was invisible until the very end, and the last-resort recovery was an equally unverified blind retry. Prompt insertion for every contenteditable provider now writes in small chunks and re-reads the editor's real content after each one, so a truncation is caught at the exact point it happens; if a pass fails, it retries with a smaller chunk size instead of guessing.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.10 — Fixed folder-picking accumulation; Chat gets its own projects -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

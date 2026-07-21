@@ -659,3 +659,87 @@ test('browser companion preserves multiline prompts in the Gemini editor', async
   expect(await page.evaluate(() => (window as unknown as { submittedPrompt: string }).submittedPrompt))
     .toBe(prompt);
 });
+
+test('browser companion recovers from Gemini silently truncating a large single insertText call', async ({ page }) => {
+  await page.addInitScript(installRuntimeStub);
+  await page.route('https://gemini.google.com/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: `<!doctype html><html><body>
+        <rich-textarea><div contenteditable="true" style="width:500px;height:120px;white-space:pre-wrap"></div></rich-textarea>
+        <button aria-label="Send message" disabled>Send</button>
+        <script>
+          // Reproduces the real observed bug: a single execCommand('insertText')
+          // call with a long value silently truncates to a cap, but still
+          // returns true, so callers cannot detect the loss from the return
+          // value alone -- only by comparing the editor's resulting content.
+          // The stub also models a framework-controlled editor (React/Angular
+          // style): direct DOM writes that did not go through execCommand are
+          // reverted back to the editor's last known-good internal value on
+          // the next input tick, so a blind "element.textContent = text"
+          // recovery cannot succeed -- only genuinely verified, small,
+          // execCommand-driven inserts can.
+          const editor = document.querySelector('[contenteditable="true"]');
+          const send = document.querySelector('button');
+          const TRUNCATE_CAP = 40;
+          let internalValue = '';
+          document.execCommand = (command, _ui, value) => {
+            if (command === 'delete') { internalValue = ''; editor.textContent = ''; return true; }
+            if (command === 'insertText') {
+              // Any single call longer than the cap is silently truncated,
+              // matching the real observed Gemini behavior; calls at or
+              // under the cap (like our small verified chunks) apply in full.
+              const applied = String(value).slice(0, TRUNCATE_CAP);
+              internalValue += applied;
+              editor.textContent += applied;
+              editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+              return true;
+            }
+            if (command === 'insertParagraph' || command === 'insertLineBreak') {
+              internalValue += '\\n';
+              editor.textContent += '\\n';
+              editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
+              return true;
+            }
+            return false;
+          };
+          editor.addEventListener('input', (event) => {
+            if (event.inputType === 'insertFromPaste') {
+              // Simulate a controlled editor rejecting an unsanctioned direct
+              // DOM write and reverting to its authoritative internal model.
+              editor.textContent = internalValue;
+            }
+          });
+          editor.addEventListener('input', () => { send.disabled = !editor.innerText.trim(); });
+          send.addEventListener('click', () => {
+            window.submittedPrompt = editor.innerText;
+            editor.textContent = '';
+            internalValue = '';
+            send.disabled = true;
+            const response = document.createElement('model-response');
+            response.innerHTML = '<div class="markdown">Gemini truncation-recovery response completed.</div>';
+            document.body.appendChild(response);
+          });
+        </script>
+      </body></html>`,
+    });
+  });
+
+  await page.goto('https://gemini.google.com/app');
+  await page.addScriptTag({ path: CONTENT_SCRIPT });
+  const prompt = 'This is a long governed prompt that exceeds the truncation cap of the simulated Gemini editor and must survive intact.';
+  const result = await page.evaluate(async (message) => {
+    const runtime = (window as unknown as { __enksteinRuntime: { listener: Function } }).__enksteinRuntime;
+    return new Promise((resolve) => runtime.listener(
+      { type: 'marcellus-execute', task: { provider: 'gemini', prompt: message } },
+      {},
+      resolve,
+    ));
+  }, prompt) as { success: boolean; response: string };
+
+  expect(result.success).toBeTruthy();
+  expect(result.response).toContain('Gemini truncation-recovery response');
+  expect(await page.evaluate(() => (window as unknown as { submittedPrompt: string }).submittedPrompt))
+    .toBe(prompt);
+});

@@ -179,6 +179,60 @@ function dispatchEditorPaste(element, text) {
   }
 }
 
+// execCommand('insertText') can silently truncate a large single call while
+// still returning true (observed on Gemini's rich-textarea editor: a ~560
+// char prompt landed as ~134 chars with no error). This inserts in small,
+// individually-verified chunks, re-reading the editor's real content after
+// every chunk so a partial/truncated insertion is caught at the exact point
+// it happens rather than only once at the very end of one large call.
+const VERIFIED_INSERT_CHUNK_SIZE = 120;
+
+async function insertOneVerifiedPass(element, text, chunkSize) {
+  selectInputContents(element);
+  document.execCommand('delete', false);
+  const lines = text.replace(/\r\n?/g, '\n').split('\n');
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    for (let offset = 0; offset < line.length; offset += chunkSize) {
+      const segment = line.slice(offset, offset + chunkSize);
+      const expectedSoFar = lines.slice(0, lineIndex).join('\n')
+        + (lineIndex > 0 ? '\n' : '')
+        + line.slice(0, offset + segment.length);
+      document.execCommand('insertText', false, segment);
+      // execCommand's return value can report success even when a call
+      // silently truncates (the exact bug observed with Gemini's editor:
+      // a ~560 char prompt landed as ~134 chars with no error signalled).
+      // Re-read the editor after every chunk and compare against the exact
+      // text expected at this point so truncation is caught immediately
+      // rather than only once at the very end of the whole insertion.
+      if (normalizedInputText(inputText(element)) !== normalizedInputText(expectedSoFar)) {
+        return false;
+      }
+    }
+    if (lineIndex < lines.length - 1) {
+      document.execCommand('insertParagraph', false) || document.execCommand('insertLineBreak', false);
+      const expectedSoFar = lines.slice(0, lineIndex + 1).join('\n') + '\n';
+      if (normalizedInputText(inputText(element)) !== normalizedInputText(expectedSoFar)) {
+        return false;
+      }
+    }
+  }
+  return normalizedInputText(inputText(element)) === normalizedInputText(text);
+}
+
+async function insertVerifiedChunks(element, text) {
+  // Try progressively smaller chunk sizes. Each attempt clears the editor and
+  // reinserts from scratch (never resumes mid-attempt), so a partial/failed
+  // pass at one chunk size can never leave stale, unverifiable content behind
+  // for the next attempt to build on top of.
+  for (let chunkSize = VERIFIED_INSERT_CHUNK_SIZE; chunkSize >= 1; chunkSize = chunkSize === 1 ? 0 : Math.max(1, Math.floor(chunkSize / 8))) {
+    if (await insertOneVerifiedPass(element, text, chunkSize)) {
+      return { complete: true };
+    }
+  }
+  return { complete: false };
+}
+
 async function setInput(element, text, kind) {
   element.focus();
   if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
@@ -209,42 +263,16 @@ async function setInput(element, text, kind) {
       }
     }
 
-    if (kind === 'gemini') {
-      selectInputContents(element);
-      document.execCommand('delete', false);
-      const lines = text.replace(/\r\n?/g, '\n').split('\n');
-      let complete = true;
-      for (let index = 0; index < lines.length; index += 1) {
-        if (lines[index] && !document.execCommand('insertText', false, lines[index])) {
-          complete = false;
-          break;
-        }
-        if (index < lines.length - 1) {
-          const paragraphInserted = document.execCommand('insertParagraph', false)
-            || document.execCommand('insertLineBreak', false);
-          if (!paragraphInserted) {
-            complete = false;
-            break;
-          }
-        }
-      }
-      if (complete && await waitForInput(element, text)) {
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        return;
-      }
-    }
-
-    // Some provider builds reject one large insert but accept native chunks.
-    selectInputContents(element);
-    document.execCommand('delete', false);
-    let chunked = true;
-    for (let offset = 0; offset < text.length; offset += 8000) {
-      if (!document.execCommand('insertText', false, text.slice(offset, offset + 8000))) {
-        chunked = false;
-        break;
-      }
-    }
-    if (!(chunked && await waitForInput(element, text))) {
+    // Insert in small, individually-verified chunks, shrinking the chunk size
+    // on failure. This catches a partial/truncated insertion at the exact
+    // point it happens (rather than only once at the very end of one large
+    // call) instead of trusting execCommand's return value, which can report
+    // success even when a provider editor silently truncates the input.
+    const { complete } = await insertVerifiedChunks(element, text);
+    if (complete && await waitForInput(element, text)) {
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    } else {
       // Final compatibility path for controlled editors that only synchronize
       // after their DOM has been populated and an input event is dispatched.
       element.textContent = text;
