@@ -1449,6 +1449,20 @@ async def execute_turn(
     classification = payload.data_classification or conversation.classification
     source = payload.source or conversation.selected_source
     runtime_group = payload.runtime_group or "hybrid"
+    # The most recent assistant reply's actual answering source (not the
+    # user's stored preference) tells us whether this turn is switching
+    # Brains mid-conversation. A Browser Companion turn normally sends only
+    # the current message because the paired provider tab is assumed to
+    # already hold the prior turns -- but that assumption is false the
+    # moment the answering engine changes (a different browser tab, a local
+    # Ollama model, or a direct API Brain that has never seen this
+    # conversation). See `brain_switched_engine` below and its use building
+    # the Cortex Gateway request.
+    last_answering_source = next(
+        (item.source for item in reversed(previous) if item.role == "assistant" and item.source),
+        None,
+    )
+    brain_switched_engine = bool(last_answering_source) and last_answering_source != source
 
     project: CortexProject | None = None
     if conversation.project_id:
@@ -1614,6 +1628,7 @@ async def execute_turn(
                 "effective_classification": effective_classification,
                 "agent_mode": bool(payload.agent_mode and conversation.mode == "cowork"),
                 "context_manifest": context_manifest.to_dict() if context_manifest else None,
+                "brain_switched_engine": brain_switched_engine,
             },
             ),
         )

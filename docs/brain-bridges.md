@@ -114,8 +114,12 @@ that account's own retention settings.
 
 The Enkstein Browser Companion connects visible signed-in tabs for ChatGPT,
 Claude, and Gemini. It uses public page controls rather than cookies, account
-tokens, hidden endpoints, or copied browser profiles. Browser Brains are
-explicit choices and are not added to silent automatic routing.
+tokens, hidden endpoints, or copied browser profiles. Browser Brains can be
+selected explicitly, and Chat mode's Auto Brain also falls back to them (in
+the order ChatGPT, Claude, Gemini) when the Codex/Claude CLI subscriptions
+are unavailable or unauthenticated, before falling back further to configured
+API profiles and finally the local Ollama boundary. They are excluded from
+the Cloud runtime group and from any implicit Hybrid/Local reordering.
 
 One-time setup on Chrome or Edge:
 

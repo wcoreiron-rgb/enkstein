@@ -427,7 +427,7 @@ _validate_registry()
 
 _SNAPSHOT = ArchitectureSnapshot(
     name="Enkstein Plexus Architecture",
-    version="0.3.11",
+    version="0.3.12",
     source_lineage="Independent compatibility-first evolution of RegentClaw",
     compatibility_mode="Legacy route and module names remain available while new contracts are introduced",
     thesis="The Cortex may be bypassed for delegated routine coordination; Trust Fabric may never be bypassed.",

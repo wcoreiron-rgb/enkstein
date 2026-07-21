@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Enkstein Browser Companion",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Connects visible signed-in AI browser sessions to the governed Enkstein Brain Bridge.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [

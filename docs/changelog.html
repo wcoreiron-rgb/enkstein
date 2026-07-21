@@ -388,6 +388,36 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.12 — Cross-Brain memory on mid-chat engine switches; ChatGPT browser added to Auto fallback -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cross-Brain memory on mid-chat engine switches; ChatGPT browser added to Auto fallback</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Conversation memory fix</span>
+          <span class="tag tag-new">Auto Brain fallback</span>
+          <span class="release-date">July 21, 2026 &nbsp;·&nbsp; Enkstein v0.3.12</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Switching which Brain answers a conversation mid-chat (for example, from Codex to the Gemini Browser Companion, or to a local Ollama model) used to lose the entire prior conversation for Browser Companion turns. Auto Brain's fallback order also did not include any Browser Companion session at all.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Lost context on Brain switch:</strong> a Browser Companion turn (ChatGPT/Claude/Gemini tab) sends only the current message by design, on the assumption that the paired provider tab already holds every prior turn -- but that assumption breaks the moment a different Brain starts answering. Enkstein now compares the previous reply's actual answering source against the current turn's target Brain; when they differ, the newly addressed Brain receives the full bounded conversation transcript instead of only the latest message, so switching engines mid-conversation no longer causes the new Brain to respond as if the conversation just started.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Browser Companion in Auto Brain's fallback order:</strong> Chat mode's "Auto Brain" now falls back to the ChatGPT, then Claude, then Gemini browser sessions (in that order) when the Codex/Claude CLI subscriptions are unavailable or unauthenticated, before falling back further to configured API profiles and finally the local Ollama boundary -- so a host without an authenticated CLI subscription but with a signed-in ChatGPT tab still gets a real answer through Auto Brain instead of skipping straight to a weaker fallback.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.11 — Fixed Gemini prompt insertion silently truncating long messages -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

@@ -29,9 +29,21 @@ _SUBSCRIPTION_BRAINS = {
     "gemini_browser",
 }
 _LOCAL_SOURCE = "profile:ollama_local_fallback"
+# Chat mode's "Auto Brain" fallback order. Official CLI subscriptions come
+# first because they use a structured protocol (no DOM insertion, no page
+# reload/selector fragility) and are already covered by an existing
+# ChatGPT/Claude plan. Browser Companion sessions come next -- per explicit
+# product decision, ChatGPT's browser session is preferred over Claude's and
+# Gemini's browser sessions when the CLI subscriptions are unavailable or
+# unauthenticated, since it is the most commonly available signed-in session.
+# Configured API profiles come after that, and the local Ollama fallback is
+# always the last resort so a fully offline host still gets a usable answer.
 _AUTO_SOURCES = [
     "codex_subscription",
     "claude_subscription",
+    "chatgpt_browser",
+    "claude_browser",
+    "gemini_browser",
     "profile:gemini_general",
     "profile:nim_fast_reasoning",
     _LOCAL_SOURCE,
@@ -87,9 +99,21 @@ async def execute_cortex_gateway(db: AsyncSession, payload: CortexGatewayRequest
     votes: list[dict[str, Any]] = []
     decisions: dict[str, Any] = {}
     prompt = scan.redacted if scan.is_sensitive else transcript
-    browser_prompt = _compose_browser_turn(
-        payload,
-        latest_scan.redacted if latest_scan.is_sensitive else latest_user,
+    # A Browser Companion turn normally sends only the latest message,
+    # because the paired provider tab is assumed to already hold every prior
+    # turn. That assumption breaks the moment the answering Brain changes
+    # mid-conversation (switching to a different browser tab, a local Ollama
+    # model, or a direct API Brain that has never seen this conversation) --
+    # so `workspace.py` flags that case via context["brain_switched_engine"]
+    # and the freshly-addressed Brain gets the full bounded transcript
+    # instead of losing everything said before the switch.
+    browser_prompt = (
+        prompt
+        if payload.context.get("brain_switched_engine")
+        else _compose_browser_turn(
+            payload,
+            latest_scan.redacted if latest_scan.is_sensitive else latest_user,
+        )
     )
 
     if payload.source == "consensus":

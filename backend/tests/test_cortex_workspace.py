@@ -151,6 +151,51 @@ async def test_workspace_turn_passes_runtime_group_to_gateway(client, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_switching_answering_brain_mid_conversation_flags_engine_switch(client, monkeypatch):
+    """The Gateway needs to know when this turn is being answered by a
+    different Brain than the one that answered the previous turn, because a
+    Browser Companion turn normally sends only the current message (assuming
+    the paired provider tab already holds prior history) -- an assumption
+    that only holds if the same engine is still answering."""
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+    captured: list[dict] = []
+
+    async def fake_gateway(db, payload):
+        captured.append(dict(payload.context))
+        response = _gateway_response("Answer")
+        # The persisted assistant message's `source` is what the next turn's
+        # brain_switched_engine check compares against, so it must reflect
+        # the Brain this turn actually requested (never the literal string
+        # "auto", which is not a real answering source).
+        response["source"] = payload.source if payload.source != "auto" else "codex_subscription"
+        return response
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+
+    first_turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "First question", "source": "codex_subscription"},
+    )
+    assert first_turn.status_code == 200, first_turn.text
+    assert captured[0]["brain_switched_engine"] is False
+
+    second_turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Continue with a different Brain", "source": "gemini_browser"},
+    )
+    assert second_turn.status_code == 200, second_turn.text
+    assert captured[1]["brain_switched_engine"] is True
+
+    third_turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Stay on the same Brain", "source": "gemini_browser"},
+    )
+    assert third_turn.status_code == 200, third_turn.text
+    assert captured[2]["brain_switched_engine"] is False
+
+
+@pytest.mark.asyncio
 async def test_conversation_rename_is_owner_and_tenant_scoped(client):
     _use_identity(_identity(sub="owner-a", tenant_id="tenant-a"))
     conversation = await _create_conversation(client, mode="chat")

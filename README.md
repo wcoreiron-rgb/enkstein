@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.11` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.3.12` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -78,7 +78,7 @@ routing is mode-aware, records its candidate order and selection reason, and
 falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
 
-Version `0.3.11` also hardens the Model Cortex boundary: profile, audit, direct
+Version `0.3.12` also hardens the Model Cortex boundary: profile, audit, direct
 Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
