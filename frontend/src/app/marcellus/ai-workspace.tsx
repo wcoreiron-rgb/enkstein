@@ -89,6 +89,7 @@ import {
 import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
+import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
 import {
   persistLastActiveConversation,
   readLastActiveConversation,
@@ -130,6 +131,13 @@ type WorkspaceDialog =
 const BASE_SOURCES: SourceOption[] = [
   { value: 'auto', label: 'Auto Brain', ready: true, detail: 'First available policy-approved Brain', models: [] },
   { value: 'consensus', label: 'Multi-Brain Swarm', ready: true, detail: 'Available Brains work concurrently and preserve dissent', models: [] },
+  {
+    value: 'custom_swarm',
+    label: 'Build a Swarm…',
+    ready: true,
+    detail: 'Pick any mix of browser, subscription, API, and local Brains to run this turn concurrently.',
+    models: [],
+  },
 ];
 
 const TEXT_EXTENSIONS = new Set([
@@ -146,6 +154,25 @@ function isTextFile(file: File) {
   const extension = file.name.split('.').pop()?.toLowerCase() || '';
   return file.type.startsWith('text/') || file.type.includes('json') || file.type.includes('xml') || TEXT_EXTENSIONS.has(extension);
 }
+
+/** Groups a Brain source into the swarm-picker's category so the picker
+ * reads like "one browser, one API, one local" rather than a flat list.
+ * Purely presentational: the actual runtime/governance grouping (local vs
+ * hybrid vs cloud) remains the existing runtime_group axis and is
+ * unaffected by this categorization. */
+function swarmSourceKind(value: string): 'browser' | 'subscription' | 'local' | 'api' {
+  if (value.endsWith('_browser')) return 'browser';
+  if (value.endsWith('_subscription') || value.endsWith('_desktop')) return 'subscription';
+  if (value === 'profile:ollama_local_fallback' || value === 'profile:gemma_scanner') return 'local';
+  return 'api';
+}
+
+const SWARM_KIND_LABELS: Record<ReturnType<typeof swarmSourceKind>, string> = {
+  browser: 'Browser Companion sessions',
+  subscription: 'Subscription CLIs & desktop apps',
+  api: 'API & governed profiles',
+  local: 'Local (on-device)',
+};
 
 export default function AIWorkspace({
   mode,
@@ -174,6 +201,14 @@ export default function AIWorkspace({
   const [source, setSource] = useState('auto');
   const [model, setModel] = useState('');
   const [sourceOptions, setSourceOptions] = useState<SourceOption[]>(BASE_SOURCES);
+  // A "Build a Swarm…" selection: any mix of ready browser/subscription/
+  // API/local sources the operator explicitly checks. Kept separate from
+  // `source` itself so switching to/from custom_swarm never clobbers the
+  // last-built list, and so it can be resumed next time the picker opens.
+  const [customSwarmSources, setCustomSwarmSources] = useState<string[]>([]);
+  const [swarmPickerOpen, setSwarmPickerOpen] = useState(false);
+  const [swarmMinVotes, setSwarmMinVotes] = useState(1);
+  useEffect(() => { setCustomSwarmSources(readStoredCustomSwarm()); }, []);
   const [classification, setClassification] = useState('internal');
   const [runtimeGroup, setRuntimeGroup] = useState<RuntimeGroup>('hybrid');
 
@@ -649,6 +684,10 @@ export default function AIWorkspace({
       setError('Selected files exceed the complete-context limit. Select fewer files so no code is truncated.');
       return;
     }
+    if (source === 'custom_swarm' && customSwarmSources.length === 0) {
+      setError('Build a swarm first: pick at least one Brain from the swarm picker.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setLastFailure(null);
@@ -722,15 +761,22 @@ export default function AIWorkspace({
         }
         return;
       }
+      // "custom_swarm" is a UI-only sentinel: the backend's consensus
+      // mechanism is what actually fans a turn out across several Brains, so
+      // a custom swarm submits as source="consensus" with the operator's
+      // explicit source list and vote threshold instead of the Gateway's
+      // own fixed default list.
+      const isCustomSwarm = source === 'custom_swarm';
       const turn = await streamCortexTurn(conversation.id, {
         content,
-        source,
+        source: isCustomSwarm ? 'consensus' : source,
+        ...(isCustomSwarm ? { consensus_sources: customSwarmSources } : {}),
         model: model || undefined,
         data_classification: classification,
         runtime_group: runtimeGroup,
         artifact_ids: Array.from(selectedArtifacts),
         include_project_files: mode === 'cowork' && selectedArtifacts.size > 0,
-        minimum_votes: 2,
+        minimum_votes: isCustomSwarm ? swarmMinVotes : 2,
         agent_mode: mode === 'cowork' && agentMode,
       }, ({ event: streamEvent, data }) => {
         if (streamEvent === 'turn_started') setActivity(['Planning governed turn']);
@@ -869,6 +915,20 @@ export default function AIWorkspace({
     setSource(value);
     const option = sourceOptions.find((item) => item.value === value);
     setModel(option?.models[0]?.id || '');
+    if (value === 'custom_swarm') setSwarmPickerOpen(true);
+  };
+
+  const toggleSwarmSource = (value: string) => {
+    setCustomSwarmSources((current) => {
+      const next = current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
+      persistCustomSwarm(next);
+      return next;
+    });
+  };
+
+  const confirmSwarmSelection = () => {
+    setSwarmMinVotes((current) => Math.min(Math.max(current, 1), Math.max(customSwarmSources.length, 1)));
+    setSwarmPickerOpen(false);
   };
 
   const openFolderPicker = () => {
@@ -1101,10 +1161,19 @@ export default function AIWorkspace({
               <option value="cloud">Cloud only</option>
             </select>
             <select value={source} onChange={(event) => selectSource(event.target.value)} aria-label="Brain source"
-              title={sourceOptions.find((item) => item.value === source)?.detail}
+              title={source === 'custom_swarm'
+                ? `Custom swarm: ${customSwarmSources.length} Brain${customSwarmSources.length === 1 ? '' : 's'} selected`
+                : sourceOptions.find((item) => item.value === source)?.detail}
               className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
               {sourceOptions.map((option) => <option key={option.value} value={option.value} disabled={!option.ready}>{option.label}{option.ready ? '' : ' — unavailable'}</option>)}
             </select>
+            {source === 'custom_swarm' && (
+              <button type="button" onClick={() => setSwarmPickerOpen(true)} title="Edit swarm selection"
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs"
+                style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
+                <Bot className="h-3.5 w-3.5 text-red-500" />{customSwarmSources.length} Brain{customSwarmSources.length === 1 ? '' : 's'}
+              </button>
+            )}
             {(sourceOptions.find((item) => item.value === source)?.models.length || 0) > 0 && (
               <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="Brain model"
                 className="h-8 max-w-52 rounded-md border px-2 text-xs outline-none"
@@ -1445,6 +1514,70 @@ export default function AIWorkspace({
                 disabled={dialogBusy || (dialog.kind === 'move-conversation' && !moveProjectId) || (dialog.kind === 'rename-conversation' && !renameTitle.trim())}
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
                 {dialogBusy && <Loader2 className="h-4 w-4 animate-spin" />}{dialog.kind === 'move-conversation' ? 'Move' : dialog.kind === 'trash-file' ? 'Move to trash' : dialog.kind === 'rename-conversation' ? 'Rename' : 'Archive'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {swarmPickerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setSwarmPickerOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="swarm-picker-title" className="w-full max-w-lg rounded-lg border p-5 shadow-2xl"
+            style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="swarm-picker-title" className="text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>Build a Swarm</h2>
+                <p className="mt-2 text-sm leading-6" style={{ color: 'var(--rc-text-3)' }}>
+                  Pick any mix of ready Brains. Every checked Brain runs this turn concurrently; the response with enough
+                  agreement wins, and dissenting answers stay visible in the governance record.
+                </p>
+              </div>
+              <button type="button" onClick={() => setSwarmPickerOpen(false)} aria-label="Close swarm picker"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="mt-4 max-h-72 space-y-4 overflow-y-auto pr-1">
+              {(['browser', 'subscription', 'api', 'local'] as const).map((kind) => {
+                const group = sourceOptions.filter((option) => option.value !== 'auto' && option.value !== 'consensus' && option.value !== 'custom_swarm' && swarmSourceKind(option.value) === kind);
+                if (!group.length) return null;
+                return (
+                  <div key={kind}>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>
+                      {kind === 'browser' && <Globe2 className="h-3 w-3" />}{SWARM_KIND_LABELS[kind]}
+                    </p>
+                    <div className="space-y-1">
+                      {group.map((option) => (
+                        <label key={option.value} title={option.detail}
+                          className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs ${option.ready ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                          style={{ borderColor: 'var(--rc-border)', background: customSwarmSources.includes(option.value) ? 'var(--rc-bg-elevated)' : 'var(--rc-bg)' }}>
+                          <input type="checkbox" checked={customSwarmSources.includes(option.value)} disabled={!option.ready}
+                            onChange={() => toggleSwarmSource(option.value)} className="h-3.5 w-3.5 accent-red-600" />
+                          <span className="flex-1" style={{ color: 'var(--rc-text-1)' }}>{option.label}</span>
+                          {customSwarmSources.includes(option.value) && <Check className="h-3.5 w-3.5 text-red-500" />}
+                          {!option.ready && <span className="text-[10px]" style={{ color: 'var(--rc-text-3)' }}>unavailable</span>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4" style={{ borderColor: 'var(--rc-border)' }}>
+              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--rc-text-2)' }}>
+                Minimum agreement
+                <select value={swarmMinVotes} onChange={(event) => setSwarmMinVotes(Number(event.target.value))} aria-label="Minimum votes required"
+                  className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
+                  {Array.from({ length: Math.max(customSwarmSources.length, 1) }, (_, index) => index + 1).map((count) => (
+                    <option key={count} value={count}>{count} of {Math.max(customSwarmSources.length, 1)}</option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{customSwarmSources.length} selected</span>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => { setSwarmPickerOpen(false); if (customSwarmSources.length === 0) setSource('auto'); }}
+                className="h-9 rounded-md border px-3 text-sm" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Cancel</button>
+              <button type="button" onClick={confirmSwarmSelection} disabled={customSwarmSources.length === 0}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
+                Use this swarm
               </button>
             </div>
           </section>

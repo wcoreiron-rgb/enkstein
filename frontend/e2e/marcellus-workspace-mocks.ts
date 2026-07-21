@@ -290,7 +290,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
 
 type TurnOutcome = 'completed' | 'failed' | 'timeout';
 
-function sse(event: string, data: unknown): string {
+export function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
