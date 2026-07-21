@@ -388,6 +388,39 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.9 — VS Code-style file tree, message copy, and folder-sync/browser-agent fixes -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">VS Code-style file tree, message copy, and folder-sync/browser-agent fixes</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.9</span>
+          <span class="tag tag-sec">Folder-sync fix</span>
+          <span class="tag tag-fix">Browser change protocol</span>
+          <span class="release-date">July 20, 2026 &nbsp;·&nbsp; Enkstein v0.3.9</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The Cowork "Project files" panel is now a real collapsible folder tree instead of an indented flat list, every message and the whole chat can be copied in one click, switching a project's bound local folder no longer leaves behind every earlier folder's files, and a Browser Companion session (ChatGPT/Claude/Gemini tab) in Cowork agent mode now knows it may propose a governed file change instead of always refusing.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>VS Code-style folder tree:</strong> Cowork's file panel groups artifacts into real, independently collapsible folder nodes instead of indentation on a flat list. Folders default expanded per project and newly-appeared folders (e.g. after a sync) auto-expand without re-collapsing folders the operator already closed by hand.</li>
+          <li><strong>Copy a message or the whole chat:</strong> every message (user or assistant) gets a hover-revealed copy-to-clipboard control, and the conversation header gets a "copy whole chat" button that copies the full transcript labeled by role, in order.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Local folder switching:</strong> connecting a different local folder to the same Cowork project kept showing files from every previously-connected folder, since a sync only ever added or updated files and never removed one that disappeared from the bound folder. Every sync now marks a previously native-synced artifact deleted (recoverable) once its path is no longer present, while files created or uploaded directly in Enkstein are never touched by this.</li>
+          <li><strong>Browser Companion change protocol:</strong> a ChatGPT/Claude/Gemini browser tab in Cowork agent mode was never told it could propose a governed file write, so a request like "create that script in this project folder" always failed with "I cannot place it into the project folder" even though the response parser already knew how to handle exactly that kind of reply. The browser-turn prompt now includes the same governed change protocol the direct-API path already sends.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.8 — Custom Brain swarms, local scanner, and truncated-response recovery -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
