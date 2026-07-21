@@ -138,8 +138,8 @@ test.describe('Enkstein Cowork project file panel', () => {
     const store = createWorkspaceStore();
     const now = new Date().toISOString();
     store.projects.push(
-      { id: 'proj-a', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Alpha project', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
-      { id: 'proj-b', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Beta project', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-a', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Alpha project', description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-b', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Beta project', description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
     );
     seedArtifacts(store, 'proj-a', ['alpha/only-in-a.py']);
     seedArtifacts(store, 'proj-b', ['beta/only-in-b.py']);
@@ -166,7 +166,7 @@ test.describe('Enkstein Cowork VS Code-style folder tree', () => {
     const now = new Date().toISOString();
     store.projects.push({
       id: 'proj-tree', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Tree project', description: '',
-      classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now,
+      kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now,
     });
     seedArtifacts(store, 'proj-tree', [
       'src/app/main.py',
@@ -206,8 +206,8 @@ test.describe('Enkstein Cowork VS Code-style folder tree', () => {
     const store = createWorkspaceStore();
     const now = new Date().toISOString();
     store.projects.push(
-      { id: 'proj-x', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project X', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
-      { id: 'proj-y', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project Y', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-x', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project X', description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-y', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project Y', description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
     );
     seedArtifacts(store, 'proj-x', ['backend/api/routes.py', 'backend/api/schemas.py']);
     seedArtifacts(store, 'proj-y', ['frontend/components/App.tsx']);

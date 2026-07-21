@@ -179,11 +179,12 @@ async def post_project(
 @router.get("/projects", response_model=list[CortexProjectRead], summary="List accessible Cortex projects")
 async def get_projects(
     tenant_id: str = Query(default="global", min_length=1, max_length=128),
+    kind: str | None = Query(default=None, pattern="^(cowork|chat)$"),
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     tenant_id = resolve_tenant(user, tenant_id)
-    return await list_projects(db, tenant_id, user=user, owner_id=actor_id(user))
+    return await list_projects(db, tenant_id, user=user, owner_id=actor_id(user), kind=kind)
 
 
 @router.post(

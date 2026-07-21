@@ -6,6 +6,7 @@ export type MockProject = {
   owner_id: string;
   name: string;
   description: string;
+  kind: string;
   classification: string;
   default_source: string;
   status: string;
@@ -152,7 +153,10 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
 
     if (segments[0] === 'projects' && segments.length === 1) {
-      if (method === 'GET') return json(200, store.projects);
+      if (method === 'GET') {
+        const kind = url.searchParams.get('kind');
+        return json(200, kind ? store.projects.filter((project) => project.kind === kind) : store.projects);
+      }
       if (method === 'POST') {
         const body = request.postDataJSON();
         const project: MockProject = {
@@ -161,6 +165,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
           owner_id: 'e2e-owner',
           name: body.name,
           description: body.description || '',
+          kind: body.kind || 'cowork',
           classification: body.classification || 'internal',
           default_source: body.default_source || 'auto',
           status: 'active',

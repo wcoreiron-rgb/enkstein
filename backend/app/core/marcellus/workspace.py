@@ -387,6 +387,7 @@ async def create_project(
         ),
         classification=payload.classification,
         default_source=payload.default_source,
+        kind=payload.kind,
     )
     db.add(project)
     try:
@@ -574,6 +575,7 @@ async def pick_and_create_native_project(
         description="",
         classification=payload.classification,
         default_source=payload.default_source,
+        kind="cowork",
     )
     db.add(project)
     try:
@@ -663,8 +665,11 @@ async def list_projects(
     *,
     user: dict[str, Any],
     owner_id: str,
+    kind: str | None = None,
 ) -> list[CortexProjectRead]:
     query = select(CortexProject).where(CortexProject.tenant_id == tenant_id, CortexProject.status == "active")
+    if kind:
+        query = query.where(CortexProject.kind == kind)
     if not _can_read_all(user):
         query = query.where(CortexProject.owner_id == owner_id)
     result = await db.execute(query.order_by(desc(CortexProject.updated_at)))

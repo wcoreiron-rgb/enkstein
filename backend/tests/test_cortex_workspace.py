@@ -328,6 +328,71 @@ async def test_cowork_automatically_reads_active_project_files(client, monkeypat
 
 
 @pytest.mark.asyncio
+async def test_projects_are_scoped_by_kind_between_chat_and_cowork(client):
+    """Chat's project/folder concept must be entirely separate from Cowork's:
+    creating a Chat folder must never appear in Cowork's project picker, and
+    vice versa, even though both share the same underlying table."""
+    _use_identity(_identity())
+    cowork_project = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-a", "name": "Cowork folder", "classification": "internal", "kind": "cowork"},
+    )
+    assert cowork_project.status_code == 200, cowork_project.text
+    assert cowork_project.json()["kind"] == "cowork"
+
+    chat_project = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-a", "name": "Chat folder", "classification": "internal", "kind": "chat"},
+    )
+    assert chat_project.status_code == 200, chat_project.text
+    assert chat_project.json()["kind"] == "chat"
+
+    cowork_list = await client.get(f"{BASE}/projects", params={"tenant_id": "tenant-a", "kind": "cowork"})
+    assert cowork_list.status_code == 200
+    cowork_names = {item["name"] for item in cowork_list.json()}
+    assert "Cowork folder" in cowork_names
+    assert "Chat folder" not in cowork_names
+
+    chat_list = await client.get(f"{BASE}/projects", params={"tenant_id": "tenant-a", "kind": "chat"})
+    assert chat_list.status_code == 200
+    chat_names = {item["name"] for item in chat_list.json()}
+    assert "Chat folder" in chat_names
+    assert "Cowork folder" not in chat_names
+
+
+@pytest.mark.asyncio
+async def test_projects_default_to_cowork_kind_for_existing_callers(client):
+    """A caller that omits kind entirely (every pre-existing create-project
+    call in this codebase) must keep creating a Cowork project, preserving
+    the pre-Chat-folder behavior exactly."""
+    _use_identity(_identity())
+    project = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-a", "name": "Legacy default project", "classification": "internal"},
+    )
+    assert project.status_code == 200, project.text
+    assert project.json()["kind"] == "cowork"
+
+
+@pytest.mark.asyncio
+async def test_same_name_is_allowed_across_different_project_kinds(client):
+    """A Chat folder and a Cowork project may share the same display name --
+    they are different rows in different kind namespaces, not a collision."""
+    _use_identity(_identity())
+    cowork = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-a", "name": "Shared name", "classification": "internal", "kind": "cowork"},
+    )
+    assert cowork.status_code == 200, cowork.text
+    chat = await client.post(
+        f"{BASE}/projects",
+        json={"tenant_id": "tenant-a", "name": "Shared name", "classification": "internal", "kind": "chat"},
+    )
+    assert chat.status_code == 200, chat.text
+    assert cowork.json()["id"] != chat.json()["id"]
+
+
+@pytest.mark.asyncio
 async def test_cowork_file_delete_and_conversation_move_are_tenant_scoped(client):
     _use_identity(_identity())
     project = await _create_project(client)

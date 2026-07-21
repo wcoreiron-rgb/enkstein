@@ -25,6 +25,7 @@ import {
 } from '@/lib/api';
 import { persistWorkspaceMode, WorkspaceMode } from '@/lib/workspace-mode';
 import { workspaceModeBasePath, workspaceModeFromPath } from '@/lib/workspace-routes';
+import { markNextFolderPickAsNewProject } from '@/lib/native-folder-intent';
 
 type NavItem = {
   label: string;
@@ -195,6 +196,12 @@ function dispatchWorkspaceAction(detail: { type: 'new-conversation' | 'open-conv
   window.dispatchEvent(new CustomEvent('marcellus:workspace-action', { detail }));
 }
 
+// Chat's remembered project uses its own key so selecting a Chat folder can
+// never clobber Cowork's remembered project (and vice versa) -- the two are
+// entirely separate CortexProject kinds sharing only the same table/UI shape.
+const CHAT_PROJECT_STORAGE_KEY = 'marcellus-chat-project';
+const COWORK_PROJECT_STORAGE_KEY = 'marcellus-cowork-project';
+
 function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collapsed: boolean }) {
   const [conversations, setConversations] = useState<CortexConversation[]>([]);
   const [projects, setProjects] = useState<CortexProject[]>([]);
@@ -205,17 +212,17 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
   const [creatingProject, setCreatingProject] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [nativeWorkspaceName, setNativeWorkspaceName] = useState('');
+  const projectStorageKey = mode === 'chat' ? CHAT_PROJECT_STORAGE_KEY : COWORK_PROJECT_STORAGE_KEY;
+  const projectLabel = mode === 'chat' ? 'Chat folder' : 'Project';
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        const projectRows = mode === 'cowork' ? await getCortexProjects() : [];
-        const rememberedProject = window.localStorage.getItem('marcellus-cowork-project');
-        const selectedProject = mode === 'cowork'
-          ? (projectRows.find((item) => item.id === rememberedProject)?.id || projectRows[0]?.id || '')
-          : '';
+        const projectRows = await getCortexProjects(mode);
+        const rememberedProject = window.localStorage.getItem(projectStorageKey);
+        const selectedProject = projectRows.find((item) => item.id === rememberedProject)?.id || projectRows[0]?.id || '';
         const conversationRows = await getCortexConversations(mode, selectedProject || undefined);
         if (!cancelled) {
           setProjects(projectRows);
@@ -248,15 +255,16 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
       cancelled = true;
       window.removeEventListener('marcellus:workspace-state', sync);
     };
-  }, [mode]);
+  }, [mode, projectStorageKey]);
 
   const selectProject = async (id: string) => {
-    if (id) window.localStorage.setItem('marcellus-cowork-project', id);
+    if (id) window.localStorage.setItem(projectStorageKey, id);
+    else window.localStorage.removeItem(projectStorageKey);
     setProjectId(id);
     setActiveConversationId('');
     setLoading(true);
     try {
-      setConversations(await getCortexConversations('cowork', id || undefined));
+      setConversations(await getCortexConversations(mode, id || undefined));
     } finally {
       setLoading(false);
     }
@@ -267,11 +275,24 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
     event.preventDefault();
     const name = projectName.trim();
     if (!name) return;
-    const project = await createCortexProject({ name, classification: 'internal', default_source: 'auto' });
+    const project = await createCortexProject({ name, classification: 'internal', default_source: 'auto', kind: mode });
     setProjects((current) => [project, ...current]);
     setProjectName('');
     setCreatingProject(false);
     await selectProject(project.id);
+  };
+
+  const pickFolderForNewProject = () => {
+    // Reuses the same working native-folder-picker round trip AIWorkspace
+    // already uses for "Import folder" on an existing project. The native
+    // round trip itself only ever returns {token, name} with no room for an
+    // extra flag, so markNextFolderPickAsNewProject() arms a one-shot signal
+    // AIWorkspace's listener reads when the picker resolves, telling it to
+    // always create a brand-new project instead of guessing at a name match.
+    if (!window.marcellusNativeWorkspace) return;
+    markNextFolderPickAsNewProject();
+    setCreatingProject(false);
+    window.marcellusNativeWorkspace.selectFolder();
   };
 
   const visibleConversations = conversations.filter((conversation) =>
@@ -310,42 +331,49 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
         </button>
       </div>
 
-      {mode === 'cowork' && (
-        <div className="border-y px-2 py-2" style={{ borderColor: 'var(--rc-border)' }}>
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Project</span>
-            <button type="button" onClick={() => setCreatingProject((current) => !current)} title="New project" aria-label="New project">
-              <FolderPlus className="h-4 w-4" style={{ color: 'var(--rc-text-3)' }} />
-            </button>
-          </div>
-          <select value={projectId} onChange={(event) => void selectProject(event.target.value)} aria-label="Cowork project"
-            className="h-9 w-full rounded-md border px-2 text-xs outline-none"
-            style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)', color: 'var(--rc-text-1)' }}>
-            <option value="">Select a project</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-          {nativeWorkspaceName && (
-            <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border px-2 py-2"
-              style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
-              <Folder className="h-3.5 w-3.5 shrink-0 text-red-500" />
-              <div className="min-w-0">
-                <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Local folder</p>
-                <p className="truncate text-xs" title={nativeWorkspaceName} style={{ color: 'var(--rc-text-1)' }}>{nativeWorkspaceName}</p>
-              </div>
+      <div className="border-y px-2 py-2" style={{ borderColor: 'var(--rc-border)' }}>
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>{projectLabel}</span>
+          <button type="button" onClick={() => setCreatingProject((current) => !current)} title={`New ${projectLabel.toLowerCase()}`} aria-label={`New ${projectLabel.toLowerCase()}`}>
+            <FolderPlus className="h-4 w-4" style={{ color: 'var(--rc-text-3)' }} />
+          </button>
+        </div>
+        <select value={projectId} onChange={(event) => void selectProject(event.target.value)} aria-label={mode === 'chat' ? 'Chat folder' : 'Cowork project'}
+          className="h-9 w-full rounded-md border px-2 text-xs outline-none"
+          style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)', color: 'var(--rc-text-1)' }}>
+          <option value="">{mode === 'chat' ? 'All chats' : 'Select a project'}</option>
+          {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+        </select>
+        {mode === 'cowork' && nativeWorkspaceName && (
+          <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border px-2 py-2"
+            style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
+            <Folder className="h-3.5 w-3.5 shrink-0 text-red-500" />
+            <div className="min-w-0">
+              <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Local folder</p>
+              <p className="truncate text-xs" title={nativeWorkspaceName} style={{ color: 'var(--rc-text-1)' }}>{nativeWorkspaceName}</p>
             </div>
-          )}
-          {creatingProject && (
-            <form onSubmit={submitProject} className="mt-2 flex gap-1.5">
+          </div>
+        )}
+        {creatingProject && (
+          <div className="mt-2 space-y-1.5">
+            <form onSubmit={submitProject} className="flex gap-1.5">
               <input value={projectName} onChange={(event) => setProjectName(event.target.value.slice(0, 255))} autoFocus
-                placeholder="Project name" className="h-8 min-w-0 flex-1 rounded border px-2 text-xs outline-none"
+                placeholder={mode === 'chat' ? 'Folder name' : 'Project name'} className="h-8 min-w-0 flex-1 rounded border px-2 text-xs outline-none"
                 style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)', color: 'var(--rc-text-1)' }} />
               <button type="submit" className="flex h-8 w-8 items-center justify-center rounded bg-red-600 text-white" aria-label="Create project">
                 <Plus className="h-4 w-4" />
               </button>
             </form>
-          )}
-        </div>
-      )}
+            {mode === 'cowork' && (
+              <button type="button" onClick={pickFolderForNewProject}
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded border text-xs"
+                style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
+                <FolderInput className="h-3.5 w-3.5" />Pick a local folder instead
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="p-2">
         <Link href="/marcellus/brains"

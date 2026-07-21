@@ -659,6 +659,7 @@ export type CortexProject = {
   owner_id: string;
   name: string;
   description: string;
+  kind: string;
   classification: string;
   default_source: string;
   status: string;
@@ -828,7 +829,8 @@ export type CortexResearchResult = {
   tool_trace: Array<Record<string, any>>;
 };
 
-export const getCortexProjects = () => apiFetch<CortexProject[]>('/marcellus/workspace/projects');
+export const getCortexProjects = (kind?: 'cowork' | 'chat') =>
+  apiFetch<CortexProject[]>(`/marcellus/workspace/projects${kind ? `?kind=${kind}` : ''}`);
 export const createCortexProject = (body: object) =>
   apiFetch<CortexProject>('/marcellus/workspace/projects', { method: 'POST', body: JSON.stringify(body) });
 export const getCortexNativeWorkspace = (projectId: string) =>

@@ -21,6 +21,7 @@ class CortexProjectCreate(BaseModel):
     description: str = Field(default="", max_length=2000)
     classification: Classification = "internal"
     default_source: str = Field(default="auto", min_length=2, max_length=128)
+    kind: Literal["cowork", "chat"] = "cowork"
 
 
 class CortexProjectRead(BaseModel):
@@ -31,6 +32,7 @@ class CortexProjectRead(BaseModel):
     owner_id: str
     name: str
     description: str
+    kind: str
     classification: str
     default_source: str
     status: str

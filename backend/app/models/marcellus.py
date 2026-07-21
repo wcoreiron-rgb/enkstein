@@ -181,7 +181,7 @@ class RegenerationRun(Base):
 class CortexProject(Base):
     __tablename__ = "marcellus_cortex_projects"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "owner_id", "name", name="uq_cortex_project_owner_name"),
+        UniqueConstraint("tenant_id", "owner_id", "kind", "name", name="uq_cortex_project_owner_kind_name"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -189,6 +189,13 @@ class CortexProject(Base):
     owner_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # "cowork" projects can bind a local folder and hold artifacts/native sync
+    # state; "chat" projects are a lightweight grouping folder for organizing
+    # Chat conversations only and never touch native-folder/artifact state.
+    # Kept on the same table (not a new model) so both share one create/list/
+    # rename/archive implementation; every route filters by kind so a Chat
+    # folder can never appear in Cowork's project picker or vice versa.
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="cowork", index=True)
     classification: Mapped[str] = mapped_column(String(32), nullable=False, default="internal")
     default_source: Mapped[str] = mapped_column(String(128), nullable=False, default="auto")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active", index=True)

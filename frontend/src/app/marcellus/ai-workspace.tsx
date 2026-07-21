@@ -93,6 +93,7 @@ import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
+import { consumeForceNewProjectIntent } from '@/lib/native-folder-intent';
 import { allFolderPaths, buildFileTree, type FileTreeNode } from '@/lib/file-tree';
 import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
 import {
@@ -190,7 +191,13 @@ export default function AIWorkspace({
 }) {
   const router = useRouter();
   const [projects, setProjects] = useState<CortexProject[]>([]);
-  const [projectId, setProjectId] = useState<string>(mode === 'cowork' ? initialProjectId || '' : '');
+  // Chat and Cowork each organize their own conversations into lightweight
+  // folders (CortexProject rows scoped by kind="chat"/"cowork"); Security has
+  // no project concept. hasProjects gates every project-scoping behavior that
+  // both Chat and Cowork share; folder-binding/artifacts/native sync remain
+  // strictly Cowork-only below.
+  const hasProjects = mode === 'cowork' || mode === 'chat';
+  const [projectId, setProjectId] = useState<string>(hasProjects ? initialProjectId || '' : '');
   const [conversations, setConversations] = useState<CortexConversation[]>([]);
   const [active, setActive] = useState<CortexConversation | null>(null);
   const [messages, setMessages] = useState<CortexMessageRecord[]>([]);
@@ -300,6 +307,9 @@ export default function AIWorkspace({
    * conversation now active in this mode, and remembers it as this mode's
    * (and, for Cowork, this project's) last active conversation. */
   const navigateToConversation = useCallback((conversation: CortexConversation | null, opts: { replace?: boolean } = {}) => {
+    // Only Cowork encodes its project into the URL (/cowork/{projectId}/...);
+    // Chat's project is sidebar-organizational only, so its URL never gains a
+    // project segment even though a Chat conversation may still have one.
     const targetProjectId = mode === 'cowork' ? (conversation?.project_id || projectId || undefined) : undefined;
     const path = workspaceRoutePath(mode, { projectId: targetProjectId, conversationId: conversation?.id });
     persistLastActiveConversation(mode, conversation?.id || null, targetProjectId);
@@ -309,7 +319,7 @@ export default function AIWorkspace({
   }, [mode, projectId, router]);
 
   const loadConversations = useCallback(async (preferredId?: string) => {
-    const rows = await getCortexConversations(mode, mode === 'cowork' && projectId ? projectId : undefined);
+    const rows = await getCortexConversations(mode, hasProjects && projectId ? projectId : undefined);
     setConversations(rows);
     const target = rows.find((item) => item.id === preferredId) || rows[0] || null;
     if (target) {
@@ -323,7 +333,7 @@ export default function AIWorkspace({
       setActive(null);
       setMessages([]);
     }
-  }, [mode, navigateToConversation, projectId]);
+  }, [mode, navigateToConversation, projectId, hasProjects]);
 
   const loadArtifacts = useCallback(async () => {
     if (!projectId) {
@@ -357,7 +367,7 @@ export default function AIWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    if (!projectId) {
+    if (mode !== 'cowork' || !projectId) {
       setNativeWorkspace(null);
       return;
     }
@@ -365,27 +375,36 @@ export default function AIWorkspace({
       .then((result) => { if (!cancelled) setNativeWorkspace(result); })
       .catch(() => { if (!cancelled) setNativeWorkspace(null); });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [mode, projectId]);
 
   useEffect(() => {
     const selected = (event: Event) => {
       const detail = (event as CustomEvent<{ token?: string; name?: string }>).detail;
       if (!detail?.token || !detail.name) return;
+      if (mode !== 'cowork') return;
+      const forceNewProject = consumeForceNewProjectIntent();
       setUploading(true);
       setError(null);
       void (async () => {
-        let targetProjectId = projectId;
+        let targetProjectId = forceNewProject ? '' : projectId;
         if (!targetProjectId) {
-          const matchingProject = projects.find((project) => project.name.toLowerCase() === detail.name!.toLowerCase());
-          const project = matchingProject || await createCortexProject({
+          // Always create a brand-new project here rather than guessing at a
+          // name match against an existing one: silently reusing an
+          // unrelated older project (because it happened to share a folder
+          // name) is exactly the "keeps adding on top of old projects"
+          // confusion this replaces. New Project's folder picker arms
+          // forceNewProject, so it always lands here with no active project.
+          const project = await createCortexProject({
             name: detail.name!,
             classification: 'internal',
             default_source: 'auto',
+            kind: 'cowork',
           });
-          if (!matchingProject) setProjects((current) => [project, ...current]);
+          setProjects((current) => [project, ...current]);
           targetProjectId = project.id;
           window.localStorage.setItem('marcellus-cowork-project', targetProjectId);
           setProjectId(targetProjectId);
+          router.push(workspaceRoutePath('cowork', { projectId: targetProjectId }));
         }
         const result = await connectCortexNativeWorkspace(targetProjectId, { token: detail.token!, name: detail.name! });
           setNativeWorkspace(result);
@@ -398,7 +417,7 @@ export default function AIWorkspace({
     };
     window.addEventListener('marcellus:native-workspace-selected', selected);
     return () => window.removeEventListener('marcellus:native-workspace-selected', selected);
-  }, [projectId, projects]);
+  }, [mode, projectId, projects, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -407,16 +426,22 @@ export default function AIWorkspace({
       setError(null);
       setNotFound(null);
       try {
-        const rows = mode === 'cowork' ? await getCortexProjects() : [];
+        const rows = hasProjects ? await getCortexProjects(mode === 'cowork' ? 'cowork' : 'chat') : [];
         if (cancelled) return;
         setProjects(rows);
         const remembered = readLastActiveConversation(mode);
-        const nextProject = mode === 'cowork'
+        // Cowork's project comes from the URL (initialProjectId) first, since
+        // it's deep-linked; Chat has no project URL segment at all, so its
+        // project selection is remembered sidebar state only.
+        const nextProject = hasProjects
           ? (initialProjectId || projectId || rows.find((item) => item.id === remembered.projectId)?.id || rows[0]?.id || '')
           : '';
         if (mode === 'cowork' && nextProject !== projectId) {
           setProjectId(nextProject);
           return;
+        }
+        if (mode === 'chat' && nextProject !== projectId) {
+          setProjectId(nextProject);
         }
         if (mode === 'cowork' && initialProjectId && rows.length > 0 && !rows.some((item) => item.id === initialProjectId)) {
           setNotFound('This Cowork project was not found, was moved, or is not owned by you.');
@@ -478,7 +503,7 @@ export default function AIWorkspace({
             setMessages([]);
           }
         }
-        if (nextProject) {
+        if (mode === 'cowork' && nextProject) {
           const artifactRows = await getCortexArtifacts(nextProject);
           if (cancelled) return;
           setArtifacts(artifactRows);
@@ -496,7 +521,7 @@ export default function AIWorkspace({
     void load();
     return () => { cancelled = true; };
     // projectId is intentionally included so changing projects reloads its conversations and files.
-  }, [mode, projectId, initialProjectId, initialConversationId, router]);
+  }, [mode, hasProjects, projectId, initialProjectId, initialConversationId, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -580,7 +605,11 @@ export default function AIWorkspace({
       return null;
     }
     const conversation = await createCortexConversation({
-      project_id: mode === 'cowork' ? projectId : undefined,
+      // Cowork requires an active project (its native folder/artifacts are
+      // project-scoped); Chat's project is optional organizational grouping,
+      // so a new Chat conversation joins whichever Chat folder is currently
+      // selected in the sidebar, or stays unfiled if none is selected.
+      project_id: hasProjects && projectId ? projectId : undefined,
       title: 'New conversation',
       mode,
       classification,
@@ -622,14 +651,14 @@ export default function AIWorkspace({
   const loadArchived = useCallback(async () => {
     setArchivedLoading(true);
     try {
-      const rows = await getCortexConversations(mode, mode === 'cowork' && projectId ? projectId : undefined, true);
+      const rows = await getCortexConversations(mode, hasProjects && projectId ? projectId : undefined, true);
       setArchivedConversations(rows.filter((item) => item.status === 'archived'));
     } catch {
       setArchivedConversations([]);
     } finally {
       setArchivedLoading(false);
     }
-  }, [mode, projectId]);
+  }, [mode, projectId, hasProjects]);
 
   const toggleArchived = () => {
     setArchivedOpen((current) => {
@@ -663,10 +692,33 @@ export default function AIWorkspace({
         const conversation = conversations.find((item) => item.id === detail.id);
         if (conversation) void openConversation(conversation);
       }
-      if (detail.type === 'select-project' && mode === 'cowork') {
+      if (detail.type === 'select-project' && hasProjects) {
         setProjectId(detail.id || '');
         setNotFound(null);
-        router.push(workspaceRoutePath('cowork', { projectId: detail.id || undefined }));
+        if (mode === 'cowork') {
+          router.push(workspaceRoutePath('cowork', { projectId: detail.id || undefined }));
+        } else {
+          // Chat's project is sidebar-organizational only (no URL segment).
+          // Fetch directly with the newly selected id rather than calling
+          // loadConversations(), which would otherwise close over the
+          // pre-update projectId from this render and refetch the old scope.
+          void (async () => {
+            const rows = await getCortexConversations(mode, detail.id || undefined);
+            setConversations(rows);
+            const target = rows[0] || null;
+            if (target) {
+              const conversationDetail = await getCortexConversation(target.id);
+              setActive(conversationDetail);
+              setMessages(conversationDetail.messages);
+              setSource(conversationDetail.selected_source);
+              setClassification(conversationDetail.classification);
+              persistLastActiveConversation(mode, conversationDetail.id, detail.id || undefined);
+            } else {
+              setActive(null);
+              setMessages([]);
+            }
+          })().catch((selectError) => setError(selectError instanceof Error ? selectError.message : 'This Chat folder could not be loaded.'));
+        }
       }
       if (
         (detail.type === 'request-archive-conversation'
@@ -999,16 +1051,21 @@ export default function AIWorkspace({
       let targetProjectId = projectId;
       if (!targetProjectId) {
         const folderName = filePath(incoming[0]).split('/')[0] || 'Local project';
-        const matchingProject = projects.find((project) => project.name.toLowerCase() === folderName.toLowerCase());
-        const project = matchingProject || await createCortexProject({
+        // Always create fresh here too, for the same reason as the native
+        // folder-picker path: silently reusing an unrelated older project by
+        // name match is the confusing "old files/projects keep showing up"
+        // behavior this replaces.
+        const project = await createCortexProject({
           name: folderName,
           classification: 'internal',
           default_source: 'auto',
+          kind: 'cowork',
         });
-        if (!matchingProject) setProjects((current) => [project, ...current]);
+        setProjects((current) => [project, ...current]);
         targetProjectId = project.id;
         window.localStorage.setItem('marcellus-cowork-project', targetProjectId);
         setProjectId(targetProjectId);
+        router.push(workspaceRoutePath('cowork', { projectId: targetProjectId }));
       }
       const files = await Promise.all(incoming.map(async (file) => ({
         path: filePath(file),
