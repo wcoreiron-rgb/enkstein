@@ -74,6 +74,12 @@ from app.trust_fabric.agt_bridge import audit_prompt
 
 
 _ADMIN_ROLES = {"admin", "security_admin", "super_admin"}
+# Distinguishes artifacts produced by a native-folder sync from anything the
+# operator created or uploaded directly, so a later sync can safely mark a
+# now-missing file deleted without ever touching a file that only exists
+# inside Enkstein. Not a real user id; never resolved against auth/tenant
+# state, only compared for artifact provenance.
+_NATIVE_SYNC_ACTOR = "system:native-folder-sync"
 _SECURITY_HANDOFF_PARTICIPANTS = {
     "arcclaw",
     "threatclaw",
@@ -426,6 +432,7 @@ async def connect_native_workspace(
         path_alias=payload.path_alias,
         file_count=synced["file_count"],
         synced_files=synced["synced_files"],
+        removed_files=synced["removed_files"],
     )
 
 
@@ -439,12 +446,21 @@ async def _sync_bound_root(
     actor_name: str,
     ip_address: str | None = None,
 ) -> dict[str, int]:
-    """Ingest the currently approved root's validated files into the project.
+    """Mirror the currently approved root into the project: ingest every file
+    the host bridge reports, then mark any previously-synced artifact whose
+    path is no longer present as deleted (recoverable, same as a manual
+    trash) so a project never keeps showing files from a folder the operator
+    switched away from or files removed on disk.
 
     The host bridge is the authoritative boundary; ingest never mirrors back to
-    native so a read-only sync cannot mutate the approved folder.
+    native so a read-only sync cannot mutate the approved folder. Only
+    artifacts previously produced by this same sync path (native-origin) are
+    ever removed here; files a user created or uploaded directly in Enkstein
+    are left untouched even if the bound folder doesn't happen to contain a
+    matching path.
     """
     files = await list_native_files(tenant_id, project.id)
+    seen_paths = {item["path"] for item in files if isinstance(item, dict) and item.get("path")}
     created = await ingest_artifacts(
         db,
         native_files_payload(
@@ -458,8 +474,57 @@ async def _sync_bound_root(
         actor_name=actor_name,
         ip_address=ip_address,
         mirror_to_native=False,
+        created_by=_NATIVE_SYNC_ACTOR,
     ) if files else []
-    return {"file_count": len(files), "synced_files": len(created)}
+    removed = await _remove_native_orphans(
+        db,
+        tenant_id=tenant_id,
+        project=project,
+        seen_paths=seen_paths,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        ip_address=ip_address,
+    )
+    return {"file_count": len(files), "synced_files": len(created), "removed_files": removed}
+
+
+async def _remove_native_orphans(
+    db: AsyncSession,
+    *,
+    tenant_id: str,
+    project: CortexProject,
+    seen_paths: set[str],
+    actor_id: str,
+    actor_name: str,
+    ip_address: str | None,
+) -> int:
+    result = await db.execute(
+        select(CortexArtifact).where(
+            CortexArtifact.tenant_id == tenant_id,
+            CortexArtifact.project_id == project.id,
+            CortexArtifact.status == "active",
+            CortexArtifact.created_by == _NATIVE_SYNC_ACTOR,
+        )
+    )
+    orphaned = [item for item in result.scalars().all() if item.path not in seen_paths]
+    if not orphaned:
+        return 0
+    await _authorize(
+        db,
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action="workspace_native_folder_sync",
+        target=str(project.id),
+        target_type="cortex_project",
+        context={"direction": "host_to_workspace", "removed_count": len(orphaned)},
+        ip_address=ip_address,
+    )
+    for artifact in orphaned:
+        artifact.status = "deleted"
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    return len(orphaned)
 
 
 async def pick_and_create_native_project(
@@ -535,6 +600,7 @@ async def pick_and_create_native_project(
             path_alias=grant.get("path_alias"),
             file_count=synced["file_count"],
             synced_files=synced["synced_files"],
+            removed_files=synced["removed_files"],
         ),
     )
 
@@ -587,6 +653,7 @@ async def sync_native_workspace(
         path_alias=binding.get("path_alias"),
         file_count=synced["file_count"],
         synced_files=synced["synced_files"],
+        removed_files=synced["removed_files"],
     )
 
 
@@ -888,6 +955,7 @@ async def ingest_artifacts(
     actor_name: str,
     ip_address: str | None = None,
     mirror_to_native: bool = True,
+    created_by: str | None = None,
 ) -> list[CortexArtifactRead]:
     project = await _get_project(db, payload.tenant_id, payload.project_id)
     _require_owner(user, project.owner_id)
@@ -958,7 +1026,7 @@ async def ingest_artifacts(
             content_digest=digest,
             classification=payload.classification,
             version=next_versions[item.path],
-            created_by=actor_id,
+            created_by=created_by or actor_id,
         )
         db.add(artifact)
         created.append(artifact)

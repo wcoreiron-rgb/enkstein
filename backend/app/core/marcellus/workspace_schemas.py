@@ -54,6 +54,7 @@ class CortexNativeWorkspaceRead(BaseModel):
     path_alias: str | None = None
     file_count: int = 0
     synced_files: int = 0
+    removed_files: int = 0
 
 
 class CortexNativePickRead(BaseModel):

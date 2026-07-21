@@ -6,6 +6,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -21,6 +22,8 @@ import {
   ChevronRight,
   Clock,
   Ban,
+  ClipboardCopy,
+  Copy,
   File,
   FilePlus2,
   Folder,
@@ -90,6 +93,8 @@ import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
+import { allFolderPaths, buildFileTree, type FileTreeNode } from '@/lib/file-tree';
+import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
 import {
   persistLastActiveConversation,
   readLastActiveConversation,
@@ -192,6 +197,39 @@ export default function AIWorkspace({
   const [artifacts, setArtifacts] = useState<CortexArtifact[]>([]);
   const [proposals, setProposals] = useState<CortexChangeProposal[]>([]);
   const [selectedArtifacts, setSelectedArtifacts] = useState<Set<string>>(new Set());
+  // Which folder paths in the VS Code-style tree are expanded. Reset
+  // whenever the active project changes so a folder left open in one
+  // project's tree never leaks into another project's tree.
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const fileTree = useMemo(() => buildFileTree(artifacts), [artifacts]);
+  const expandedFoldersProjectRef = useRef<string | null>(null);
+  useEffect(() => {
+    const folderPaths = allFolderPaths(fileTree);
+    if (expandedFoldersProjectRef.current !== projectId) {
+      // A genuine project switch (including the initial artifact load,
+      // which starts from an empty tree before the real files arrive):
+      // start every currently-known folder expanded, VS Code-style.
+      expandedFoldersProjectRef.current = projectId;
+      setExpandedFolders(new Set(folderPaths));
+      return;
+    }
+    // Same project, artifacts refreshed (e.g. a native folder sync added
+    // files): expand any newly-appeared folder without touching folders the
+    // operator already collapsed by hand.
+    setExpandedFolders((current) => {
+      const missing = folderPaths.filter((path) => !current.has(path));
+      if (!missing.length) return current;
+      return new Set([...Array.from(current), ...missing]);
+    });
+  }, [projectId, fileTree]);
+  const toggleFolder = (path: string) => {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
   const [preview, setPreview] = useState<CortexArtifact | null>(null);
   const [creatingFile, setCreatingFile] = useState(false);
   const [newFilePath, setNewFilePath] = useState('');
@@ -1074,6 +1112,14 @@ export default function AIWorkspace({
     }
   };
 
+  const { copied: chatCopied, copy: copyChat } = useCopyToClipboard();
+  const copyWholeChat = () => {
+    const transcript = messages
+      .map((message) => `${message.role === 'user' ? 'You' : 'Enkstein'}:\n${message.content}`)
+      .join('\n\n---\n\n');
+    void copyChat(transcript);
+  };
+
   const completeDialog = async () => {
     if (!dialog || dialogBusy) return;
     setDialogBusy(true);
@@ -1202,6 +1248,12 @@ export default function AIWorkspace({
             {active && mode === 'cowork' && projects.length > 0 && <button type="button" onClick={() => { setMoveProjectId(''); setDialog({ kind: 'move-conversation', conversation: active }); }}
               title="Move to project" aria-label="Move conversation to project" className="flex h-8 w-8 items-center justify-center rounded-md border"
               style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}><FolderOpen className="h-4 w-4" /></button>}
+            {active && messages.length > 0 && (
+              <button type="button" onClick={copyWholeChat} title={chatCopied ? 'Chat copied' : 'Copy whole chat'} aria-label={chatCopied ? 'Whole chat copied to clipboard' : 'Copy whole chat to clipboard'}
+                className="flex h-8 w-8 items-center justify-center rounded-md border" style={{ borderColor: 'var(--rc-border)', color: chatCopied ? '#16a34a' : 'var(--rc-text-3)' }}>
+                {chatCopied ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
+              </button>
+            )}
             {active && <button type="button" onClick={() => { setRenameTitle(active.title); setDialog({ kind: 'rename-conversation', conversation: active }); }} title="Rename conversation" aria-label="Rename conversation"
               className="flex h-8 w-8 items-center justify-center rounded-md border" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}><Pencil className="h-4 w-4" /></button>}
             {active && <button type="button" onClick={() => setDialog({ kind: 'archive-conversation', conversation: active })} title="Archive conversation" aria-label="Archive conversation"
@@ -1229,15 +1281,18 @@ export default function AIWorkspace({
                     {message.role === 'assistant'
                       ? <SafeMarkdown content={message.content} />
                       : <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{message.content}</p>}
-                    {message.role === 'assistant' && (
-                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <GovernanceRecord message={message} />
-                        <button type="button" onClick={() => void branchAt(message)} title="Branch from here" aria-label="Branch from here"
-                          className="invisible flex h-7 w-7 shrink-0 items-center justify-center rounded group-hover:visible" style={{ color: 'var(--rc-text-3)' }}>
-                          <GitBranch className="h-3.5 w-3.5" />
-                        </button>
+                    <div className={`mt-3 flex items-center gap-3 ${message.role === 'assistant' ? 'justify-between' : 'justify-end'}`}>
+                      {message.role === 'assistant' && <GovernanceRecord message={message} />}
+                      <div className="flex items-center gap-1">
+                        <MessageCopyButton content={message.content} />
+                        {message.role === 'assistant' && (
+                          <button type="button" onClick={() => void branchAt(message)} title="Branch from here" aria-label="Branch from here"
+                            className="invisible flex h-7 w-7 shrink-0 items-center justify-center rounded group-hover:visible" style={{ color: 'var(--rc-text-3)' }}>
+                            <GitBranch className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </article>
               ))}
@@ -1408,20 +1463,15 @@ export default function AIWorkspace({
               </div>
             ) : artifacts.length ? (
               <div className="p-2">
-                {artifacts.map((artifact) => {
-                  const depth = Math.min(4, artifact.path.split('/').length - 1);
-                  return (
-                    <div key={artifact.id} className="group flex items-center gap-1 rounded px-1 py-1 hover:bg-black/5 dark:hover:bg-white/5" style={{ paddingLeft: `${4 + depth * 12}px` }}>
-                      <button type="button" onClick={() => toggleArtifact(artifact.id)} aria-label={`${selectedArtifacts.has(artifact.id) ? 'Remove' : 'Add'} ${artifact.path} context`}
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded border" style={{ borderColor: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'var(--rc-border)', background: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'transparent', color: 'white' }}>
-                        {selectedArtifacts.has(artifact.id) && <Check className="h-3 w-3" />}
-                      </button>
-                      <File className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />
-                      <button type="button" onClick={() => void previewArtifact(artifact)} className="min-w-0 flex-1 truncate text-left text-xs" title={artifact.path} style={{ color: 'var(--rc-text-2)' }}>{artifact.path}</button>
-                      <span className="text-[9px]" style={{ color: 'var(--rc-text-3)' }}>v{artifact.version}</span>
-                    </div>
-                  );
-                })}
+                <FileTreeView
+                  nodes={fileTree}
+                  depth={0}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={toggleFolder}
+                  selectedArtifacts={selectedArtifacts}
+                  onToggleArtifact={toggleArtifact}
+                  onPreviewArtifact={previewArtifact}
+                />
               </div>
             ) : (
               <div className="p-5 text-center">
@@ -1634,6 +1684,89 @@ function TurnFailureBlock({
         </button>
       </div>
     </article>
+  );
+}
+
+/** Recursive VS Code-style folder tree for the Cowork "Project files" panel.
+ * Folders collapse/expand independently; files show the same context
+ * checkbox, path, and version the old flat list did. Rebuilt fresh from
+ * `artifacts` on every render (see buildFileTree), so it can never drift
+ * from what the active project's own file list actually contains. */
+function FileTreeView({
+  nodes,
+  depth,
+  expandedFolders,
+  onToggleFolder,
+  selectedArtifacts,
+  onToggleArtifact,
+  onPreviewArtifact,
+}: {
+  nodes: FileTreeNode[];
+  depth: number;
+  expandedFolders: Set<string>;
+  onToggleFolder: (path: string) => void;
+  selectedArtifacts: Set<string>;
+  onToggleArtifact: (id: string) => void;
+  onPreviewArtifact: (artifact: CortexArtifact) => void;
+}) {
+  const indent = 4 + Math.min(6, depth) * 14;
+  return (
+    <>
+      {nodes.map((node) => {
+        if (node.kind === 'folder') {
+          const expanded = expandedFolders.has(node.path);
+          return (
+            <div key={node.path}>
+              <button type="button" onClick={() => onToggleFolder(node.path)}
+                aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} ${node.name} folder`}
+                className="flex w-full items-center gap-1 rounded px-1 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ paddingLeft: `${indent}px` }}>
+                {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />}
+                {expanded ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-red-500" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-red-500" />}
+                <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: 'var(--rc-text-1)' }}>{node.name}</span>
+              </button>
+              {expanded && (
+                <FileTreeView
+                  nodes={node.children}
+                  depth={depth + 1}
+                  expandedFolders={expandedFolders}
+                  onToggleFolder={onToggleFolder}
+                  selectedArtifacts={selectedArtifacts}
+                  onToggleArtifact={onToggleArtifact}
+                  onPreviewArtifact={onPreviewArtifact}
+                />
+              )}
+            </div>
+          );
+        }
+        const artifact = node.artifact;
+        return (
+          <div key={artifact.id} className="group flex items-center gap-1 rounded px-1 py-1 hover:bg-black/5 dark:hover:bg-white/5" style={{ paddingLeft: `${indent + 18}px` }}>
+            <button type="button" onClick={() => onToggleArtifact(artifact.id)} aria-label={`${selectedArtifacts.has(artifact.id) ? 'Remove' : 'Add'} ${artifact.path} context`}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded border" style={{ borderColor: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'var(--rc-border)', background: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'transparent', color: 'white' }}>
+              {selectedArtifacts.has(artifact.id) && <Check className="h-3 w-3" />}
+            </button>
+            <File className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />
+            <button type="button" onClick={() => void onPreviewArtifact(artifact)} className="min-w-0 flex-1 truncate text-left text-xs" title={artifact.path} style={{ color: 'var(--rc-text-2)' }}>{node.name}</button>
+            <span className="text-[9px]" style={{ color: 'var(--rc-text-3)' }}>v{artifact.version}</span>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Copies a single message's plain-text content to the clipboard. Shown for
+ * both user and assistant turns, matching the copy-a-message affordance
+ * every mainstream chat AI tool already offers. */
+function MessageCopyButton({ content }: { content: string }) {
+  const { copied, copy } = useCopyToClipboard();
+  return (
+    <button type="button" onClick={() => void copy(content)}
+      title={copied ? 'Copied' : 'Copy message'} aria-label={copied ? 'Message copied to clipboard' : 'Copy message to clipboard'}
+      className="invisible flex h-7 w-7 shrink-0 items-center justify-center rounded group-hover:visible" style={{ color: copied ? '#16a34a' : 'var(--rc-text-3)' }}>
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 

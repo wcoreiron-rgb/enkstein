@@ -450,6 +450,91 @@ async def test_native_folder_binding_syncs_only_validated_bridge_files(client, m
 
 
 @pytest.mark.asyncio
+async def test_switching_native_folder_removes_files_from_the_previous_folder(client, monkeypatch):
+    """Picking a different local folder for the same project must make the
+    right-side file panel mirror only that folder's files -- a previously
+    synced file whose path is no longer reported by the host bridge is
+    marked deleted (recoverable) rather than staying listed forever, which
+    was the bug: switching folders kept showing every earlier folder's files."""
+    _use_identity(_identity())
+    project = await _create_project(client)
+    current_files: list[dict] = [
+        {"path": "src/main.py", "content": "print('folder-a')", "mime_type": "text/plain"},
+        {"path": "README.md", "content": "folder a docs", "mime_type": "text/plain"},
+    ]
+
+    def set_binding(tenant_id, project_id, *, token, name, path_alias=None):
+        pass
+
+    async def list_files(tenant_id, project_id):
+        return current_files
+
+    monkeypatch.setattr(workspace, "set_binding", set_binding)
+    monkeypatch.setattr(workspace, "list_native_files", list_files)
+
+    first = await client.post(
+        f"{BASE}/projects/{project['id']}/native-workspace",
+        json={"tenant_id": "tenant-a", "token": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "name": "Folder A"},
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["synced_files"] == 2
+    assert first.json()["removed_files"] == 0
+
+    active = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
+    assert sorted(item["path"] for item in active.json()) == ["README.md", "src/main.py"]
+
+    # Operator picks a completely different local folder for the same project.
+    current_files = [{"path": "app/index.ts", "content": "export {}", "mime_type": "text/plain"}]
+    second = await client.post(
+        f"{BASE}/projects/{project['id']}/native-workspace",
+        json={"tenant_id": "tenant-a", "token": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "name": "Folder B"},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["synced_files"] == 1
+    assert second.json()["removed_files"] == 2
+
+    active_after = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
+    assert [item["path"] for item in active_after.json()] == ["app/index.ts"]
+
+
+@pytest.mark.asyncio
+async def test_native_sync_never_removes_files_a_user_created_directly(client, monkeypatch):
+    """A file created or uploaded by the operator inside Enkstein (not
+    produced by a folder sync) must survive a native sync even if the bound
+    folder doesn't happen to contain a file at that same path."""
+    _use_identity(_identity())
+    project = await _create_project(client)
+
+    manual = await client.post(
+        f"{BASE}/artifacts",
+        json={
+            "tenant_id": "tenant-a",
+            "project_id": project["id"],
+            "files": [{"path": "notes/manual.md", "content": "written directly in Enkstein"}],
+        },
+    )
+    assert manual.status_code == 200, manual.text
+
+    def set_binding(tenant_id, project_id, *, token, name, path_alias=None):
+        pass
+
+    async def list_files(tenant_id, project_id):
+        return [{"path": "src/main.py", "content": "print('synced')", "mime_type": "text/plain"}]
+
+    monkeypatch.setattr(workspace, "set_binding", set_binding)
+    monkeypatch.setattr(workspace, "list_native_files", list_files)
+    connected = await client.post(
+        f"{BASE}/projects/{project['id']}/native-workspace",
+        json={"tenant_id": "tenant-a", "token": "cccccccc-cccc-cccc-cccc-cccccccccccc", "name": "Folder A"},
+    )
+    assert connected.status_code == 200, connected.text
+    assert connected.json()["removed_files"] == 0
+
+    active = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
+    assert sorted(item["path"] for item in active.json()) == ["notes/manual.md", "src/main.py"]
+
+
+@pytest.mark.asyncio
 async def test_workspace_rejects_path_traversal_and_cross_project_context(client, monkeypatch):
     _use_identity(_identity())
     first_project = await _create_project(client, "First")

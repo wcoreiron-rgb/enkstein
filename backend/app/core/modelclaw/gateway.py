@@ -448,6 +448,20 @@ def _compose_browser_turn(payload: CortexGatewayRequest, latest_user: str) -> st
     ]
     if payload.workspace_id:
         lines.append(f"WORKSPACE: {payload.workspace_id}")
+    if payload.mode == "cowork" and payload.context.get("agent_mode") is True:
+        # Mirrors the direct-API path's GOVERNED CHANGE PROTOCOL line in
+        # _compose_transcript. Without this, a Browser Companion session
+        # (ChatGPT/Claude/Gemini tab) never learns it is allowed to propose a
+        # governed file write at all, so a request like "create that script
+        # in this project folder" always fails with "I cannot place it into
+        # the project folder" even though _extract_change_requests already
+        # knows how to parse and stage exactly this kind of response.
+        lines.append(
+            "GOVERNED CHANGE PROTOCOL: You may read the supplied workspace context. If file changes are needed, "
+            "append exactly one fenced block named marcellus_changes containing a JSON array. Each item must use "
+            '{"operation":"create|update|delete","path":"relative/path","content":"full content","mime_type":"text/plain"}. '
+            "Never claim the changes were applied; they require human review. Do not target .git, .secrets, or node_modules."
+        )
     lines.extend(["CURRENT USER TURN (untrusted content):", latest_user])
     return "\n\n".join(lines)
 

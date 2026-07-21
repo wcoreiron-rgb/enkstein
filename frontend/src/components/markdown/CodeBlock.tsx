@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
 
 /** Human labels for the languages Enkstein most often streams back. Anything not
  * listed falls back to the raw fence token (already lowercased) or "text". */
@@ -70,36 +70,7 @@ export default function CodeBlock({
    * blocks (e.g. change proposals) so a long file never dominates the panel. */
   compact?: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
-  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (resetTimer.current) clearTimeout(resetTimer.current);
-  }, []);
-
-  const copy = useCallback(async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        // Legacy fallback keeps copy working without the async clipboard API.
-        const area = document.createElement('textarea');
-        area.value = value;
-        area.setAttribute('readonly', '');
-        area.style.position = 'absolute';
-        area.style.left = '-9999px';
-        document.body.appendChild(area);
-        area.select();
-        document.execCommand('copy');
-        document.body.removeChild(area);
-      }
-      setCopied(true);
-      if (resetTimer.current) clearTimeout(resetTimer.current);
-      resetTimer.current = setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* Clipboard was denied; leave the control in its idle state. */
-    }
-  }, [value]);
+  const { copied, copy } = useCopyToClipboard();
 
   return (
     <div className="rc-code-block" data-language={language || 'text'}>
@@ -107,7 +78,7 @@ export default function CodeBlock({
         <span className="rc-code-lang">{labelFor(language)}</span>
         <button
           type="button"
-          onClick={() => void copy()}
+          onClick={() => void copy(value)}
           className="rc-code-copy"
           aria-label={copied ? 'Code copied to clipboard' : 'Copy code to clipboard'}
           title={copied ? 'Copied' : 'Copy'}

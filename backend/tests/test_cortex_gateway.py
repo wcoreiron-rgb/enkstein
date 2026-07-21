@@ -120,6 +120,59 @@ async def test_persistent_browser_brain_receives_current_turn_without_replaying_
 
 
 @pytest.mark.asyncio
+async def test_browser_brain_receives_the_governed_change_protocol_in_agent_mode(client, monkeypatch):
+    """A Browser Companion session (ChatGPT/Claude/Gemini tab) must be told
+    the same governed file-change protocol the direct-API path already
+    includes when Cowork agent mode is on -- otherwise the Brain has no way
+    to know it may propose a file write and can only ever say it cannot
+    place a file into the project folder."""
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        captured["prompt"] = prompt
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "chatgpt_browser",
+            "context": {"conversation_id": "conversation-456", "agent_mode": True},
+            "messages": [{"role": "user", "content": "Create that script in this project folder"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "GOVERNED CHANGE PROTOCOL" in captured["prompt"]
+    assert "marcellus_changes" in captured["prompt"]
+    assert "Create that script in this project folder" in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_browser_brain_omits_the_change_protocol_outside_agent_mode(client, monkeypatch):
+    """The change protocol is only added when Cowork agent mode is actually
+    on, so a plain chat/browser turn is never told it can propose writes."""
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        captured["prompt"] = prompt
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "chatgpt_browser",
+            "context": {"conversation_id": "conversation-789"},
+            "messages": [{"role": "user", "content": "Just explain this script"}],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert "GOVERNED CHANGE PROTOCOL" not in captured["prompt"]
+
+
+@pytest.mark.asyncio
 async def test_gateway_redacts_sensitive_context_before_brain(client, monkeypatch):
     captured = {}
 

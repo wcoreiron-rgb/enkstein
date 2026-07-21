@@ -159,3 +159,117 @@ test.describe('Enkstein Cowork project file panel', () => {
     await expect(page.getByTitle('alpha/only-in-a.py')).toHaveCount(0);
   });
 });
+
+test.describe('Enkstein Cowork VS Code-style folder tree', () => {
+  test('files group under real, independently collapsible folder nodes', async ({ page }) => {
+    const store = createWorkspaceStore();
+    const now = new Date().toISOString();
+    store.projects.push({
+      id: 'proj-tree', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Tree project', description: '',
+      classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now,
+    });
+    seedArtifacts(store, 'proj-tree', [
+      'src/app/main.py',
+      'src/app/utils.py',
+      'src/lib/helpers.py',
+      'README.md',
+    ]);
+    await mockMarcellusWorkspace(page, store);
+
+    await page.goto('/marcellus/cowork/proj-tree');
+
+    // Folders render as their own named nodes, not just indentation, and
+    // start expanded so every file is initially visible.
+    const srcFolder = page.getByRole('button', { name: /Collapse src folder/i });
+    await expect(srcFolder).toBeVisible();
+    await expect(page.getByRole('button', { name: /Collapse app folder/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Collapse lib folder/i })).toBeVisible();
+    await expect(page.getByTitle('src/app/main.py')).toBeVisible();
+    await expect(page.getByTitle('src/lib/helpers.py')).toBeVisible();
+    await expect(page.getByTitle('README.md')).toBeVisible();
+
+    // Collapsing the top-level "src" folder hides everything nested beneath
+    // it, including the "app" and "lib" subfolders and their files, while
+    // leaving unrelated top-level files (README.md) visible.
+    await srcFolder.click();
+    await expect(page.getByTitle('src/app/main.py')).toHaveCount(0);
+    await expect(page.getByTitle('src/lib/helpers.py')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Collapse app folder/i })).toHaveCount(0);
+    await expect(page.getByTitle('README.md')).toBeVisible();
+
+    // Re-expanding restores the nested contents.
+    await page.getByRole('button', { name: /Expand src folder/i }).click();
+    await expect(page.getByTitle('src/app/main.py')).toBeVisible();
+  });
+
+  test('switching Cowork projects shows only that project\'s own folder tree', async ({ page }) => {
+    const store = createWorkspaceStore();
+    const now = new Date().toISOString();
+    store.projects.push(
+      { id: 'proj-x', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project X', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+      { id: 'proj-y', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Project Y', description: '', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now },
+    );
+    seedArtifacts(store, 'proj-x', ['backend/api/routes.py', 'backend/api/schemas.py']);
+    seedArtifacts(store, 'proj-y', ['frontend/components/App.tsx']);
+    await mockMarcellusWorkspace(page, store);
+
+    await page.goto('/marcellus/cowork/proj-x');
+    await expect(page.getByRole('button', { name: /Collapse backend folder/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Collapse api folder/i })).toBeVisible();
+    await expect(page.getByTitle('backend/api/routes.py')).toBeVisible();
+    await expect(page.getByRole('button', { name: /frontend folder/i })).toHaveCount(0);
+
+    await page.getByLabel('Cowork project').selectOption('proj-y');
+    await expect(page.getByRole('button', { name: /Collapse frontend folder/i })).toBeVisible();
+    await expect(page.getByTitle('frontend/components/App.tsx')).toBeVisible();
+    await expect(page.getByRole('button', { name: /backend folder/i })).toHaveCount(0);
+    await expect(page.getByTitle('backend/api/routes.py')).toHaveCount(0);
+  });
+});
+
+test.describe('Enkstein message and chat copy', () => {
+  test('copying a single assistant message puts exactly that message on the clipboard', async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    const store = await mockMarcellusWorkspace(page);
+    seedChat(store, 'chat-copy-message');
+    await mockTurnStream(page, store, { conversationId: 'chat-copy-message', assistantContent: 'Here is the answer you asked for.' });
+
+    await page.goto('/marcellus/chat/chat-copy-message');
+    await page.getByPlaceholder('Message Enkstein').fill('ask a question');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.getByText('Here is the answer you asked for.')).toBeVisible();
+
+    // The per-message copy control only becomes visible on hover (matching
+    // the existing "Branch from here" control's convention), so hover the
+    // message before interacting with it, the same as a real user would.
+    await page.getByText('Here is the answer you asked for.').hover();
+    await page.getByRole('button', { name: 'Copy message to clipboard' }).click();
+    await expect(page.getByRole('button', { name: 'Message copied to clipboard' })).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toBe('Here is the answer you asked for.');
+  });
+
+  test('copying the whole chat includes every turn labeled by role, in order', async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    const store = await mockMarcellusWorkspace(page);
+    seedChat(store, 'chat-copy-all');
+    await mockTurnStream(page, store, { conversationId: 'chat-copy-all', assistantContent: 'First governed answer.' });
+
+    await page.goto('/marcellus/chat/chat-copy-all');
+    await page.getByPlaceholder('Message Enkstein').fill('first question');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.getByText('First governed answer.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Copy whole chat to clipboard' }).click();
+    await expect(page.getByRole('button', { name: 'Whole chat copied to clipboard' })).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    // mockTurnStream always persists a fixed 'user prompt' user message
+    // regardless of what was typed, so assert against that real persisted
+    // content rather than the composer text.
+    expect(clipboard).toContain('user prompt');
+    expect(clipboard).toContain('First governed answer.');
+    expect(clipboard.indexOf('user prompt')).toBeLessThan(clipboard.indexOf('First governed answer.'));
+    expect(clipboard).toContain('You:');
+    expect(clipboard).toContain('Enkstein:');
+  });
+});
