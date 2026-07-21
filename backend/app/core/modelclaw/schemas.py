@@ -115,6 +115,10 @@ class BrainInvokeRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
 
 
+class CliLoginLaunchRequest(BaseModel):
+    brain: str = Field(..., pattern="^(codex_subscription|claude_subscription)$")
+
+
 class BrainVoteRead(BaseModel):
     source: str
     kind: str

@@ -283,6 +283,24 @@ async def create_browser_brain_pairing() -> dict[str, Any]:
         return {"available": False, "detail": "Enkstein could not start browser pairing."}
 
 
+async def launch_cli_login(brain: str) -> dict[str, Any]:
+    """Open a visible Terminal window running the exact resolved CLI binary's
+    login command. CLI subscription login (codex login / claude login) is an
+    interactive OAuth device-flow that needs a real terminal and a browser
+    tab to complete, so this cannot be a fully silent background action --
+    it is the closest safe equivalent of a single authenticate button."""
+    if brain not in {"codex_subscription", "claude_subscription"}:
+        return {"launched": False, "detail": "Unsupported CLI brain."}
+    if not bridge_configured():
+        return {"launched": False, "detail": "Native Brain Bridge is not configured for this runtime."}
+    try:
+        body = await _bridge_request("POST", "/v1/cli/launch-login", {"brain": brain})
+        return {"launched": bool(body.get("launched")), "detail": body.get("detail")}
+    except Exception as exc:
+        logger.warning("CLI login launch failed: brain=%s error=%s", brain, type(exc).__name__)
+        return {"launched": False, "detail": "Enkstein could not open a terminal for CLI login."}
+
+
 async def open_browser_companion_folder() -> dict[str, Any]:
     if not bridge_configured():
         return {"opened": False, "detail": "Native Brain Bridge is not configured for this runtime."}

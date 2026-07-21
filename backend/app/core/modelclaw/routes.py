@@ -15,6 +15,7 @@ from app.core.modelclaw.schemas import (
     BrainInvokeResponse,
     BrainStatusRead,
     BrainVoteRead,
+    CliLoginLaunchRequest,
     ConsensusRequest,
     ConsensusResponse,
     CortexGatewayRequest,
@@ -35,6 +36,7 @@ from app.core.modelclaw.brain_bridge import (
     derive_brain_session_id,
     deterministic_consensus,
     invoke_subscription_brain,
+    launch_cli_login,
     open_browser_companion_folder,
     request_desktop_brain_access,
 )
@@ -213,6 +215,11 @@ async def get_brain_status(
 @router.post("/brains/desktop-access", summary="Request desktop Brain accessibility permission")
 async def request_desktop_access(user: dict = Depends(get_current_user)):
     return await request_desktop_brain_access()
+
+
+@router.post("/brains/cli-login", summary="Open a terminal to authenticate a CLI subscription Brain")
+async def launch_cli_login_route(payload: CliLoginLaunchRequest, user: dict = Depends(get_current_user)):
+    return await launch_cli_login(payload.brain)
 
 
 @router.post("/brains/browser-pair", summary="Start browser companion pairing")

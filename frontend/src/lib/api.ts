@@ -609,6 +609,11 @@ export const getBrainStatuses = (force = false) =>
   apiFetch<any[]>(`/modelclaw/brains/status${force ? '?force=true' : ''}`);
 export const requestDesktopBrainAccess = () =>
   apiFetch<{ granted: boolean; detail: string }>('/modelclaw/brains/desktop-access', { method: 'POST' });
+export const launchCliLogin = (brain: 'codex_subscription' | 'claude_subscription') =>
+  apiFetch<{ launched: boolean; detail?: string }>('/modelclaw/brains/cli-login', {
+    method: 'POST',
+    body: JSON.stringify({ brain }),
+  });
 export const startBrowserBrainPairing = () =>
   apiFetch<{ available: boolean; setup_url?: string; opened?: boolean; expires_in_seconds?: number; detail?: string }>(
     '/modelclaw/brains/browser-pair',

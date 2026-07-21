@@ -22,6 +22,7 @@ import {
   getArcProviders,
   getBrainStatuses,
   getModelClawProfiles,
+  launchCliLogin,
   openBrowserCompanionFolder,
   requestDesktopBrainAccess,
   startBrowserBrainPairing,
@@ -93,6 +94,7 @@ export default function BrainConnectionsPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [requestingAccess, setRequestingAccess] = useState(false);
   const [pairingBrowser, setPairingBrowser] = useState(false);
+  const [launchingCliLogin, setLaunchingCliLogin] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('chat');
   const [returnPath, setReturnPath] = useState('/marcellus/chat');
   const loadInFlight = useRef(false);
@@ -248,6 +250,19 @@ export default function BrainConnectionsPage() {
     }
   };
 
+  const signInToCli = async (brain: 'codex_subscription' | 'claude_subscription') => {
+    setLaunchingCliLogin(brain);
+    try {
+      const result = await launchCliLogin(brain);
+      if (!result.launched) throw new Error(result.detail || 'A terminal could not be opened for sign-in.');
+      setWarnings([result.detail || 'Complete sign-in in the opened terminal window, then return here and refresh.']);
+    } catch (loginError) {
+      setWarnings([loginError instanceof Error ? loginError.message : 'CLI sign-in could not start.']);
+    } finally {
+      setLaunchingCliLogin(null);
+    }
+  };
+
   const openCompanion = async () => {
     try {
       const result = await openBrowserCompanionFolder();
@@ -358,6 +373,18 @@ export default function BrainConnectionsPage() {
                   </div>
                   <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{status?.detail || instruction}</p>
                   {status?.last_checked && <p className="mt-1 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>Last checked {new Date(status.last_checked).toLocaleTimeString()}</p>}
+                  {(id === 'codex_subscription' || id === 'claude_subscription') && !ready && (
+                    <button
+                      type="button"
+                      onClick={() => void signInToCli(id)}
+                      disabled={launchingCliLogin === id}
+                      className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs disabled:opacity-50"
+                      style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-elevated)' }}
+                    >
+                      {launchingCliLogin === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <TerminalSquare className="h-3.5 w-3.5" />}
+                      Sign in
+                    </button>
+                  )}
                   {id.endsWith('_desktop') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option visibly opens the vendor app and remains subject to its normal plan and usage limits.</p>}
                   {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Enkstein.</p>}
                   {(status?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status!.models!.join(' · ')}</p>}

@@ -719,6 +719,54 @@ private final class BrainBridge {
             return
         }
 
+        // CLI subscription login (codex login / claude login) is an
+        // interactive OAuth device-flow that needs a real terminal and a
+        // browser tab -- it cannot be completed silently from a background
+        // process. This is the closest thing to a "single button" for it:
+        // open Terminal.app pre-populated with the exact resolved binary's
+        // login command, so the user only has to press Return and finish
+        // the OAuth prompt in their browser, without hand-typing anything
+        // or hunting for the right install path themselves.
+        if request.method == "POST", request.path == "/v1/cli/launch-login" {
+            guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let brain = payload["brain"] as? String else {
+                send(connection, status: 400, body: ["error": "A brain is required."])
+                return
+            }
+            let executableName = brain == "claude_subscription" ? "claude" : brain == "codex_subscription" ? "codex" : nil
+            guard let executableName else {
+                send(connection, status: 400, body: ["error": "Unsupported CLI brain."])
+                return
+            }
+            guard let executablePath = findExecutable(executableName) else {
+                send(connection, status: 200, body: [
+                    "launched": false,
+                    "detail": "\(executableName) is not installed on this host yet.",
+                ])
+                return
+            }
+            let loginArgs = executableName == "claude" ? "" : " login"
+            // Build the shell command Terminal will run, then embed it in the
+            // AppleScript command string using its own quoting/escaping rules
+            // (AppleScript "quoted form of" is not applicable here since this
+            // is a literal script string, not a shell argument) -- escape only
+            // double quotes and backslashes, matching AppleScript string literal
+            // escaping, not shell escaping.
+            let shellCommand = "\"\(executablePath)\"\(loginArgs)"
+            let escapedForAppleScript = shellCommand
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            let script = "tell application \"Terminal\" to do script \"\(escapedForAppleScript)\""
+            let launched = (try? run("/usr/bin/osascript", arguments: ["-e", script], timeout: 15).code) == 0
+            send(connection, status: 200, body: [
+                "launched": launched,
+                "detail": launched
+                    ? "Complete sign-in in the opened Terminal window, then return here and refresh."
+                    : "Could not open Terminal to run \(executableName) login.",
+            ])
+            return
+        }
+
         if request.method == "POST", request.path == "/v1/browser/open-extension" {
             let extensionURL = URL(fileURLWithPath: CommandLine.arguments[0])
                 .deletingLastPathComponent()

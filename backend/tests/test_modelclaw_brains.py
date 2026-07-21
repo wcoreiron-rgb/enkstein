@@ -106,6 +106,45 @@ async def test_browser_brain_pairing_is_started_by_authenticated_api(client, mon
 
 
 @pytest.mark.asyncio
+async def test_cli_login_launch_is_started_by_authenticated_api(client, monkeypatch):
+    async def fake_launch(brain):
+        assert brain == "codex_subscription"
+        return {"launched": True, "detail": "Complete sign-in in the opened Terminal window, then return here and refresh."}
+
+    monkeypatch.setattr(routes, "launch_cli_login", fake_launch)
+    response = await client.post(f"{BASE}/brains/cli-login", json={"brain": "codex_subscription"})
+    assert response.status_code == 200
+    assert response.json()["launched"] is True
+
+
+@pytest.mark.asyncio
+async def test_cli_login_launch_rejects_unsupported_brain(client):
+    response = await client.post(f"{BASE}/brains/cli-login", json={"brain": "gemini_browser"})
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_cli_login_launch_requests_the_native_bridge_endpoint(monkeypatch):
+    async def fake_request(method, path, payload=None):
+        assert method == "POST"
+        assert path == "/v1/cli/launch-login"
+        assert payload == {"brain": "claude_subscription"}
+        return {"launched": True, "detail": "Complete sign-in in the opened Terminal window, then return here and refresh."}
+
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: True)
+    monkeypatch.setattr(brain_bridge, "_bridge_request", fake_request)
+    result = await brain_bridge.launch_cli_login("claude_subscription")
+    assert result["launched"] is True
+
+
+@pytest.mark.asyncio
+async def test_cli_login_launch_fails_closed_without_bridge(monkeypatch):
+    monkeypatch.setattr(brain_bridge, "bridge_configured", lambda: False)
+    result = await brain_bridge.launch_cli_login("codex_subscription")
+    assert result["launched"] is False
+
+
+@pytest.mark.asyncio
 async def test_browser_brain_pairing_accepts_explicit_loopback_url(monkeypatch):
     async def fake_request(method, path, payload=None):
         return {

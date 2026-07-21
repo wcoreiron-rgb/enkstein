@@ -388,6 +388,31 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.13 — One-click CLI sign-in and richer Markdown formatting guidance -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">One-click CLI sign-in and richer Markdown formatting guidance</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">Sign-in button</span>
+          <span class="tag tag-new">Response formatting</span>
+          <span class="release-date">July 21, 2026 &nbsp;·&nbsp; Enkstein v0.3.13</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Two usability improvements to Brain Connections and every Brain's responses.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Sign in button for CLI subscriptions:</strong> Codex and Claude Code CLI cards on Brain Connections now have a Sign in button. CLI login is an interactive OAuth device-flow that cannot be completed silently, so this opens Terminal.app running the exact resolved CLI binary's login command instead of requiring the user to find and type it manually (macOS only in this release).</li>
+          <li><strong>Explicit Markdown formatting guidance:</strong> every Brain now receives guidance to use GitHub-flavored Markdown -- bold key terms and section titles, tables for comparisons, numbered/bulleted lists for steps, fenced code blocks with a language tag -- matching the default formatting style of ChatGPT, Claude, and Kimi, instead of defaulting to flat prose. The renderer (SafeMarkdown) already supported all of this; only the guidance was missing.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.12 — Cross-Brain memory on mid-chat engine switches; ChatGPT browser added to Auto fallback -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

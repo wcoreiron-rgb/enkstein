@@ -85,6 +85,15 @@ Claude Browser reappears if the CLI becomes unhealthy. CLI prompts are written
 to stdin; Codex runs read-only and Claude runs with an empty tool set. Prompt
 text is never placed in process arguments.
 
+CLI subscription login (`codex login` / `claude login`) is an interactive
+OAuth device-flow that needs a real terminal and a browser tab, so it cannot
+be completed silently in the background. A **Sign in** button on Brain
+Connections opens Terminal.app running the exact resolved CLI binary's login
+command (macOS only in this release); the user completes the OAuth prompt in
+their browser, then returns and refreshes readiness. This does not read,
+store, or transmit the resulting credential; the CLI manages its own
+authenticated session exactly as it would from a manually opened terminal.
+
 ## Desktop App Session Bridge (macOS preview)
 
 ChatGPT Desktop and Claude Desktop can be selected as explicit Brains on macOS.
