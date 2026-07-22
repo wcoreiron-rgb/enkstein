@@ -102,6 +102,118 @@ _CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*?)```", re.IGNORE
 _UNCLOSED_CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*)\Z", re.IGNORECASE | re.DOTALL)
 _CHANGE_MIME = "application/vnd.marcellus.change+json"
 
+# Fenced code block whose info string / preceding header names a file path.
+# Browser chat models (ChatGPT/Gemini/Claude web) answer a "build this app"
+# request as prose plus a series of ```lang blocks, each introduced by the
+# file path -- never the strict marcellus_changes JSON protocol. The heuristic
+# extractor below recovers those into the same governed change shape.
+_FENCED_BLOCK = re.compile(
+    r"```([^\n`]*)\r?\n(.*?)```",
+    re.DOTALL,
+)
+# A path-like token: has a slash or a dotted extension, no spaces, bounded
+# length, and only characters that are legal in a project-relative path. Used
+# to recognize a filename either in a fence info string (```python app/main.py)
+# or on the line immediately preceding the fence (a heading like **app/main.py**
+# or `app/main.py`).
+_PATHLIKE = re.compile(r"^[A-Za-z0-9._\-/]{1,255}$")
+# Common language tokens that are NOT file paths, so a bare ```python fence
+# without a real filename is not mistaken for a file named "python".
+_LANGUAGE_TOKENS = {
+    "python", "py", "javascript", "js", "jsx", "typescript", "ts", "tsx",
+    "json", "yaml", "yml", "toml", "ini", "bash", "sh", "shell", "zsh",
+    "html", "css", "scss", "sql", "go", "rust", "rs", "java", "kotlin",
+    "swift", "ruby", "rb", "php", "c", "cpp", "cs", "csharp", "text", "txt",
+    "markdown", "md", "dockerfile", "makefile", "xml", "env", "diff", "plaintext",
+    "console", "output", "log", "tsv", "csv", "graphql", "proto", "vue", "svelte",
+}
+
+
+def _looks_like_path(token: str) -> bool:
+    token = token.strip().strip("`*:").strip()
+    if not token or " " in token or not _PATHLIKE.match(token):
+        return False
+    if token.lower() in _LANGUAGE_TOKENS:
+        return False
+    # Must look like a file: contain a path separator or a dotted extension.
+    return "/" in token or ("." in token and not token.startswith("."))
+
+
+def _filename_from_info_string(info: str) -> str | None:
+    """Recover a filename from a fence info string like ``python app/main.py``
+    or ``app/main.py`` (no language), ignoring a leading language token."""
+    parts = info.strip().split()
+    for candidate in parts:
+        if _looks_like_path(candidate):
+            return candidate.strip("`*:").strip()
+    return None
+
+
+def _filename_from_preceding_line(text: str, block_start: int) -> str | None:
+    """Recover a filename from the nearest non-empty line before a fence, e.g.
+    a heading ``**app/main.py**``, ``### app/main.py``, ``File: app/main.py``,
+    or an inline-code ``app/main.py`` label."""
+    preceding = text[:block_start].rstrip("\n")
+    if not preceding:
+        return None
+    last_line = preceding.rsplit("\n", 1)[-1].strip()
+    if not last_line or len(last_line) > 300:
+        return None
+    # Strip common heading/label decoration and a leading "File:"/"Path:" prefix.
+    cleaned = re.sub(r"^(#{1,6}\s*|[-*]\s*)", "", last_line).strip()
+    cleaned = re.sub(r"^(file|path|filename)\s*[:\-]\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = cleaned.strip("*_`").strip()
+    # The header may be "app/main.py" or "app/main.py (entry point)" -> take the
+    # first whitespace-delimited token and test it.
+    first_token = cleaned.split()[0] if cleaned else ""
+    if _looks_like_path(first_token):
+        return first_token.strip("`*:").strip()
+    return None
+
+
+def _heuristic_change_requests(text: str) -> list[dict[str, Any]]:
+    """Best-effort scrape of file-writing intent from a free-form answer.
+
+    Recovers every fenced code block that is clearly labelled with a file path
+    (in its info string or immediately preceding line) into the same governed
+    ``create`` change shape the strict protocol produces. This never trusts the
+    model to follow the protocol; it only recognizes the near-universal
+    "here is <path>: <code fence>" pattern that browser chat models emit.
+    Deletes/updates are intentionally not inferred here -- a heuristic cannot
+    safely distinguish "replace this file" from "here is an illustrative
+    snippet", so only creations of clearly-named files are surfaced, and the
+    approval/auto-apply layer still governs whether they touch disk.
+    """
+    changes: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    for match in _FENCED_BLOCK.finditer(text):
+        info = match.group(1)
+        body = match.group(2)
+        path = _filename_from_info_string(info) or _filename_from_preceding_line(text, match.start())
+        if not path:
+            continue
+        content = body.rstrip("\n")
+        if not content.strip():
+            continue
+        try:
+            item = CortexArtifactItem(path=path, content=content, mime_type="text/plain")
+        except Exception:
+            continue
+        if item.path in seen_paths:
+            continue
+        seen_paths.add(item.path)
+        changes.append(
+            {
+                "operation": "create",
+                "path": item.path,
+                "content": item.content,
+                "mime_type": item.mime_type,
+            }
+        )
+        if len(changes) >= 20:
+            break
+    return changes
+
 
 def _can_read_all(user: dict[str, Any]) -> bool:
     return str(user.get("role") or "").lower() in _ADMIN_ROLES
@@ -1417,6 +1529,84 @@ async def _persist_change_proposals(
     return created
 
 
+async def _auto_apply_changes(
+    db: AsyncSession,
+    *,
+    conversation: CortexConversation,
+    changes: list[dict[str, Any]],
+    source: str,
+    actor_id: str,
+    classification: str,
+) -> tuple[list[str], list[str]]:
+    """Write extracted changes straight into the connected project folder.
+
+    Only reached after the same Trust Fabric ``workspace_change_propose``
+    decision the proposal path uses has already allowed the batch, and only
+    when a native folder is bound to the project. Each write mirrors to the
+    approved host root through the existing ``mirror_write``/``mirror_trash``
+    boundary (which independently re-validates the relative path), then records
+    an encrypted active artifact version so the file tree and history stay
+    consistent with the manual and proposal-approval write paths.
+
+    Returns (applied_paths, skipped_paths); a change is skipped when it cannot
+    be represented safely (e.g. an unresolved path) rather than aborting the
+    whole batch.
+    """
+    applied: list[str] = []
+    skipped: list[str] = []
+    for change in changes:
+        operation = change["operation"]
+        path = change["path"]
+        content = change.get("content", "")
+        try:
+            if operation == "delete":
+                await mirror_trash(conversation.tenant_id, conversation.project_id, path=path)
+            else:
+                await mirror_write(conversation.tenant_id, conversation.project_id, path=path, content=content)
+        except HTTPException:
+            skipped.append(path)
+            continue
+        version_result = await db.execute(
+            select(func.max(CortexArtifact.version)).where(
+                CortexArtifact.tenant_id == conversation.tenant_id,
+                CortexArtifact.project_id == conversation.project_id,
+                CortexArtifact.path == path,
+            )
+        )
+        await db.execute(
+            update(CortexArtifact)
+            .where(
+                CortexArtifact.tenant_id == conversation.tenant_id,
+                CortexArtifact.project_id == conversation.project_id,
+                CortexArtifact.path == path,
+                CortexArtifact.status == "active",
+            )
+            .values(status="deleted" if operation == "delete" else "superseded")
+        )
+        if operation != "delete":
+            ciphertext, digest = encrypt_json({"content": content})
+            db.add(
+                CortexArtifact(
+                    tenant_id=conversation.tenant_id,
+                    project_id=conversation.project_id,
+                    conversation_id=conversation.id,
+                    path=path,
+                    mime_type=str(change.get("mime_type") or "text/plain")[:128],
+                    size_bytes=len(content.encode("utf-8")),
+                    content_ciphertext=ciphertext,
+                    content_digest=digest,
+                    classification=classification,
+                    version=int(version_result.scalar_one_or_none() or 0) + 1,
+                    status="active",
+                    created_by=f"agent:{source or actor_id}"[:255],
+                )
+            )
+        applied.append(path)
+    if applied:
+        await db.flush()
+    return applied, skipped
+
+
 async def execute_turn(
     db: AsyncSession,
     tenant_id: str,
@@ -1627,6 +1817,7 @@ async def execute_turn(
                 "artifact_count": len(requested_artifact_ids),
                 "effective_classification": effective_classification,
                 "agent_mode": bool(payload.agent_mode and conversation.mode == "cowork"),
+                "structure_mode": payload.structure_mode,
                 "context_manifest": context_manifest.to_dict() if context_manifest else None,
                 "brain_switched_engine": brain_switched_engine,
             },
@@ -1646,8 +1837,19 @@ async def execute_turn(
         governance = gateway.get("governance") or {}
         assistant_text = f"{gateway.get('status', 'unavailable').replace('_', ' ').title()}: {governance.get('reason', 'No governed Brain returned a response.')}"
     proposal_rows: list[CortexArtifact] = []
+    applied_change_paths: list[str] = []
     if payload.agent_mode and conversation.mode == "cowork" and conversation.project_id and gateway.get("response"):
         assistant_text, changes = _extract_change_requests(assistant_text)
+        # Cowork agent-mode structure modes:
+        #   smart -> only the strict protocol block (already extracted above).
+        #   fast  -> only the filename-labelled fenced-code heuristic.
+        #   auto  -> protocol block if present, else fall back to the heuristic
+        #            (this is the "ChatGPT gave structure but no protocol block"
+        #            case, where the model answered with plain code fences).
+        if payload.structure_mode == "fast":
+            changes = _heuristic_change_requests(assistant_text)
+        elif payload.structure_mode == "auto" and not changes:
+            changes = _heuristic_change_requests(assistant_text)
         if changes:
             proposal_decision = await enforce(
                 db,
@@ -1669,13 +1871,42 @@ async def execute_turn(
                 ),
             )
             if proposal_decision.allowed:
-                proposal_rows = await _persist_change_proposals(
-                    db,
-                    conversation=conversation,
-                    changes=changes,
-                    source=str(gateway.get("source") or "cortex"),
-                    actor_id=actor_id,
-                )
+                # Auto-apply writes straight to the connected folder; without a
+                # bound folder there is nowhere to write, so it degrades to the
+                # normal approve-before-write proposal flow.
+                folder_connected = get_binding(tenant_id, conversation.project_id) is not None
+                if payload.auto_apply and folder_connected:
+                    applied_change_paths, skipped_paths = await _auto_apply_changes(
+                        db,
+                        conversation=conversation,
+                        changes=changes,
+                        source=str(gateway.get("source") or "cortex"),
+                        actor_id=actor_id,
+                        classification=effective_classification,
+                    )
+                    if applied_change_paths:
+                        note = (
+                            f"Applied {len(applied_change_paths)} file change"
+                            f"{'s' if len(applied_change_paths) != 1 else ''} directly to the connected local folder."
+                        )
+                        if skipped_paths:
+                            note += f" {len(skipped_paths)} could not be written and were skipped."
+                        assistant_text = f"{assistant_text}\n\n{note}".strip()
+                    elif skipped_paths:
+                        assistant_text += "\n\nNo file changes could be written to the connected local folder."
+                else:
+                    proposal_rows = await _persist_change_proposals(
+                        db,
+                        conversation=conversation,
+                        changes=changes,
+                        source=str(gateway.get("source") or "cortex"),
+                        actor_id=actor_id,
+                    )
+                    if payload.auto_apply and not folder_connected and proposal_rows:
+                        assistant_text += (
+                            "\n\nAuto-apply was requested but no local folder is connected, "
+                            "so these changes are pending review instead."
+                        )
             else:
                 assistant_text += "\n\nFile change proposals were blocked by Trust Fabric."
     assistant_ciphertext, assistant_digest = encrypt_json({"content": assistant_text})
@@ -1692,6 +1923,7 @@ async def execute_turn(
             for vote in gateway.get("votes", [])
         ],
         "change_proposal_ids": [str(item.id) for item in proposal_rows],
+        "applied_change_paths": applied_change_paths,
         "context_manifest": context_manifest.to_dict() if context_manifest else None,
         "effective_classification": effective_classification,
         # Surfaced for compact response provenance in the workspace UI. Both are

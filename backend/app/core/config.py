@@ -14,7 +14,7 @@ _INSECURE_DEFAULTS = frozenset({
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Enkstein"
-    APP_VERSION: str = "0.3.14"
+    APP_VERSION: str = "0.3.15"
     DEBUG: bool = False
 
     # Database

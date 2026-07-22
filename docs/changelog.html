@@ -334,6 +334,28 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.15 — Cowork writes local files from any Brain -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork can turn any Brain's answer into real local files</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.15</span>
+          <span class="release-date">July 22, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; agent file writes</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Cowork agent mode previously only wrote files when a Brain emitted a strict <code>marcellus_changes</code> JSON block, which browser chat models (ChatGPT/Gemini/Claude web) rarely produce — so "build me an app" gave structure in the reply but created nothing on disk.</p>
+      <ul>
+        <li><strong>Structure modes:</strong> <em>Smart</em> (strict JSON protocol), <em>Fast</em> (scrape filename-labelled code fences), and <em>Auto</em> (try the protocol, fall back to code fences) — chosen from the Cowork composer.</li>
+        <li><strong>Auto-apply:</strong> when enabled and a local folder is connected, extracted changes write straight into the folder through the existing Trust Fabric path and become active file versions; with no folder connected it safely degrades to pending review.</li>
+        <li>The Brain now receives format guidance it can actually follow, and the file tree refreshes automatically after applied changes.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.8 — Professional safe message rendering -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

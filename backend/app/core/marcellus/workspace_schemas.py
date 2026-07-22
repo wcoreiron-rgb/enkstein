@@ -166,6 +166,21 @@ class CortexTurnCreate(BaseModel):
     # default consensus_sources is used unchanged.
     consensus_sources: list[str] | None = Field(default=None, max_length=8)
     agent_mode: bool = False
+    # How a Cowork agent-mode turn turns a Brain's answer into file changes:
+    #   "smart" => only the strict ``marcellus_changes`` JSON protocol block.
+    #   "fast"  => only the heuristic scrape of fenced code blocks whose
+    #              preceding line/header names a file path (what browser chat
+    #              models like ChatGPT/Gemini emit by default).
+    #   "auto"  => try smart first, and fall back to fast when the model
+    #              ignored the protocol (structure present, no protocol block).
+    # Only consulted when agent_mode is true; ignored otherwise.
+    structure_mode: Literal["auto", "smart", "fast"] = "auto"
+    # When true (and a local folder is connected) an agent-mode turn writes the
+    # extracted changes straight into the connected project folder through the
+    # same Trust Fabric enforcement, instead of leaving them as pending
+    # approve-before-write proposals. When no local folder is connected this
+    # safely degrades to proposals regardless of the flag.
+    auto_apply: bool = False
     context: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("consensus_sources")

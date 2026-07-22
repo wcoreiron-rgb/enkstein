@@ -131,6 +131,9 @@ def _turn_content_frames(turn):
     proposal_ids = governance.get("change_proposal_ids", [])
     if proposal_ids:
         yield _sse("changes_proposed", {"proposal_ids": proposal_ids, "count": len(proposal_ids)})
+    applied_paths = governance.get("applied_change_paths", [])
+    if applied_paths:
+        yield _sse("changes_applied", {"paths": applied_paths, "count": len(applied_paths)})
     yield _sse("turn_completed", turn.model_dump(mode="json"))
 
 

@@ -897,6 +897,30 @@ def test_change_extraction_empty_cutoff_reports_no_recovery_without_crashing():
     assert "cut off" in cleaned
 
 
+def test_heuristic_recovers_filename_labelled_code_fences():
+    """The heuristic recovers files a browser chat model emits as plain code
+    fences labelled by path (info string or a preceding header), the exact
+    shape ChatGPT/Gemini produce for 'build an app' -- and ignores a bare
+    language-only fence that names no file."""
+    answer = (
+        "Here's the structure.\n\n"
+        "app/main.py\n```python\nprint('run')\n```\n\n"
+        "**app/util.py**\n```python\ndef helper():\n    return 1\n```\n\n"
+        "And a shell example you don't need to save:\n```bash\nls -la\n```\n\n"
+        "```json config/settings.json\n{\"debug\": false}\n```"
+    )
+    changes = workspace._heuristic_change_requests(answer)
+    paths = [item["path"] for item in changes]
+    assert paths == ["app/main.py", "app/util.py", "config/settings.json"]
+    assert all(item["operation"] == "create" for item in changes)
+    assert changes[0]["content"] == "print('run')"
+
+
+def test_heuristic_ignores_unlabelled_and_empty_fences():
+    answer = "```python\nprint('no filename anywhere')\n```\n\nfile.py\n```python\n\n```"
+    assert workspace._heuristic_change_requests(answer) == []
+
+
 @pytest.mark.asyncio
 async def test_agent_file_change_recovers_from_a_truncated_browser_response(client, monkeypatch):
     """End-to-end: a response that was cut off mid-change-block (the shape
@@ -994,6 +1018,117 @@ async def test_agent_file_change_requires_review_before_native_write(client, mon
     assert writes == [("src/config.py", "ENABLED = True")]
     active = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
     assert active.json()[0]["version"] == 2
+
+
+@pytest.mark.asyncio
+async def test_auto_structure_mode_falls_back_to_code_fences(client, monkeypatch):
+    """A browser-style answer with no marcellus_changes block but plain
+    filename-labelled code fences still produces reviewable proposals in the
+    default 'auto' structure mode -- the 'ChatGPT gave structure but no files'
+    case."""
+    _use_identity(_identity())
+    project = await _create_project(client, "Auto structure fallback")
+    conversation = await _create_conversation(client, project["id"])
+
+    async def fake_gateway(db, payload):
+        assert payload.context["agent_mode"] is True
+        assert payload.context["structure_mode"] == "auto"
+        return _gateway_response(
+            "Here's the app.\n\napp/main.py\n```python\nprint('hi')\n```\n"
+            "requirements.txt\n```\nflask\n```"
+        )
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Build a small app", "agent_mode": True},
+    )
+    assert turn.status_code == 200, turn.text
+    pending = await client.get(
+        f"{BASE}/projects/{project['id']}/change-proposals",
+        params={"tenant_id": "tenant-a"},
+    )
+    assert sorted(item["path"] for item in pending.json()) == ["app/main.py", "requirements.txt"]
+
+
+@pytest.mark.asyncio
+async def test_auto_apply_writes_directly_to_connected_folder(client, monkeypatch):
+    """With auto_apply on and a local folder connected, extracted changes are
+    written straight to the folder and become active artifacts -- no pending
+    proposal step."""
+    _use_identity(_identity())
+    project = await _create_project(client, "Auto apply")
+    conversation = await _create_conversation(client, project["id"])
+    writes: list[tuple[str, str]] = []
+
+    async def mirror_write(tenant_id, project_id, *, path, content):
+        writes.append((path, content))
+
+    def get_binding(tenant_id, project_id):
+        return {"token": "11111111-1111-1111-1111-111111111111", "name": "local"}
+
+    async def fake_gateway(db, payload):
+        return _gateway_response(
+            "Done.\n\napp/main.py\n```python\nprint('applied')\n```"
+        )
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    monkeypatch.setattr(workspace, "mirror_write", mirror_write)
+    monkeypatch.setattr(workspace, "get_binding", get_binding)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Create the entrypoint",
+            "agent_mode": True,
+            "auto_apply": True,
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    assert writes == [("app/main.py", "print('applied')")]
+    assert "Applied 1 file change" in turn.json()["assistant_message"]["content"]
+
+    pending = await client.get(
+        f"{BASE}/projects/{project['id']}/change-proposals",
+        params={"tenant_id": "tenant-a"},
+    )
+    assert pending.json() == []
+    active = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
+    assert [item["path"] for item in active.json()] == ["app/main.py"]
+
+
+@pytest.mark.asyncio
+async def test_auto_apply_without_connected_folder_degrades_to_proposals(client, monkeypatch):
+    """Requesting auto_apply with no local folder connected must not silently
+    drop the changes; it falls back to pending review and says so."""
+    _use_identity(_identity())
+    project = await _create_project(client, "Auto apply no folder")
+    conversation = await _create_conversation(client, project["id"])
+
+    async def fake_gateway(db, payload):
+        return _gateway_response("Done.\n\napp/main.py\n```python\nprint('x')\n```")
+
+    def get_binding(tenant_id, project_id):
+        return None
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    monkeypatch.setattr(workspace, "get_binding", get_binding)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Create the entrypoint",
+            "agent_mode": True,
+            "auto_apply": True,
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    assert "no local folder is connected" in turn.json()["assistant_message"]["content"]
+    pending = await client.get(
+        f"{BASE}/projects/{project['id']}/change-proposals",
+        params={"tenant_id": "tenant-a"},
+    )
+    assert [item["path"] for item in pending.json()] == ["app/main.py"]
 
 
 @pytest.mark.asyncio

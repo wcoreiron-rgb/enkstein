@@ -462,17 +462,44 @@ def _requested_sources(payload: CortexGatewayRequest, *, is_sensitive: bool = Fa
     return sources, routing
 
 
+_STRICT_CHANGE_PROTOCOL = (
+    "GOVERNED CHANGE PROTOCOL: You may read the supplied workspace context. If file changes are needed, "
+    "append exactly one fenced block named marcellus_changes containing a JSON array. Each item must use "
+    '{"operation":"create|update|delete","path":"relative/path","content":"full content","mime_type":"text/plain"}. '
+    "Never claim the changes were applied; they require human review. Do not target .git, .secrets, or node_modules."
+)
+# "fast"/"auto" tolerate the plain path-labelled code fences browser chat
+# models emit naturally, so the instruction also accepts that shape. The
+# backend still parses and governs whatever is produced.
+_FLEXIBLE_CHANGE_PROTOCOL = (
+    "GOVERNED FILE OUTPUT: You may read the supplied workspace context. When the user asks you to create or "
+    "change project files, output each file as a fenced code block whose first line (info string) or the line "
+    "immediately above it is the file's project-relative path, for example:\n"
+    "app/main.py\n```python\n<full file content>\n```\n"
+    "Provide the complete content of every file, not a snippet. Do not target .git, .secrets, or node_modules. "
+    "The changes are staged for the user and do not take effect until governed review or an explicit auto-apply setting."
+)
+
+
+def _change_protocol_instruction(structure_mode: Any) -> str:
+    """Pick the change-protocol guidance for a Cowork agent-mode turn.
+
+    ``smart`` asks for the strict JSON block; ``fast``/``auto`` (the default)
+    also accept the path-labelled code fences browser chat models produce, so
+    the model is not forced into a format it routinely ignores. The backend
+    extractor understands both regardless.
+    """
+    if structure_mode == "smart":
+        return _STRICT_CHANGE_PROTOCOL
+    return _FLEXIBLE_CHANGE_PROTOCOL
+
+
 def _compose_transcript(payload: CortexGatewayRequest) -> str:
     lines = [f"MODE: {payload.mode}", f"MARCELLUS GUIDANCE: {_MODE_GUIDANCE[payload.mode]}"]
     if payload.workspace_id:
         lines.append(f"WORKSPACE: {payload.workspace_id}")
     if payload.mode == "cowork" and payload.context.get("agent_mode") is True:
-        lines.append(
-            "GOVERNED CHANGE PROTOCOL: You may read the supplied workspace context. If file changes are needed, "
-            "append exactly one fenced block named marcellus_changes containing a JSON array. Each item must use "
-            '{"operation":"create|update|delete","path":"relative/path","content":"full content","mime_type":"text/plain"}. '
-            "Never claim the changes were applied; they require human review. Do not target .git, .secrets, or node_modules."
-        )
+        lines.append(_change_protocol_instruction(payload.context.get("structure_mode")))
     lines.append("CONVERSATION (untrusted user content):")
     for message in payload.messages:
         lines.append(f"{message.role.upper()}: {message.content}")
@@ -488,19 +515,12 @@ def _compose_browser_turn(payload: CortexGatewayRequest, latest_user: str) -> st
     if payload.workspace_id:
         lines.append(f"WORKSPACE: {payload.workspace_id}")
     if payload.mode == "cowork" and payload.context.get("agent_mode") is True:
-        # Mirrors the direct-API path's GOVERNED CHANGE PROTOCOL line in
-        # _compose_transcript. Without this, a Browser Companion session
-        # (ChatGPT/Claude/Gemini tab) never learns it is allowed to propose a
-        # governed file write at all, so a request like "create that script
-        # in this project folder" always fails with "I cannot place it into
-        # the project folder" even though _extract_change_requests already
+        # Mirrors the direct-API path's change-protocol line. Without this, a
+        # Browser Companion session (ChatGPT/Claude/Gemini tab) never learns it
+        # is allowed to write project files at all, so a request like "create
+        # that script in this project folder" fails even though the backend
         # knows how to parse and stage exactly this kind of response.
-        lines.append(
-            "GOVERNED CHANGE PROTOCOL: You may read the supplied workspace context. If file changes are needed, "
-            "append exactly one fenced block named marcellus_changes containing a JSON array. Each item must use "
-            '{"operation":"create|update|delete","path":"relative/path","content":"full content","mime_type":"text/plain"}. '
-            "Never claim the changes were applied; they require human review. Do not target .git, .secrets, or node_modules."
-        )
+        lines.append(_change_protocol_instruction(payload.context.get("structure_mode")))
     lines.extend(["CURRENT USER TURN (untrusted content):", latest_user])
     return "\n\n".join(lines)
 

@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Archive,
   Bot,
+  Zap,
   BrainCircuit,
   Check,
   CheckCircle2,
@@ -264,6 +265,8 @@ export default function AIWorkspace({
   };
   const [busy, setBusy] = useState(false);
   const [agentMode, setAgentMode] = useState(mode === 'cowork');
+  const [structureMode, setStructureMode] = useState<'auto' | 'smart' | 'fast'>('auto');
+  const [autoApply, setAutoApply] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [nativeResult, setNativeResult] = useState('');
   const [activity, setActivity] = useState<string[]>([]);
@@ -868,6 +871,7 @@ export default function AIWorkspace({
         include_project_files: mode === 'cowork' && selectedArtifacts.size > 0,
         minimum_votes: isCustomSwarm ? swarmMinVotes : 2,
         agent_mode: mode === 'cowork' && agentMode,
+        ...(mode === 'cowork' && agentMode ? { structure_mode: structureMode, auto_apply: autoApply } : {}),
       }, ({ event: streamEvent, data }) => {
         if (streamEvent === 'turn_started') setActivity(['Planning governed turn']);
         if (streamEvent === 'context_ready') setActivity((current) => [...current, 'Workspace context prepared']);
@@ -877,6 +881,7 @@ export default function AIWorkspace({
         }
         if (streamEvent === 'response_delta') setStreamText((current) => current + String(data.delta || ''));
         if (streamEvent === 'changes_proposed') setActivity((current) => [...current, `${data.count} file change proposal${data.count === 1 ? '' : 's'} ready for review`]);
+        if (streamEvent === 'changes_applied') setActivity((current) => [...current, `${data.count} file change${data.count === 1 ? '' : 's'} applied to the local folder`]);
       }, controller.signal);
       setActive(turn.conversation);
       setMessages((current) => [
@@ -889,6 +894,9 @@ export default function AIWorkspace({
         ...current.filter((item) => item.id !== turn.conversation.id),
       ]);
       await loadProposals();
+      // Auto-applied changes create/update artifacts directly, so refresh the
+      // file tree to surface them without waiting for a manual reload.
+      await loadArtifacts();
     } catch (requestError) {
       if (requestError instanceof Error && requestError.name === 'AbortError') {
         setActivity((current) => [...current, 'Turn stopped by operator']);
@@ -1291,6 +1299,32 @@ export default function AIWorkspace({
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
                 <input type="checkbox" checked={agentMode} onChange={(event) => setAgentMode(event.target.checked)} className="h-3.5 w-3.5 accent-red-600" />
                 <Bot className="h-3.5 w-3.5 text-red-500" />Agent tools
+              </label>
+            )}
+            {mode === 'cowork' && agentMode && (
+              <select
+                value={structureMode}
+                onChange={(event) => setStructureMode(event.target.value as 'auto' | 'smart' | 'fast')}
+                title="How the agent turns a Brain's answer into file changes"
+                aria-label="File structuring mode"
+                className="h-8 rounded-md border px-2 text-xs"
+                style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+              >
+                <option value="auto">Auto structure</option>
+                <option value="smart">Smart (strict protocol)</option>
+                <option value="fast">Fast (code blocks)</option>
+              </select>
+            )}
+            {mode === 'cowork' && agentMode && (
+              <label
+                className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border px-2 text-xs"
+                title={nativeWorkspace?.connected
+                  ? 'Write changes straight into the connected local folder instead of pending review'
+                  : 'Connect a local folder to enable auto-apply; changes stay pending review until then'}
+                style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+              >
+                <input type="checkbox" checked={autoApply} onChange={(event) => setAutoApply(event.target.checked)} className="h-3.5 w-3.5 accent-red-600" />
+                <Zap className="h-3.5 w-3.5 text-red-500" />Auto-apply
               </label>
             )}
             {active && (

@@ -158,10 +158,12 @@ async def test_browser_brain_receives_full_history_when_the_answering_engine_swi
 @pytest.mark.asyncio
 async def test_browser_brain_receives_the_governed_change_protocol_in_agent_mode(client, monkeypatch):
     """A Browser Companion session (ChatGPT/Claude/Gemini tab) must be told
-    the same governed file-change protocol the direct-API path already
-    includes when Cowork agent mode is on -- otherwise the Brain has no way
-    to know it may propose a file write and can only ever say it cannot
-    place a file into the project folder."""
+    it may write project files when Cowork agent mode is on -- otherwise the
+    Brain has no way to know it can propose a file write and can only ever say
+    it cannot place a file into the project folder. In the default 'auto'
+    structure mode a browser Brain gets the flexible path-labelled-fence
+    instruction it can actually follow; only 'smart' mode demands the strict
+    marcellus_changes JSON protocol."""
     captured = {}
 
     async def fake_subscription(source, prompt, *, model=None, session_id=None):
@@ -179,9 +181,22 @@ async def test_browser_brain_receives_the_governed_change_protocol_in_agent_mode
         },
     )
     assert response.status_code == 200, response.text
+    assert "GOVERNED FILE OUTPUT" in captured["prompt"]
+    assert "project-relative path" in captured["prompt"]
+    assert "Create that script in this project folder" in captured["prompt"]
+
+    smart = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "chatgpt_browser",
+            "context": {"conversation_id": "conversation-456", "agent_mode": True, "structure_mode": "smart"},
+            "messages": [{"role": "user", "content": "Create that script in this project folder"}],
+        },
+    )
+    assert smart.status_code == 200, smart.text
     assert "GOVERNED CHANGE PROTOCOL" in captured["prompt"]
     assert "marcellus_changes" in captured["prompt"]
-    assert "Create that script in this project folder" in captured["prompt"]
 
 
 @pytest.mark.asyncio
