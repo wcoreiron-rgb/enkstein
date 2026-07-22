@@ -334,6 +334,28 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.16 — Capture browser answers even when the streaming flag lingers -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Reliably capture browser answers, even when the provider's streaming indicator lingers</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.16</span>
+          <span class="release-date">July 22, 2026 &nbsp;·&nbsp; Enkstein Browser Companion &nbsp;·&nbsp; response capture</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A browser turn could reach ChatGPT and produce a visible answer, yet Enkstein never captured it back — the companion waited on the provider's stop/streaming control to clear, and if that control lingered in the DOM or its selector drifted, the finished answer sat unread until the invoke timeout.</p>
+      <ul>
+        <li>The companion now accepts a completion when the visible answer has been non-empty and unchanged for a short stall window, even if the streaming indicator still reads active.</li>
+        <li>The normal fast path (finish the instant streaming stops) is unchanged; this only adds a fallback so selector drift can no longer strand a rendered answer.</li>
+        <li>Browser Companion bumped to 0.1.12 — reload it in your browser's extensions page to pick up the fix.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.15 — Cowork writes local files from any Brain -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

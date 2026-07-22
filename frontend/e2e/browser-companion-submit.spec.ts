@@ -252,6 +252,51 @@ test('tracks one assistant identity from streaming through a replaced completion
   expect(completed.response).toBe('Completed response after node replacement.');
 });
 
+test('completes a stable answer even when the streaming indicator never clears', async ({ page }) => {
+  // Reproduces the "response is visible in the provider tab but Enkstein never
+  // captured it" failure: the provider leaves its stop/streaming control in
+  // the DOM (or renamed the selector), so isStreaming() stays true forever.
+  // The stall fallback must still accept the fully rendered, unchanging answer.
+  await page.addInitScript(() => { (window as unknown as { __enksteinStallCompleteMs: number }).__enksteinStallCompleteMs = 300; });
+  await page.addInitScript(installRuntimeStub);
+  await page.route('https://chatgpt.com/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: `<!doctype html><html><body>
+      <div id="prompt-textarea" contenteditable="true" style="width:500px;height:120px"></div>
+      <button data-testid="send-button" aria-label="Send prompt" disabled>Send</button>
+      <script>
+        const editor = document.querySelector('#prompt-textarea');
+        const send = document.querySelector('[data-testid="send-button"]');
+        editor.addEventListener('input', () => { send.disabled = !editor.innerText.trim(); });
+        send.addEventListener('click', () => {
+          editor.textContent = '';
+          send.disabled = true;
+          // Stop button appears and is deliberately NEVER removed, so the
+          // streaming indicator stays true for the whole observation.
+          const stop = document.createElement('button');
+          stop.setAttribute('data-testid', 'stop-button');
+          stop.textContent = 'Stop';
+          document.body.appendChild(stop);
+          const answer = document.createElement('div');
+          answer.dataset.messageAuthorRole = 'assistant';
+          answer.textContent = 'Fully rendered answer that never gets a done signal.';
+          document.body.appendChild(answer);
+        });
+      </script>
+    </body></html>`,
+  }));
+  await page.goto('https://chatgpt.com/');
+  await page.addScriptTag({ path: CONTENT_SCRIPT });
+  const result = await send(page, {
+    type: 'marcellus-submit',
+    task: { provider: 'chatgpt', task_id: 'stall-complete', prompt: 'answer me' },
+  }) as { success: boolean };
+  expect(result.success).toBeTruthy();
+  const completed = await observeUntil(page, 'stall-complete', 'completed');
+  expect(completed.response).toBe('Fully rendered answer that never gets a done signal.');
+});
+
 test('marcellus-observe recovers after a reload-compatible content script reinjection', async ({ page }) => {
   await page.addInitScript(installRuntimeStub);
   let reloadBody = CHATGPT_MULTI_TURN_BODY;

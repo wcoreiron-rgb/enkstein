@@ -22,6 +22,18 @@ const STREAMING_SELECTORS = {
   gemini: ['button[aria-label*="Stop response" i]', 'button[aria-label*="Stop generating" i]'],
 };
 
+// Completion is normally detected the moment the provider's streaming
+// indicator clears. But that indicator is provider-owned and can drift (a
+// renamed stop-button selector) or linger in the DOM, which would otherwise
+// strand a fully rendered answer until the 180s invoke timeout -- the exact
+// "I can see the response in ChatGPT but Enkstein didn't capture it" case.
+// As a resilience fallback, an answer whose visible text has not changed for
+// this long is accepted as complete even while the streaming flag still reads
+// true. Long enough that a brief mid-stream pause is not mistaken for done.
+// A test-only global may lower this for deterministic fast runs; it never
+// applies in the shipped extension where the global is unset.
+const STALL_COMPLETE_MS = (typeof window !== 'undefined' && Number(window.__enksteinStallCompleteMs)) || 8000;
+
 // Keyed by task_id. Holds only ephemeral submission/observation state — never
 // persists the prompt or response text. Element correlation uses provider IDs
 // when available, otherwise an extension-owned opaque marker placed on the
@@ -75,7 +87,7 @@ function recoverTaskMetadata(taskId) {
       lastAssistantFingerprint: typeof saved.lastAssistantFingerprint === 'string' ? saved.lastAssistantFingerprint : null,
       responseIdentity: typeof saved.responseIdentity === 'string' ? saved.responseIdentity : null,
       recovered: true,
-      sample: { previous: '', identity: null, stable: 0 },
+      sample: { previous: '', identity: null, stable: 0, changedAt: 0 },
     };
     taskRecords.set(taskId, record);
     return record;
@@ -456,7 +468,7 @@ async function handleSubmit(task) {
       lastAssistantFingerprint: lastAssistant?.fingerprint || null,
       responseIdentity: null,
       recovered: false,
-      sample: { previous: '', identity: null, stable: 0 },
+      sample: { previous: '', identity: null, stable: 0, changedAt: 0 },
     };
     taskRecords.set(taskId, record);
     persistTaskMetadata(taskId, record);
@@ -487,8 +499,23 @@ function handleObserve(taskId) {
       record.sample.previous = candidate;
       record.sample.identity = identity;
       record.sample.stable = 0;
+      record.sample.changedAt = Date.now();
     }
     record.status = 'streaming';
+    // Fallback: the provider still reports streaming, but the visible answer
+    // has been non-empty and unchanged for the stall window. Treat a drifted
+    // or lingering streaming indicator as complete instead of waiting out the
+    // whole invoke timeout on an answer that is already fully rendered.
+    if (
+      candidate.length >= 12
+      && candidate === record.sample.previous
+      && record.sample.changedAt
+      && Date.now() - record.sample.changedAt >= STALL_COMPLETE_MS
+    ) {
+      record.status = 'completed';
+      persistTaskMetadata(taskId, record);
+      return { state: 'completed', response: candidate };
+    }
     return { state: 'streaming' };
   }
 
