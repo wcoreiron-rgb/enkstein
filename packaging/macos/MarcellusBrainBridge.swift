@@ -502,7 +502,32 @@ private final class BrainBridge {
         "bash", "c", "cfg", "conf", "cpp", "cs", "css", "csv", "go", "h", "hpp", "html", "ini",
         "java", "js", "json", "jsx", "kt", "kts", "log", "md", "mjs", "ps1", "py", "rb", "rs",
         "sh", "sql", "tf", "tfvars", "toml", "ts", "tsx", "txt", "xml", "yaml", "yml",
+        // Apple/Swift app scaffolds and other common source/config types that
+        // a "create this project" turn routinely produces.
+        "swift", "m", "mm", "metal", "plist", "entitlements", "storyboard", "xib",
+        "pbxproj", "xcconfig", "xcscheme", "modulemap", "resolved",
+        "dart", "php", "vue", "svelte", "scss", "sass", "less", "svg", "gradle",
+        "properties", "bat", "env", "gitignore", "gitattributes", "dockerignore",
+        "editorconfig", "keep", "gitkeep",
     ])
+    // Files with no extension whose exact name is a common, safe project
+    // marker/config. `.keep`/`.gitkeep` and similar dotfiles report an empty
+    // pathExtension in Foundation, so they must be matched by full name; the
+    // same applies to conventional extensionless files like Dockerfile.
+    private let allowedFilenames = Set([
+        ".keep", ".gitkeep", ".gitignore", ".gitattributes", ".dockerignore",
+        ".editorconfig", "dockerfile", "makefile", "procfile", "podfile",
+        "gemfile", "rakefile", "license", "readme", "changelog", "notice",
+    ])
+
+    // A workspace file is allowed when its extension is allowlisted or its full
+    // (lowercased) name is a recognized extensionless project file. Backend
+    // path validation independently blocks secret leaves (.env, .pypirc, etc.)
+    // and protected directories before any write reaches here.
+    private func isAllowedWorkspaceFile(_ url: URL) -> Bool {
+        if allowedExtensions.contains(url.pathExtension.lowercased()) { return true }
+        return allowedFilenames.contains(url.lastPathComponent.lowercased())
+    }
 
     private lazy var codexSessions = CodexAppServerSessionManager(
         findExecutable: { [weak self] name in self?.findExecutable(name) },
@@ -960,7 +985,7 @@ private final class BrainBridge {
             }
             let values = try url.resourceValues(forKeys: keys)
             guard values.isRegularFile == true, values.isSymbolicLink != true,
-                  allowedExtensions.contains(url.pathExtension.lowercased()) else { continue }
+                  isAllowedWorkspaceFile(url) else { continue }
             let size = values.fileSize ?? 0
             guard size <= 1_000_000, files.count < 100, totalBytes + size <= 5_000_000 else { continue }
             let data = try Data(contentsOf: url, options: [.mappedIfSafe])
@@ -975,7 +1000,7 @@ private final class BrainBridge {
         guard content.utf8.count <= 1_000_000 else { throw BridgeError.invalidRequest }
         let root = try workspaceRoot(token: token)
         let target = try safeWorkspaceURL(root: root, relativePath: path, allowMissingLeaf: true)
-        guard allowedExtensions.contains(target.pathExtension.lowercased()) else { throw BridgeError.invalidRequest }
+        guard isAllowedWorkspaceFile(target) else { throw BridgeError.invalidRequest }
         try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data(content.utf8).write(to: target, options: .atomic)
         return ["success": true, "path": path, "size_bytes": content.utf8.count]

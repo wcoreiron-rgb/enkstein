@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 import pytest
@@ -887,6 +888,22 @@ def test_change_extraction_with_no_block_is_unaffected():
     assert cleaned == plain
 
 
+def test_change_extraction_recovers_a_full_project_scaffold_beyond_the_old_cap():
+    """A real multi-directory scaffold (more than the previous 10-item cap)
+    must survive intact -- the '.keep' scaffold case that was silently
+    truncated. Also confirms extensionless dotfiles like .keep are accepted
+    by path validation, not dropped."""
+    entries = [
+        {"operation": "create", "path": f"TouristGuide/Module{i}/.keep", "content": "placeholder\n"}
+        for i in range(30)
+    ]
+    block = "Staged the structure.\n```marcellus_changes\n" + json.dumps(entries) + "\n```"
+    _cleaned, changes = workspace._extract_change_requests(block)
+    assert len(changes) == 30
+    assert changes[0]["path"] == "TouristGuide/Module0/.keep"
+    assert changes[-1]["path"] == "TouristGuide/Module29/.keep"
+
+
 def test_change_extraction_empty_cutoff_reports_no_recovery_without_crashing():
     """The fence opened but generation stopped before any object body was
     produced at all -- this must still report the truncation clearly rather
@@ -1095,6 +1112,54 @@ async def test_auto_apply_writes_directly_to_connected_folder(client, monkeypatc
     assert pending.json() == []
     active = await client.get(f"{BASE}/projects/{project['id']}/artifacts", params={"tenant_id": "tenant-a"})
     assert [item["path"] for item in active.json()] == ["app/main.py"]
+
+
+@pytest.mark.asyncio
+async def test_auto_apply_writes_keep_scaffold_to_connected_folder(client, monkeypatch):
+    """A '.keep' directory scaffold (extensionless dotfiles) must be extracted
+    and written -- the 'ChatGPT created it but Cowork failed' case where the
+    native writer rejected .keep files."""
+    _use_identity(_identity())
+    project = await _create_project(client, "Keep scaffold")
+    conversation = await _create_conversation(client, project["id"])
+    writes: list[str] = []
+
+    async def mirror_write(tenant_id, project_id, *, path, content):
+        writes.append(path)
+
+    def get_binding(tenant_id, project_id):
+        return {"token": "11111111-1111-1111-1111-111111111111", "name": "local"}
+
+    async def fake_gateway(db, payload):
+        entries = [
+            {"operation": "create", "path": "TouristGuide/App/.keep", "content": "entry\n"},
+            {"operation": "create", "path": "TouristGuide/Core/Networking/.keep", "content": "net\n"},
+            {"operation": "create", "path": "TouristGuide/Sources/main.swift", "content": "import SwiftUI\n"},
+        ]
+        return _gateway_response(
+            "Staged the structure.\n```marcellus_changes\n" + json.dumps(entries) + "\n```"
+        )
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", fake_gateway)
+    monkeypatch.setattr(workspace, "mirror_write", mirror_write)
+    monkeypatch.setattr(workspace, "get_binding", get_binding)
+    turn = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={
+            "tenant_id": "tenant-a",
+            "content": "Create this architecture in the folder",
+            "agent_mode": True,
+            "structure_mode": "smart",
+            "auto_apply": True,
+        },
+    )
+    assert turn.status_code == 200, turn.text
+    assert writes == [
+        "TouristGuide/App/.keep",
+        "TouristGuide/Core/Networking/.keep",
+        "TouristGuide/Sources/main.swift",
+    ]
+    assert "Applied 3 file changes" in turn.json()["assistant_message"]["content"]
 
 
 @pytest.mark.asyncio

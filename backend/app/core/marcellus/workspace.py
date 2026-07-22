@@ -101,6 +101,11 @@ _CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*?)```", re.IGNORE
 # no complete block, so it can never match inside an already-complete one.
 _UNCLOSED_CHANGE_BLOCK = re.compile(r"```marcellus_changes[ \t]*\r?\n(.*)\Z", re.IGNORECASE | re.DOTALL)
 _CHANGE_MIME = "application/vnd.marcellus.change+json"
+# Maximum file changes extracted from a single agent turn. Matches the manual
+# artifact-batch ceiling (CortexArtifactBatchCreate allows 100 files), so a
+# real project scaffold -- e.g. a multi-directory app layout -- is not
+# silently truncated to a small subset the way a 10-item cap did.
+_MAX_CHANGES_PER_TURN = 100
 
 # Fenced code block whose info string / preceding header names a file path.
 # Browser chat models (ChatGPT/Gemini/Claude web) answer a "build this app"
@@ -210,7 +215,7 @@ def _heuristic_change_requests(text: str) -> list[dict[str, Any]]:
                 "mime_type": item.mime_type,
             }
         )
-        if len(changes) >= 20:
+        if len(changes) >= _MAX_CHANGES_PER_TURN:
             break
     return changes
 
@@ -348,7 +353,7 @@ def _extract_change_requests(text: str) -> tuple[str, list[dict[str, Any]]]:
 
     changes: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
-    for raw in raw_changes[:10]:
+    for raw in raw_changes[:_MAX_CHANGES_PER_TURN]:
         if not isinstance(raw, dict) or raw.get("operation") not in {"create", "update", "delete"}:
             continue
         operation = str(raw["operation"])

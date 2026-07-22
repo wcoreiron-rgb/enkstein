@@ -334,6 +334,27 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.17 — Apply project scaffolds (.keep dirs, Swift/Apple files) to the local folder -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Apply full project scaffolds locally, including .keep directories and Apple/Swift files</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.17</span>
+          <span class="release-date">July 22, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; local file writes</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A Brain could correctly produce a full project scaffold (for example, a nested layout staged with <code>.keep</code> files), yet Cowork failed to create it locally.</p>
+      <ul>
+        <li>The native writer rejected any file whose extension was not on a fixed allowlist. Extensionless dev markers like <code>.keep</code>/<code>.gitkeep</code> and common source types such as <code>.swift</code> were refused, so an Apple-app scaffold could never be written. The writer now accepts these, matched by full name for extensionless files, while backend path validation still blocks secret files and protected directories.</li>
+        <li>Agent-turn extraction silently capped at 10 changes, truncating larger scaffolds. The cap now matches the manual batch ceiling (100), so a real multi-directory layout is applied in full.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.16 — Capture browser answers even when the streaming flag lingers -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
