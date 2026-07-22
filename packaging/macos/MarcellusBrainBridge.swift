@@ -120,6 +120,15 @@ private final class BrowserSessionBroker {
     // jitter/service-worker cold-start time, or a perfectly healthy,
     // still-open tab gets reported as disconnected between alarm ticks.
     private static let connectionStalenessSeconds: TimeInterval = 50
+    // When a browser turn arrives but the companion has not checked in within
+    // connectionStalenessSeconds, wait up to this long for it to reconnect
+    // (service worker waking, tab finishing a refresh) before giving up. This
+    // turns a transient readiness miss -- the common "Ready in status, but the
+    // turn failed at ~130ms" case -- into a brief pause and a successful run,
+    // instead of an instant failure that also burns a fallback attempt. A tab
+    // that is genuinely closed/signed-out still fails within this bounded
+    // window rather than hanging for the full invoke timeout.
+    private static let readinessGraceSeconds: TimeInterval = 15
 
     private let condition = NSCondition()
     private var pairingCodes: [String: Date] = [:]
@@ -292,12 +301,20 @@ private final class BrowserSessionBroker {
     func invoke(brain: String, prompt: String, sessionID: String?, timeout: TimeInterval) throws -> [String: Any] {
         let provider = Self.provider(for: brain)
         condition.lock()
-        let live = lastSeen.map { Date().timeIntervalSince($0) < Self.connectionStalenessSeconds && providers.contains(provider) } ?? false
-        guard live else {
-            condition.unlock()
-            throw BridgeError.runtimeUnavailable(
-                "The Enkstein browser companion is not connected to a signed-in \(provider.capitalized) tab."
-            )
+        // Wait a bounded grace period for the companion to (re)connect rather
+        // than failing instantly on a transient miss. poll() refreshes
+        // lastSeen/providers on the extension's regular check-in; re-checking
+        // after each bounded wait lets a briefly-asleep worker or a
+        // mid-refresh tab recover without burning the turn.
+        let readinessDeadline = Date().addingTimeInterval(Self.readinessGraceSeconds)
+        while !(lastSeen.map { Date().timeIntervalSince($0) < Self.connectionStalenessSeconds && providers.contains(provider) } ?? false) {
+            if Date() >= readinessDeadline {
+                condition.unlock()
+                throw BridgeError.runtimeUnavailable(
+                    "Enkstein could not reach a signed-in \(provider.capitalized) tab. Open \(Self.providerHost(for: provider)) in your browser, sign in, keep the tab open, then try again."
+                )
+            }
+            _ = condition.wait(until: min(readinessDeadline, Date().addingTimeInterval(1)))
         }
         let generated = nextTaskID(provider: provider, sessionID: sessionID, prompt: prompt)
         let record = BrowserTaskRecord(
@@ -454,6 +471,14 @@ private final class BrowserSessionBroker {
         if brain.hasPrefix("chatgpt_") { return "chatgpt" }
         if brain.hasPrefix("claude_") { return "claude" }
         return "gemini"
+    }
+
+    private static func providerHost(for provider: String) -> String {
+        switch provider {
+        case "chatgpt": return "chatgpt.com"
+        case "claude": return "claude.ai"
+        default: return "gemini.google.com"
+        }
     }
 
     private static func newToken() -> String {
