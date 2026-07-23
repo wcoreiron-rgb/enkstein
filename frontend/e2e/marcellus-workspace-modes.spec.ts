@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { mockMarcellusWorkspace } from './marcellus-workspace-mocks';
+import { mockMarcellusWorkspace, seedArtifacts } from './marcellus-workspace-mocks';
 
 test.describe('Enkstein workspace mode separation', () => {
   test('mode selector switches immediately and keeps the route synchronized', async ({ page }) => {
@@ -66,6 +66,63 @@ test.describe('Enkstein workspace mode separation', () => {
     await expect(page).toHaveURL(/\/marcellus\/chat\/chat-canonical$/);
     await page.goto('/marcellus/cowork');
     await expect(page).toHaveURL(/\/marcellus\/cowork\/project-canonical\/cowork-canonical$/);
+  });
+
+  test('switching to a conversation in a different Cowork project shows only that project\'s files', async ({ page }) => {
+    // Regression for: opening a conversation belonging to a different
+    // project than whatever the sidebar's own project picker last had
+    // selected used to leave the previous project's file panel/header
+    // showing (and its files still attachable to a new turn), because
+    // artifacts were only refreshed in some of the code paths that change
+    // the active conversation. The file panel must always reflect the
+    // project of whichever conversation is actually open.
+    const store = await mockMarcellusWorkspace(page);
+    const now = new Date().toISOString();
+    store.projects.push(
+      {
+        id: 'project-alpha', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Alpha Project',
+        description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active',
+        created_at: now, updated_at: now,
+      },
+      {
+        id: 'project-beta', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Beta Project',
+        description: '', kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active',
+        created_at: now, updated_at: now,
+      },
+    );
+    store.conversations.push(
+      {
+        id: 'cowork-alpha', tenant_id: 'default', owner_id: 'e2e-owner', project_id: 'project-alpha',
+        title: 'Alpha Conversation', mode: 'cowork', classification: 'internal', selected_source: 'auto',
+        status: 'active', message_count: 0, created_at: now, updated_at: now,
+      },
+      {
+        id: 'cowork-beta', tenant_id: 'default', owner_id: 'e2e-owner', project_id: 'project-beta',
+        title: 'Beta Conversation', mode: 'cowork', classification: 'internal', selected_source: 'auto',
+        status: 'active', message_count: 0, created_at: now, updated_at: now,
+      },
+    );
+    seedArtifacts(store, 'project-alpha', ['alpha-only-file.py']);
+    seedArtifacts(store, 'project-beta', ['beta-only-file.py']);
+
+    await page.goto('/marcellus/cowork/project-alpha/cowork-alpha');
+    await expect(page.getByText('alpha-only-file.py')).toBeVisible();
+    await expect(page.getByTitle('Alpha Project', { exact: true })).toBeVisible();
+    await expect(page.getByText('beta-only-file.py')).toHaveCount(0);
+
+    // Navigate directly to the other project's conversation by URL (e.g. a
+    // saved link, browser back/forward, or reopening an archived
+    // conversation from a different project) rather than through the
+    // sidebar's own project-scoped conversation list, which only ever lists
+    // conversations for whichever single project it has selected.
+    await page.goto('/marcellus/cowork/project-beta/cowork-beta');
+    await expect(page).toHaveURL(/\/marcellus\/cowork\/project-beta\/cowork-beta$/);
+    await expect(page.getByText('beta-only-file.py')).toBeVisible();
+    await expect(page.getByTitle('Beta Project', { exact: true })).toBeVisible();
+    await expect(page.getByText('alpha-only-file.py')).toHaveCount(0);
+
+    // The sidebar's own project dropdown must agree with what's shown.
+    await expect(page.getByLabel('Cowork project')).toHaveValue('project-beta');
   });
 
   test('back and forward navigation stay synchronized with the visible workspace', async ({ page }) => {

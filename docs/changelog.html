@@ -334,6 +334,28 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.3.18 — Cowork always shows the correct project's files, never mixes them across projects -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork always shows the currently open project's files -- never a stale or mixed set</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.18</span>
+          <span class="release-date">July 22, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; project/file alignment</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Opening a conversation from a different Cowork project than whatever the sidebar's project picker had selected could leave the previous project's files showing in the right-hand file panel -- and selectable for a new turn -- because artifact loading was handled ad hoc in several different code paths, each only covering its own trigger.</p>
+      <ul>
+        <li>One project (the project of whichever conversation is actually open) now exclusively owns the file panel's contents, replacing the scattered per-action refreshes that could each individually forget to update.</li>
+        <li>The file panel header now names the project it's showing, and the sidebar's own project selector is kept in lockstep with it, so the two blades can no longer disagree about which project is active.</li>
+        <li>Creating a file, adding files, and syncing a local folder now always target the project that's actually open, not whatever the sidebar dropdown happens to show.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.17 — Apply project scaffolds (.keep dirs, Swift/Apple files) to the local folder -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

@@ -205,6 +205,22 @@ export default function AIWorkspace({
   const [artifacts, setArtifacts] = useState<CortexArtifact[]>([]);
   const [proposals, setProposals] = useState<CortexChangeProposal[]>([]);
   const [selectedArtifacts, setSelectedArtifacts] = useState<Set<string>>(new Set());
+  // The single project whose files should ever be visible in the right-hand
+  // "Project files" blade. Deliberately not just `projectId` (the sidebar's
+  // picker) because an opened conversation is authoritative over its own
+  // project once loaded -- otherwise, opening a conversation that belongs to
+  // a project different from whatever the sidebar happened to have selected
+  // silently kept showing the old project's files (the "attaches files from
+  // other projects" bug). Falls back to the sidebar's projectId only when no
+  // conversation is active (e.g. an empty project, or before any conversation
+  // loads), so a freshly selected empty project shows its own (empty) files
+  // rather than stale ones from whatever was previously open.
+  const activeProjectId = mode === 'cowork' ? (active?.project_id || (active ? '' : projectId)) : '';
+  // Shown in the file-panel header so the right blade always states, in
+  // plain text, which project's files it is displaying -- eliminating any
+  // ambiguity between the sidebar's own selection and the conversation
+  // that's actually open (the "no folder alignment" confusion).
+  const activeProjectName = projects.find((item) => item.id === activeProjectId)?.name;
   // Which folder paths in the VS Code-style tree are expanded. Reset
   // whenever the active project changes so a folder left open in one
   // project's tree never leaks into another project's tree.
@@ -339,23 +355,36 @@ export default function AIWorkspace({
   }, [mode, navigateToConversation, projectId, hasProjects]);
 
   const loadArtifacts = useCallback(async () => {
-    if (!projectId) {
+    if (!activeProjectId) {
       setArtifacts([]);
       setSelectedArtifacts(new Set());
       return;
     }
-    const rows = await getCortexArtifacts(projectId);
+    const rows = await getCortexArtifacts(activeProjectId);
     setArtifacts(rows);
     setSelectedArtifacts(new Set(rows.slice(0, 20).map((item) => item.id)));
-  }, [projectId]);
+  }, [activeProjectId]);
 
   const loadProposals = useCallback(async () => {
-    if (!projectId || mode !== 'cowork') {
+    if (!activeProjectId || mode !== 'cowork') {
       setProposals([]);
       return;
     }
-    setProposals(await getCortexChangeProposals(projectId));
-  }, [mode, projectId]);
+    setProposals(await getCortexChangeProposals(activeProjectId));
+  }, [mode, activeProjectId]);
+
+  // Single owner of `artifacts`/`selectedArtifacts`: whenever the effectively
+  // active project changes (switching conversations, switching the sidebar
+  // project selector, or closing a conversation), reload from that project
+  // alone. This replaces the previous scattered per-action setArtifacts calls
+  // that each handled only their own trigger, which is what let one
+  // conversation-changing action forget to refresh and leave a stale
+  // project's files attached and selectable.
+  useEffect(() => {
+    let cancelled = false;
+    void loadArtifacts().catch(() => { if (!cancelled) setArtifacts([]); });
+    return () => { cancelled = true; };
+  }, [activeProjectId, loadArtifacts]);
 
   useEffect(() => {
     setAgentMode(mode === 'cowork');
@@ -410,7 +439,11 @@ export default function AIWorkspace({
           router.push(workspaceRoutePath('cowork', { projectId: targetProjectId }));
         }
         const result = await connectCortexNativeWorkspace(targetProjectId, { token: detail.token!, name: detail.name! });
-          setNativeWorkspace(result);
+        setNativeWorkspace(result);
+        // Fetch by targetProjectId explicitly (not the shared loadArtifacts,
+        // which keys off activeProjectId): connecting a folder doesn't
+        // necessarily change which conversation is active, so activeProjectId
+        // could still point at a different project if one happened to be open.
         const rows = await getCortexArtifacts(targetProjectId);
         setArtifacts(rows);
         setSelectedArtifacts(new Set(rows.slice(0, 20).map((item) => item.id)));
@@ -506,15 +539,11 @@ export default function AIWorkspace({
             setMessages([]);
           }
         }
-        if (mode === 'cowork' && nextProject) {
-          const artifactRows = await getCortexArtifacts(nextProject);
-          if (cancelled) return;
-          setArtifacts(artifactRows);
-          setSelectedArtifacts(new Set(artifactRows.slice(0, 20).map((item) => item.id)));
-        } else {
-          setArtifacts([]);
-          setSelectedArtifacts(new Set());
-        }
+        // artifacts/selectedArtifacts are no longer set here: the dedicated
+        // effect keyed on activeProjectId (derived from `active`/`projectId`
+        // above) owns them exclusively, so this initial load can't race it or
+        // leave a stale project's files attached if this async function and
+        // that effect settle in a different order.
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Workspace could not be loaded.');
       } finally {
@@ -636,11 +665,12 @@ export default function AIWorkspace({
       setMessages(detail.messages);
       setSource(detail.selected_source);
       setClassification(detail.classification);
-      if (detail.project_id) {
-        const rows = await getCortexArtifacts(detail.project_id);
-        setArtifacts(rows);
-        setSelectedArtifacts(new Set(rows.slice(0, 20).map((item) => item.id)));
-      }
+      // artifacts refresh automatically via the activeProjectId effect once
+      // setActive(detail) lands -- this used to fetch only when
+      // detail.project_id was truthy, silently leaving a previous project's
+      // files attached and selectable when opening a projectless (Chat) or
+      // different-project conversation. That was the root cause of files
+      // being attached across projects.
       setError(null);
       setNotFound(null);
       navigateToConversation(detail);
@@ -763,11 +793,15 @@ export default function AIWorkspace({
         conversations,
         projects,
         activeConversationId: active?.id,
-        projectId,
+        // Broadcast the same activeProjectId the file panel/header use (not
+        // the raw sidebar `projectId` picker state), so the sidebar's project
+        // dropdown can never disagree with which project's files are
+        // actually showing on the right.
+        projectId: mode === 'cowork' ? (activeProjectId || projectId) : projectId,
         nativeWorkspaceName: nativeWorkspace?.connected ? nativeWorkspace.name : undefined,
       },
     }));
-  }, [active?.id, conversations, mode, nativeWorkspace, projectId, projects]);
+  }, [active?.id, activeProjectId, conversations, mode, nativeWorkspace, projectId, projects]);
 
   const submit = async (event?: FormEvent, retryContent?: string) => {
     event?.preventDefault();
@@ -1035,11 +1069,11 @@ export default function AIWorkspace({
   };
 
   const syncNativeFolder = async () => {
-    if (!projectId || uploading) return;
+    if (!activeProjectId || uploading) return;
     setUploading(true);
     setError(null);
     try {
-      const result = await syncCortexNativeWorkspace(projectId);
+      const result = await syncCortexNativeWorkspace(activeProjectId);
       setNativeWorkspace(result);
       await loadArtifacts();
     } catch (syncError) {
@@ -1056,7 +1090,7 @@ export default function AIWorkspace({
     setUploading(true);
     setError(null);
     try {
-      let targetProjectId = projectId;
+      let targetProjectId = activeProjectId || projectId;
       if (!targetProjectId) {
         const folderName = filePath(incoming[0]).split('/')[0] || 'Local project';
         // Always create fresh here too, for the same reason as the native
@@ -1124,13 +1158,13 @@ export default function AIWorkspace({
 
   const saveFile = async () => {
     const path = newFilePath.trim();
-    if (!projectId || !path || savingFile) return;
+    if (!activeProjectId || !path || savingFile) return;
     setSavingFile(true);
     setError(null);
     try {
       const rows = creatingFile
         ? await ingestCortexArtifacts({
-            project_id: projectId,
+            project_id: activeProjectId,
             conversation_id: active?.id,
             classification,
             files: [{ path, content: editorContent, mime_type: 'text/plain' }],
@@ -1481,17 +1515,20 @@ export default function AIWorkspace({
         <aside className="flex min-h-0 flex-col border-t lg:border-l lg:border-t-0" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
           <div className="flex items-center justify-between border-b p-3" style={{ borderColor: 'var(--rc-border)' }}>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}><Folder className="h-4 w-4 text-red-500" />Project files</div>
+              <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>
+                <Folder className="h-4 w-4 text-red-500" />
+                {activeProjectName ? <span className="truncate" title={activeProjectName}>{activeProjectName}</span> : 'Project files'}
+              </div>
               {nativeWorkspace?.connected && <div className="mt-0.5 max-w-40 truncate text-[10px] text-green-600" title={nativeWorkspace.name}>Local folder: {nativeWorkspace.name}</div>}
             </div>
             <div className="flex items-center gap-1">
               <input ref={fileInput} type="file" multiple className="hidden" onChange={ingestFiles} />
               <input ref={folderInput} type="file" multiple className="hidden" onChange={ingestFiles} />
-              <button type="button" onClick={startNewFile} disabled={!projectId || uploading} title="Create file" aria-label="Create file"
+              <button type="button" onClick={startNewFile} disabled={!activeProjectId || uploading} title="Create file" aria-label="Create file"
                 className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40"><FilePlus2 className="h-4 w-4" /></button>
-              <button type="button" onClick={() => fileInput.current?.click()} disabled={!projectId || uploading} title="Add files" aria-label="Add files"
+              <button type="button" onClick={() => fileInput.current?.click()} disabled={!activeProjectId || uploading} title="Add files" aria-label="Add files"
                 className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40"><Paperclip className="h-4 w-4" /></button>
-              <button type="button" onClick={openFolderPicker} disabled={uploading} title={projectId ? 'Import folder' : 'Choose folder and create project'} aria-label="Import folder"
+              <button type="button" onClick={openFolderPicker} disabled={uploading} title={activeProjectId ? 'Import folder' : 'Choose folder and create project'} aria-label="Import folder"
                 className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}</button>
               {nativeWorkspace?.connected && <button type="button" onClick={() => void syncNativeFolder()} disabled={uploading} title="Sync local folder" aria-label="Sync local folder"
                 className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}</button>}
