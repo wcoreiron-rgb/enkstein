@@ -358,11 +358,29 @@ async def route_and_call(
     """
     # ── Step 1: Classify ────────────────────────────────────────────────────
     if sensitivity_override:
+        # An override that *lowers* the classification is the dangerous
+        # direction: it can route genuinely restricted content to a cloud
+        # provider. Require an explicit justification and record both the
+        # detected and the asserted level so the decision is reviewable
+        # rather than an invisible bypass (OWASP LLM09).
+        detected = classify_sensitivity(prompt)
+        if sensitivity_override not in _SENSITIVITY_RANK:
+            raise ValueError(f"Unknown sensitivity: {sensitivity_override}")
+        downgrade = (
+            _SENSITIVITY_RANK[sensitivity_override] < _SENSITIVITY_RANK[detected["level"]]
+        )
+        if downgrade and not (override_reason or "").strip():
+            raise PermissionError(
+                "Lowering the detected data classification requires an override_reason."
+            )
         classification = {
             "level": sensitivity_override,
             "matched_rule": "override",
             "matched_text": None,
             "confidence": 1.0,
+            "detected_level": detected["level"],
+            "detected_rule": detected["matched_rule"],
+            "downgraded": downgrade,
         }
     else:
         classification = classify_sensitivity(prompt)
@@ -438,6 +456,10 @@ async def route_and_call(
         "output_sensitive": output_scan.is_sensitive,
         "override_used": override_used,
         "override_reason": override_reason if override_used else None,
+        # Promoted out of `classification` so an operator reviewing the audit
+        # can filter for downgrades without parsing the nested record.
+        "classification_downgraded": bool(classification.get("downgraded")),
+        "detected_sensitivity": classification.get("detected_level"),
     }
     _append_audit(audit_entry)
 

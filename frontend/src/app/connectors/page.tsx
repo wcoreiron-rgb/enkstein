@@ -1,14 +1,17 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plug, ShieldCheck, CheckCircle, Clock, Ban, AlertTriangle,
   ChevronDown, ChevronUp, Key, Settings, Zap, X, Eye, EyeOff,
-  Shield, Loader, Search,
+  Shield, Loader, Search, ExternalLink, Copy,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { BUNDLED_VENDOR_ICONS } from '@/lib/vendor-icons';
 
-// ── Brand logos via Simple Icons CDN ─────────────────────────────────────────
-// Format: https://cdn.simpleicons.org/{slug}/{hex-color}
+// ── Brand marks ──────────────────────────────────────────────────────────────
+// Bundled from simple-icons at /vendor-icons/{slug}.svg, or a local raster in
+// /public. Nothing is fetched from a third-party CDN: doing so disclosed the
+// operator's connector inventory and broke entirely when offline.
 
 const BRAND_LOGOS: Record<string, { slug: string; color: string; bg: string; local?: string }> = {
   // Identity & Access
@@ -142,7 +145,7 @@ function resolveBrandKey(type: string, name: string): string | null {
   return null;
 }
 
-// ConnectorIcon — real brand logo from Simple Icons, styled initials fallback
+// ConnectorIcon — bundled brand mark, styled initials fallback
 function ConnectorIcon({ type, name, size = 32 }: { type: string; name: string; size?: number }) {
   const brandKey = resolveBrandKey(type, name);
   const brand = brandKey ? BRAND_LOGOS[brandKey] : undefined;
@@ -157,7 +160,46 @@ function ConnectorIcon({ type, name, size = 32 }: { type: string; name: string; 
   const bg  = brand?.bg  ?? '#1e293b';
   const px  = `${size}px`;
 
-  if (brand && !imgError) {
+  // A bundled mark is a monochrome simple-icons glyph with no fill of its own,
+  // so it is tinted with a CSS mask rather than rendered as a coloured image.
+  const bundledSlug =
+    brand && !brand.local && BUNDLED_VENDOR_ICONS.has(brand.slug) ? brand.slug : null;
+
+  if (bundledSlug) {
+    return (
+      <div
+        style={{
+          width: px, height: px,
+          background: bg,
+          borderRadius: '10px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+          padding: '6px',
+        }}
+      >
+        <span
+          role="img"
+          aria-label={name}
+          style={{
+            width: size - 12,
+            height: size - 12,
+            display: 'block',
+            background: `#${brand!.color}`,
+            WebkitMaskImage: `url(/vendor-icons/${bundledSlug}.svg)`,
+            maskImage: `url(/vendor-icons/${bundledSlug}.svg)`,
+            WebkitMaskRepeat: 'no-repeat',
+            maskRepeat: 'no-repeat',
+            WebkitMaskSize: 'contain',
+            maskSize: 'contain',
+            WebkitMaskPosition: 'center',
+            maskPosition: 'center',
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (brand?.local && !imgError) {
     return (
       <div
         style={{
@@ -171,7 +213,7 @@ function ConnectorIcon({ type, name, size = 32 }: { type: string; name: string; 
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={brand.local || `https://cdn.simpleicons.org/${brand.slug}/${brand.color}`}
+          src={brand.local}
           alt={name}
           width={size - 12}
           height={size - 12}
@@ -251,14 +293,164 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
   const [testing, setTesting]   = useState(false);
   const [testResult, setTestResult]     = useState<any>(null);
   const [policyResult, setPolicyResult] = useState<any>(null);
+  // Interactive device-code sign-in, offered only for providers that publish
+  // a device endpoint. Everything else keeps credential entry.
+  const [deviceInfo, setDeviceInfo]   = useState<any>(null);
+  const [deviceFlow, setDeviceFlow]   = useState<any>(null);
+  const [deviceErr, setDeviceErr]     = useState<string | null>(null);
+  const [deviceBusy, setDeviceBusy]   = useState(false);
+  const [tenantId, setTenantId]       = useState('');
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Browser sign-in (authorization code + PKCE). This covers far more
+  // providers than the device grant, so it is preferred where both exist.
+  const [browserInfo, setBrowserInfo] = useState<any>(null);
+  const [browserFlow, setBrowserFlow] = useState<any>(null);
+  const [browserErr, setBrowserErr]   = useState<string | null>(null);
+  const [browserBusy, setBrowserBusy] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthHost, setOauthHost]     = useState('');
+  const [showManualKeys, setShowManualKeys] = useState(false);
+  const browserPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setLoadErr(null);
     apiFetch<any>(`/connectors/${connector.id}/fields`)
-      .then(data => { setFields(data.fields || []); setLoading(false); })
+      .then(data => {
+        setFields(data.fields || []);
+        setDeviceInfo({
+          supported: !!data.supports_device_code,
+          label: data.device_code_label,
+          requiresTenant: !!data.device_code_requires_tenant,
+          unavailableReason: data.device_code_unavailable_reason,
+        });
+        setBrowserInfo(data.browser_auth || { supported: false });
+        setLoading(false);
+      })
       .catch(e  => { setLoadErr(e.message || 'Failed to load fields'); setLoading(false); });
   }, [connector.id]);
+
+  // Stop polling if the operator closes the dialog mid sign-in.
+  useEffect(() => () => {
+    if (pollRef.current) clearTimeout(pollRef.current);
+    if (browserPollRef.current) clearTimeout(browserPollRef.current);
+  }, []);
+
+  const pollDeviceCode = useCallback(async (flow: any, intervalMs: number) => {
+    if (Date.now() > flow.expires_at_ms) {
+      setDeviceErr('The sign-in code expired. Start again to get a new one.');
+      setDeviceFlow(null);
+      return;
+    }
+    try {
+      const result = await apiFetch<any>(`/connectors/${connector.id}/device-code/poll`, {
+        method: 'POST',
+        body: JSON.stringify({ device_code: flow.device_code, tenant_id: flow.tenant_id || null }),
+      });
+      if (result.status === 'pending') {
+        // Honour the provider's slow_down signal rather than hammering it.
+        const next = result.slow_down ? intervalMs + 5000 : intervalMs;
+        pollRef.current = setTimeout(() => pollDeviceCode(flow, next), next);
+        return;
+      }
+      setDeviceFlow(null);
+      setPolicyResult({
+        policy_decision: 'allowed',
+        is_configured: true,
+        credential_hint: result.credential_hint,
+        message: result.message,
+      });
+      try {
+        const updated = await apiFetch<any>(`/connectors/${connector.id}`);
+        onUpdate(updated);
+      } catch { /* non-fatal — card refresh can fail without blocking sign-in */ }
+      setStep('review');
+    } catch (e: any) {
+      setDeviceErr(e?.data?.detail || e?.message || 'Sign-in failed');
+      setDeviceFlow(null);
+    }
+  }, [connector.id, onUpdate]);
+
+  // Wait for the provider to redirect the browser back to the loopback
+  // listener. The operator does not copy anything; they just approve.
+  const pollBrowserAuth = useCallback(async (flow: any) => {
+    if (Date.now() > flow.expires_at_ms) {
+      setBrowserErr('This sign-in request expired. Start again.');
+      setBrowserFlow(null);
+      return;
+    }
+    try {
+      const result = await apiFetch<any>(`/connectors/${connector.id}/browser-auth/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ state: flow.state }),
+      });
+      if (result.status === 'pending') {
+        browserPollRef.current = setTimeout(() => pollBrowserAuth(flow), 2000);
+        return;
+      }
+      setBrowserFlow(null);
+      setPolicyResult({
+        policy_decision: 'allowed',
+        is_configured: true,
+        credential_hint: result.credential_hint,
+        message: result.message,
+      });
+      try {
+        const updated = await apiFetch<any>(`/connectors/${connector.id}`);
+        onUpdate(updated);
+      } catch { /* non-fatal — card refresh can fail without blocking sign-in */ }
+      setStep('review');
+    } catch (e: any) {
+      setBrowserErr(e?.data?.detail || e?.message || 'Sign-in failed');
+      setBrowserFlow(null);
+    }
+  }, [connector.id, onUpdate]);
+
+  const startBrowserAuth = async () => {
+    setBrowserBusy(true);
+    setBrowserErr(null);
+    try {
+      const started = await apiFetch<any>(`/connectors/${connector.id}/browser-auth/start`, {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: tenantId || null,
+          host: oauthHost || null,
+          client_id: oauthClientId || null,
+        }),
+      });
+      const flow = { ...started, expires_at_ms: Date.now() + (started.expires_in ?? 600) * 1000 };
+      setBrowserFlow(flow);
+      window.open(started.authorization_url, '_blank', 'noopener,noreferrer');
+      browserPollRef.current = setTimeout(() => pollBrowserAuth(flow), 2000);
+    } catch (e: any) {
+      setBrowserErr(e?.data?.detail || e?.message || 'Could not start sign-in');
+    } finally {
+      setBrowserBusy(false);
+    }
+  };
+
+  const startDeviceCode = async () => {
+    setDeviceBusy(true);
+    setDeviceErr(null);
+    try {
+      const started = await apiFetch<any>(`/connectors/${connector.id}/device-code/start`, {
+        method: 'POST',
+        body: JSON.stringify({ tenant_id: tenantId || null }),
+      });
+      const flow = {
+        ...started,
+        tenant_id: tenantId || null,
+        expires_at_ms: Date.now() + (started.expires_in ?? 900) * 1000,
+      };
+      setDeviceFlow(flow);
+      const intervalMs = Math.max((started.interval ?? 5) * 1000, 5000);
+      pollRef.current = setTimeout(() => pollDeviceCode(flow, intervalMs), intervalMs);
+    } catch (e: any) {
+      setDeviceErr(e?.data?.detail || e?.message || 'Could not start sign-in');
+    } finally {
+      setDeviceBusy(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -336,8 +528,8 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
           ].map(s => (
             <div key={s.id} className="flex-1 py-2 text-center text-xs font-medium border-b-2 transition-colors"
               style={{
-                borderColor: step === s.id ? 'var(--rc-accent)' : 'transparent',
-                color: step === s.id ? 'var(--rc-accent)' : 'var(--rc-text-3)',
+                borderColor: step === s.id ? 'var(--rc-brand)' : 'transparent',
+                color: step === s.id ? 'var(--rc-brand)' : 'var(--rc-text-3)',
               }}>{s.label}</div>
           ))}
         </div>
@@ -356,12 +548,197 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
                   ⚠ {loadErr}
                 </div>
               )}
+
+              {!loading && !loadErr && browserInfo?.supported && !browserFlow && !deviceFlow && (
+                <div className="p-3 rounded-lg border space-y-3"
+                  style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>
+                      Sign in with {browserInfo.label}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>
+                      Approve once on {browserInfo.label}&apos;s own consent screen. Enkstein
+                      receives a token through a redirect only this machine can hear;
+                      your password and session cookies are never involved, and you can
+                      revoke the grant from {browserInfo.label} at any time.
+                    </p>
+                  </div>
+                  {browserInfo.requires_tenant && (
+                    <input
+                      value={tenantId}
+                      onChange={e => setTenantId(e.target.value)}
+                      placeholder="Tenant ID (optional — leave blank for your default)"
+                      className="w-full px-3 py-2 rounded-lg border text-sm"
+                      style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}
+                    />
+                  )}
+                  {browserInfo.requires_host && (
+                    <input
+                      value={oauthHost}
+                      onChange={e => setOauthHost(e.target.value)}
+                      placeholder={`Your ${browserInfo.requires_host} (e.g. yourorg.okta.com)`}
+                      className="w-full px-3 py-2 rounded-lg border text-sm"
+                      style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}
+                    />
+                  )}
+                  {browserInfo.requires_client_id && (
+                    <div className="space-y-2">
+                      <input
+                        value={oauthClientId}
+                        onChange={e => setOauthClientId(e.target.value)}
+                        placeholder="OAuth client ID"
+                        className="w-full px-3 py-2 rounded-lg border text-sm"
+                        style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}
+                      />
+                      <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                        {browserInfo.label} publishes no shared public client, so register a
+                        native/public OAuth app once with redirect URI{' '}
+                        <code className="px-1 rounded" style={{ background: 'var(--rc-bg-surface)' }}>
+                          {browserInfo.redirect_uri}
+                        </code>
+                        . No client secret is required.
+                      </p>
+                    </div>
+                  )}
+                  <button
+                    onClick={startBrowserAuth}
+                    disabled={
+                      browserBusy
+                      || (browserInfo.requires_client_id && !oauthClientId.trim())
+                      || (!!browserInfo.requires_host && !oauthHost.trim())
+                    }
+                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    style={{ background: 'var(--regent-600)', color: '#fff' }}>
+                    {browserBusy ? <Loader className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                    Sign in with browser
+                  </button>
+                </div>
+              )}
+
+              {!loading && browserFlow && (
+                <div className="p-3 rounded-lg border space-y-2"
+                  style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-1)' }}>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Waiting for you to approve in your browser…
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                    A tab opened on {browserFlow.label}. If it did not,{' '}
+                    <a href={browserFlow.authorization_url} target="_blank" rel="noopener noreferrer"
+                      className="underline">open the sign-in page</a>.
+                  </p>
+                  <button onClick={() => { setBrowserFlow(null); setBrowserErr(null); }}
+                    className="text-xs underline" style={{ color: 'var(--rc-text-3)' }}>
+                    Cancel sign-in
+                  </button>
+                </div>
+              )}
+
+              {!loading && browserErr && (
+                <div className="p-3 rounded-lg border text-sm text-red-400 bg-red-900/20 border-red-800">
+                  ⚠ {browserErr}
+                </div>
+              )}
+
+              {!loading && !loadErr && deviceInfo?.supported && !browserInfo?.supported && !deviceFlow && (
+                <div className="p-3 rounded-lg border space-y-3"
+                  style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
+                  <div>
+                    <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>
+                      Sign in with {deviceInfo.label}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--rc-text-3)' }}>
+                      Approve once in your browser instead of creating an app registration.
+                      Enkstein receives a token from {deviceInfo.label}; your password and
+                      session cookies are never involved.
+                    </p>
+                  </div>
+                  {deviceInfo.requiresTenant && (
+                    <input
+                      value={tenantId}
+                      onChange={e => setTenantId(e.target.value)}
+                      placeholder="Tenant ID (optional — leave blank for your default)"
+                      className="w-full px-3 py-2 rounded-lg border text-sm"
+                      style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}
+                    />
+                  )}
+                  <button onClick={startDeviceCode} disabled={deviceBusy}
+                    className="flex items-center gap-2 text-sm px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    style={{ background: 'var(--regent-600)', color: '#fff' }}>
+                    {deviceBusy ? <Loader className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                    Start sign-in
+                  </button>
+                </div>
+              )}
+
+              {!loading && deviceInfo?.unavailableReason && (
+                <div className="p-3 rounded-lg border text-xs"
+                  style={{ color: 'var(--rc-text-3)', borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
+                  {deviceInfo.unavailableReason}
+                </div>
+              )}
+
+              {deviceFlow && (
+                <div className="p-4 rounded-lg border space-y-3"
+                  style={{ borderColor: 'var(--regent-600)', background: 'var(--rc-bg-elevated)' }}>
+                  <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>
+                    Enter this code at {deviceFlow.label}, then return here. Waiting for approval…
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-lg font-bold tracking-widest px-3 py-2 rounded-lg"
+                      style={{ background: 'var(--rc-bg-surface)', color: 'var(--rc-text-1)' }}>
+                      {deviceFlow.user_code}
+                    </code>
+                    <button onClick={() => navigator.clipboard?.writeText(deviceFlow.user_code)}
+                      title="Copy code"
+                      className="p-2 rounded-lg border transition-colors"
+                      style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <a href={deviceFlow.verification_uri} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg"
+                      style={{ background: 'var(--regent-600)', color: '#fff' }}>
+                      <ExternalLink className="w-4 h-4" /> Open sign-in page
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                    <Loader className="w-3 h-3 animate-spin" /> Checking for approval
+                  </div>
+                </div>
+              )}
+
+              {deviceErr && (
+                <div className="p-3 rounded-lg border text-sm text-red-400 bg-red-900/20 border-red-800">
+                  ⚠ {deviceErr}
+                </div>
+              )}
+
               {!loading && !loadErr && fields.length === 0 && (
                 <div className="p-3 rounded-lg border text-sm" style={{ color: 'var(--rc-text-2)', borderColor: 'var(--rc-border)', background: 'var(--rc-bg-elevated)' }}>
                   No credential fields required for this connector.
                 </div>
               )}
+
+              {/* When sign-in is available the key form is the fallback, not
+                  the expected path, so it is collapsed behind a divider. */}
+              {!loading && !loadErr && browserInfo?.supported && !browserFlow && fields.length > 0 && !showManualKeys && (
+                <button
+                  onClick={() => setShowManualKeys(true)}
+                  className="w-full text-xs py-2 underline"
+                  style={{ color: 'var(--rc-text-3)' }}>
+                  Or enter API credentials manually
+                </button>
+              )}
+
+              {!loading && browserInfo?.supported && showManualKeys && fields.length > 0 && (
+                <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                  Manual credentials are only needed if you cannot sign in — for
+                  example for an unattended service principal.
+                </p>
+              )}
+
               {!loading && fields.map(field => (
+                (!browserInfo?.supported || showManualKeys || browserFlow) ? (
                 <div key={field.name}>
                   <label className="block text-sm font-medium mb-1" style={{ color: 'var(--rc-text-2)' }}>
                     {field.label}
@@ -386,6 +763,7 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
                     )}
                   </div>
                 </div>
+                ) : null
               ))}
               {saveErr && (
                 <div className="p-3 rounded-lg border text-sm text-red-400 bg-red-900/20 border-red-800">
@@ -820,7 +1198,7 @@ export default function ConnectorsPage() {
                 <button key={s} onClick={() => setStatusFilter(s)}
                   className="px-3 py-2 rounded-lg text-xs font-medium transition-colors capitalize"
                   style={{
-                    background: statusFilter === s ? 'var(--rc-accent)' : 'var(--rc-bg-surface)',
+                    background: statusFilter === s ? 'var(--rc-brand)' : 'var(--rc-bg-surface)',
                     color: statusFilter === s ? 'white' : 'var(--rc-text-2)',
                     border: '1px solid var(--rc-border)',
                   }}>
@@ -838,7 +1216,7 @@ export default function ConnectorsPage() {
                 <button key={cat} onClick={() => setCategory(cat)}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                   style={{
-                    background: category === cat ? 'var(--rc-accent)' : 'var(--rc-bg-elevated)',
+                    background: category === cat ? 'var(--rc-brand)' : 'var(--rc-bg-elevated)',
                     color: category === cat ? 'white' : 'var(--rc-text-2)',
                   }}>
                   {cat} <span className="opacity-60 ml-1">{count}</span>

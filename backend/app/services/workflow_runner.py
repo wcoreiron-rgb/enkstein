@@ -123,9 +123,10 @@ async def _dispatch_real_intel(agent: Agent, ctx: Dict) -> Optional[Dict]:
 async def _exec_agent_run(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
     """
     Execute an agent step.
-    1. Tries to dispatch to a real data-fetching implementation.
-    2. Falls back to governed simulation if no real impl exists.
-    Context from previous steps (ctx) is passed in and can be updated.
+
+    Dispatches to a real data-fetching implementation, then to the agent's own
+    Capability Node scan. A step that cannot execute fails; it does not report
+    completion for work that never ran.
     """
     agent_id = step.get("config", {}).get("agent_id") or step.get("agent_id")
     if not agent_id:
@@ -139,11 +140,8 @@ async def _exec_agent_run(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
     if not agent:
         label = step.get("config", {}).get("label", agent_id)
         return {
-            "status": "completed",
-            "output": (
-                f"Agent '{label}' not found in DB — running in simulation mode. "
-                f"Seed agents first: docker compose exec backend python seed_example_orchestrations.py"
-            ),
+            "status": "failed",
+            "output": f"Agent '{label}' does not exist, so this step could not run.",
         }
 
     if agent.status != "active":
@@ -161,57 +159,143 @@ async def _exec_agent_run(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
         return real
 
     # Fallback: governed simulation
-    await asyncio.sleep(0)
-    scope_notes = agent.scope_notes or "No scope configured."
-    connectors  = agent.allowed_connectors or "[]"
-    try:
-        conn_list = json.loads(connectors)
-    except Exception:
-        conn_list = []
+    # No bespoke intel path: run the agent's Capability Node scan, which is the
+    # same governed path the console and the scheduler use. Previously this
+    # returned a completed step describing the agent's configuration without
+    # executing anything, so a workflow reported success having done no work.
+    from app.services.claw_scan_dispatch import run_node_scan
 
+    try:
+        scan = await run_node_scan(agent.claw, db)
+    except Exception as exc:
+        return {
+            "status": "failed",
+            "output": f"Agent '{agent.name}' scan failed: {type(exc).__name__}: {exc}",
+            "agent_name": agent.name,
+            "agent_claw": agent.claw,
+        }
+
+    if scan is None:
+        return {
+            "status": "failed",
+            "output": f"'{agent.claw}' has no scan entrypoint, so this step could not run.",
+            "agent_name": agent.name,
+            "agent_claw": agent.claw,
+        }
+
+    mode = scan.get("mode", "unknown")
     return {
-        "status":     "completed",
+        "status": "completed",
         "output": (
-            f"Agent '{agent.name}' ({agent.claw}) executed in {agent.execution_mode} mode. "
-            f"Risk: {agent.risk_level}. "
-            f"Scope: {scope_notes[:120]} "
-            f"Connectors needed: {', '.join(conn_list) if conn_list else 'none configured — connect via Connector Marketplace'}. "
-            f"Real data available once connectors are authenticated."
+            f"Agent '{agent.name}' ({agent.claw}) ran a {mode} scan: "
+            f"{scan.get('findings_created', 0)} new and "
+            f"{scan.get('findings_updated', 0)} updated finding(s)."
         ),
         "agent_name": agent.name,
         "agent_claw": agent.claw,
-        "data_source": "simulation",
+        "data_source": "live" if mode == "live" else mode,
+        "providers": scan.get("providers", {}),
     }
 
 
-async def _exec_policy_check(step: Dict, db: AsyncSession) -> Dict:
-    """Evaluate a condition expression (field / op / value)."""
+_COMPARATORS = {
+    "eq":       lambda a, b: a == b,
+    "ne":       lambda a, b: a != b,
+    "gt":       lambda a, b: _num(a) > _num(b),
+    "gte":      lambda a, b: _num(a) >= _num(b),
+    "lt":       lambda a, b: _num(a) < _num(b),
+    "lte":      lambda a, b: _num(a) <= _num(b),
+    "contains": lambda a, b: str(b).lower() in str(a).lower(),
+    "in":       lambda a, b: str(a) in [str(x) for x in (b if isinstance(b, list) else [b])],
+    "exists":   lambda a, _b: a is not None,
+}
+
+
+def _num(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+
+
+def _ctx_value(ctx: Dict, field: str) -> Any:
+    """Read a possibly dotted field out of the workflow context."""
+    current: Any = ctx
+    for part in str(field).split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current
+
+
+async def _exec_policy_check(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
+    """
+    Evaluate a gate against real workflow context.
+
+    This used to return PASS unconditionally with a "(simulated)" note, which
+    meant a workflow's guardrail approved every branch it was asked about. A
+    gate that cannot be evaluated now fails the step rather than waving it
+    through: an unevaluatable control is not a satisfied control.
+    """
     config = step.get("config", {})
     field = config.get("field", "")
     op    = config.get("op", "eq")
     value = config.get("value", "")
     label = config.get("label") or f"if {field} {op} '{value}'"
 
-    # In a real engine this queries live data; here we simulate a PASS
-    await asyncio.sleep(0)
+    comparator = _COMPARATORS.get(op)
+    if comparator is None:
+        return {"status": "failed", "check": label, "result": "error",
+                "output": f"Policy check '{label}' uses unsupported operator '{op}'."}
+
+    if not field:
+        return {"status": "failed", "check": label, "result": "error",
+                "output": f"Policy check '{label}' has no field to evaluate."}
+
+    actual = _ctx_value(ctx, field)
+    if actual is None and op != "exists":
+        return {"status": "failed", "check": label, "result": "error",
+                "output": (f"Policy check '{label}' could not be evaluated: "
+                           f"'{field}' is not present in the workflow context.")}
+
+    try:
+        passed = bool(comparator(actual, value))
+    except Exception as exc:
+        return {"status": "failed", "check": label, "result": "error",
+                "output": f"Policy check '{label}' errored: {type(exc).__name__}"}
+
     return {
-        "status": "completed",
-        "output": f"Policy check '{label}' evaluated → PASS (simulated). "
-                  "In production this queries the Trust Fabric enforcer.",
+        "status": "completed" if passed else "failed",
+        "output": f"Policy check '{label}' evaluated → {'PASS' if passed else 'FAIL'} (actual: {actual!r}).",
         "check": label,
-        "result": "pass",
+        "result": "pass" if passed else "fail",
     }
 
 
-async def _exec_condition(step: Dict, db: AsyncSession) -> Dict:
-    """Branch gate — always passes in simulation."""
+async def _exec_condition(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
+    """
+    Branch gate over the same field/op/value contract as a policy check.
+
+    A free-form expression is not evaluated — running arbitrary expressions
+    from stored workflow config would be an injection surface — so a workflow
+    that supplies one is told to express it as a structured condition instead
+    of being silently allowed to continue.
+    """
     config = step.get("config", {})
-    expression = config.get("expression", "true")
-    await asyncio.sleep(0)
-    return {
-        "status": "completed",
-        "output": f"Condition '{expression}' evaluated → TRUE (simulated). Branch continues.",
-    }
+    if config.get("field"):
+        result = await _exec_policy_check(step, db, ctx)
+        result["output"] = result["output"].replace("Policy check", "Condition")
+        return result
+
+    expression = config.get("expression")
+    if expression:
+        return {
+            "status": "failed",
+            "output": (f"Condition '{expression}' is a free-form expression, which is not "
+                       f"evaluated. Express it as field/op/value so the branch is decidable."),
+        }
+    return {"status": "failed", "output": "Condition step has nothing to evaluate."}
 
 
 async def _exec_wait(step: Dict, db: AsyncSession) -> Dict:
@@ -506,9 +590,9 @@ async def execute_workflow(
             if step_type == "agent_run":
                 result_data = await _exec_agent_run(step, db, ctx)
             elif step_type == "policy_check":
-                result_data = await _exec_policy_check(step, db)
+                result_data = await _exec_policy_check(step, db, ctx)
             elif step_type == "condition":
-                result_data = await _exec_condition(step, db)
+                result_data = await _exec_condition(step, db, ctx)
             elif step_type == "wait":
                 result_data = await _exec_wait(step, db)
             elif step_type == "notify":

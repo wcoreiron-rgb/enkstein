@@ -32,6 +32,8 @@ class FindingCreate(BaseModel):
     external_id: Optional[str] = None
     reference_url: Optional[str] = None
     raw_data: Optional[str] = None
+    data_origin: str = "unknown"
+    source_connector: Optional[str] = None
 
 
 class FindingUpdate(BaseModel):
@@ -67,6 +69,8 @@ class FindingRead(BaseModel):
     external_id: Optional[str] = None
     reference_url: Optional[str] = None
     raw_data: Optional[str] = None
+    data_origin: str = "unknown"
+    source_connector: Optional[str] = None
     first_seen: datetime
     last_seen: datetime
     resolved_at: Optional[datetime] = None

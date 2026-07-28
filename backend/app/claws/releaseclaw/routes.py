@@ -604,18 +604,26 @@ async def get_findings(tenant_id: str = "default"):
 
 
 @router.post("/scan")
-async def run_scan():
-    """Compatibility scan endpoint for left-blade testing.
-
-    Release Governance scans deployment definitions/templates rather than external findings.
-    """
+async def run_scan(tenant_id: str = "default"):
+    """Evaluate the tenant's governed deployment posture and control catalog."""
+    deployments = [
+        item for item in DEPLOYMENTS.values()
+        if item.get("tenant_id", "default") == tenant_id
+    ]
+    blocked = sum(item.get("status") == "blocked" for item in deployments)
+    awaiting = sum(item.get("status") in {"approval_required", "conditional"} for item in deployments)
     return {
         "status": "completed",
-        "findings_created": 0,
-        "findings_updated": 0,
+        "mode": "live" if deployments else "simulated",
+        "deployments_scanned": len(deployments),
+        "blocked_deployments": blocked,
+        "approval_required": awaiting,
         "templates_checked": len(TEMPLATES),
         "adapters_checked": len(ADAPTERS),
-        "message": "Release Governance deployment template/control catalog scan complete.",
+        "message": (
+            "No governed deployments exist for this tenant yet; control catalog validated."
+            if not deployments else "Release Governance deployment scan complete."
+        ),
     }
 
 

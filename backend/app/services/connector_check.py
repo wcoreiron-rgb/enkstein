@@ -45,11 +45,39 @@ async def check_providers(
     """
     output = []
     for p in provider_map:
-        connector_types = p.get("connector_types") or ([p.get("connector_type")] if p.get("connector_type") else [])
+        raw = p.get("connector_types") or p.get("connector_type") or []
+        # A provider may name one connector type or several aliases; normalise
+        # both shapes so a list value is not wrapped into a nested list.
+        connector_types = raw if isinstance(raw, (list, tuple)) else [raw]
         configured = any([await is_connector_configured(db, ct) for ct in connector_types])
+        # Whether this provider could return live tenant data if it were
+        # configured. Surfacing it means an operator can tell a provider that
+        # is merely unconfigured apart from one that cannot scan yet at all,
+        # rather than configuring a credential and wondering why nothing
+        # changed.
+        state = _coverage(connector_types)
         output.append({
             "provider":   p["provider"],
             "label":      p["label"],
             "configured": configured,
+            "coverage":   state,
+            "live_capable": state in ("declarative", "native"),
         })
     return output
+
+
+def _coverage(connector_types: list[str]) -> str:
+    """Best coverage state across the connector types a provider may use."""
+    # Imported here because the adapter registry imports provider modules that
+    # transitively import this checker.
+    from app.claws.adapters import registry
+
+    best = "missing"
+    ranking = {"missing": 0, "action_only": 1, "declarative": 2, "native": 3}
+    for connector_type in connector_types:
+        if not isinstance(connector_type, str):
+            continue
+        state = registry.coverage_state(connector_type)
+        if ranking.get(state, 0) > ranking.get(best, 0):
+            best = state
+    return best

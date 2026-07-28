@@ -6,8 +6,7 @@ import {
   Shield, Activity, Ban
 } from 'lucide-react';
 import { capabilityName, marcellusText } from '@/lib/capability-names';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+import { apiFetch } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -123,56 +122,46 @@ function fmtRelative(iso: string | null): string {
 
 // ─── API functions ────────────────────────────────────────────────────────────
 
+// These went through a bare fetch against an absolute localhost URL, which
+// sent no bearer token and could not resolve from the packaged desktop app.
+// apiFetch uses the same-origin proxy and carries the operator's session.
+
 async function fetchStats(): Promise<Stats> {
-  const r = await fetch(`${API}/remediation/stats`);
-  return r.json();
+  return apiFetch<Stats>('/remediation/stats');
 }
 
 async function fetchActions(status?: string): Promise<RemAction[]> {
-  const url = status
-    ? `${API}/remediation/actions?status=${status}&limit=100`
-    : `${API}/remediation/actions?limit=100`;
-  const r = await fetch(url);
-  const data = await r.json();
+  const query = status ? `?status=${encodeURIComponent(status)}&limit=100` : '?limit=100';
+  const data = await apiFetch<{ actions?: RemAction[] }>(`/remediation/actions${query}`);
   return data.actions || [];
 }
 
 async function fetchPlaybooks(): Promise<Playbook[]> {
-  const r = await fetch(`${API}/remediation/playbooks`);
-  const data = await r.json();
+  const data = await apiFetch<{ playbooks?: Playbook[] }>('/remediation/playbooks');
   return data.playbooks || [];
 }
 
+/** Approver identity comes from the bearer token server-side, not the body. */
 async function approveAction(id: string): Promise<RemAction> {
-  const r = await fetch(`${API}/remediation/actions/${id}/approve`, {
+  return apiFetch<RemAction>(`/remediation/actions/${id}/approve`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ approved_by: 'admin' }),
+    body: JSON.stringify({}),
   });
-  return r.json();
 }
 
 async function rejectAction(id: string, reason: string): Promise<RemAction> {
-  const r = await fetch(`${API}/remediation/actions/${id}/reject`, {
+  return apiFetch<RemAction>(`/remediation/actions/${id}/reject`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rejected_by: 'admin', reason }),
+    body: JSON.stringify({ reason }),
   });
-  return r.json();
 }
 
 async function rollbackAction(id: string): Promise<RemAction> {
-  const r = await fetch(`${API}/remediation/actions/${id}/rollback`, {
-    method: 'POST',
-  });
-  return r.json();
+  return apiFetch<RemAction>(`/remediation/actions/${id}/rollback`, { method: 'POST' });
 }
 
 async function togglePlaybook(id: string): Promise<Playbook> {
-  const r = await fetch(`${API}/remediation/playbooks/${id}/toggle`, {
-    method: 'POST',
-  });
-  return r.json();
+  return apiFetch<Playbook>(`/remediation/playbooks/${id}/toggle`, { method: 'POST' });
 }
 
 // ─── Approval Queue Card ──────────────────────────────────────────────────────
@@ -423,14 +412,14 @@ function PlaybookCard({ pb, onToggle }: { pb: Playbook; onToggle: (id: string) =
       className="rounded-xl border p-4 space-y-3 transition-opacity"
       style={{
         background:   'var(--rc-surface)',
-        borderColor:  pb.is_active ? 'var(--rc-accent)44' : 'var(--rc-border)',
+        borderColor:  pb.is_active ? 'var(--rc-brand)44' : 'var(--rc-border)',
         opacity:      pb.is_active ? 1 : 0.6,
       }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Zap className="w-3.5 h-3.5" style={{ color: pb.is_active ? 'var(--rc-accent)' : 'var(--rc-text-3)' }} />
+            <Zap className="w-3.5 h-3.5" style={{ color: pb.is_active ? 'var(--rc-brand)' : 'var(--rc-text-3)' }} />
             <span className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{pb.name}</span>
             {pb.trigger_severity && (
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-3)' }}>
@@ -564,7 +553,7 @@ export default function RemediationPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <RefreshCcw className="w-6 h-6 animate-spin" style={{ color: 'var(--rc-accent)' }} />
+        <RefreshCcw className="w-6 h-6 animate-spin" style={{ color: 'var(--rc-brand)' }} />
       </div>
     );
   }
@@ -604,7 +593,7 @@ export default function RemediationPage() {
             { label: 'Failed',           value: stats.failed,            icon: XCircle,      color: '#ef4444' },
             { label: 'Rolled Back',      value: stats.rolled_back,       icon: RotateCcw,    color: '#6b7280' },
             { label: 'Timed Out',        value: stats.timed_out,         icon: Ban,          color: '#6b7280' },
-            { label: 'Total Actions',    value: stats.total,             icon: Shield,       color: 'var(--rc-accent)' },
+            { label: 'Total Actions',    value: stats.total,             icon: Shield,       color: 'var(--rc-brand)' },
             { label: 'Active Playbooks', value: stats.active_playbooks,  icon: Zap,          color: '#22c55e' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div
@@ -660,7 +649,7 @@ export default function RemediationPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Activity className="w-5 h-5" style={{ color: 'var(--rc-accent)' }} />
+            <Activity className="w-5 h-5" style={{ color: 'var(--rc-brand)' }} />
             <h2 className="text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>
               Action History
             </h2>
@@ -672,7 +661,7 @@ export default function RemediationPage() {
                 onClick={() => setTab(t)}
                 className="px-3 py-1 rounded-lg text-xs capitalize transition-colors"
                 style={{
-                  background: tab === t ? 'var(--rc-accent)' : 'var(--rc-bg-elevated)',
+                  background: tab === t ? 'var(--rc-brand)' : 'var(--rc-bg-elevated)',
                   color:      tab === t ? '#fff'              : 'var(--rc-text-2)',
                 }}
               >
@@ -717,7 +706,7 @@ export default function RemediationPage() {
       {/* Playbooks */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5" style={{ color: 'var(--rc-accent)' }} />
+          <Zap className="w-5 h-5" style={{ color: 'var(--rc-brand)' }} />
           <h2 className="text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>
             Remediation Playbooks
           </h2>

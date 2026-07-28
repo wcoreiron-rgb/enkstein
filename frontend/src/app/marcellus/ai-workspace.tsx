@@ -34,6 +34,8 @@ import {
   Globe2,
   ExternalLink,
   Loader2,
+  Maximize2,
+  Minimize2,
   Paperclip,
   Pencil,
   RefreshCcw,
@@ -52,6 +54,7 @@ import {
   branchCortexConversation,
   renameCortexConversation,
   ContextManifest,
+  CortexFileChange,
   CortexArtifact,
   CortexCodexApproval,
   CortexChangeProposal,
@@ -94,6 +97,14 @@ import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
+import {
+  clampPanelWidth,
+  DEFAULT_PANEL_WIDTH,
+  MAX_PANEL_WIDTH,
+  MIN_PANEL_WIDTH,
+  persistPanelWidth,
+  readStoredPanelWidth,
+} from '@/lib/panel-width';
 import { consumeForceNewProjectIntent } from '@/lib/native-folder-intent';
 import { allFolderPaths, buildFileTree, type FileTreeNode } from '@/lib/file-tree';
 import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
@@ -111,6 +122,23 @@ declare global {
 }
 
 type Mode = 'chat' | 'cowork' | 'security';
+
+// The execution timeline is deliberately two-layered rather than one Codex-style feed
+// forced onto every source. "pipeline" steps are Enkstein's own turn stages and apply to
+// every Brain (context compiled, sent, responded, files written) -- what a local Ollama
+// turn honestly has to show. "brain" steps are the answering Brain's own real lifecycle
+// states (currently only reported for browser sessions: queued/leased/submitted/streaming,
+// and for native Codex: plan/diff deltas) -- shown only when that source actually reports
+// them, never invented for a source that has nothing to report.
+type ExecutionStepKind = 'pipeline' | 'brain' | 'file';
+type ExecutionStepStatus = 'active' | 'done' | 'skipped';
+type ExecutionStep = {
+  id: string;
+  kind: ExecutionStepKind;
+  label: string;
+  detail?: string;
+  status: ExecutionStepStatus;
+};
 
 type TurnFailureKind = 'failed' | 'timeout' | 'interrupted';
 type TurnFailure = { content: string; kind: TurnFailureKind; detail: string };
@@ -275,6 +303,44 @@ export default function AIWorkspace({
   const [runtimeGroup, setRuntimeGroup] = useState<RuntimeGroup>('hybrid');
 
   useEffect(() => { setRuntimeGroup(readStoredRuntimeGroup()); }, []);
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const [panelMaximized, setPanelMaximized] = useState(false);
+  const [resizingPanel, setResizingPanel] = useState(false);
+  useEffect(() => { setPanelWidth(readStoredPanelWidth()); }, []);
+
+  // Drag-to-resize for the Cowork project/review panel. Width is measured from
+  // the viewport's right edge so the handle tracks the pointer exactly, and is
+  // persisted so a reviewer who widened the panel to read a script keeps it.
+  const startPanelResize = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setPanelMaximized(false);
+    setResizingPanel(true);
+    const onMove = (move: PointerEvent) => {
+      setPanelWidth(clampPanelWidth(window.innerWidth - move.clientX));
+    };
+    const onUp = () => {
+      setResizingPanel(false);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setPanelWidth((current) => { persistPanelWidth(current); return current; });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
+  const nudgePanel = useCallback((delta: number) => {
+    setPanelMaximized(false);
+    setPanelWidth((current) => {
+      const next = clampPanelWidth(current + delta);
+      persistPanelWidth(next);
+      return next;
+    });
+  }, []);
+
+  // Past this width the panel is being used as a review surface rather than a
+  // file list, so diffs and the editor get more generous typography.
+  const effectivePanelWidth = panelMaximized ? MAX_PANEL_WIDTH : panelWidth;
+  const wideReviewPanel = effectivePanelWidth >= 460;
   const selectRuntimeGroup = (group: RuntimeGroup) => {
     setRuntimeGroup(group);
     persistRuntimeGroup(group);
@@ -285,7 +351,7 @@ export default function AIWorkspace({
   const [autoApply, setAutoApply] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [nativeResult, setNativeResult] = useState('');
-  const [activity, setActivity] = useState<string[]>([]);
+  const [activity, setActivity] = useState<ExecutionStep[]>([]);
   const [codexApprovals, setCodexApprovals] = useState<CortexCodexApproval[]>([]);
   const [reviewingProposal, setReviewingProposal] = useState<string | null>(null);
   const [researchOpen, setResearchOpen] = useState(false);
@@ -469,8 +535,14 @@ export default function AIWorkspace({
         // Cowork's project comes from the URL (initialProjectId) first, since
         // it's deep-linked; Chat has no project URL segment at all, so its
         // project selection is remembered sidebar state only.
+        // Opening the workspace without a deep link is a fresh start: no
+        // project, no conversation. Restoring the previously remembered
+        // project put the operator back inside a folder they did not ask for
+        // and hid every thread outside it. The remembered values still serve
+        // deep links and in-session navigation; they just no longer decide
+        // what a plain open looks like.
         const nextProject = hasProjects
-          ? (initialProjectId || projectId || rows.find((item) => item.id === remembered.projectId)?.id || rows[0]?.id || '')
+          ? (initialProjectId || projectId || '')
           : '';
         if (mode === 'cowork' && nextProject !== projectId) {
           setProjectId(nextProject);
@@ -520,24 +592,12 @@ export default function AIWorkspace({
             setMessages([]);
           }
         } else {
-          const first = conversationRows.find((item) => item.id === remembered.conversationId) || conversationRows[0];
-          if (first) {
-            const detail = await getCortexConversation(first.id);
-            if (cancelled) return;
-            setActive(detail);
-            setMessages(detail.messages);
-            setSource(detail.selected_source);
-            setClassification(detail.classification);
-            const canonical = workspaceRoutePath(mode, {
-              projectId: detail.project_id || undefined,
-              conversationId: detail.id,
-            });
-            persistLastActiveConversation(mode, detail.id, detail.project_id || undefined);
-            if (window.location.pathname !== canonical) router.replace(canonical);
-          } else {
-            setActive(null);
-            setMessages([]);
-          }
+          // Opening a mode without a conversation in the URL starts a clean
+          // page. Previously the most recent thread was loaded and the URL
+          // rewritten to match, so there was no way to reach an empty
+          // workspace. Past conversations stay one click away in the blade.
+          setActive(null);
+          setMessages([]);
         }
         // artifacts/selectedArtifacts are no longer set here: the dedicated
         // effect keyed on activeProjectId (derived from `active`/`projectId`
@@ -604,9 +664,17 @@ export default function AIWorkspace({
             .filter((item) => providerKey === 'ollama' || allowedModels.has(item.id))
             .map((item) => ({ id: item.id, label: item.name || item.id }));
           const models = liveModels.length ? liveModels : [{ id: profile.model, label: profile.model }];
+          // Several profiles can share one provider (Ollama in particular has
+          // a general, an authoring and a scanner profile), so the provider
+          // label alone renders three indistinguishable "Ollama" rows. Naming
+          // the model makes the choice legible: "Ollama · qwen2.5:14b-instruct".
+          const providerLabel = provider?.label || profile.provider;
+          const defaultModel = models.some((item) => item.id === profile.model)
+            ? profile.model
+            : models[0]?.id || profile.model;
           return {
             value: `profile:${profile.name}`,
-            label: provider?.label || `${profile.provider} · ${profile.name}`,
+            label: defaultModel ? `${providerLabel} · ${defaultModel}` : providerLabel,
             ready: Boolean(provider?.ready),
             detail: provider?.setup || 'Provider is not connected.',
             models,
@@ -632,15 +700,11 @@ export default function AIWorkspace({
   }, [messages, busy]);
 
   const createConversation = async () => {
-    if (mode === 'cowork' && !projectId) {
-      setError('Create or select a project from the Cowork blade first.');
-      return null;
-    }
     const conversation = await createCortexConversation({
-      // Cowork requires an active project (its native folder/artifacts are
-      // project-scoped); Chat's project is optional organizational grouping,
-      // so a new Chat conversation joins whichever Chat folder is currently
-      // selected in the sidebar, or stays unfiled if none is selected.
+      // A project is optional in both modes. Cowork file writes are
+      // project-scoped and the backend already skips them when a conversation
+      // has no project, so an unfiled Cowork thread is a valid way to think
+      // through a problem before binding a folder to it.
       project_id: hasProjects && projectId ? projectId : undefined,
       title: 'New conversation',
       mode,
@@ -803,6 +867,32 @@ export default function AIWorkspace({
     }));
   }, [active?.id, activeProjectId, conversations, mode, nativeWorkspace, projectId, projects]);
 
+  // addStep appends a new step (marking the previous "active" step of the same kind "done"
+  // first, so only the current stage of each layer shows as in-progress at once). updateStep
+  // mutates the most recent matching step in place -- used for a Brain state transition
+  // (queued -> leased -> submitted -> streaming) so the timeline doesn't grow one row per
+  // poll tick, and for finalizing a step to "done"/"skipped".
+  const stepCounter = useRef(0);
+  const addStep = (kind: ExecutionStepKind, label: string, detail?: string, status: ExecutionStepStatus = 'active') => {
+    stepCounter.current += 1;
+    const id = `step-${stepCounter.current}`;
+    setActivity((current) => [
+      ...current.map((step) => (step.kind === kind && step.status === 'active' ? { ...step, status: 'done' as const } : step)),
+      { id, kind, label, detail, status },
+    ]);
+    return id;
+  };
+  const updateLastStep = (kind: ExecutionStepKind, matchLabel: (label: string) => boolean, label: string, detail?: string, status: ExecutionStepStatus = 'active') => {
+    setActivity((current) => {
+      const index = [...current].reverse().findIndex((step) => step.kind === kind && matchLabel(step.label));
+      if (index === -1) return [...current, { id: `step-${++stepCounter.current}`, kind, label, detail, status }];
+      const realIndex = current.length - 1 - index;
+      const next = [...current];
+      next[realIndex] = { ...next[realIndex], label, detail, status };
+      return next;
+    });
+  };
+
   const submit = async (event?: FormEvent, retryContent?: string) => {
     event?.preventDefault();
     const content = (retryContent ?? draft).trim();
@@ -837,18 +927,18 @@ export default function AIWorkspace({
         && (source === 'auto' || source === 'codex_subscription');
       if (useNativeCodex) {
         nativeCodexConversation.current = conversation.id;
-        setActivity(['Trust Fabric is authorizing the Codex subscription CLI']);
+        addStep('pipeline', 'Trust Fabric is authorizing the Codex subscription CLI');
         await startCortexCodex(conversation.id, {
           sandbox: 'workspace-write',
           runtime_group: runtimeGroup,
         });
-        setActivity((current) => [...current, 'Official Codex App Server session ready']);
+        addStep('pipeline', 'Official Codex App Server session ready', undefined, 'done');
         const started = await sendCortexCodexTurn(conversation.id, {
           prompt: content,
           runtime_group: runtimeGroup,
         });
         if (started.policy.input_redacted) {
-          setActivity((current) => [...current, 'Sensitive input redacted before CLI execution']);
+          addStep('pipeline', 'Sensitive input redacted before CLI execution', undefined, 'done');
         }
         let cursor = started.cursor;
         let nativeText = '';
@@ -865,16 +955,16 @@ export default function AIWorkspace({
               setStreamText(nativeText);
             }
             if (transient?.kind === 'item/plan/delta' && typeof transient.text === 'string') {
-              setActivity((current) => [...current.slice(-7), `Plan: ${transient.text.slice(0, 160)}`]);
+              updateLastStep('brain', (label) => label.startsWith('Plan:'), `Plan: ${transient.text.slice(0, 160)}`);
             }
             if (transient?.kind === 'turn/diff/updated') {
-              setActivity((current) => [...current, 'Workspace diff updated; changes remain approval-governed']);
+              addStep('brain', 'Workspace diff updated; changes remain approval-governed', undefined, 'done');
             }
           }
           if (status.turn === 'completed') {
             keepTransientOutput = true;
             setNativeResult(nativeText || 'Codex completed without a textual response. Review the governed workspace diff and activity record.');
-            setActivity((current) => [...current, 'Codex completed through the governed native bridge']);
+            addStep('pipeline', 'Codex completed through the governed native bridge', undefined, 'done');
             break;
           }
           if (status.turn === 'interrupted' || status.transport === 'interrupted') {
@@ -907,15 +997,36 @@ export default function AIWorkspace({
         agent_mode: mode === 'cowork' && agentMode,
         ...(mode === 'cowork' && agentMode ? { structure_mode: structureMode, auto_apply: autoApply } : {}),
       }, ({ event: streamEvent, data }) => {
-        if (streamEvent === 'turn_started') setActivity(['Planning governed turn']);
-        if (streamEvent === 'context_ready') setActivity((current) => [...current, 'Workspace context prepared']);
+        if (streamEvent === 'turn_started') { setActivity([]); addStep('pipeline', 'Planning governed turn'); }
+        if (streamEvent === 'context_ready') addStep('pipeline', 'Workspace context prepared', undefined, 'done');
+        // brain_progress carries the answering Brain's own real lifecycle state (currently
+        // only reported for browser sessions: queued/leased/submitted/streaming). It updates
+        // the same row in place per source rather than growing a new row per poll tick.
+        if (streamEvent === 'brain_progress' && data.label) {
+          updateLastStep(
+            'brain',
+            (label) => label.startsWith(`${data.source}:`),
+            `${data.source}: ${data.label}`,
+          );
+        }
         if (streamEvent === 'brain_completed') {
           const state = data.counted ? 'completed' : 'did not return a usable vote';
-          setActivity((current) => [...current, `${data.source || 'Brain'} ${state}`]);
+          addStep('brain', `${data.source || 'Brain'} ${state}`, undefined, 'done');
         }
         if (streamEvent === 'response_delta') setStreamText((current) => current + String(data.delta || ''));
-        if (streamEvent === 'changes_proposed') setActivity((current) => [...current, `${data.count} file change proposal${data.count === 1 ? '' : 's'} ready for review`]);
-        if (streamEvent === 'changes_applied') setActivity((current) => [...current, `${data.count} file change${data.count === 1 ? '' : 's'} applied to the local folder`]);
+        // file_progress is emitted once per file as _auto_apply_changes writes/skips it, giving
+        // a real per-file row instead of only a final batch count.
+        if (streamEvent === 'file_progress') {
+          const verb = data.operation === 'delete' ? 'Deleting' : 'Writing';
+          addStep(
+            'file',
+            `${data.outcome === 'skipped' ? 'Skipped' : verb} ${data.path}`,
+            undefined,
+            data.outcome === 'skipped' ? 'skipped' : 'done',
+          );
+        }
+        if (streamEvent === 'changes_proposed') addStep('pipeline', `${data.count} file change proposal${data.count === 1 ? '' : 's'} ready for review`, undefined, 'done');
+        if (streamEvent === 'changes_applied') addStep('pipeline', `${data.count} file change${data.count === 1 ? '' : 's'} applied to the local folder`, undefined, 'done');
       }, controller.signal);
       setActive(turn.conversation);
       setMessages((current) => [
@@ -933,7 +1044,7 @@ export default function AIWorkspace({
       await loadArtifacts();
     } catch (requestError) {
       if (requestError instanceof Error && requestError.name === 'AbortError') {
-        setActivity((current) => [...current, 'Turn stopped by operator']);
+        addStep('pipeline', 'Turn stopped by operator', undefined, 'done');
       } else {
         const detail = requestError instanceof Error ? requestError.message : 'The governed request failed.';
         // The governed backend rolls the turn back on failed/timeout/cancelled,
@@ -977,7 +1088,7 @@ export default function AIWorkspace({
     try {
       await decideCortexCodexApproval(active.id, approval.approval_id, decision);
       setCodexApprovals((current) => current.filter((item) => item.approval_id !== approval.approval_id));
-      setActivity((current) => [...current, `Codex ${approval.method.split('/')[1] || 'action'} ${decision}ed`]);
+      addStep('brain', `Codex ${approval.method.split('/')[1] || 'action'} ${decision}ed`, undefined, 'done');
     } catch (approvalError) {
       setError(approvalError instanceof Error ? approvalError.message : 'The governed approval failed.');
     }
@@ -989,9 +1100,10 @@ export default function AIWorkspace({
     setResearching(true);
     setBusy(true);
     setError(null);
-    setActivity(['Trust Fabric is evaluating research access']);
+    setActivity([]);
+    addStep('pipeline', 'Trust Fabric is evaluating research access');
     try {
-      setActivity((current) => [...current, `Retrieving ${urls.length} governed source${urls.length === 1 ? '' : 's'}`]);
+      addStep('pipeline', `Retrieving ${urls.length} governed source${urls.length === 1 ? '' : 's'}`, undefined, 'done');
       const result = await runCortexResearch(projectId, {
         conversation_id: active.id,
         question: researchQuestion.trim(),
@@ -1010,7 +1122,8 @@ export default function AIWorkspace({
         result.turn.conversation,
         ...current.filter((item) => item.id !== result.turn.conversation.id),
       ]);
-      setActivity((current) => [...current, `${result.citations.length} citations verified`, 'Source bundle and report saved']);
+      addStep('pipeline', `${result.citations.length} citations verified`, undefined, 'done');
+      addStep('pipeline', 'Source bundle and report saved', undefined, 'done');
       await loadArtifacts();
       setResearchOpen(false);
       setResearchQuestion('');
@@ -1282,13 +1395,16 @@ export default function AIWorkspace({
   };
 
   return (
-    <div className={`mx-auto grid h-[calc(100vh-4rem)] min-h-0 grid-cols-1 overflow-hidden ${mode === 'cowork' ? 'max-w-[1760px] lg:grid-cols-[minmax(420px,1fr)_300px]' : 'max-w-none'} `}
-      style={{ background: mode === 'chat' ? 'var(--rc-chat-canvas)' : 'var(--rc-bg-base)' }}>
+    <div className={`mx-auto grid h-[calc(100vh-4rem)] min-h-0 grid-cols-1 overflow-hidden ${mode === 'cowork' ? 'max-w-[1760px] lg:grid-cols-[minmax(0,1fr)_auto]' : 'max-w-none'} ${resizingPanel ? 'select-none' : ''}`}
+      style={{
+        background: mode === 'chat' ? 'var(--rc-chat-canvas)' : 'var(--rc-bg-base)',
+        cursor: resizingPanel ? 'col-resize' : undefined,
+      }}>
       <section className="flex min-h-0 min-w-0 flex-col">
         <header className="flex min-h-14 flex-wrap items-center justify-between gap-2 px-4 py-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <BrainCircuit className="h-4 w-4 text-red-500" />
+              <BrainCircuit className="h-4 w-4" style={{ color: "var(--rc-brand)" }} />
               <h1 className="truncate text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>{active?.title || (mode === 'chat' ? 'Enkstein Chat' : 'Enkstein Cowork')}</h1>
             </div>
             <p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Cortex Gateway · encrypted history · Trust Fabric enforced</p>
@@ -1316,7 +1432,7 @@ export default function AIWorkspace({
               <button type="button" onClick={() => setSwarmPickerOpen(true)} title="Edit swarm selection"
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs"
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
-                <Bot className="h-3.5 w-3.5 text-red-500" />{customSwarmSources.length} Brain{customSwarmSources.length === 1 ? '' : 's'}
+                <Bot className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />{customSwarmSources.length} Brain{customSwarmSources.length === 1 ? '' : 's'}
               </button>
             )}
             {(sourceOptions.find((item) => item.value === source)?.models.length || 0) > 0 && (
@@ -1331,8 +1447,8 @@ export default function AIWorkspace({
             {mode === 'cowork' && (
               <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border px-2 text-xs"
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}>
-                <input type="checkbox" checked={agentMode} onChange={(event) => setAgentMode(event.target.checked)} className="h-3.5 w-3.5 accent-red-600" />
-                <Bot className="h-3.5 w-3.5 text-red-500" />Agent tools
+                <input type="checkbox" checked={agentMode} onChange={(event) => setAgentMode(event.target.checked)} className="h-3.5 w-3.5" style={{ accentColor: "var(--rc-brand)" }} />
+                <Bot className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />Agent tools
               </label>
             )}
             {mode === 'cowork' && agentMode && (
@@ -1357,8 +1473,8 @@ export default function AIWorkspace({
                   : 'Connect a local folder to enable auto-apply; changes stay pending review until then'}
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
               >
-                <input type="checkbox" checked={autoApply} onChange={(event) => setAutoApply(event.target.checked)} className="h-3.5 w-3.5 accent-red-600" />
-                <Zap className="h-3.5 w-3.5 text-red-500" />Auto-apply
+                <input type="checkbox" checked={autoApply} onChange={(event) => setAutoApply(event.target.checked)} className="h-3.5 w-3.5" style={{ accentColor: "var(--rc-brand)" }} />
+                <Zap className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />Auto-apply
               </label>
             )}
             {active && (
@@ -1366,7 +1482,7 @@ export default function AIWorkspace({
                 title="Investigate this conversation with Security Arms"
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-xs disabled:opacity-50"
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
-                {investigating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5 text-red-500" />}
+                {investigating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldAlert className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />}
                 Investigate
               </button>
             )}
@@ -1390,11 +1506,15 @@ export default function AIWorkspace({
           {!messages.length && !busy && !nativeResult && !lastFailure ? (
             <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full border" style={{ borderColor: 'var(--rc-border-2)' }}>
-                {mode === 'chat' ? <BrainCircuit className="h-6 w-6 text-red-500" /> : <FolderOpen className="h-6 w-6 text-red-500" />}
+                {mode === 'chat' ? <BrainCircuit className="h-6 w-6" style={{ color: "var(--rc-brand)" }} /> : <FolderOpen className="h-6 w-6" style={{ color: "var(--rc-brand)" }} />}
               </div>
-              <h2 className="mt-5 text-xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{mode === 'chat' ? 'What are we working on?' : projectId ? 'Work with this project' : 'Create or select a project'}</h2>
+              <h2 className="mt-5 text-xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{mode === 'chat' ? 'What are we working on?' : projectId ? 'Work with this project' : 'What are we building?'}</h2>
               <p className="mt-2 max-w-md text-sm leading-6" style={{ color: 'var(--rc-text-3)' }}>
-                {mode === 'chat' ? 'Every Brain request is governed and the conversation is encrypted at rest.' : 'Import a folder and ask about it. Active project files stay attached to this Cowork conversation.'}
+                {mode === 'chat'
+                  ? 'Every Brain request is governed and the conversation is encrypted at rest.'
+                  : projectId
+                    ? 'Import a folder and ask about it. Active project files stay attached to this Cowork conversation.'
+                    : 'Ask anything. Select a project from the blade when you want Enkstein to read and write real files.'}
               </p>
             </div>
           ) : (
@@ -1424,11 +1544,7 @@ export default function AIWorkspace({
               {busy && (
                 <article className="space-y-3">
                   <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}><Loader2 className="h-4 w-4 animate-spin" />Cortex is working</div>
-                  {activity.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {activity.map((item, index) => <span key={`${item}-${index}`} className="rounded border px-2 py-1 text-[10px]" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}>{item}</span>)}
-                    </div>
-                  )}
+                  {activity.length > 0 && <ExecutionTimeline steps={activity} />}
                   {streamText && <SafeMarkdown content={streamText} />}
                   {codexApprovals.map((approval) => (
                     <div key={approval.approval_id} className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
@@ -1480,13 +1596,13 @@ export default function AIWorkspace({
               <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} complete file{selectedArtifacts.size === 1 ? '' : 's'} ·{' '}
               {selectedArtifactBytes.toLocaleString()} chars / {Math.ceil(selectedArtifactBytes / 1024)} KB · ~{Math.ceil(selectedArtifactBytes / 4).toLocaleString()} tokens ·{' '}
               {selectedArtifactBytes.toLocaleString()} / 100,000 char budget
-              <button type="button" onClick={() => setSelectedArtifacts(new Set())} className="ml-1 text-red-500">clear</button>
+              <button type="button" onClick={() => setSelectedArtifacts(new Set())} className="ml-1" style={{ color: "var(--rc-brand)" }}>clear</button>
             </div>
           )}
           <div className="mx-auto max-w-3xl rounded-2xl border p-2 shadow-sm"
             style={{ background: mode === 'chat' ? 'var(--rc-chat-panel)' : 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
             <textarea ref={draftRef} value={draft} onChange={(event) => setDraft(event.target.value.slice(0, 12000))} onKeyDown={handleKey} rows={3}
-              placeholder={mode === 'chat' ? 'Message Enkstein' : 'Ask about this project'}
+              placeholder={mode === 'chat' ? 'Message Enkstein' : projectId ? 'Ask about this project' : 'Ask about this work'}
               className="w-full resize-none bg-transparent px-2 py-1 text-sm leading-6 outline-none" style={{ color: 'var(--rc-text-1)' }} />
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-1">
@@ -1495,49 +1611,117 @@ export default function AIWorkspace({
                   <button type="button" onClick={() => setResearchOpen(true)} disabled={!projectId || !active || busy}
                     title="Research public sources" aria-label="Research public sources"
                     className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs disabled:opacity-40" style={{ color: 'var(--rc-text-2)' }}>
-                    <Globe2 className="h-3.5 w-3.5 text-red-500" />Research
+                    <Globe2 className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />Research
                   </button>
                 )}
               </div>
               {busy ? (
                 <button type="button" onClick={stopTurn} title="Stop turn" aria-label="Stop turn"
-                  className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-white"><Square className="h-3.5 w-3.5 fill-current" /></button>
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-white"
+                  style={{ background: 'var(--rc-brand)' }}><Square className="h-3.5 w-3.5 fill-current" /></button>
               ) : (
-                <button type="submit" disabled={!draft.trim() || (mode === 'cowork' && !projectId)} title="Send" aria-label="Send"
-                  className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-white disabled:opacity-40"><Send className="h-4 w-4" /></button>
+                <button type="submit" disabled={!draft.trim()} title="Send" aria-label="Send"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-white disabled:opacity-40"
+                  style={{ background: 'var(--rc-brand)' }}><Send className="h-4 w-4" /></button>
               )}
             </div>
           </div>
         </form>
       </section>
 
-      {mode === 'cowork' && (
-        <aside className="flex min-h-0 flex-col border-t lg:border-l lg:border-t-0" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
-          <div className="flex items-center justify-between border-b p-3" style={{ borderColor: 'var(--rc-border)' }}>
+      {/* The file panel only means something once a project is bound. Showing
+          an empty "No project selected" rail on every Cowork open spent a
+          third of the width on a placeholder. */}
+      {mode === 'cowork' && Boolean(activeProjectId) && (
+        <aside
+          className="relative flex min-h-0 w-full flex-col border-t lg:w-[var(--rc-panel-width)] lg:border-l lg:border-t-0"
+          style={{
+            borderColor: 'var(--rc-border)',
+            background: 'var(--rc-bg-surface)',
+            // The grid track is `auto`, so the panel's own width drives the
+            // layout; on narrow screens it stacks full-width instead.
+            ['--rc-panel-width' as string]: `${panelMaximized ? MAX_PANEL_WIDTH : panelWidth}px`,
+          }}
+          data-testid="cowork-panel"
+          data-panel-width={panelMaximized ? MAX_PANEL_WIDTH : panelWidth}
+        >
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize project panel"
+            aria-valuenow={panelMaximized ? MAX_PANEL_WIDTH : panelWidth}
+            aria-valuemin={MIN_PANEL_WIDTH}
+            aria-valuemax={MAX_PANEL_WIDTH}
+            tabIndex={0}
+            data-testid="cowork-panel-resizer"
+            onPointerDown={startPanelResize}
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft') { event.preventDefault(); nudgePanel(40); }
+              if (event.key === 'ArrowRight') { event.preventDefault(); nudgePanel(-40); }
+            }}
+            className="absolute left-0 top-0 hidden h-full w-1.5 -translate-x-1/2 cursor-col-resize lg:block"
+            style={{ background: resizingPanel ? 'var(--rc-accent, #dc2626)' : 'transparent' }}
+          />
+          <div
+            className="flex items-center justify-between gap-2 border-b px-3 py-2.5"
+            style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-panel-header)' }}
+          >
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-                <Folder className="h-4 w-4 text-red-500" />
-                {activeProjectName ? <span className="truncate" title={activeProjectName}>{activeProjectName}</span> : 'Project files'}
+              <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>
+                Project files
+              </p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <Folder className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-accent)' }} />
+                <span className="truncate text-xs font-medium" title={activeProjectName || undefined} style={{ color: 'var(--rc-text-1)' }}>
+                  {activeProjectName || 'No project selected'}
+                </span>
               </div>
-              {nativeWorkspace?.connected && <div className="mt-0.5 max-w-40 truncate text-[10px] text-green-600" title={nativeWorkspace.name}>Local folder: {nativeWorkspace.name}</div>}
+              {nativeWorkspace?.connected && (
+                <p className="mt-0.5 truncate text-[10px]" title={nativeWorkspace.name} style={{ color: 'var(--rc-text-3)' }}>
+                  Local folder: {nativeWorkspace.name}
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-0.5">
               <input ref={fileInput} type="file" multiple className="hidden" onChange={ingestFiles} />
               <input ref={folderInput} type="file" multiple className="hidden" onChange={ingestFiles} />
               <button type="button" onClick={startNewFile} disabled={!activeProjectId || uploading} title="Create file" aria-label="Create file"
-                className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40"><FilePlus2 className="h-4 w-4" /></button>
+                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] disabled:opacity-40" style={{ color: 'var(--rc-text-2)' }}><FilePlus2 className="h-4 w-4" /></button>
               <button type="button" onClick={() => fileInput.current?.click()} disabled={!activeProjectId || uploading} title="Add files" aria-label="Add files"
-                className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40"><Paperclip className="h-4 w-4" /></button>
+                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] disabled:opacity-40" style={{ color: 'var(--rc-text-2)' }}><Paperclip className="h-4 w-4" /></button>
               <button type="button" onClick={openFolderPicker} disabled={uploading} title={activeProjectId ? 'Import folder' : 'Choose folder and create project'} aria-label="Import folder"
-                className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}</button>
+                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] disabled:opacity-40" style={{ color: 'var(--rc-text-2)' }}>{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FolderPlus className="h-4 w-4" />}</button>
               {nativeWorkspace?.connected && <button type="button" onClick={() => void syncNativeFolder()} disabled={uploading} title="Sync local folder" aria-label="Sync local folder"
-                className="flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-40">{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}</button>}
+                className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] disabled:opacity-40" style={{ color: 'var(--rc-text-2)' }}>{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}</button>}
+              <button type="button" onClick={() => setPanelMaximized((current) => !current)}
+                title={panelMaximized ? 'Restore panel width' : 'Widen panel to review files'}
+                aria-label={panelMaximized ? 'Restore panel width' : 'Widen panel'}
+                aria-pressed={panelMaximized}
+                data-testid="cowork-panel-maximize"
+                className="hidden h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] lg:flex" style={{ color: 'var(--rc-text-2)' }}>
+                {panelMaximized ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
             </div>
           </div>
           {proposals.length > 0 && (
-            <div className="max-h-64 overflow-y-auto border-b p-2" style={{ borderColor: 'var(--rc-border)' }}>
-              <div className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-                <Wrench className="h-3.5 w-3.5 text-amber-500" />Changes awaiting review
+            <div className="overflow-y-auto border-b p-2"
+              style={{
+                borderColor: 'var(--rc-border)',
+                // A widened panel is widened precisely so scripts can be read
+                // before approval, so give the review list room to match.
+                maxHeight: wideReviewPanel ? '65vh' : '16rem',
+              }}>
+              <div className="mb-2 flex items-center gap-1.5 px-1">
+                <Wrench className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>
+                  Changes awaiting review
+                </span>
+                <span
+                  className="ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+                  style={{ background: 'rgba(245,158,11,.14)', color: '#b45309' }}
+                >
+                  {proposals.length}
+                </span>
               </div>
               <div className="space-y-1.5">
                 {proposals.map((proposal) => (
@@ -1552,7 +1736,7 @@ export default function AIWorkspace({
                       <CodeBlock
                         language={proposal.path.split('.').pop() || 'text'}
                         value={(proposal.operation === 'delete' ? proposal.current_content : proposal.proposed_content) || ''}
-                        compact
+                        compact={!wideReviewPanel}
                       />
                     </div>
                     <div className="mt-2 flex justify-end gap-1.5">
@@ -1569,24 +1753,38 @@ export default function AIWorkspace({
           <div className="min-h-0 flex-1 overflow-y-auto">
             {preview || creatingFile ? (
               <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b p-3" style={{ borderColor: 'var(--rc-border)' }}>
+                <div
+                  className="flex items-center justify-between gap-2 border-b px-3 py-2.5"
+                  style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-panel-header)' }}
+                >
                   <div className="min-w-0 flex-1">
                     <input value={newFilePath} onChange={(event) => setNewFilePath(event.target.value.slice(0, 1024))}
                       placeholder="folder/file.md" aria-label={creatingFile ? 'New file path' : 'File path'}
-                      className="h-8 w-full rounded border px-2 text-xs outline-none"
-                      style={{ background: 'var(--rc-bg)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }} />
-                    {!creatingFile && <div className="text-[10px]" style={{ color: 'var(--rc-text-3)' }}>v{preview?.version} · {preview?.size_bytes} bytes · edit path to move</div>}
+                      className="h-8 w-full rounded-md border px-2 font-mono text-xs outline-none transition-colors focus:border-[var(--rc-border-2)]"
+                      style={{ background: 'var(--rc-bg-input)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }} />
+                    {!creatingFile && (
+                      <div className="mt-1 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>
+                        v{preview?.version} · {preview?.size_bytes} bytes · edit path to move
+                      </div>
+                    )}
                   </div>
-                  <div className="ml-2 flex items-center gap-1">
-                    {!creatingFile && <button type="button" onClick={removeFile} aria-label="Move file to trash" title="Move file to trash"><Trash2 className="h-4 w-4" /></button>}
+                  <div className="ml-1 flex shrink-0 items-center gap-0.5">
+                    {!creatingFile && (
+                      <button type="button" onClick={removeFile} aria-label="Move file to trash" title="Move file to trash"
+                        className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)]"
+                        style={{ color: 'var(--rc-text-2)' }}><Trash2 className="h-4 w-4" /></button>
+                    )}
                     <button type="button" onClick={() => void saveFile()} disabled={savingFile || (creatingFile && !newFilePath.trim())} aria-label="Save file" title="Save file"
-                      className="flex h-7 w-7 items-center justify-center disabled:opacity-40">{savingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}</button>
-                    <button type="button" onClick={closeEditor} aria-label="Close editor"><X className="h-4 w-4" /></button>
+                      className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)] disabled:opacity-40"
+                      style={{ color: 'var(--rc-text-2)' }}>{savingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}</button>
+                    <button type="button" onClick={closeEditor} aria-label="Close editor" title="Close editor"
+                      className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--rc-panel-hover)]"
+                      style={{ color: 'var(--rc-text-2)' }}><X className="h-4 w-4" /></button>
                   </div>
                 </div>
                 <textarea value={editorContent} onChange={(event) => setEditorContent(event.target.value.slice(0, 1_000_000))}
                   aria-label="File content" spellCheck={false}
-                  className="min-h-0 flex-1 resize-none bg-transparent p-3 font-mono text-[11px] leading-5 outline-none"
+                  className={`min-h-0 flex-1 resize-none bg-transparent p-3 font-mono outline-none ${wideReviewPanel ? 'text-[13px] leading-6' : 'text-[11px] leading-5'}`}
                   style={{ color: 'var(--rc-text-2)' }} />
               </div>
             ) : artifacts.length ? (
@@ -1618,7 +1816,7 @@ export default function AIWorkspace({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="research-dialog-title" className="flex items-center gap-2 text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>
-                  <Globe2 className="h-4 w-4 text-red-500" />Governed research
+                  <Globe2 className="h-4 w-4" style={{ color: "var(--rc-brand)" }} />Governed research
                 </h2>
                 <p className="mt-1 text-xs leading-5" style={{ color: 'var(--rc-text-3)' }}>
                   Public HTTPS sources are checked by Trust Fabric, SSRF defenses, and prompt-injection scanning before any Brain sees them.
@@ -1644,7 +1842,7 @@ export default function AIWorkspace({
               <span className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Up to 8 sources · 512 KB each · no redirects or private networks</span>
               <button type="button" onClick={() => void runResearch()}
                 disabled={researching || !researchQuestion.trim() || !researchUrls.trim()}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-white disabled:opacity-40" style={{ background: 'var(--rc-brand)' }}>
                 {researching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe2 className="h-4 w-4" />}Research
               </button>
             </div>
@@ -1690,7 +1888,7 @@ export default function AIWorkspace({
               <button type="button" onClick={() => setDialog(null)} disabled={dialogBusy} className="h-9 rounded-md border px-3 text-sm" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Cancel</button>
               <button type="button" onClick={() => void completeDialog()}
                 disabled={dialogBusy || (dialog.kind === 'move-conversation' && !moveProjectId) || (dialog.kind === 'rename-conversation' && !renameTitle.trim())}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-white disabled:opacity-40" style={{ background: 'var(--rc-brand)' }}>
                 {dialogBusy && <Loader2 className="h-4 w-4 animate-spin" />}{dialog.kind === 'move-conversation' ? 'Move' : dialog.kind === 'trash-file' ? 'Move to trash' : dialog.kind === 'rename-conversation' ? 'Rename' : 'Archive'}
               </button>
             </div>
@@ -1727,9 +1925,9 @@ export default function AIWorkspace({
                           className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-xs ${option.ready ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                           style={{ borderColor: 'var(--rc-border)', background: customSwarmSources.includes(option.value) ? 'var(--rc-bg-elevated)' : 'var(--rc-bg)' }}>
                           <input type="checkbox" checked={customSwarmSources.includes(option.value)} disabled={!option.ready}
-                            onChange={() => toggleSwarmSource(option.value)} className="h-3.5 w-3.5 accent-red-600" />
+                            onChange={() => toggleSwarmSource(option.value)} className="h-3.5 w-3.5" style={{ accentColor: "var(--rc-brand)" }} />
                           <span className="flex-1" style={{ color: 'var(--rc-text-1)' }}>{option.label}</span>
-                          {customSwarmSources.includes(option.value) && <Check className="h-3.5 w-3.5 text-red-500" />}
+                          {customSwarmSources.includes(option.value) && <Check className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />}
                           {!option.ready && <span className="text-[10px]" style={{ color: 'var(--rc-text-3)' }}>unavailable</span>}
                         </label>
                       ))}
@@ -1754,7 +1952,7 @@ export default function AIWorkspace({
               <button type="button" onClick={() => { setSwarmPickerOpen(false); if (customSwarmSources.length === 0) setSource('auto'); }}
                 className="h-9 rounded-md border px-3 text-sm" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Cancel</button>
               <button type="button" onClick={confirmSwarmSelection} disabled={customSwarmSources.length === 0}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-red-600 px-3 text-sm text-white disabled:opacity-40">
+                className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-white disabled:opacity-40" style={{ background: 'var(--rc-brand)' }}>
                 Use this swarm
               </button>
             </div>
@@ -1775,6 +1973,62 @@ const FAILURE_PRESENTATION: Record<TurnFailureKind, { label: string; Icon: typeo
  * turn. Retry replays the preserved message as a fresh governed turn; Continue
  * returns it to the composer. Neither duplicates a submission because the turn
  * rolled back server-side. */
+const EXECUTION_STEP_ICON: Record<ExecutionStepKind, typeof BrainCircuit> = {
+  pipeline: Loader2,
+  brain: BrainCircuit,
+  file: File,
+};
+
+/** Two-layer live execution timeline shown while a turn is in flight.
+ *
+ * "pipeline" rows are Enkstein's own turn stages (context compiled, sent,
+ * files written) and apply to every Brain, including a fully local Ollama
+ * turn that has nothing else to show. "brain" rows are the answering
+ * Brain's own real lifecycle state -- currently reported for browser
+ * sessions (queued/leased/submitted/streaming) and native Codex
+ * (plan/diff deltas) -- and only ever appear when that source actually
+ * reported one; nothing is invented for a source that has no native
+ * state to report. "file" rows are per-file write/delete outcomes from
+ * the Cowork auto-apply writer. Collapsed to the most recent step by
+ * default; expandable to the full timeline. */
+function ExecutionTimeline({ steps }: { steps: ExecutionStep[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const latest = steps[steps.length - 1];
+  const visible = expanded ? steps : latest ? [latest] : [];
+  return (
+    <div className="rounded-lg border" style={{ borderColor: 'var(--rc-border)' }}>
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px]"
+        style={{ color: 'var(--rc-text-3)' }}
+        aria-expanded={expanded}
+      >
+        <span className="font-medium">Execution steps ({steps.length})</span>
+        {expanded ? <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}
+      </button>
+      <div className="space-y-1 border-t px-2.5 py-1.5" style={{ borderColor: 'var(--rc-border)' }}>
+        {visible.map((step) => {
+          const Icon = EXECUTION_STEP_ICON[step.kind];
+          const spinning = step.status === 'active';
+          return (
+            <div key={step.id} className="flex items-start gap-2 text-[11px]" style={{ color: step.status === 'skipped' ? 'var(--rc-text-3)' : 'var(--rc-text-2)' }}>
+              {step.status === 'done' ? (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-accent, #16a34a)' }} aria-hidden="true" />
+              ) : step.status === 'skipped' ? (
+                <Ban className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : (
+                <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${spinning ? 'animate-spin' : ''}`} aria-hidden="true" />
+              )}
+              <span className="min-w-0 break-words">{step.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TurnFailureBlock({
   failure,
   onRetry,
@@ -1802,7 +2056,7 @@ function TurnFailureBlock({
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button type="button" onClick={onRetry} title="Re-run this turn" aria-label="Retry the failed turn"
-          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-medium text-white">
+          className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-white" style={{ background: 'var(--rc-brand)' }}>
           <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />Retry
         </button>
         <button type="button" onClick={onContinue} title="Return the message to the composer to adjust and continue"
@@ -1847,10 +2101,12 @@ function FileTreeView({
             <div key={node.path}>
               <button type="button" onClick={() => onToggleFolder(node.path)}
                 aria-expanded={expanded} aria-label={`${expanded ? 'Collapse' : 'Expand'} ${node.name} folder`}
-                className="flex w-full items-center gap-1 rounded px-1 py-1 text-left hover:bg-black/5 dark:hover:bg-white/5"
+                className="flex w-full items-center gap-1.5 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-[var(--rc-panel-hover)]"
                 style={{ paddingLeft: `${indent}px` }}>
                 {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />}
-                {expanded ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-red-500" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-red-500" />}
+                {expanded
+                  ? <FolderOpen className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-accent)' }} />
+                  : <Folder className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-accent)' }} />}
                 <span className="min-w-0 flex-1 truncate text-xs font-medium" style={{ color: 'var(--rc-text-1)' }}>{node.name}</span>
               </button>
               {expanded && (
@@ -1869,14 +2125,29 @@ function FileTreeView({
         }
         const artifact = node.artifact;
         return (
-          <div key={artifact.id} className="group flex items-center gap-1 rounded px-1 py-1 hover:bg-black/5 dark:hover:bg-white/5" style={{ paddingLeft: `${indent + 18}px` }}>
+          <div
+            key={artifact.id}
+            className="group flex items-center gap-1.5 rounded-md px-1 py-1.5 transition-colors hover:bg-[var(--rc-panel-hover)]"
+            style={{
+              paddingLeft: `${indent + 18}px`,
+              // A file already in context is the one piece of state a user
+              // scans this list for, so mark the row itself, not just its box.
+              background: selectedArtifacts.has(artifact.id) ? 'var(--rc-panel-hover)' : undefined,
+            }}
+          >
             <button type="button" onClick={() => onToggleArtifact(artifact.id)} aria-label={`${selectedArtifacts.has(artifact.id) ? 'Remove' : 'Add'} ${artifact.path} context`}
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded border" style={{ borderColor: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'var(--rc-border)', background: selectedArtifacts.has(artifact.id) ? '#dc2626' : 'transparent', color: 'white' }}>
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
+              style={{
+                borderColor: selectedArtifacts.has(artifact.id) ? 'var(--rc-accent)' : 'var(--rc-border-2)',
+                background: selectedArtifacts.has(artifact.id) ? 'var(--rc-accent)' : 'transparent',
+                color: 'white',
+              }}>
               {selectedArtifacts.has(artifact.id) && <Check className="h-3 w-3" />}
             </button>
             <File className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />
-            <button type="button" onClick={() => void onPreviewArtifact(artifact)} className="min-w-0 flex-1 truncate text-left text-xs" title={artifact.path} style={{ color: 'var(--rc-text-2)' }}>{node.name}</button>
-            <span className="text-[9px]" style={{ color: 'var(--rc-text-3)' }}>v{artifact.version}</span>
+            <button type="button" onClick={() => void onPreviewArtifact(artifact)} className="min-w-0 flex-1 truncate text-left text-xs" title={artifact.path}
+              style={{ color: selectedArtifacts.has(artifact.id) ? 'var(--rc-text-1)' : 'var(--rc-text-2)' }}>{node.name}</button>
+            <span className="shrink-0 text-[10px] tabular-nums opacity-0 transition-opacity group-hover:opacity-100" style={{ color: 'var(--rc-text-3)' }}>v{artifact.version}</span>
           </div>
         );
       })}
@@ -1904,6 +2175,11 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
   const votes = Array.isArray(governance.votes) ? governance.votes : [];
   const citations = Array.isArray(governance.citations) ? governance.citations : [];
   const contextManifest = governance.context_manifest as ContextManifest | null | undefined;
+  const fileChanges = Array.isArray(governance.file_changes)
+    ? governance.file_changes.filter((change): change is CortexFileChange => (
+      Boolean(change) && typeof change.path === 'string' && typeof change.operation === 'string' && typeof change.outcome === 'string'
+    ))
+    : [];
   const allowed = governance.outcome === 'allowed';
   const runtimeGroup = typeof governance.runtime_group === 'string' ? governance.runtime_group : undefined;
   const latencyMs = typeof governance.latency_ms === 'number' ? governance.latency_ms : undefined;
@@ -1929,7 +2205,7 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
       </div>
       {votes.length > 1 && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-red-500">{votes.filter((vote: any) => vote.counted).length}/{votes.length} Brain results · {governance.agreement || 'agreement pending'}</summary>
+          <summary className="cursor-pointer" style={{ color: "var(--rc-brand)" }}>{votes.filter((vote: any) => vote.counted).length}/{votes.length} Brain results · {governance.agreement || 'agreement pending'}</summary>
           <div className="mt-1.5 space-y-1">
             {votes.map((vote: any) => (
               <div key={vote.source} className="flex flex-wrap items-center gap-x-2 rounded border px-2 py-1" style={{ borderColor: 'var(--rc-border)' }}>
@@ -1945,11 +2221,11 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
       )}
       {citations.length > 0 && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-red-500">{citations.length} governed citation{citations.length === 1 ? '' : 's'}</summary>
+          <summary className="cursor-pointer" style={{ color: "var(--rc-brand)" }}>{citations.length} governed citation{citations.length === 1 ? '' : 's'}</summary>
           <div className="mt-1.5 space-y-1">
             {citations.map((citation: any) => (
               <a key={`${citation.id}-${citation.content_digest}`} href={citation.url} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 rounded border px-2 py-1 hover:text-red-500" style={{ borderColor: 'var(--rc-border)' }}>
+                className="flex items-center gap-2 rounded border px-2 py-1" style={{ color: 'var(--rc-text-2)', borderColor: 'var(--rc-border)' }}>
                 <span>[{citation.id}]</span><span className="min-w-0 flex-1 truncate">{citation.title}</span><ExternalLink className="h-3 w-3 shrink-0" />
               </a>
             ))}
@@ -1958,7 +2234,7 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
       )}
       {contextManifest && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-red-500">
+          <summary className="cursor-pointer" style={{ color: "var(--rc-brand)" }}>
             Context sent · {contextManifest.entries.length} file{contextManifest.entries.length === 1 ? '' : 's'} ·{' '}
             {contextManifest.total_characters_sent.toLocaleString()}/{contextManifest.budget_characters.toLocaleString()} chars ·{' '}
             ~{contextManifest.total_estimated_tokens.toLocaleString()} tokens · {contextManifest.selected_destination || contextManifest.destination}
@@ -1999,6 +2275,29 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
                 </div>
               </div>
             ))}
+          </div>
+        </details>
+      )}
+      {fileChanges.length > 0 && (
+        <details className="mt-2">
+          <summary className="cursor-pointer" style={{ color: "var(--rc-brand)" }}>
+            Files changed · {fileChanges.length} file{fileChanges.length === 1 ? '' : 's'}
+          </summary>
+          <div className="mt-1.5 space-y-1">
+            {fileChanges.map((change, index) => {
+              const color = change.outcome === 'applied'
+                ? '#16a34a'
+                : change.outcome === 'proposed'
+                  ? '#d97706'
+                  : '#dc2626';
+              return (
+                <div key={`${change.path}-${change.operation}-${index}`} className="flex min-w-0 flex-wrap items-center gap-x-2 rounded border px-2 py-1" style={{ borderColor: 'var(--rc-border)' }}>
+                  <span className="font-medium" style={{ color }}>{change.operation}</span>
+                  <span className="min-w-0 flex-1 truncate" title={change.path}>{change.path}</span>
+                  <span style={{ color }}>{change.outcome}</span>
+                </div>
+              );
+            })}
           </div>
         </details>
       )}

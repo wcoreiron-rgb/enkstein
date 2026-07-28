@@ -125,8 +125,16 @@ Chat, Cowork, and Security are separate mounted workspaces synchronized through
 URL history and remembered mode. Chat does not load Project state. Cowork
 requires a selected tenant-owned Project before project conversations, files,
 artifacts, proposals, or native-folder controls are active. Runtime-group choice
-is sent with each turn, but 0.3.18 does not persist it per conversation/Project
+is sent with each turn, but 0.4.9 does not persist it per conversation/Project
 because no compatible database field exists and no migration was authorized.
+
+Cowork persists a content-free per-turn file-result ledger alongside its
+existing context provenance. Each entry records only a project-relative path,
+the requested create/update/delete operation, and its final `applied`,
+`proposed`, `skipped`, or `blocked` outcome. The web console renders it as an
+expandable **Files changed** section after the response, so it is available on
+both live and reopened conversations without exposing generated file content in
+governance metadata.
 
 Encrypted tenant-scoped Projects hold persistent Chat/Cowork conversations and
 versioned text artifacts. Folder access is explicit. In the desktop shell, the

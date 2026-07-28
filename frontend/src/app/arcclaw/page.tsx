@@ -855,7 +855,7 @@ export default function ArcClawPage() {
                         className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-sm font-medium transition-colors"
                         style={{
                           background: "rgba(99,102,241,0.15)",
-                          color: "var(--rc-accent)",
+                          color: "var(--rc-accent-violet)",
                           border: "1px solid rgba(99,102,241,0.35)",
                         }}>
                         Go to Connector Marketplace →
@@ -951,7 +951,7 @@ export default function ArcClawPage() {
                               style={{
                                 background: "rgba(99,102,241,0.12)",
                                 borderColor: "rgba(99,102,241,0.4)",
-                                color: "var(--rc-accent)",
+                                color: "var(--rc-accent-violet)",
                               }}>
                               <Key className="w-3 h-3" />
                               Open Connector Marketplace →

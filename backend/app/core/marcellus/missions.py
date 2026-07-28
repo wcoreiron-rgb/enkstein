@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID
@@ -35,6 +36,8 @@ from app.models.swarm import SwarmJob
 from app.trust_fabric import ActionRequest, enforce
 from app.trust_fabric.agt_bridge import audit_prompt
 
+logger = logging.getLogger("marcellus.missions")
+
 
 _CADENCE = {
     "manual": None,
@@ -65,17 +68,33 @@ def _require_owner(user: dict[str, Any], owner_id: str) -> None:
         raise HTTPException(status_code=403, detail="Mission owner access required")
 
 
-def _mission_objective(mission: CortexMission) -> str:
-    return str(decrypt_json(mission.objective_ciphertext, mission.objective_digest)["objective"])
+_UNREADABLE = "[unreadable — encrypted with a different runtime key]"
+
+
+def _mission_objective(mission: CortexMission) -> tuple[str, bool]:
+    """Decrypt the objective, or report it as unreadable.
+
+    A row written under a previous runtime key cannot be authenticated. Raising
+    here failed the whole listing, so one stale mission blanked Mission Control
+    entirely. The row is surfaced as unreadable instead, which keeps the rest of
+    the page working and makes the bad row visible enough to delete.
+    """
+    try:
+        return str(decrypt_json(mission.objective_ciphertext, mission.objective_digest)["objective"]), True
+    except (ValueError, KeyError, TypeError):
+        logger.warning("Mission %s objective could not be decrypted", mission.id)
+        return _UNREADABLE, False
 
 
 def _mission_read(mission: CortexMission) -> CortexMissionRead:
+    objective, readable = _mission_objective(mission)
     return CortexMissionRead(
         id=mission.id,
         tenant_id=mission.tenant_id,
         owner_id=mission.owner_id,
         name=mission.name,
-        objective=_mission_objective(mission),
+        objective=objective,
+        readable=readable,
         status=mission.status,
         cadence=mission.cadence,
         autonomy_mode=mission.autonomy_mode,
@@ -95,7 +114,14 @@ def _mission_read(mission: CortexMission) -> CortexMissionRead:
 
 
 def _observation_read(observation: CortexMissionObservation) -> CortexMissionObservationRead:
-    summary = decrypt_json(observation.summary_ciphertext, observation.summary_digest)["summary"]
+    # Same key-rotation exposure as the mission objective above: one stale row
+    # must not take the observations feed down with it.
+    try:
+        summary = str(decrypt_json(observation.summary_ciphertext, observation.summary_digest)["summary"])
+        readable = True
+    except (ValueError, KeyError, TypeError):
+        logger.warning("Mission observation %s summary could not be decrypted", observation.id)
+        summary, readable = _UNREADABLE, False
     return CortexMissionObservationRead(
         id=observation.id,
         mission_id=observation.mission_id,
@@ -103,6 +129,7 @@ def _observation_read(observation: CortexMissionObservation) -> CortexMissionObs
         status=observation.status,
         severity=observation.severity,
         summary=summary,
+        readable=readable,
         evidence=json.loads(observation.evidence_json or "{}"),
         proposed_by=observation.proposed_by,
         reviewed_by=observation.reviewed_by,

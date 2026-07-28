@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+from app.claws import credential_aliases, provenance
 
 logger = logging.getLogger("endpointclaw.crowdstrike")
 
@@ -197,6 +198,7 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     Pull CrowdStrike detections from the Falcon Detections API.
     Fetches detections from the last 7 days with severity HIGH or CRITICAL.
     """
+    credentials = credential_aliases.resolve("crowdstrike", credentials)
     base_url = credentials.get("base_url", DEFAULT_BASE).rstrip("/")
     client_id = credentials.get("client_id", "")
     client_secret = credentials.get("client_secret", "")
@@ -269,13 +271,29 @@ def _parse_falcon_detection(raw: dict) -> dict:
     }
 
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """
+    Authenticated fetch that propagates failure.
+
+    ``get_findings`` deliberately falls back to demonstration data so a
+    standalone view is never blank. A shared scan needs the opposite: a
+    provider that failed must be reported as failed rather than counted as a
+    successful scan that happened to return demo findings.
+    """
+    raw = await _fetch_real_findings(credentials)
+    return provenance.live(
+        [_parse_falcon_detection(d) for d in raw],
+        provider="crowdstrike",
+        connector="crowdstrike",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """Main entry point for CrowdStrike Falcon adapter."""
     if credentials:
         try:
-            raw = await _fetch_real_findings(credentials)
-            return [_parse_falcon_detection(d) for d in raw]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("CrowdStrike Falcon API failed: %s — using simulated data", exc)
 
-    return [{**f, "provider": "crowdstrike"} for f in SIMULATED_FINDINGS]
+    return provenance.simulated(SIMULATED_FINDINGS, provider="crowdstrike")

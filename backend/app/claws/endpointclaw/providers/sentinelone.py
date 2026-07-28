@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+from app.claws import provenance
 
 logger = logging.getLogger("endpointclaw.sentinelone")
 
@@ -225,11 +226,20 @@ def _parse_s1_threat(raw: dict) -> dict:
     }
 
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    raw = await _fetch_real_findings(credentials)
+    return provenance.live(
+        [_parse_s1_threat(t) for t in raw],
+        provider="sentinelone",
+        connector="sentinelone",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     if credentials:
         try:
-            raw = await _fetch_real_findings(credentials)
-            return [_parse_s1_threat(t) for t in raw]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("SentinelOne API failed: %s — using simulated data", exc)
-    return [{**f, "provider": "sentinelone"} for f in SIMULATED_FINDINGS]
+    return provenance.simulated(SIMULATED_FINDINGS, provider="sentinelone")

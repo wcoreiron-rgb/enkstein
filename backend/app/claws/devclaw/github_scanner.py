@@ -25,6 +25,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import secrets_manager
+from app.services import device_code_auth
 
 logger = logging.getLogger("devclaw.github_scanner")
 
@@ -55,8 +56,10 @@ def _sev_risk(severity: str) -> float:
 
 
 def _make_headers(pat: str) -> dict[str, str]:
+    # GitHub accepts "Bearer" for both classic PATs and OAuth tokens, whereas
+    # the older "token" scheme rejects OAuth device-code tokens.
     return {
-        "Authorization": f"token {pat}",
+        "Authorization": f"Bearer {pat}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
@@ -298,16 +301,25 @@ async def fetch_github_findings(db: AsyncSession) -> list[dict]:
     if not rows:
         raise ValueError("GitHub connector not configured")
 
-    # 2. Find the row that actually has a PAT stored (skip seed placeholder rows)
+    # 2. Find the row that actually has a usable credential (skip seed
+    #    placeholder rows). Either a PAT or an interactive device-code token.
     pat: str | None = None
     for row in rows:
         creds = secrets_manager.get_credential(str(row[0]))
-        if creds and creds.get("personal_access_token"):
+        if not creds:
+            continue
+        device_token = await device_code_auth.resolve_access_token(creds)
+        if device_token:
+            pat = device_token
+            break
+        if creds.get("personal_access_token"):
             pat = creds["personal_access_token"]
             break
 
     if not pat:
-        raise ValueError("GitHub connector credentials not found — add your PAT in Connector Marketplace")
+        raise ValueError(
+            "GitHub connector credentials not found — sign in or add a PAT in Connector Marketplace"
+        )
 
     headers = _make_headers(pat)
 

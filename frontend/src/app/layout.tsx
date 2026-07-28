@@ -1,7 +1,17 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import AuthBoundary from '@/components/AuthBoundary';
+
+// Self-hosted at build time by Next, so there is no runtime request to Google
+// and no flash of unstyled text. Exposed as a CSS variable that globals.css
+// lists first in --rc-font-sans, ahead of the native system fallbacks.
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--rc-font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'Enkstein Architecture Lab',
@@ -17,7 +27,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         <link rel="icon"             type="image/png" sizes="512x512" href="/favicon.png" />
         <link rel="icon"             type="image/png" sizes="192x192" href="/favicon.png" />

@@ -15,7 +15,7 @@ import logging
 
 import httpx
 
-from .base import ActionResult, simulated
+from .base import ActionResult, not_configured
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ async def execute(
     creds = credentials or {}
 
     if not _has_gh_creds(creds):
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "revoke_token":
         # target_id is the token to revoke
@@ -58,7 +58,7 @@ async def execute(
         client_id     = creds.get("github_client_id", "")
         client_secret = creds.get("github_client_secret", "")
         if not (client_id and client_secret):
-            return simulated(action_type, target_id, {"note": "No GitHub OAuth app credentials"})
+            return not_configured(action_type, target_id, {"note": "No GitHub OAuth app credentials"})
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.delete(
@@ -177,7 +177,7 @@ async def rollback(
                 message=f"GitHub org member {username} unsuspended from {org}",
                 output={"status": resp.status_code},
             )
-        return simulated("unsuspend_org_member", target_id)
+        return not_configured("unsuspend_org_member", target_id)
 
     # Token revocations and secret deletions cannot be reversed
     return ActionResult(

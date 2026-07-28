@@ -94,6 +94,13 @@ async def route_prompt(
             override_reason=body.override_reason,
         )
         return result
+    except PermissionError as exc:
+        # A refused classification downgrade is a policy decision, not a
+        # provider failure; report it as such so the caller can supply a
+        # justification instead of seeing a misleading upstream error.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
     except Exception:
         logger.exception("Model router call failed")
         raise HTTPException(status_code=502, detail="Model provider request failed")

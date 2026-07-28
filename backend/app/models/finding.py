@@ -77,6 +77,17 @@ class Finding(Base):
     # Raw provider data
     raw_data: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
 
+    # Data origin. A beta tenant typically has one or two live connectors while
+    # the rest of the platform still produces realistic demo findings, so an
+    # operator must be able to tell which findings describe their own estate.
+    #   "live"      — returned by an authenticated provider API call
+    #   "simulated" — generated locally for demonstration
+    #   "unknown"   — origin was not asserted by the adapter (legacy rows)
+    data_origin: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
+    # Which configured connector produced it, when known, so a finding can be
+    # traced back to the credential that fetched it.
+    source_connector: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # Timestamps
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

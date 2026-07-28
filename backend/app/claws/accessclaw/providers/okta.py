@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+from app.claws import provenance
+from app.claws import credential_aliases
 
 logger = logging.getLogger("accessclaw.okta")
 TIMEOUT = httpx.Timeout(30.0)
@@ -87,10 +89,13 @@ SIMULATED_FINDINGS = [
 
 
 async def _fetch_real_findings(credentials: dict) -> list[dict]:
+    credentials = credential_aliases.resolve("okta", credentials)
     org_url = credentials.get("org_url", "").rstrip("/")
     api_token = credentials.get("api_token", "")
     if not org_url or not api_token:
-        raise ValueError("Okta requires org_url and api_token")
+        raise ValueError(
+            "Okta requires an org URL (Okta Domain) and an API token"
+        )
 
     headers = {"Authorization": f"SSWS {api_token}", "Accept": "application/json"}
     findings = []
@@ -129,10 +134,17 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     return findings
 
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    return provenance.live(
+        await _fetch_real_findings(credentials), provider="okta", connector="okta"
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     if credentials:
         try:
-            return [{**f, "provider": "okta"} for f in await _fetch_real_findings(credentials)]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("Okta API failed: %s — using simulated data", exc)
-    return [{**f, "provider": "okta"} for f in SIMULATED_FINDINGS]
+    return provenance.simulated(SIMULATED_FINDINGS, provider="okta")

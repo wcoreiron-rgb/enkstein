@@ -119,25 +119,48 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     Uses the finding pipeline for deduplication, policy evaluation, and alert routing.
     """
     from app.services.finding_pipeline import ingest_findings
+    from app.services.claw_scan import fetch_via_adapter
+    from app.core.config import settings
 
     provider_results = {}
     errors = []
     total_created = 0
     total_updated = 0
+    any_live = False
 
     for cfg in PROVIDER_CONFIG:
         provider_name = cfg["provider"]
         creds = await _get_credentials(db, cfg["connector_type"])
 
+        if not creds and settings.REQUIRE_LIVE_DATA:
+            # Production data policy: report the gap instead of filling it
+            # with an estate this tenant does not have.
+            provider_results[provider_name] = {"status": "not_configured"}
+            continue
+
         try:
-            raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+            # With credentials, use the authenticated path that raises on
+            # failure; otherwise a broken connector reports as a clean scan.
+            if creds:
+                raw_findings = await fetch_via_adapter(cfg["adapter"], creds)
+            else:
+                raw_findings = await cfg["adapter"].get_findings(credentials=None)
             for f in raw_findings:
                 f.setdefault("claw", CLAW_NAME)
                 f.setdefault("provider", provider_name)
+                # Adapters tag their own origin; anything untagged is treated as
+                # demonstration data rather than the tenant's real estate.
+                f.setdefault("data_origin", "live" if creds else "simulated")
+                if creds and not f.get("source_connector"):
+                    f["source_connector"] = cfg["connector_type"]
 
             summary = await ingest_findings(db, CLAW_NAME, raw_findings)
+            if creds:
+                any_live = True
             provider_results[provider_name] = {
-                "status": "success",
+                # Without credentials this returned demonstration data, which
+                # is not a successful scan of the tenant's endpoints.
+                "status": "success" if creds else "not_configured",
                 "created": summary["created"],
                 "updated": summary["updated"],
                 "simulated": creds is None,
@@ -151,6 +174,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 
     return {
         "status": "completed" if not errors else "completed_with_errors",
+        "mode": "live" if any_live else ("empty" if settings.REQUIRE_LIVE_DATA else "simulated"),
         "findings_created": total_created,
         "findings_updated": total_updated,
         "providers": provider_results,

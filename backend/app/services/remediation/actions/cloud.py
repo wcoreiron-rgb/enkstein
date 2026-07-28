@@ -11,7 +11,8 @@ Credentials dict expected keys (from secrets_manager):
 
 NOTE: AWS SDK (boto3/botocore) is an optional heavy dependency. We use httpx with
 SigV4 signing manually to avoid the dependency — but if boto3 is available we
-prefer it. If credentials are not configured, simulated success is returned.
+prefer it. If credentials are not configured the action fails rather than
+reporting a success that never happened.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ import json
 import logging
 from typing import Any
 
-from .base import ActionResult, simulated
+from .base import ActionResult, not_configured
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def execute(
     creds = credentials or {}
 
     if not _has_aws_creds(creds):
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     # Run synchronous boto3 calls in a thread executor
     import asyncio
@@ -187,7 +188,7 @@ async def rollback(
     """Reverse a previously executed cloud action."""
     creds = credentials or {}
     if not _has_aws_creds(creds):
-        return simulated(f"rollback_{action_type}", target_id)
+        return not_configured(f"rollback_{action_type}", target_id)
 
     import asyncio
     loop = asyncio.get_event_loop()

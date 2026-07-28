@@ -51,6 +51,8 @@ services:
       # Generate: python -c "import secrets; print(secrets.token_hex(32))"
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       APP_VERSION: ${APP_VERSION:-0.0.0-dev}
+      # true = never show demonstration findings; only connector-backed data.
+      REQUIRE_LIVE_DATA: ${REQUIRE_LIVE_DATA:-false}
       BRAIN_BRIDGE_URL: ${BRAIN_BRIDGE_URL:-}
       BRAIN_BRIDGE_SECRET: ${BRAIN_BRIDGE_SECRET:-}
       BRAIN_BRIDGE_TIMEOUT_SECONDS: ${BRAIN_BRIDGE_TIMEOUT_SECONDS:-180}

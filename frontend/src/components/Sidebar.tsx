@@ -12,7 +12,7 @@ import {
   GitBranch, Settings, RefreshCcw, Network, CalendarClock, Layers, Workflow, Webhook, Sparkles,
   MessageSquare, ShoppingBag, PanelLeftClose, ShieldAlert,
   Users2, Rocket, Container, BriefcaseBusiness, ShieldCheck,
-  Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder, Pencil,
+  Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder, Pencil, Compass,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '@/components/ThemeProvider';
@@ -45,6 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Cortex & Hearts',
     defaultOpen: true,
     items: [
+      { label: 'Mission Control',  href: '/marcellus/security', icon: Compass,        tag: 'Overview' },
       { label: 'Control Center',   href: '/control-center',   icon: Shield,           tag: 'Command' },
       { label: 'Dashboard',        href: '/dashboard',        icon: LayoutDashboard },
       { label: 'Findings',         href: '/findings',         icon: AlertTriangle,    tag: 'All Nodes' },
@@ -99,7 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Detection Arm',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { label: 'Threat Analysis',       href: '/capabilities/threat-analysis',      icon: Target,    tag: 'D&R' },
       { label: 'Security Telemetry',    href: '/capabilities/security-telemetry',   icon: BookOpen,  tag: 'SIEM' },
@@ -110,7 +111,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Response Arm',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { label: 'Security Automation', href: '/capabilities/security-automation', icon: Bot,      tag: 'SOAR' },
       { label: 'Attack Path Analysis', href: '/capabilities/attack-path-analysis', icon: GitMerge, tag: 'Paths' },
@@ -119,7 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Governance Arm',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { label: 'Compliance Assurance', href: '/capabilities/compliance-assurance', icon: ClipboardCheck, tag: 'GRC' },
       { label: 'Privacy Governance',   href: '/capabilities/privacy-governance',   icon: Lock,           tag: 'Privacy' },
@@ -128,7 +129,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Engineering Arm',
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { label: 'Terraform Governance', href: '/capabilities/terraform-governance', icon: Container, tag: 'IaC Sec' },
       { label: 'Developer Security',   href: '/capabilities/developer-security', icon: GitBranch, tag: 'DevSecOps' },
@@ -221,14 +222,15 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
       setLoading(true);
       try {
         const projectRows = await getCortexProjects(mode);
-        const rememberedProject = window.localStorage.getItem(projectStorageKey);
-        const selectedProject = projectRows.find((item) => item.id === rememberedProject)?.id || projectRows[0]?.id || '';
+        // The blade opens unscoped so it lists every conversation, including
+        // unfiled ones. Restoring a remembered project silently hid the rest.
+        const selectedProject = '';
         const conversationRows = await getCortexConversations(mode, selectedProject || undefined);
         if (!cancelled) {
           setProjects(projectRows);
           setProjectId(selectedProject);
           setConversations(conversationRows);
-          setActiveConversationId(conversationRows[0]?.id || '');
+          setActiveConversationId('');
         }
       } catch {
         if (!cancelled) {
@@ -303,14 +305,15 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
     return (
       <div className="space-y-1 py-1">
         <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'new-conversation' })}
-          className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-red-600 text-white" title={`New ${mode === 'chat' ? 'chat' : 'Cowork conversation'}`}>
+          className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg text-white"
+          style={{ background: 'var(--rc-brand)' }} title={`New ${mode === 'chat' ? 'chat' : 'Cowork conversation'}`}>
           <Plus className="h-4 w-4" />
         </button>
         {visibleConversations.slice(0, 8).map((conversation) => (
           <button key={conversation.id} type="button" title={conversation.title}
             onClick={() => dispatchWorkspaceAction({ type: 'open-conversation', id: conversation.id })}
-            className={clsx('mx-auto flex h-10 w-10 items-center justify-center rounded-lg', activeConversationId === conversation.id ? 'bg-[var(--rc-bg-elevated)] text-red-500' : 'hover:bg-[var(--rc-bg-elevated)]')}
-            style={{ color: activeConversationId === conversation.id ? undefined : 'var(--rc-text-2)' }}>
+            className={clsx('mx-auto flex h-10 w-10 items-center justify-center rounded-lg', activeConversationId === conversation.id ? 'bg-[var(--rc-bg-elevated)]' : 'hover:bg-[var(--rc-bg-elevated)]')}
+            style={{ color: activeConversationId === conversation.id ? 'var(--rc-brand)' : 'var(--rc-text-2)' }}>
             {mode === 'chat' ? <MessageSquare className="h-4 w-4" /> : <BriefcaseBusiness className="h-4 w-4" />}
           </button>
         ))}
@@ -326,7 +329,7 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
           <p className="text-[10px]" style={{ color: 'var(--rc-text-3)' }}>{mode === 'chat' ? 'Encrypted history' : 'Projects and conversations'}</p>
         </div>
         <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'new-conversation' })}
-          className="flex h-8 w-8 items-center justify-center rounded-md bg-red-600 text-white" title="New conversation" aria-label="New conversation">
+          className="flex h-8 w-8 items-center justify-center rounded-md text-white" style={{ background: 'var(--rc-brand)' }} title="New conversation" aria-label="New conversation">
           <Plus className="h-4 w-4" />
         </button>
       </div>
@@ -339,15 +342,15 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
           </button>
         </div>
         <select value={projectId} onChange={(event) => void selectProject(event.target.value)} aria-label={mode === 'chat' ? 'Chat folder' : 'Cowork project'}
-          className="h-9 w-full rounded-md border px-2 text-xs outline-none"
-          style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)', color: 'var(--rc-text-1)' }}>
+          className="h-9 w-full rounded-md border px-2 text-xs outline-none transition-colors focus:border-[var(--rc-border-2)]"
+          style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)', color: 'var(--rc-text-1)' }}>
           <option value="">{mode === 'chat' ? 'All chats' : 'Select a project'}</option>
           {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
         </select>
         {mode === 'cowork' && nativeWorkspaceName && (
           <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border px-2 py-2"
             style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
-            <Folder className="h-3.5 w-3.5 shrink-0 text-red-500" />
+            <Folder className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-brand)' }} />
             <div className="min-w-0">
               <p className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Local folder</p>
               <p className="truncate text-xs" title={nativeWorkspaceName} style={{ color: 'var(--rc-text-1)' }}>{nativeWorkspaceName}</p>
@@ -358,15 +361,16 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
           <div className="mt-2 space-y-1.5">
             <form onSubmit={submitProject} className="flex gap-1.5">
               <input value={projectName} onChange={(event) => setProjectName(event.target.value.slice(0, 255))} autoFocus
-                placeholder={mode === 'chat' ? 'Folder name' : 'Project name'} className="h-8 min-w-0 flex-1 rounded border px-2 text-xs outline-none"
-                style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)', color: 'var(--rc-text-1)' }} />
-              <button type="submit" className="flex h-8 w-8 items-center justify-center rounded bg-red-600 text-white" aria-label="Create project">
+                placeholder={mode === 'chat' ? 'Folder name' : 'Project name'}
+                className="h-8 min-w-0 flex-1 rounded-md border px-2 text-xs outline-none transition-colors focus:border-[var(--rc-border-2)]"
+                style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)', color: 'var(--rc-text-1)' }} />
+              <button type="submit" className="flex h-8 w-8 items-center justify-center rounded-md text-white transition-opacity hover:opacity-90" style={{ background: 'var(--rc-brand)' }} aria-label="Create project">
                 <Plus className="h-4 w-4" />
               </button>
             </form>
             {mode === 'cowork' && (
               <button type="button" onClick={pickFolderForNewProject}
-                className="flex h-8 w-full items-center justify-center gap-1.5 rounded border text-xs"
+                className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border text-xs transition-colors hover:bg-[var(--rc-panel-hover)]"
                 style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
                 <FolderInput className="h-3.5 w-3.5" />Pick a local folder instead
               </button>
@@ -379,11 +383,12 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
         <Link href="/marcellus/brains"
           className="mb-2 flex h-9 items-center gap-2 rounded-md border px-2 text-xs transition-colors hover:bg-[var(--rc-bg-elevated)]"
           style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
-          <BrainCircuit className="h-3.5 w-3.5 text-red-500" />
+          <BrainCircuit className="h-3.5 w-3.5" style={{ color: 'var(--rc-brand)' }} />
           <span className="flex-1">Brain Connections</span>
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
-        <div className="flex items-center gap-2 rounded-md border px-2" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg)' }}>
+        <div className="flex items-center gap-2 rounded-md border px-2 transition-colors focus-within:border-[var(--rc-border-2)]"
+          style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />}
           <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={mode === 'chat' ? 'Search chats' : 'Search conversations'}
             className="h-8 min-w-0 flex-1 bg-transparent text-xs outline-none" style={{ color: 'var(--rc-text-1)' }} />
@@ -392,34 +397,39 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         {visibleConversations.map((conversation) => (
-          <div key={conversation.id} className="group mb-1 flex items-center rounded-md pr-1 hover:bg-[var(--rc-bg-elevated)]"
+          <div key={conversation.id}
+            className="group relative mb-0.5 flex items-center rounded-md pr-1 transition-colors hover:bg-[var(--rc-panel-hover)]"
             style={{ background: activeConversationId === conversation.id ? 'var(--rc-bg-elevated)' : 'transparent' }}>
+            {activeConversationId === conversation.id && (
+              <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full"
+                style={{ background: 'var(--rc-brand)' }} />
+            )}
             <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'open-conversation', id: conversation.id })}
               className="min-w-0 flex-1 px-2.5 py-2 text-left">
               <p className="truncate text-xs font-medium" style={{ color: 'var(--rc-text-1)' }}>{conversation.title}</p>
-              <p className="mt-1 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>{conversation.message_count} messages</p>
+              <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: 'var(--rc-text-3)' }}>{conversation.message_count} messages</p>
             </button>
             <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-rename-conversation', id: conversation.id })}
               aria-label={`Rename ${conversation.title}`} title="Rename conversation"
-              className="invisible flex h-7 w-7 items-center justify-center group-hover:visible">
+              className="hidden h-7 w-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-[var(--rc-panel-hover)] group-hover:flex">
               <Pencil className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />
             </button>
             {projects.length > 0 && (
               <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-move-conversation', id: conversation.id })}
                 aria-label={`Move ${conversation.title} to project`} title="Move to project"
-                className="invisible flex h-7 w-7 items-center justify-center group-hover:visible">
+                className="hidden h-7 w-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-[var(--rc-panel-hover)] group-hover:flex">
                 <FolderInput className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />
               </button>
             )}
             <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-archive-conversation', id: conversation.id })} aria-label={`Archive ${conversation.title}`} title="Archive conversation"
-              className="invisible flex h-7 w-7 items-center justify-center group-hover:visible">
+              className="hidden h-7 w-7 shrink-0 items-center justify-center rounded transition-colors hover:bg-[var(--rc-panel-hover)] group-hover:flex">
               <Trash2 className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />
             </button>
           </div>
         ))}
         {!loading && visibleConversations.length === 0 && (
           <p className="px-2 py-4 text-xs leading-5" style={{ color: 'var(--rc-text-3)' }}>
-            {mode === 'cowork' && !projectId ? 'Create or select a project.' : 'No conversations yet.'}
+            {'No conversations yet.'}
           </p>
         )}
       </div>

@@ -235,7 +235,7 @@ export default function EnksteinRuntimeConsole({ nodes }: { nodes: EnksteinCapab
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-red-500" />
+            <Activity className="h-5 w-5" style={{ color: 'var(--rc-brand)' }} />
             <h2 className="text-lg font-semibold" style={{ color: 'var(--rc-text-1)' }}>Distributed Runtime</h2>
           </div>
           <div className="mt-2 flex flex-wrap gap-4 text-xs" style={{ color: 'var(--rc-text-3)' }}>

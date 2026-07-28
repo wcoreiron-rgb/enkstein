@@ -399,11 +399,23 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 
 @router.post("/scan", summary="Run Developer Security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run a Developer Security scan. Uses real GitHub API when configured, otherwise falls back to simulation."""
+    """Run a Developer Security scan against the configured GitHub connector.
+
+    Without a connector this returns labelled demonstration findings so the
+    module is explorable, unless the production data policy forbids it.
+    """
     from app.services.finding_pipeline import ingest_findings
     from app.services.connector_check import is_connector_configured
+    from app.core.config import settings
 
     github_configured = await is_connector_configured(db, "github")
+
+    if not github_configured and settings.REQUIRE_LIVE_DATA:
+        return {
+            "status": "completed", "mode": "empty",
+            "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0,
+            "message": "No GitHub connector is configured, and demonstration data is disabled.",
+        }
 
     if github_configured:
         # Real scan via GitHub REST API
@@ -413,10 +425,16 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         try:
             pipeline_findings = await fetch_github_findings(db)
         except ValueError:
-            return {"status": "error", "message": "Invalid connector configuration", "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0}
+            return {"status": "error", "mode": "error", "message": "Invalid connector configuration", "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0}
         except Exception:
             logger.exception("GitHub scan failed")
-            return {"status": "error", "message": "GitHub scan failed", "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0}
+            return {"status": "error", "mode": "error", "message": "GitHub scan failed", "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0}
+
+        # Authenticated GitHub results describe the tenant's own repositories.
+        pipeline_findings = [
+            {**f, "data_origin": "live", "source_connector": "github"}
+            for f in pipeline_findings
+        ]
 
         # Purge simulation findings (no external_id = ingested from _FINDINGS demo data)
         await db.execute(
@@ -432,17 +450,23 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
         for f in _FINDINGS:
             entry = dict(f)
             entry.setdefault("claw", CLAW_NAME)
+            # Static module findings are demonstration data until a
+            # connector-backed provider supplies its own origin.
+            entry.setdefault("data_origin", "simulated")
             entry.setdefault("provider", "github")
             if "severity" in entry:
                 entry["severity"] = str(entry["severity"]).lower()
             pipeline_findings.append(entry)
 
     if not pipeline_findings:
-        return {"status": "completed", "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0, "message": "No findings from GitHub (all clean or no alerts enabled)"}
+        return {"status": "completed", "mode": "live" if github_configured else "simulated",
+                "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0,
+                "message": "No findings from GitHub (all clean or no alerts enabled)"}
 
     summary = await ingest_findings(db, CLAW_NAME, pipeline_findings)
     return {
         "status": "completed",
+        "mode": "live" if github_configured else "simulated",
         "findings_created": summary["created"],
         "findings_updated": summary["updated"],
         "critical": summary["critical"],

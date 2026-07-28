@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.3.18` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.4.9` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -78,10 +78,33 @@ routing is mode-aware, records its candidate order and selection reason, and
 falls through only to a policy-approved available Brain. `restricted` and
 `top_secret` automatic requests are forced to the local profile.
 
-Version `0.3.18` also hardens the Model Cortex boundary: profile, audit, direct
+Model Cortex hardens the profile, audit, direct
 Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
+
+Version `0.4.9` keeps a paired Browser Companion marked ready while it is
+submitting, streaming, or completing a long provider turn, and routes workspace
+SSE through a dedicated streaming proxy rather than the generic API rewrite.
+This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
+reported as disconnected or a healthy multi-minute response from being marked
+stalled merely because it is busy producing an answer.
+
+For Cowork implementation requests, every answering Brain is an advisor, not a
+filesystem authority. When Browser Companion, Hybrid-local, or other supported
+profile output returns an architecture or ordinary code answer without a safe
+project-relative manifest, Enkstein sends a bounded copy to its dedicated local
+Qwen file author. The author receives its own output budget and can recover
+complete file entries even if its final JSON fence is cut off. Trust Fabric then
+governs proposal or Auto-apply writes into the operator-selected project root.
+A planning response is never represented as local execution.
+
+Browser Brain handoffs are capped to a compact, continuity-preserving context
+instead of replaying an entire conversation into a provider message editor.
+Cowork accepts the strict Enkstein manifest as well as the safe equivalent JSON
+forms emitted by local models (for example `type`/`file_path`), then applies the
+same tenant-scoped path validation, Trust Fabric decision, and approved-folder
+write boundary before any local file changes.
 
 The Chat, Cowork, and Security workspaces are separate mounted state
 containers. Their URL hash, browser history, and remembered mode stay aligned;
@@ -102,6 +125,11 @@ the message to the composer), preserving the draft and conversation without dupl
 submission. Each assistant reply carries a compact provenance record —
 source/provider/model, runtime group, policy outcome, latency, confidence,
 input/output redaction, and fallback reason.
+For Cowork turns that propose, apply, skip, or block local project changes, that
+same durable record now includes an expandable **Files changed** ledger with
+the relative path, create/update/delete operation, and final outcome. The
+ledger is content-free, survives reopening the conversation, and never turns a
+planning response into claimed execution.
 
 ### Brain runtime groups
 
@@ -340,14 +368,14 @@ RegentClaw maintains an honest, evidence-backed self-assessment against the **OW
 | Category | Status |
 |---|---|
 | LLM01 Prompt Injection | Shipped — 12-vector AGT audit on every AI event |
-| LLM02 Insecure Output Handling | Shipped — prompt scanning + model-output re-scan/redaction metadata now applied in Model Router |
+| LLM02 Insecure Output Handling | Shipped — prompt scanning, model-output re-scan/redaction, and DLP scanning of provider-generated binary downloads (OOXML/ZIP members included) before any file is written |
 | LLM03 Training Data Poisoning | N/A — uses provider APIs, no training pipeline |
-| LLM04 Model Denial of Service | Shipped (baseline) — auth and `/model-router/route` per-IP rate limiting enforced; deeper tenant quotas remain planned |
+| LLM04 Model Denial of Service | Shipped — auth and model-router per-IP limits, plus per-identity rate limiting on governed Cowork/Chat turn, stream, and research endpoints; token-budget quotas remain planned |
 | LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan + exchange checksum gate, CI SBOM + blocking dependency policy thresholds |
 | LLM06 Sensitive Information Disclosure | Shipped — Fernet encryption, DLP scanner, masked credential hints |
 | LLM07 Insecure Plugin Design | Partially Shipped — ring policy + SSRF protection shipped; OS sandbox not yet |
 | LLM08 Excessive Agency | Shipped — 4-ring privilege isolation, dual-approval gates, self-approval blocked |
-| LLM09 Overreliance | Shipped (baseline) — model override usage is now explicitly captured in routing audit (`override_used` + `override_reason`) |
+| LLM09 Overreliance | Shipped — override usage captured in routing audit, and lowering a detected data classification is refused without a recorded justification |
 | LLM10 Model Theft | N/A — no hosted weights; API keys encrypted at rest |
 
 > This is a vendor self-assessment. Independent audit recommended before compliance reliance.
@@ -457,6 +485,40 @@ Every Capability Node module supports real integrations. Go to **Connectors** an
 | Custom | Any REST API via Custom Capability |
 
 Without credentials, all modules run on realistic simulated findings so the platform is fully usable for demos and evaluation.
+
+Every finding records a **data origin** so the two are never confused once you connect a real
+connector. Findings are labelled `live` (returned by an authenticated provider, with the source
+connector named), `simulated` (locally generated demonstration data), or `unknown`. An adapter
+that supplies no origin is recorded as `unknown` rather than `live`, so nothing can be presented
+as verified estate data by omission. Filter with `GET /api/v1/findings?data_origin=live`, or use
+the data-origin filter in the Findings console.
+
+### Which Capability Nodes return live data
+
+Seven nodes call a provider API when a connector is configured: **Cloud Posture** (AWS Security
+Hub, Azure Defender for Cloud, GCP SCC), **Endpoint** (CrowdStrike, Defender, SentinelOne),
+**Developer Security** (GitHub), **Identity** and **Privileged Access** (Entra ID, Okta),
+**Security Telemetry** (Splunk), and **AI Governance**.
+
+The remaining nodes are connector-aware but not yet adapter-backed. Configuring a connector for
+one of them does not empty it: it keeps showing demonstration findings with the `simulated`
+badge and reports `"Connector configured, but no live adapter is available yet"` in the scan
+response, so a configured-but-inert connector is never mistaken for a broken scan.
+
+### Connecting Microsoft without an app registration
+
+Entra ID, Azure, Defender, and Sentinel connectors support **interactive sign-in** using the
+OAuth device authorization grant. Enkstein shows a code, you approve it once on Microsoft's own
+sign-in page, and Enkstein receives a refresh token — no app registration and no client secret.
+Access tokens renew automatically so scheduled scans keep working.
+
+This is a documented provider flow, not browser-session reuse: no cookies, page automation, or
+vendor session tokens are involved, and you can revoke the grant from Microsoft's consent screen
+at any time. Device sign-in passes the same Trust Fabric policy gate as manual credential entry.
+
+GitHub device sign-in requires your own OAuth app; set `GITHUB_OAUTH_CLIENT_ID` to enable it.
+Every other connector continues to use credential configuration, because `client_credentials`
+with a scoped app registration is the correct posture for unattended scanning.
 
 ## Use it from your terminal & editor
 

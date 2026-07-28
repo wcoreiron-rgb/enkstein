@@ -10,15 +10,29 @@ from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.finding_pipeline import ingest_findings
 from app.services.connector_check import check_providers, is_connector_configured
+from app.services.claw_scan import has_live_adapter, run_claw_scan
+from app.claws.accessclaw.providers import entra as entra_adapter, okta as okta_adapter
 
 router = APIRouter(prefix="/accessclaw", tags=["Privileged Access Management"])
 
 CLAW_NAME = "accessclaw"
 
 PROVIDER_MAP = [
-    {"provider": "okta",     "label": "Okta Identity",       "connector_type": "okta"},
-    {"provider": "azure_ad", "label": "Microsoft Entra ID",  "connector_type": "azure_ad"},
-    {"provider": "aws_iam",  "label": "AWS IAM",             "connector_type": "aws_iam"},
+    {
+        "provider": "okta",
+        "label": "Okta Identity",
+        "connector_type": "okta",
+        "adapter": okta_adapter,
+    },
+    {
+        "provider": "azure_ad",
+        "label": "Microsoft Entra ID",
+        # Entra connectors are registered under either name depending on when
+        # the tenant onboarded, so accept both rather than missing a live one.
+        "connector_type": ["azure_ad", "entra_id"],
+        "adapter": entra_adapter,
+    },
+    {"provider": "aws_iam", "label": "AWS IAM", "connector_type": "aws_iam"},
 ]
 
 _FINDINGS = [
@@ -403,7 +417,10 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             await is_connector_configured(db, p["connector_type"])
             for p in PROVIDER_MAP if p.get("connector_type")
         ])
-        if not any_configured:
+        if not any_configured or not has_live_adapter(PROVIDER_MAP):
+            # Showing labelled demonstration findings is more honest than an
+            # empty module: this Claw has no adapter that could have returned
+            # tenant data, so an empty list would read as a broken scan.
             return _FINDINGS
         return []
     return [
@@ -441,22 +458,13 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 
 @router.post("/scan", summary="Run Privileged Access privileged access scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
-    """Run an Privileged Access scan. Falls back to simulation when no real connector is configured."""
-    pipeline_findings = []
-    for f in _FINDINGS:
-        entry = dict(f)
-        entry.setdefault("claw", CLAW_NAME)
-        if "severity" in entry:
-            entry["severity"] = str(entry["severity"]).lower()
-        pipeline_findings.append(entry)
-    summary = await ingest_findings(db, CLAW_NAME, pipeline_findings)
-    return {
-        "status": "completed",
-        "findings_created": summary["created"],
-        "findings_updated": summary["updated"],
-        "critical": summary["critical"],
-        "high": summary["high"],
-    }
+    """Run a Privileged Access scan against Okta/Entra when configured."""
+    return await run_claw_scan(
+        db,
+        claw=CLAW_NAME,
+        provider_config=PROVIDER_MAP,
+        demo_findings=_FINDINGS,
+    )
 
 
 @router.post("/task", summary="Execute focused Privileged Access swarm task")

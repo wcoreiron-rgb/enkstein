@@ -90,6 +90,32 @@ test.describe('Enkstein safe message rendering', () => {
     expect(clipboard).toContain('Terminal PowerShell line marker 9f3a done');
   });
 
+  test('completed Cowork turns retain an expandable, content-free file change ledger', async ({ page }) => {
+    const store = await mockMarcellusWorkspace(page);
+    seedChat(store, 'chat-file-ledger');
+    await mockTurnStream(page, store, {
+      conversationId: 'chat-file-ledger',
+      assistantContent: 'Implemented the governed workspace update.',
+      assistantGovernance: {
+        file_changes: [
+          { path: 'src/app.ts', operation: 'create', outcome: 'applied' },
+          { path: 'legacy/debug.ts', operation: 'delete', outcome: 'skipped' },
+        ],
+      },
+    });
+
+    await page.goto('/marcellus/chat/chat-file-ledger');
+    await page.getByPlaceholder('Message Enkstein').fill('apply the files');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await page.getByText('Files changed · 2 files').click();
+    await expect(page.getByText('src/app.ts')).toBeVisible();
+    await expect(page.getByText('create', { exact: true })).toBeVisible();
+    await expect(page.getByText('applied', { exact: true })).toBeVisible();
+    await expect(page.getByText('legacy/debug.ts')).toBeVisible();
+    await expect(page.getByText('skipped', { exact: true })).toBeVisible();
+  });
+
   test('a timed-out turn shows a terminal block whose Retry replays without duplicate submission', async ({ page }) => {
     const store = await mockMarcellusWorkspace(page);
     seedChat(store, 'chat-retry');
@@ -271,5 +297,49 @@ test.describe('Enkstein message and chat copy', () => {
     expect(clipboard.indexOf('user prompt')).toBeLessThan(clipboard.indexOf('First governed answer.'));
     expect(clipboard).toContain('You:');
     expect(clipboard).toContain('Enkstein:');
+  });
+});
+
+test.describe('Enkstein Cowork resizable review panel', () => {
+  test('panel can be widened by drag and by the maximize toggle, and the width persists', async ({ page }) => {
+    const store = createWorkspaceStore();
+    const now = new Date().toISOString();
+    store.projects.push({
+      id: 'proj-resize', tenant_id: 'default', owner_id: 'e2e-owner', name: 'Resize project', description: '',
+      kind: 'cowork', classification: 'internal', default_source: 'auto', status: 'active', created_at: now, updated_at: now,
+    });
+    seedArtifacts(store, 'proj-resize', ['scripts/deploy.ps1']);
+    await mockMarcellusWorkspace(page, store);
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/marcellus/cowork/proj-resize');
+
+    const panel = page.getByTestId('cowork-panel');
+    await expect(panel).toBeVisible();
+    const initial = Number(await panel.getAttribute('data-panel-width'));
+
+    // Dragging the separator left widens the panel so long scripts are readable
+    // before approval.
+    const resizer = page.getByTestId('cowork-panel-resizer');
+    const box = await resizer.boundingBox();
+    if (!box) throw new Error('resizer has no bounding box');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x - 240, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+
+    const widened = Number(await panel.getAttribute('data-panel-width'));
+    expect(widened).toBeGreaterThan(initial);
+
+    // The chosen width survives a reload.
+    await page.reload();
+    await expect(page.getByTestId('cowork-panel')).toHaveAttribute('data-panel-width', String(widened));
+
+    // The maximize toggle expands further and then restores.
+    await page.getByTestId('cowork-panel-maximize').click();
+    const maximized = Number(await page.getByTestId('cowork-panel').getAttribute('data-panel-width'));
+    expect(maximized).toBeGreaterThanOrEqual(widened);
+    await page.getByTestId('cowork-panel-maximize').click();
+    await expect(page.getByTestId('cowork-panel')).toHaveAttribute('data-panel-width', String(widened));
   });
 });

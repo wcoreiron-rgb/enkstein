@@ -10,6 +10,8 @@ from typing import Optional
 
 import httpx
 
+from app.claws import credential_aliases, provenance
+
 logger = logging.getLogger("cloudclaw.gcp")
 
 TIMEOUT = httpx.Timeout(30.0)
@@ -167,11 +169,14 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     Call Google Cloud Security Command Center findings API.
     Expects credentials: {service_account_json (dict), organization_id}.
     """
+    credentials = credential_aliases.resolve("gcp_scc", credentials)
     org_id = credentials.get("organization_id", "")
     service_account_json = credentials.get("service_account_json", {})
 
     if not org_id or not service_account_json:
-        raise ValueError("Missing required GCP credentials: organization_id and service_account_json")
+        raise ValueError(
+            "GCP requires an organization (or project) ID and a service account key"
+        )
 
     token = await _get_gcp_token(service_account_json)
 
@@ -236,6 +241,18 @@ def _parse_scc_finding(raw: dict, organization_id: str) -> dict:
 
 # ─── Public entry point ───────────────────────────────────────────────────────
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    credentials = credential_aliases.resolve("gcp_scc", credentials)
+    org_id = credentials.get("organization_id", "unknown")
+    raw_findings = await _fetch_real_findings(credentials)
+    return provenance.live(
+        [_parse_scc_finding(f, org_id) for f in raw_findings],
+        provider="gcp",
+        connector="gcp_security_command_center",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     Main entry point for the GCP adapter.
@@ -244,9 +261,7 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     if credentials:
         try:
-            org_id = credentials.get("organization_id", "unknown")
-            raw_findings = await _fetch_real_findings(credentials)
-            return [_parse_scc_finding(f, org_id) for f in raw_findings]
+            return await fetch_findings(credentials)
         except NotImplementedError:
             logger.info("GCP adapter: using simulated findings (google-auth not wired up)")
         except Exception as exc:
@@ -262,5 +277,5 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
             "status": "open",
             **f,
         }
-        results.append(finding)
+        results.append({**finding, "data_origin": provenance.SIMULATED})
     return results

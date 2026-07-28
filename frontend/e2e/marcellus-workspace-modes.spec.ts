@@ -11,7 +11,7 @@ test.describe('Enkstein workspace mode separation', () => {
 
     await page.getByTitle('Cowork').click();
     await expect(page).toHaveURL(/\/marcellus\/cowork$/);
-    await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
 
     await page.getByTitle('Security').click();
     await expect(page).toHaveURL(/\/marcellus\/security$/);
@@ -26,7 +26,7 @@ test.describe('Enkstein workspace mode separation', () => {
     await mockMarcellusWorkspace(page);
     await page.goto('/marcellus#cowork');
 
-    await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
     await expect(page.getByLabel('Cowork project')).toBeVisible();
   });
 
@@ -41,7 +41,7 @@ test.describe('Enkstein workspace mode separation', () => {
     await expect(page.getByRole('link', { name: 'Control Center' })).toBeVisible();
   });
 
-  test('base conversation workspaces canonicalize remembered or default conversations with replace', async ({ page }) => {
+  test('base workspace routes open clean instead of adopting a previous conversation', async ({ page }) => {
     const store = await mockMarcellusWorkspace(page);
     const now = new Date().toISOString();
     store.projects.push({
@@ -63,9 +63,21 @@ test.describe('Enkstein workspace mode separation', () => {
     );
 
     await page.goto('/marcellus/chat');
-    await expect(page).toHaveURL(/\/marcellus\/chat\/chat-canonical$/);
+    // The base route stays put: an existing conversation must not be loaded
+    // and the URL must not be rewritten to point at it.
+    await expect(page).toHaveURL(/\/marcellus\/chat$/);
+    await expect(page.getByRole('heading', { name: 'What are we working on?' })).toBeVisible();
+
     await page.goto('/marcellus/cowork');
+    await expect(page).toHaveURL(/\/marcellus\/cowork$/);
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
+    // With no project bound there is nothing for the file panel to show.
+    await expect(page.getByTestId('cowork-panel')).toHaveCount(0);
+
+    // Deep links still resolve to the exact conversation they name.
+    await page.goto('/marcellus/cowork/project-canonical/cowork-canonical');
     await expect(page).toHaveURL(/\/marcellus\/cowork\/project-canonical\/cowork-canonical$/);
+    await expect(page.getByTestId('cowork-panel')).toBeVisible();
   });
 
   test('switching to a conversation in a different Cowork project shows only that project\'s files', async ({ page }) => {
@@ -135,7 +147,7 @@ test.describe('Enkstein workspace mode separation', () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/marcellus\/cowork$/);
-    await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(/\/marcellus\/chat$/);
@@ -154,7 +166,9 @@ test.describe('Enkstein workspace mode separation', () => {
     // Cowork remounts as its own AIWorkspace instance (key={mode}) with its
     // own draft state, so its prompt is present but starts empty — it must
     // not inherit Chat's unsent text.
-    await expect(page.getByPlaceholder('Ask about this project')).toHaveValue('');
+    // Cowork opens unfiled, so its prompt reads "Ask about this work" until a
+    // project is bound.
+    await expect(page.getByPlaceholder('Ask about this work')).toHaveValue('');
 
     await page.getByTitle('Chat').click();
     // Chat also remounted, so its earlier draft is gone rather than restored.
@@ -164,7 +178,7 @@ test.describe('Enkstein workspace mode separation', () => {
   test('creating a project in Cowork immediately scopes the workspace to it', async ({ page }) => {
     await mockMarcellusWorkspace(page);
     await page.goto('/marcellus#cowork');
-    await expect(page.getByRole('heading', { name: 'Create or select a project' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
 
     await page.getByLabel('New project').click();
     await page.getByPlaceholder('Project name').fill('Perimeter Rebuild');
@@ -191,6 +205,10 @@ test.describe('Enkstein workspace mode separation', () => {
     });
 
     await page.goto('/marcellus#cowork');
+    // Cowork opens unfiled by default, so the project has to be chosen
+    // explicitly before its project-bound surface appears.
+    await expect(page.getByRole('heading', { name: 'What are we building?' })).toBeVisible();
+    await page.getByLabel('Cowork project').selectOption('project-native');
     await expect(page.getByRole('heading', { name: 'Work with this project' })).toBeVisible();
 
     await page.evaluate(() => {

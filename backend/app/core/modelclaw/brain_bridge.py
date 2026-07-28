@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 from datetime import datetime, timezone
 from hashlib import sha256
 import logging
@@ -8,7 +10,7 @@ import os
 import socket
 import re
 from time import monotonic, perf_counter
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import httpx
@@ -46,15 +48,18 @@ _MAX_TENANT_BRAIN_CALLS = 4
 _MAX_SOURCE_BRAIN_CALLS = 2
 _BRAIN_TIMEOUT_SECONDS = 60.0
 # Browser Companion sessions run at human/page speed (the native bridge's own
-# browser broker call already waits up to 180s -- see invokeBrowser in
+# browser broker call already waits up to 900s -- see invokeBrowser in
 # MarcellusBrainBridge.swift) and can legitimately take far longer than a
 # direct API/CLI call to produce a long response. A uniform 60s timeout cut
 # these off before the native bridge's own patience window even elapsed, so
 # a genuinely-in-progress long browser response was silently discarded
 # rather than returned. This budget must stay at or below the native
 # bridge's own browser wait so a timeout here always fires before (never
-# after) the bridge itself would have given up.
-_BROWSER_BRAIN_TIMEOUT_SECONDS = 170.0
+# after) the bridge itself would have given up. A large multi-file/full-app
+# generation can legitimately run for several minutes, so this and the
+# outer WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS both give real headroom
+# for that instead of a short ceiling tuned for a simple chat answer.
+_BROWSER_BRAIN_TIMEOUT_SECONDS = 890.0
 _TENANT_SEMAPHORES: dict[tuple[int, str], asyncio.Semaphore] = {}
 _SOURCE_SEMAPHORES: dict[tuple[int, str, str], asyncio.Semaphore] = {}
 
@@ -318,6 +323,7 @@ async def invoke_subscription_brain(
     *,
     model: str | None = None,
     session_id: str | None = None,
+    on_progress: Callable[[str, str | None], None] | None = None,
 ) -> dict[str, Any]:
     if brain not in _SUBSCRIPTION_BRAINS:
         raise ValueError("Unknown subscription Brain")
@@ -327,6 +333,15 @@ async def invoke_subscription_brain(
     input_scan = scan_text(prompt, redact=True)
     transmitted_prompt = input_scan.redacted if input_scan.is_sensitive else prompt
     started = perf_counter()
+    if brain.endswith("_browser"):
+        return await _invoke_browser_polled(
+            brain,
+            transmitted_prompt,
+            session_id=session_id,
+            started=started,
+            input_scan=input_scan,
+            on_progress=on_progress,
+        )
     try:
         body = await _bridge_request(
             "POST",
@@ -345,6 +360,131 @@ async def invoke_subscription_brain(
             str(body.get("detail") or "Subscription Brain returned no response."),
         )
 
+    output_scan = scan_text(response, redact=True)
+    return {
+        "source": brain,
+        "kind": _brain_kind(brain),
+        "available": True,
+        "counted": True,
+        "provider": str(body.get("provider") or brain),
+        "model": body.get("model"),
+        "response": output_scan.redacted if output_scan.is_sensitive else response,
+        "reason": _redaction_reason(input_scan.is_sensitive, output_scan.is_sensitive),
+        "latency_ms": int(body.get("latency_ms") or ((perf_counter() - started) * 1000)),
+        "token_count": body.get("token_count"),
+    }
+
+
+# Real bridge lifecycle states -> a short, user-facing phrase. Anything unrecognized (e.g. a future
+# bridge state this backend doesn't know about yet) is deliberately dropped rather than guessed at,
+# so the UI only ever shows a state Enkstein can vouch for.
+_BROWSER_STATE_LABELS = {
+    "queued": "Waiting for an available browser tab",
+    "leased": "Browser tab is preparing the request",
+    "submitted": "Prompt submitted; waiting for a reply",
+    "streaming": "Reply is streaming in the browser tab",
+    "reconnecting": "Browser bridge reconnecting; the provider task is still active",
+}
+
+
+async def _invoke_browser_polled(
+    brain: str,
+    prompt: str,
+    *,
+    session_id: str | None,
+    started: float,
+    input_scan,
+    on_progress: Callable[[str, str | None], None] | None,
+) -> dict[str, Any]:
+    """Starts a browser Brain invocation through the non-blocking bridge endpoints and polls it,
+    reporting each real lifecycle state through on_progress as it changes. Falls back to the
+    original single blocking /v1/invoke call if the bridge does not yet support the start/status
+    pair (e.g. an older native bridge build), so this never regresses an existing installation.
+    """
+    try:
+        start_body = await _bridge_request(
+            "POST", "/v1/browser-invoke/start", {"brain": brain, "prompt": prompt, "session_id": session_id}
+        )
+    except Exception:
+        # Older bridge without the polling endpoints: keep working via the blocking call.
+        return await _invoke_browser_blocking(brain, prompt, session_id=session_id, started=started, input_scan=input_scan)
+
+    task_id = start_body.get("task_id")
+    if not task_id:
+        return _unavailable_vote(brain, _brain_kind(brain), str(start_body.get("detail") or "Browser invocation could not be started."))
+
+    last_state: str | None = None
+    deadline = started + _BROWSER_BRAIN_TIMEOUT_SECONDS
+    while perf_counter() < deadline:
+        try:
+            status_body = await _bridge_request("POST", "/v1/browser-invoke/status", {"task_id": task_id})
+        except Exception:
+            # A brief host-bridge/socket interruption must not be translated
+            # into a provider timeout. The ChatGPT/Gemini page may still be
+            # generating normally and the paired extension retains the task
+            # metadata needed to resume observation. Keep polling until the
+            # existing governed browser deadline; collect_votes supplies the
+            # matching outer cancellation bound.
+            if last_state != "reconnecting":
+                last_state = "reconnecting"
+                if on_progress:
+                    on_progress("reconnecting", _BROWSER_STATE_LABELS["reconnecting"])
+            await asyncio.sleep(0.75)
+            continue
+        state = str(status_body.get("state") or "")
+        if state and state != last_state:
+            last_state = state
+            label = _BROWSER_STATE_LABELS.get(state)
+            if label and on_progress:
+                on_progress(state, label)
+        if state in {"completed", "failed", "cancelled", "expired", "unknown"}:
+            if state == "completed":
+                response = str(status_body.get("response") or "")
+                if response:
+                    output_scan = scan_text(response, redact=True)
+                    return {
+                        "source": brain,
+                        "kind": _brain_kind(brain),
+                        "available": True,
+                        "counted": True,
+                        "provider": str(status_body.get("provider") or brain),
+                        "model": "browser-selected",
+                        "response": output_scan.redacted if output_scan.is_sensitive else response,
+                        "reason": _redaction_reason(input_scan.is_sensitive, output_scan.is_sensitive),
+                        "latency_ms": int((perf_counter() - started) * 1000),
+                        "token_count": None,
+                        "attachments": sanitize_provider_attachments(status_body.get("attachments")),
+                    }
+            return _unavailable_vote(
+                brain,
+                _brain_kind(brain),
+                str(status_body.get("detail") or "Browser session returned no response."),
+            )
+        await asyncio.sleep(0.75)
+    return _unavailable_vote(brain, _brain_kind(brain), "The browser session timed out before returning a response.")
+
+
+async def _invoke_browser_blocking(
+    brain: str,
+    prompt: str,
+    *,
+    session_id: str | None,
+    started: float,
+    input_scan,
+) -> dict[str, Any]:
+    try:
+        body = await _bridge_request(
+            "POST",
+            "/v1/invoke",
+            {"brain": brain, "prompt": prompt, "model": None, "session_id": session_id},
+            timeout_seconds=_BROWSER_BRAIN_TIMEOUT_SECONDS + 10.0,
+        )
+    except Exception:
+        logger.warning("Subscription Brain invocation failed: brain=%s", brain)
+        return _unavailable_vote(brain, _brain_kind(brain), "Native Brain invocation failed.")
+    response = str(body.get("response") or "")
+    if not body.get("success") or not response:
+        return _unavailable_vote(brain, _brain_kind(brain), str(body.get("detail") or "Subscription Brain returned no response."))
     output_scan = scan_text(response, redact=True)
     return {
         "source": brain,
@@ -479,6 +619,7 @@ async def _invoke_prepared_profile(prepared: dict[str, Any], prompt: str) -> dic
             "Do not claim to have executed tools or changed systems."
         ),
         api_key=api_key,
+        max_tokens=int(profile.get("max_tokens") or 0) or None,
     )
     if not result.success or not result.content:
         return _unavailable_vote(
@@ -515,6 +656,7 @@ async def collect_votes(
     session_id: str | None = None,
     browser_prompt: str | None = None,
     subscription_invoker=None,
+    on_progress: Callable[[str, str, str | None], None] | None = None,
 ) -> list[dict[str, Any]]:
     prepared: dict[str, dict[str, Any]] = {}
     for source in sources:
@@ -534,6 +676,8 @@ async def collect_votes(
             kwargs: dict[str, Any] = {"model": model}
             if session_id:
                 kwargs["session_id"] = session_id
+            if source.endswith("_browser") and on_progress:
+                kwargs["on_progress"] = lambda state, label, _source=source: on_progress(_source, state, label)
             source_prompt = browser_prompt if source.endswith("_browser") and browser_prompt else prompt
             return await invoker(source, source_prompt, **kwargs)
         if source.startswith("profile:"):
@@ -584,8 +728,14 @@ async def _resolve_provider_key(db: AsyncSession, provider: str) -> str | None:
         return None
 
 
-async def _bridge_request(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    timeout = httpx.Timeout(float(settings.BRAIN_BRIDGE_TIMEOUT_SECONDS), connect=5.0)
+async def _bridge_request(
+    method: str,
+    path: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    timeout_seconds: float | None = None,
+) -> dict[str, Any]:
+    timeout = httpx.Timeout(float(timeout_seconds or settings.BRAIN_BRIDGE_TIMEOUT_SECONDS), connect=5.0)
     endpoint, host_header = _bridge_endpoint(path)
     headers = {
         "X-Marcellus-Bridge-Token": settings.BRAIN_BRIDGE_SECRET,
@@ -642,6 +792,41 @@ def _unavailable_vote(source: str, kind: str, reason: str) -> dict[str, Any]:
         "counted": False,
         "reason": reason[:240],
     }
+
+
+# Provider-generated downloads relayed by the host bridge. The broker already
+# bounds these, but the backend re-validates because the bridge is a separate
+# process boundary: names must be safe single leaves and payloads real base64.
+_ATTACHMENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]*\.[A-Za-z0-9]{1,12}$")
+_MAX_ATTACHMENTS = 20
+_MAX_ATTACHMENT_BYTES = 5_000_000
+
+
+def sanitize_provider_attachments(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    sanitized: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    total = 0
+    for item in raw[:_MAX_ATTACHMENTS]:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        encoded = item.get("content_base64")
+        if not _ATTACHMENT_NAME.match(name) or ".." in name or name in seen:
+            continue
+        if not isinstance(encoded, str) or len(encoded) > 8_000_000:
+            continue
+        try:
+            payload = base64.b64decode(encoded, validate=True)
+        except (ValueError, binascii.Error):
+            continue
+        if not payload or len(payload) > _MAX_ATTACHMENT_BYTES or total + len(payload) > 20_000_000:
+            continue
+        total += len(payload)
+        seen.add(name)
+        sanitized.append({"name": name, "size": len(payload), "content_base64": encoded})
+    return sanitized
 
 
 def _redaction_reason(input_redacted: bool, output_redacted: bool) -> str | None:

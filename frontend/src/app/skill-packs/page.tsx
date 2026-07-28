@@ -469,7 +469,7 @@ export default function SkillPacksPage() {
             <Package className="text-cyan-400" /> Skill Packs
           </h1>
           <p className="text-gray-400 mt-1 text-sm">
-            Versioned security automation bundles. Install, activate, and govern skill packs across your claws.
+            Versioned security automation bundles. Install, activate, and govern skill packs across your Capability Nodes.
           </p>
         </div>
         <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white">

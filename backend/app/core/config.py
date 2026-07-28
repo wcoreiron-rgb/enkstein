@@ -14,8 +14,18 @@ _INSECURE_DEFAULTS = frozenset({
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Enkstein"
-    APP_VERSION: str = "0.3.18"
+    APP_VERSION: str = "0.4.9"
     DEBUG: bool = False
+
+    # Production data policy.
+    #
+    # Capability Nodes fall back to labelled demonstration findings when no
+    # connector is configured, so a new install is explorable rather than a
+    # wall of empty screens. In a real deployment that fallback is a liability:
+    # an operator can mistake sample data for their own estate. Setting this
+    # makes every node return nothing instead, so anything on screen came from
+    # an authenticated connector.
+    REQUIRE_LIVE_DATA: bool = False
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://regentclaw:regentclaw@db:5432/regentclaw"
@@ -50,12 +60,34 @@ class Settings(BaseSettings):
     # DEADLINE so a stalled Brain can never leave the client streaming forever —
     # the deadline always resolves to a terminal turn_timeout event.
     WORKSPACE_STREAM_HEARTBEAT_SECONDS: float = 10.0
+    # AI endpoint rate limiting (OWASP LLM04). Applies per authenticated
+    # identity to governed turn, stream, and research endpoints.
+    AI_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    AI_RATE_LIMIT_MAX_REQUESTS: int = 20
+    # OAuth client ID for GitHub device-code sign-in. GitHub has no first-party
+    # public client, so interactive sign-in stays disabled until a deployment
+    # supplies its own OAuth app; credential configuration still works.
+    GITHUB_OAUTH_CLIENT_ID: str = ""
+    # Browser sign-in (authorization code + PKCE) client IDs. These vendors
+    # publish no first-party public client, so a deployment registers a native
+    # OAuth app once. PKCE means no client secret is ever needed or stored.
+    GITLAB_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    SLACK_OAUTH_CLIENT_ID: str = ""
+    ATLASSIAN_OAUTH_CLIENT_ID: str = ""
+    DATADOG_OAUTH_CLIENT_ID: str = ""
+    SNYK_OAUTH_CLIENT_ID: str = ""
+    PAGERDUTY_OAUTH_CLIENT_ID: str = ""
+    SALESFORCE_OAUTH_CLIENT_ID: str = ""
     WORKSPACE_STREAM_DEADLINE_SECONDS: float = 180.0
     # Browser Companion sessions run at human/page speed and need a longer
     # deadline than a direct API/CLI Brain call; this stays comfortably above
-    # brain_bridge._BROWSER_BRAIN_TIMEOUT_SECONDS (170s) so the per-Brain
+    # brain_bridge._BROWSER_BRAIN_TIMEOUT_SECONDS (890s) so the per-Brain
     # timeout there always resolves before this outer turn deadline would.
-    WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS: float = 210.0
+    # A large multi-file/full-app generation can legitimately run ChatGPT/
+    # Claude/Gemini for several minutes; 900s (15 minutes) gives real headroom
+    # for that without leaving a genuinely-stuck session streaming forever.
+    WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS: float = 900.0
 
     def validate_security(self) -> None:
         """Call at startup. Raises if running in production with insecure defaults."""

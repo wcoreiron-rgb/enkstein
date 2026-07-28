@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from .base import ActionResult, simulated
+from .base import ActionResult, not_configured
 
 logger = logging.getLogger(__name__)
 
@@ -245,23 +245,23 @@ async def execute(
     if action_type == "create_jira_ticket":
         if _has_jira_creds(creds):
             return await _create_jira_ticket(params, creds, context)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "create_pagerduty_incident":
         if _has_pd_creds(creds):
             return await _create_pd_incident(params, creds, context)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "send_slack_alert":
         if _has_slack_creds(creds):
             return await _send_slack(params, creds, context)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "call_webhook":
         url = params.get("url", "")
         if url:
             return await _call_webhook(params, context)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     return ActionResult(success=False, message=f"Unknown ticketing action: {action_type}", error="unsupported_action")
 

@@ -27,11 +27,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.finding import Finding
 from app.models.customclaw import CustomClawDefinition
+from app.services.connector_tester import _validate_endpoint_url
 
 logger = logging.getLogger("customclaw")
 
 router = APIRouter(prefix="/customclaw", tags=["Custom Capability"])
+
+CLAW_NAME = "customclaw"
 
 TIMEOUT = httpx.Timeout(20.0)
 
@@ -135,6 +139,9 @@ async def _call_endpoint(
     url = base_url.rstrip("/") + path
 
     try:
+        # A user-defined capability is intentionally flexible, but it must not
+        # turn the server into a route to metadata or private control planes.
+        url = _validate_endpoint_url(url)
         kwargs: Dict = {"headers": headers, "timeout": TIMEOUT}
         if method in ("POST", "PUT", "PATCH") and body:
             kwargs["json"] = body
@@ -170,6 +177,42 @@ async def _call_endpoint(
             "success": False,
             "error": "endpoint call failed",
         }
+
+
+@router.post("/scan", summary="Run every configured Custom Capability")
+async def scan_all_definitions(db: AsyncSession = Depends(get_db)):
+    """Bounded aggregate scan for the Security console's root scan action."""
+    result = await db.execute(
+        select(CustomClawDefinition).order_by(CustomClawDefinition.created_at.desc()).limit(25)
+    )
+    definitions = [_to_dict(row) for row in result.scalars().all()]
+    started = datetime.now(timezone.utc)
+    rows: list[dict] = []
+    async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=False) as client:
+        for definition in definitions:
+            endpoints = definition.get("endpoints", [])[:20]
+            calls = [
+                _call_endpoint(client, definition.get("base_url", ""), _build_headers(definition), endpoint)
+                for endpoint in endpoints
+            ]
+            results = await asyncio.gather(*calls, return_exceptions=True)
+            succeeded = sum(1 for item in results if isinstance(item, dict) and item.get("success"))
+            rows.append({
+                "definition_id": definition["id"],
+                "definition_name": definition["name"],
+                "endpoints_total": len(endpoints),
+                "endpoints_success": succeeded,
+            })
+    return {
+        "status": "completed",
+        "mode": "live" if definitions else "simulated",
+        "definitions_checked": len(rows),
+        "endpoints_checked": sum(item["endpoints_total"] for item in rows),
+        "endpoints_success": sum(item["endpoints_success"] for item in rows),
+        "duration_sec": round((datetime.now(timezone.utc) - started).total_seconds(), 2),
+        "results": rows,
+        "message": "No Custom Capability definitions configured." if not definitions else None,
+    }
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
@@ -321,6 +364,65 @@ async def scan_definition(def_id: str, db: AsyncSession = Depends(get_db)):
         "endpoints_success": success_count,
         "results": processed,
     }
+
+
+@router.get("/findings", summary="All Custom Capability findings")
+async def get_findings(db: AsyncSession = Depends(get_db)):
+    """
+    Findings this Node has persisted.
+
+    Every other Capability Node exposes ``/findings``, and the shared Findings
+    console iterates that contract. Without it a user-defined capability could
+    record findings that never surfaced anywhere outside its own page.
+    """
+    result = await db.execute(
+        select(Finding)
+        .where(Finding.claw == CLAW_NAME)
+        .order_by(Finding.risk_score.desc())
+    )
+    return [
+        {
+            "id": str(f.id),
+            "claw": f.claw,
+            "provider": f.provider,
+            "title": f.title,
+            "description": f.description,
+            "category": f.category,
+            "severity": f.severity.value if hasattr(f.severity, "value") else f.severity,
+            "status": f.status.value if hasattr(f.status, "value") else f.status,
+            "resource_id": f.resource_id,
+            "resource_name": f.resource_name,
+            "risk_score": f.risk_score,
+            "data_origin": getattr(f, "data_origin", None),
+            "source_connector": getattr(f, "source_connector", None),
+            "created_at": f.created_at.isoformat() if f.created_at else None,
+        }
+        for f in result.scalars().all()
+    ]
+
+
+@router.get("/providers", summary="Custom Capability definition status")
+async def get_providers(db: AsyncSession = Depends(get_db)):
+    """
+    Each saved definition is this Node's equivalent of a provider, so the
+    Security console's provider panel can render it like any other Node.
+    """
+    result = await db.execute(
+        select(CustomClawDefinition).order_by(CustomClawDefinition.created_at.desc())
+    )
+    providers = []
+    for row in result.scalars().all():
+        definition = _to_dict(row)
+        providers.append({
+            "provider": definition["id"],
+            "label": definition["name"],
+            "connector_type": "custom_rest",
+            "configured": bool(definition.get("base_url")),
+            "live_capable": bool(definition.get("base_url")),
+            "coverage": "user_defined",
+            "endpoints": len(definition.get("endpoints", [])),
+        })
+    return providers
 
 
 @router.get("/stats", summary="Custom Capability aggregate stats")

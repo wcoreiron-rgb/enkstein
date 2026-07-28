@@ -122,6 +122,13 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # create_all adds missing tables but never alters existing ones. A local
+    # database outlives every upgrade, so reconcile additive column drift
+    # before anything queries it.
+    from app.core.schema_guard import reconcile_schema
+    async with engine.begin() as conn:
+        await conn.run_sync(reconcile_schema)
+
     # Start background scan scheduler
     from app.services.auto_scanner import background_scheduler_loop
     scheduler_task = asyncio.create_task(

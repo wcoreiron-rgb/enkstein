@@ -4,11 +4,18 @@ import { expect, test, type Page } from '@playwright/test';
 const CONTENT_SCRIPT = path.resolve(process.cwd(), '../browser-extension/content.js');
 const BACKGROUND_SCRIPT = path.resolve(process.cwd(), '../browser-extension/background.js');
 
+type RuntimeListener = (message: unknown, sender: unknown, callback: (value: unknown) => void) => boolean;
+type RuntimeStub = {
+  listener: RuntimeListener | null;
+  onMessage: { addListener(listener: RuntimeListener): void };
+  sendMessage(): void;
+};
+
 function installRuntimeStub() {
-  const runtime = {
-    listener: null as null | ((message: unknown, sender: unknown, callback: (value: unknown) => void) => boolean),
+  const runtime: RuntimeStub = {
+    listener: null,
     onMessage: {
-      addListener(listener: typeof runtime.listener) {
+      addListener(listener: RuntimeListener) {
         runtime.listener = listener;
       },
     },
@@ -528,10 +535,10 @@ test('persists delayed SPA conversation URLs and restores the same sanitized con
 
 test('browser companion submits the complete ChatGPT prompt', async ({ page }) => {
   await page.addInitScript(() => {
-    const runtime = {
-      listener: null as null | ((message: unknown, sender: unknown, callback: (value: unknown) => void) => boolean),
+    const runtime: RuntimeStub = {
+      listener: null,
       onMessage: {
-        addListener(listener: typeof runtime.listener) {
+        addListener(listener: RuntimeListener) {
           runtime.listener = listener;
         },
       },
@@ -585,9 +592,9 @@ test('browser companion submits the complete ChatGPT prompt', async ({ page }) =
 
 test('browser companion supports a controlled editor that accepts paste transactions', async ({ page }) => {
   await page.addInitScript(() => {
-    const runtime = {
-      listener: null as null | ((message: unknown, sender: unknown, callback: (value: unknown) => void) => boolean),
-      onMessage: { addListener(listener: typeof runtime.listener) { runtime.listener = listener; } },
+    const runtime: RuntimeStub = {
+      listener: null,
+      onMessage: { addListener(listener: RuntimeListener) { runtime.listener = listener; } },
       sendMessage() {},
     };
     Object.defineProperty(window, 'chrome', { value: { runtime }, configurable: true });
@@ -648,9 +655,9 @@ test('browser companion supports a controlled editor that accepts paste transact
 
 test('browser companion preserves multiline prompts in the Gemini editor', async ({ page }) => {
   await page.addInitScript(() => {
-    const runtime = {
-      listener: null as null | ((message: unknown, sender: unknown, callback: (value: unknown) => void) => boolean),
-      onMessage: { addListener(listener: typeof runtime.listener) { runtime.listener = listener; } },
+    const runtime: RuntimeStub = {
+      listener: null,
+      onMessage: { addListener(listener: RuntimeListener) { runtime.listener = listener; } },
       sendMessage() {},
     };
     Object.defineProperty(window, 'chrome', { value: { runtime }, configurable: true });

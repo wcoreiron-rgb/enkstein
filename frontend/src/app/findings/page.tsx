@@ -13,6 +13,20 @@ import { capabilityName } from '@/lib/capability-names';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 const STATUSES   = ['open', 'in_remediation', 'resolved', 'accepted_risk', 'false_positive'];
+const DATA_ORIGINS = ['live', 'simulated', 'unknown'];
+
+// Data origin separates findings that came from an authenticated connector
+// against the tenant's own estate from the demonstration data that Capability
+// Nodes still emit when no connector is configured.
+const ORIGIN_STYLE: Record<string, { badge: string; label: string }> = {
+  live:      { badge: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30', label: 'live' },
+  simulated: { badge: 'text-amber-500 bg-amber-500/10 border-amber-500/30',       label: 'demo data' },
+  unknown:   { badge: 'text-gray-400 bg-gray-400/10 border-gray-400/30',          label: 'unverified' },
+};
+
+function originStyle(origin: string | undefined) {
+  return ORIGIN_STYLE[origin ?? 'unknown'] ?? ORIGIN_STYLE.unknown;
+}
 
 const SEV_STYLE: Record<string, { badge: string; dot: string; icon: React.ReactNode }> = {
   critical: { badge: 'text-red-500 bg-red-500/10 border-red-500/30',    dot: 'bg-red-500',    icon: <Flame         className="w-3 h-3" /> },
@@ -60,6 +74,9 @@ function riskColor(score: number) {
 function StatsBar({ stats }: { stats: any }) {
   if (!stats) return null;
   const t = stats.totals ?? {};
+  const origins = stats.by_origin ?? {};
+  const liveCount = origins.live ?? 0;
+  const demoCount = (origins.simulated ?? 0) + (origins.unknown ?? 0);
   return (
     <div className="flex items-center gap-6 flex-wrap">
       {SEVERITIES.map(s => {
@@ -75,6 +92,13 @@ function StatsBar({ stats }: { stats: any }) {
           </div>
         );
       })}
+      {(liveCount > 0 || demoCount > 0) && (
+        <div className="flex items-center gap-1.5">
+          <span className={`text-xs px-2 py-0.5 rounded-full border ${ORIGIN_STYLE.live.badge}`}>live</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--rc-text-1)' }}>{liveCount}</span>
+          <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>of {liveCount + demoCount}</span>
+        </div>
+      )}
       <span className="text-xs ml-auto" style={{ color: 'var(--rc-text-3)' }}>
         {stats.open_count ?? 0} open · {stats.critical_count ?? 0} critical
       </span>
@@ -162,6 +186,10 @@ function DetailDrawer({ finding, onClose, onUpdate }: {
                 background: clawColor(finding.claw) + '10',
               }}>
                 {capabilityName(finding.claw)}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full border ${originStyle(finding.data_origin).badge}`}>
+                {originStyle(finding.data_origin).label}
+                {finding.source_connector ? ` · ${finding.source_connector}` : ''}
               </span>
             </div>
             <h2 className="text-sm font-semibold leading-snug" style={{ color: 'var(--rc-text-1)' }}>{finding.title}</h2>
@@ -306,6 +334,7 @@ export default function FindingsPage() {
   const [severity, setSeverity] = useState('');
   const [claw,     setClaw]     = useState('');
   const [status,   setStatus]   = useState('');
+  const [dataOrigin, setDataOrigin] = useState('');
   const [sort,     setSort]     = useState<'recent' | 'risk' | 'last_seen'>('recent');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -327,8 +356,9 @@ export default function FindingsPage() {
     if (claw)     p.claw     = claw;
     if (status)   p.status   = status;
     if (search)   p.search   = search;
+    if (dataOrigin) p.data_origin = dataOrigin;
     return p;
-  }, [severity, claw, status, search, sort]);
+  }, [severity, claw, status, search, sort, dataOrigin]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -395,7 +425,7 @@ export default function FindingsPage() {
           }}>
           <SlidersHorizontal className="w-4 h-4" />
           Filters
-          {(severity || claw || status) && <span className="w-2 h-2 rounded-full bg-cyan-500" />}
+          {(severity || claw || status || dataOrigin) && <span className="w-2 h-2 rounded-full bg-cyan-500" />}
         </button>
 
         <div className="flex items-center rounded-xl overflow-hidden border" style={{ borderColor: 'var(--rc-border)' }}>
@@ -435,6 +465,11 @@ export default function FindingsPage() {
         {status && (
           <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${STATUS_STYLE[status]}`}>
             {status.replace(/_/g, ' ')} <button onClick={() => setStatus('')}><X className="w-3 h-3" /></button>
+          </span>
+        )}
+        {dataOrigin && (
+          <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${originStyle(dataOrigin).badge}`}>
+            {originStyle(dataOrigin).label} <button onClick={() => setDataOrigin('')}><X className="w-3 h-3" /></button>
           </span>
         )}
 
@@ -477,6 +512,24 @@ export default function FindingsPage() {
                   className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${status === s ? STATUS_STYLE[s] : ''}`}
                   style={status !== s ? { color: 'var(--rc-text-3)', borderColor: 'var(--rc-border-2)' } : {}}>
                   {s.replace(/_/g, ' ')}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs block mb-1.5" style={{ color: 'var(--rc-text-3)' }}>Data origin</label>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={() => setDataOrigin('')}
+                className="text-xs px-2.5 py-1 rounded-lg border transition-colors"
+                style={{ background: !dataOrigin ? 'var(--regent-600)' : 'transparent', borderColor: !dataOrigin ? 'var(--regent-600)' : 'var(--rc-border-2)', color: !dataOrigin ? '#fff' : 'var(--rc-text-3)' }}>
+                All
+              </button>
+              {DATA_ORIGINS.map(o => (
+                <button key={o} onClick={() => setDataOrigin(o === dataOrigin ? '' : o)}
+                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${dataOrigin === o ? originStyle(o).badge : ''}`}
+                  style={dataOrigin !== o ? { color: 'var(--rc-text-3)', borderColor: 'var(--rc-border-2)' } : {}}>
+                  {originStyle(o).label}
                 </button>
               ))}
             </div>
@@ -542,8 +595,13 @@ export default function FindingsPage() {
                   {/* Title + provider */}
                   <div className="min-w-0">
                     <p className="text-sm truncate font-medium" style={{ color: 'var(--rc-text-1)' }}>{f.title}</p>
-                    <p className="text-xs truncate" style={{ color: 'var(--rc-text-3)' }}>
-                      {f.provider}{f.resource_name ? ` · ${f.resource_name}` : ''}
+                    <p className="text-xs truncate flex items-center gap-1.5" style={{ color: 'var(--rc-text-3)' }}>
+                      <span className={`px-1.5 rounded-full border flex-shrink-0 ${originStyle(f.data_origin).badge}`}>
+                        {originStyle(f.data_origin).label}
+                      </span>
+                      <span className="truncate">
+                        {f.provider}{f.resource_name ? ` · ${f.resource_name}` : ''}
+                      </span>
                     </p>
                   </div>
 

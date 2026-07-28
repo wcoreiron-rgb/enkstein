@@ -142,6 +142,18 @@ export default function SecurityWorkspace() {
     setError(null);
     try {
       const result = await getEnksteinArchitecture();
+      // Everything below reads this as a complete architecture document, so a
+      // truncated payload from a skewed backend used to white-screen the whole
+      // workspace. Validate at the boundary and fall into the existing error
+      // state instead of rendering a half-built page.
+      const complete =
+        Array.isArray(result?.cortex) &&
+        Array.isArray(result?.hearts) &&
+        Array.isArray(result?.arms) &&
+        Array.isArray(result?.capability_nodes);
+      if (!complete) {
+        throw new Error('Architecture response was incomplete');
+      }
       setArchitecture(result);
       setSelectedNode((current) => current || result.capability_nodes[0] || null);
     } catch (err) {

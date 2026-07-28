@@ -67,6 +67,10 @@ class CortexMissionRead(BaseModel):
     next_run_at: datetime | None
     created_at: datetime
     updated_at: datetime
+    # False when the encrypted objective could not be authenticated with the
+    # current runtime key. The row is still listed so it can be inspected or
+    # removed, but its objective text is not trustworthy.
+    readable: bool = True
 
 
 class CortexMissionRunRead(BaseModel):
@@ -89,6 +93,7 @@ class CortexMissionObservationRead(BaseModel):
     review_reason: str | None
     created_at: datetime
     reviewed_at: datetime | None
+    readable: bool = True
 
 
 class CortexMissionObservationReview(BaseModel):

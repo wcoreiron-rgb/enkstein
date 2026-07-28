@@ -62,6 +62,25 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "tenant_id": "global",
         "created_at": datetime.utcnow(),
     },
+    "ollama_cowork_author": {
+        "name": "ollama_cowork_author",
+        "provider": "ollama",
+        # Qwen 2.5 7B is a practical local coding model on ordinary developer
+        # hardware. The invocation pins this model explicitly so a global
+        # fallback preference cannot silently turn a file-authoring turn into
+        # a different local Brain.
+        "model": "qwen2.5:7b",
+        "allowed_models": [],
+        "allowed_claws": ["executive"],
+        "allowed_data_classes": ["public", "internal", "confidential", "restricted", "top_secret"],
+        "temperature": 0.1,
+        "max_tokens": 6000,
+        "tool_calling": False,
+        "requires_redaction": True,
+        "fallback_profile": None,
+        "tenant_id": "global",
+        "created_at": datetime.utcnow(),
+    },
     "gemma_scanner": {
         "name": "gemma_scanner",
         "provider": "ollama",

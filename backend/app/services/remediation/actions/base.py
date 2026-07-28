@@ -22,11 +22,23 @@ class ActionResult:
     error: str | None = None
 
 
-def simulated(action_type: str, target_id: str, extra: dict | None = None) -> ActionResult:
-    """Return a simulated success when credentials are not configured."""
+def not_configured(action_type: str, target_id: str, extra: dict | None = None) -> ActionResult:
+    """Fail an action that cannot reach its provider.
+
+    This previously returned ``success=True`` with a "Simulated:" message, so
+    the engine recorded the action as COMPLETED. An operator reviewing the
+    queue saw a disabled account or an isolated host that had never actually
+    been touched, and the audit trail agreed with them. An action that does not
+    execute is not a successful action, so it now fails with the reason.
+    """
     return ActionResult(
-        success=True,
-        message=f"Simulated: would have executed '{action_type}' on target '{target_id}' — credentials not configured",
+        success=False,
+        message=(
+            f"Cannot execute '{action_type}' on '{target_id}': no credentials are "
+            f"configured for this provider. Configure and approve its connector first."
+        ),
+        error="provider_not_configured",
         rollback_data=extra or {},
-        output={"simulated": True, "action_type": action_type, "target_id": target_id},
+        output={"executed": False, "reason": "provider_not_configured",
+                "action_type": action_type, "target_id": target_id},
     )

@@ -7,10 +7,27 @@ if [ -z "$console_user" ] || [ "$console_user" = "root" ] || [ "$console_user" =
 fi
 
 console_uid=$(id -u "$console_user")
+brain_bridge_plist="/Users/$console_user/Library/LaunchAgents/com.marcellus.brain-bridge.plist"
+
 # Installing over a running app otherwise leaves its WebView and launcher using
 # the pre-update runtime until the operator manually quits it.
 /bin/launchctl asuser "$console_uid" /usr/bin/osascript \
   -e 'tell application id "com.marcellus.desktop" to quit' >/dev/null 2>&1 || true
+
+# The native Brain Bridge is a separate long-lived launchd service (KeepAlive,
+# RunAtLoad) that stays running independently of the desktop app. Without an
+# explicit restart here, launchd never notices a new EnksteinBrainBridge
+# binary was just installed and keeps the old process alive indefinitely --
+# every fix to CLI/browser Brain detection, timeouts, or new endpoints in a
+# fresh install would silently never take effect until the operator happened
+# to manually kill it or reboot. bootout/bootstrap cycles the exact same
+# service so it picks up the freshly installed binary immediately.
+if [ -f "$brain_bridge_plist" ]; then
+  /bin/launchctl asuser "$console_uid" /bin/launchctl bootout "gui/$console_uid/com.marcellus.brain-bridge" >/dev/null 2>&1 || true
+  /bin/sleep 1
+  /bin/launchctl asuser "$console_uid" /bin/launchctl bootstrap "gui/$console_uid" "$brain_bridge_plist" >/dev/null 2>&1 || true
+fi
+
 /bin/sleep 1
 if [ -d /Applications/Enkstein.app ] && [ -d /Applications/Marcellus.app ]; then
   new_id=$(/usr/bin/defaults read /Applications/Enkstein.app/Contents/Info CFBundleIdentifier 2>/dev/null || true)

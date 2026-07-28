@@ -287,7 +287,8 @@ export default function BrainConnectionsPage() {
               <ArrowLeft className="h-3.5 w-3.5" />Return to {workspaceMode === 'cowork' ? 'Cowork' : workspaceMode === 'security' ? 'Security' : 'Chat'}
             </Link>
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-600 text-white"><BrainCircuit className="h-5 w-5" /></div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-md text-white"
+                style={{ background: 'var(--rc-brand)' }}><BrainCircuit className="h-5 w-5" /></div>
               <div>
                 <h1 className="text-xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>Brain Connections</h1>
                 <p className="mt-1 text-sm" style={{ color: 'var(--rc-text-3)' }}>Choose how Enkstein reasons. Every request still passes through Trust Fabric.</p>
@@ -314,7 +315,7 @@ export default function BrainConnectionsPage() {
             ['Discovered Models', String(Object.values(models).reduce((total, rows) => total + rows.length, 0)), Cpu],
           ].map(([label, value, Icon]) => (
             <div key={String(label)} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
-              <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4 text-red-500" /></div>
+              <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4" style={{ color: 'var(--rc-brand)' }} /></div>
               <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{String(value)}</p>
             </div>
           ))}
@@ -368,7 +369,7 @@ export default function BrainConnectionsPage() {
               return (
                 <article key={id} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3"><Icon className="h-5 w-5 text-red-500" /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{name}</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status?.runtime || 'Desktop runtime'}</p></div></div>
+                    <div className="flex items-center gap-3"><Icon className="h-5 w-5" style={{ color: 'var(--rc-brand)' }} /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{name}</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status?.runtime || 'Desktop runtime'}</p></div></div>
                     <Status ready={ready} checking={checkingBrains} status={status?.status} />
                   </div>
                   <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{status?.detail || instruction}</p>
@@ -398,7 +399,7 @@ export default function BrainConnectionsPage() {
           <h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>Local Brain</h2>
           <article className="mt-3 rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex items-center gap-3"><HardDrive className="h-5 w-5 text-red-500" /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Ollama</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Private models running on this computer</p></div></div>
+              <div className="flex items-center gap-3"><HardDrive className="h-5 w-5" style={{ color: 'var(--rc-brand)' }} /><div><h3 className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>Ollama</h3><p className="mt-0.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Private models running on this computer</p></div></div>
               <Status ready={Boolean(ollama?.ready)} />
             </div>
             <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{ollama?.setup || 'Install Ollama and run: ollama pull llama3.2'}</p>
@@ -409,12 +410,12 @@ export default function BrainConnectionsPage() {
         <section>
           <div className="flex items-end justify-between gap-3">
             <div><h2 className="text-sm font-semibold" style={{ color: 'var(--rc-text-1)' }}>API Brains</h2><p className="mt-1 text-xs" style={{ color: 'var(--rc-text-3)' }}>Keys are verified through connector setup before a provider becomes ready.</p></div>
-            <Link href="/modelclaw" className="inline-flex items-center gap-1 text-xs text-red-500">Advanced profiles <ExternalLink className="h-3.5 w-3.5" /></Link>
+            <Link href="/modelclaw" className="inline-flex items-center gap-1 text-xs" style={{ color: 'var(--rc-brand)' }}>Advanced profiles <ExternalLink className="h-3.5 w-3.5" /></Link>
           </div>
           <div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
             {apiProviders.map((provider) => (
               <div key={provider.provider} className="flex flex-wrap items-center gap-4 px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
-                <Cloud className="h-4 w-4 shrink-0 text-red-500" />
+                <Cloud className="h-4 w-4 shrink-0" style={{ color: 'var(--rc-brand)' }} />
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{provider.label}</p><p className="mt-0.5 truncate text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.setup}</p></div>
                 <span className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.models?.length || 0} models</span>
                 <Status ready={provider.ready} />

@@ -140,7 +140,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
   await page.route('**/api/v1/arcclaw/agent/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route('**/api/v1/marcellus/architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ARCHITECTURE_STUB) }));
   await page.route('**/api/v1/marcellus/missions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.3.18' }) }));
+  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.4.9' }) }));
 
   await page.route('**/api/v1/marcellus/workspace/**', async (route) => {
     const request = route.request();
@@ -306,7 +306,12 @@ export function sse(event: string, data: unknown): string {
 export async function mockTurnStream(
   page: Page,
   store: WorkspaceStore,
-  options: { conversationId: string; assistantContent: string; outcomes?: TurnOutcome[] },
+  options: {
+    conversationId: string;
+    assistantContent: string;
+    outcomes?: TurnOutcome[];
+    assistantGovernance?: Record<string, unknown>;
+  },
 ): Promise<() => number> {
   const outcomes = options.outcomes && options.outcomes.length ? options.outcomes : ['completed'];
   let calls = 0;
@@ -335,6 +340,7 @@ export async function mockTurnStream(
           outcome: 'allowed', policy_name: 'default', reason: 'ok', risk_score: 3,
           input_redacted: false, output_redacted: false, confidence: 0.92,
           runtime_group: 'hybrid', latency_ms: 812, votes: [], context_manifest: null,
+          ...options.assistantGovernance,
         },
         created_at: now,
       };

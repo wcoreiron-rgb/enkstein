@@ -120,15 +120,15 @@ async def test_persistent_browser_brain_receives_current_turn_without_replaying_
 
 
 @pytest.mark.asyncio
-async def test_browser_brain_receives_full_history_when_the_answering_engine_switched(client, monkeypatch):
+async def test_browser_brain_receives_compact_handoff_when_the_answering_engine_switched(client, monkeypatch):
     """When the conversation's last reply came from a different Brain
     (e.g. the user just switched from Codex to the Gemini browser session,
     or from one browser tab to a different local/API Brain), the newly
     addressed provider tab has never seen the prior turns, so the
     'paired thread already has history' assumption behind
     _compose_browser_turn does not hold. workspace.py signals this via
-    context["brain_switched_engine"]; the Gateway must then send the full
-    bounded transcript instead of only the latest message."""
+    context["brain_switched_engine"]; the Gateway must then send compact prior
+    context instead of only the latest message or an unbounded transcript."""
     captured = {}
 
     async def fake_subscription(source, prompt, *, model=None, session_id=None):
@@ -153,6 +153,34 @@ async def test_browser_brain_receives_full_history_when_the_answering_engine_swi
     assert "Continue from where we left off" in captured["prompt"]
     assert "Earlier request answered by a different Brain" in captured["prompt"]
     assert "Earlier answer from the previous engine" in captured["prompt"]
+    assert "ENGINE HANDOFF" in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_browser_handoff_caps_large_history_before_provider_insertion(client, monkeypatch):
+    captured = {}
+
+    async def fake_subscription(source, prompt, *, model=None, session_id=None):
+        captured["prompt"] = prompt
+        return _vote(source)
+
+    monkeypatch.setattr(gateway, "invoke_subscription_brain", fake_subscription)
+    response = await client.post(
+        BASE,
+        json={
+            "mode": "cowork",
+            "source": "chatgpt_browser",
+            "context": {"conversation_id": "conversation-789", "brain_switched_engine": True, "agent_mode": True},
+            "messages": [
+                {"role": "user", "content": "a" * 40_000},
+                {"role": "assistant", "content": "b" * 40_000},
+                {"role": "user", "content": "Create a local project file now"},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert len(captured["prompt"]) <= gateway._BROWSER_HANDOFF_MAX_CHARS
+    assert "Create a local project file now" in captured["prompt"]
 
 
 @pytest.mark.asyncio
@@ -181,7 +209,7 @@ async def test_browser_brain_receives_the_governed_change_protocol_in_agent_mode
         },
     )
     assert response.status_code == 200, response.text
-    assert "GOVERNED FILE OUTPUT" in captured["prompt"]
+    assert "GOVERNED EXECUTION CONTRACT" in captured["prompt"]
     assert "project-relative path" in captured["prompt"]
     assert "Create that script in this project folder" in captured["prompt"]
 
@@ -195,7 +223,7 @@ async def test_browser_brain_receives_the_governed_change_protocol_in_agent_mode
         },
     )
     assert smart.status_code == 200, smart.text
-    assert "GOVERNED CHANGE PROTOCOL" in captured["prompt"]
+    assert "GOVERNED EXECUTION CONTRACT" in captured["prompt"]
     assert "marcellus_changes" in captured["prompt"]
 
 

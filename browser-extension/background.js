@@ -380,7 +380,15 @@ async function advanceEntry(entry, token) {
       if (observation?.state === 'completed') {
         await bridgeRequest('/v1/browser/complete', {
           token,
-          body: { task_id: entry.task_id, success: true, response: observation.response || '', detail: '' },
+          body: {
+            task_id: entry.task_id,
+            success: true,
+            response: observation.response || '',
+            detail: '',
+            // Files the provider actually generated for this turn. Empty
+            // whenever the answer produced no downloads.
+            attachments: Array.isArray(observation.attachments) ? observation.attachments : [],
+          },
         }).catch(() => {});
         entry.state = 'completed';
         entry.progress_at = now;

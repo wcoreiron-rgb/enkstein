@@ -860,8 +860,8 @@ export default function MemoryPage() {
           {[
             {
               label: 'Platform Risk',
-              value: summary.tenant_risk_level.toUpperCase(),
-              sub: `score ${summary.tenant_risk_score.toFixed(0)}`,
+              value: (summary.tenant_risk_level ?? 'unknown').toUpperCase(),
+              sub: `score ${(summary.tenant_risk_score ?? 0).toFixed(0)}`,
               color: RISK_LEVEL_COLOR[summary.tenant_risk_level] ?? 'text-white',
               trend: riskScores, trendColor: summary.tenant_risk_level === 'low' ? 'green' : 'red' as const,
             },

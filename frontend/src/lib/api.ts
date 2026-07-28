@@ -775,6 +775,12 @@ export type ContextManifest = {
   fallback_reason?: string | null;
 };
 
+export type CortexFileChange = {
+  path: string;
+  operation: 'create' | 'update' | 'delete' | string;
+  outcome: 'applied' | 'proposed' | 'skipped' | 'blocked' | string;
+};
+
 export type CortexTurn = {
   conversation: CortexConversation;
   user_message: CortexMessageRecord;
@@ -927,7 +933,25 @@ export async function streamCortexTurn(
   // the socket producing frames. If no frame (not even a heartbeat) arrives for
   // this long, the stream is presumed dead and is abandoned rather than hanging
   // the UI indefinitely.
-  const IDLE_TIMEOUT_MS = 45_000;
+  // A healthy backend emits a heartbeat every 10 seconds. Leave enough room
+  // for desktop WebKit scheduling and a transient Docker/Next handoff, while
+  // still failing a genuinely dead stream well before the backend's governed
+  // deadline. The dedicated workspace route preserves SSE frames for
+  // multi-minute Browser Companion turns.
+  // Browser Companion work can take several minutes and some desktop WebKit /
+  // proxy combinations buffer intermediate SSE heartbeats. Treating a quiet
+  // 75-second window as terminal meant the UI abandoned a healthy ChatGPT
+  // turn while the native broker and provider page kept working. The backend
+  // already enforces the real 15-minute browser deadline, so the client must
+  // leave browser work alive for that same bounded window. Non-browser turns
+  // retain the quick dead-stream guard.
+  const requestPayload = body as { source?: unknown; consensus_sources?: unknown };
+  const requestSources = [
+    requestPayload.source,
+    ...(Array.isArray(requestPayload.consensus_sources) ? requestPayload.consensus_sources : []),
+  ].map((item) => String(item || ''));
+  const isBrowserTurn = requestSources.some((source) => source.endsWith('_browser'));
+  const IDLE_TIMEOUT_MS = isBrowserTurn ? 930_000 : 75_000;
   try {
     while (true) {
       let idleTimer: ReturnType<typeof setTimeout> | undefined;

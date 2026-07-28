@@ -10,6 +10,8 @@ from typing import Optional
 
 import httpx
 
+from app.claws import credential_aliases, provenance
+
 logger = logging.getLogger("cloudclaw.aws")
 
 TIMEOUT = httpx.Timeout(30.0)
@@ -265,14 +267,15 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
         "MaxResults": 100,
     }
 
-    # Real AWS Security Hub calls require boto3/aioboto3 with SigV4 signing.
-    # boto3/aioboto3 is not installed in this environment — return empty list
-    # so the caller falls back to simulated findings.
-    logger.info(
-        "AWS adapter: boto3/aioboto3 not available for SigV4 signing — "
-        "returning empty list to trigger simulated-findings fallback"
+    # Real AWS Security Hub calls require SigV4 request signing. Returning an
+    # empty list here would be indistinguishable from "your account is clean",
+    # so this raises instead: an operator who configured AWS credentials needs
+    # to know the call was never made.
+    raise NotImplementedError(
+        "AWS Security Hub requires SigV4 signing (boto3/aioboto3), which is not "
+        "installed. Configure AWS via Security Hub export to a supported "
+        "connector until native signing is available."
     )
-    return []
 
 
 def _parse_security_hub_finding(raw: dict, account_id: str, region: str) -> dict:
@@ -324,6 +327,19 @@ def _parse_security_hub_finding(raw: dict, account_id: str, region: str) -> dict
 
 # ─── Public entry point ───────────────────────────────────────────────────────
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    credentials = credential_aliases.resolve("aws_security_hub", credentials)
+    raw_findings = await _fetch_real_findings(credentials)
+    region = credentials.get("region", "us-east-1")
+    account_id = credentials.get("account_id", "unknown")
+    return provenance.live(
+        [_parse_security_hub_finding(f, account_id, region) for f in raw_findings],
+        provider="aws",
+        connector="aws_security_hub",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     Main entry point for the AWS adapter.
@@ -334,13 +350,7 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     if credentials:
         try:
-            raw_findings = await _fetch_real_findings(credentials)
-            if raw_findings:
-                region = credentials.get("region", "us-east-1")
-                account_id = credentials.get("account_id", "unknown")
-                return [_parse_security_hub_finding(f, account_id, region) for f in raw_findings]
-            # Empty list means the real call couldn't be made — fall through to simulated
-            logger.info("AWS adapter: real call returned no findings — using simulated findings")
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("AWS Security Hub call failed: %s — falling back to simulated findings", exc)
 
@@ -357,5 +367,5 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
             "risk_score": f.get("risk_score", 50.0),
             **f,
         }
-        results.append(finding)
+        results.append({**finding, "data_origin": provenance.SIMULATED})
     return results

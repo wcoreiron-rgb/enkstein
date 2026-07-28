@@ -100,6 +100,11 @@ ensure_env_value() {
   fi
 }
 
+# Returns the PID currently bound to BRIDGE_PORT in LISTEN state, or nothing.
+bridge_port_owner() {
+  /usr/sbin/lsof -nP -iTCP:"$BRIDGE_PORT" -sTCP:LISTEN -t 2>/dev/null | head -1
+}
+
 start_brain_bridge() {
   local bridge="$APP_ROOT/Resources/EnksteinBrainBridge"
   [ -x "$bridge" ] || return 0
@@ -115,7 +120,15 @@ start_brain_bridge() {
   chmod 600 "$RUNTIME_DIR/.env"
 
   if [ -f "$BRIDGE_VERSION_FILE" ] && [ "$(cat "$BRIDGE_VERSION_FILE")" = "$source_version" ] && \
-     /bin/launchctl print "gui/$(id -u)/com.marcellus.brain-bridge" >/dev/null 2>&1; then
+     /bin/launchctl print "gui/$(id -u)/com.marcellus.brain-bridge" >/dev/null 2>&1 && \
+     [ -n "$(bridge_port_owner)" ]; then
+     # Version already matches and something is genuinely listening on the
+     # bridge port -- nothing to do. (Previously this only checked that the
+     # launchd job was registered, not that a process was actually bound to
+     # the port; a stuck/orphaned prior instance holding the port while a
+     # fresh launchd-managed instance repeatedly failed to bind behind it
+     # was invisible to that check, so a stale bridge from a much earlier
+     # launch could silently keep answering every request indefinitely.)
     return 0
   fi
 
@@ -142,11 +155,40 @@ start_brain_bridge() {
 PLIST
   chmod 600 "$BRIDGE_PLIST"
   /bin/launchctl bootout "gui/$(id -u)/com.marcellus.brain-bridge" >/dev/null 2>&1 || true
+
+  # bootout asks launchd to stop the job, but if the running binary predates
+  # this launcher's process-group/signal wiring it can end up detached from
+  # launchd (PPID 1) and simply not exit -- bootout then reports success
+  # while the old process keeps holding the port. Wait briefly for the port
+  # to actually free up, then fall back to killing whatever still owns it
+  # directly, so a fresh bootstrap always gets a clean bind instead of
+  # starting a new instance that immediately loses to a zombie predecessor.
+  for _ in $(seq 1 10); do
+    [ -z "$(bridge_port_owner)" ] && break
+    sleep 0.3
+  done
+  stale_owner=$(bridge_port_owner)
+  if [ -n "$stale_owner" ]; then
+    kill -TERM "$stale_owner" >/dev/null 2>&1 || true
+    sleep 1
+    stale_owner=$(bridge_port_owner)
+    [ -n "$stale_owner" ] && kill -KILL "$stale_owner" >/dev/null 2>&1 || true
+    sleep 0.5
+  fi
+
   if ! /bin/launchctl bootstrap "gui/$(id -u)" "$BRIDGE_PLIST"; then
     nohup "$bridge" --port "$BRIDGE_PORT" --secret-file "$BRIDGE_SECRET_FILE" \
       >>"$LOG_DIR/brain-bridge.log" 2>&1 </dev/null &
     printf '%s\n' "$!" > "$BRIDGE_PID_FILE"
   fi
+
+  # Confirm the new instance actually bound the port before recording this
+  # version as successfully deployed; otherwise the next launch retries
+  # instead of silently treating a failed restart as done.
+  for _ in $(seq 1 20); do
+    [ -n "$(bridge_port_owner)" ] && break
+    sleep 0.3
+  done
   printf '%s\n' "$source_version" > "$BRIDGE_VERSION_FILE"
 }
 

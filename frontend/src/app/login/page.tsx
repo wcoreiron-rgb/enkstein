@@ -43,6 +43,22 @@ export default function LoginPage() {
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    // Same source the console sidebar uses, so the locked screen cannot report
+    // a different build than the app behind it.
+    fetch('/runtime-info', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('version unavailable')))
+      .then(payload => {
+        if (active && typeof payload.version === 'string') {
+          setRuntimeVersion(payload.version.replace(/^v/i, ''));
+        }
+      })
+      .catch(() => { if (active) setRuntimeVersion(null); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     setEmail(getRememberedEmail());
@@ -160,7 +176,7 @@ export default function LoginPage() {
       ? 'Verified email access' : view === 'recovery' ? 'Owner recovery' : 'Unlock Enkstein';
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-white p-4 text-slate-950">
+    <main className="min-h-screen flex flex-col items-center justify-center bg-white p-4 text-slate-950">
       <section className="w-full max-w-sm border border-slate-200 bg-white p-7 shadow-sm" style={{ borderRadius: 8 }}>
         <header className="mb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -203,7 +219,7 @@ export default function LoginPage() {
 
         {view === 'owner' && <form onSubmit={ownerLogin} className="space-y-4">
           <Field label="Owner username"><input required autoComplete="username" value={username} onChange={e => setUsername(e.target.value)} style={fieldStyle} /></Field>
-          <Field label="Password"><span className="relative block"><KeyRound className="absolute left-3 top-3.5 h-4 w-4 text-red-500" /><input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} style={{ ...fieldStyle, paddingLeft: '2.4rem' }} /></span></Field>
+          <Field label="Password"><span className="relative block"><KeyRound className="absolute left-3 top-3.5 h-4 w-4" style={{ color: 'var(--rc-brand)' }} /><input type="password" required autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} style={{ ...fieldStyle, paddingLeft: '2.4rem' }} /></span></Field>
           <Field label="Authenticator code"><CodeInput value={code} setValue={setCode} /></Field>
           <Primary disabled={loading || code.length !== 6}>{loading ? 'Unlocking...' : 'Unlock Enkstein'}</Primary>
           <button type="button" onClick={() => { setView('recovery'); setError(''); }} className="w-full text-xs text-slate-500 hover:text-slate-800">Use a recovery code</button>
@@ -233,6 +249,9 @@ export default function LoginPage() {
 
         {error && <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
       </section>
+      <p className="mt-6 text-center text-xs text-slate-400">
+        Enkstein {runtimeVersion ? `v${runtimeVersion}` : 'version unavailable'}
+      </p>
     </main>
   );
 }
@@ -242,10 +261,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 function Hint({ children }: { children: React.ReactNode }) { return <span className="block text-xs text-slate-500">{children}</span>; }
 function CodeInput({ value, setValue }: { value: string; setValue: (value: string) => void }) {
-  return <span className="relative block"><Smartphone className="absolute left-3 top-3.5 h-4 w-4 text-red-500" /><input inputMode="numeric" autoComplete="one-time-code" required maxLength={6} pattern="[0-9]{6}" value={value} onChange={e => setValue(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="text-center font-mono tracking-[0.3em]" style={{ ...fieldStyle, paddingLeft: '2.4rem' }} /></span>;
+  return <span className="relative block"><Smartphone className="absolute left-3 top-3.5 h-4 w-4" style={{ color: 'var(--rc-brand)' }} /><input inputMode="numeric" autoComplete="one-time-code" required maxLength={6} pattern="[0-9]{6}" value={value} onChange={e => setValue(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" className="text-center font-mono tracking-[0.3em]" style={{ ...fieldStyle, paddingLeft: '2.4rem' }} /></span>;
 }
 function Primary({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void }) {
-  return <button type={onClick ? 'button' : 'submit'} onClick={onClick} disabled={disabled} className="h-11 w-full bg-red-600 font-medium text-white hover:bg-red-500 disabled:opacity-50" style={{ borderRadius: 6 }}>{children}</button>;
+  return <button type={onClick ? 'button' : 'submit'} onClick={onClick} disabled={disabled} className="h-11 w-full font-medium text-white disabled:opacity-50 hover:opacity-90" style={{ background: 'var(--rc-brand)', borderRadius: 6 }}>{children}</button>;
 }
 function Back({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return <button type="button" onClick={onClick} className="flex w-full items-center justify-center gap-1 text-xs text-slate-500 hover:text-slate-800"><ArrowLeft className="h-3 w-3" />{children}</button>;

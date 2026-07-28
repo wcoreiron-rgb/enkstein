@@ -19,7 +19,7 @@ from typing import Any
 
 import httpx
 
-from .base import ActionResult, simulated
+from .base import ActionResult, not_configured
 
 logger = logging.getLogger(__name__)
 
@@ -219,31 +219,31 @@ async def execute(
             return await _okta_suspend_user(target_id, creds)
         if _has_entra_creds(creds):
             return await _entra_suspend_user(target_id, creds)
-        return simulated(action_type, target_id, {"was_active": True})
+        return not_configured(action_type, target_id, {"was_active": True})
 
     if action_type == "unsuspend_user":
         if _has_okta_creds(creds):
             return await _okta_unsuspend_user(target_id, creds)
         if _has_entra_creds(creds):
             return await _entra_unsuspend_user(target_id, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "revoke_sessions":
         if _has_okta_creds(creds):
             return await _okta_revoke_sessions(target_id, creds)
         if _has_entra_creds(creds):
             return await _entra_revoke_sessions(target_id, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "force_mfa_reset":
         if _has_okta_creds(creds):
             return await _okta_force_mfa_reset(target_id, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "remove_group_member":
         if _has_okta_creds(creds):
             return await _okta_remove_group_member(target_id, params, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     return ActionResult(success=False, message=f"Unknown identity action: {action_type}", error="unsupported_action")
 
@@ -264,7 +264,7 @@ async def rollback(
                 return await _okta_unsuspend_user(target_id, creds)
             if provider == "entra" or _has_entra_creds(creds):
                 return await _entra_unsuspend_user(target_id, creds)
-            return simulated("unsuspend_user", target_id)
+            return not_configured("unsuspend_user", target_id)
 
     if action_type == "remove_group_member":
         group_id = rollback_data.get("group_id", "")
@@ -279,7 +279,7 @@ async def rollback(
                 message=f"Restored group membership for user {target_id}",
                 output={"okta_response": body},
             )
-        return simulated("restore_group_member", target_id)
+        return not_configured("restore_group_member", target_id)
 
     return ActionResult(
         success=False,

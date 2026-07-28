@@ -11,6 +11,7 @@ Every test is read-only — no writes, no side effects.
 from __future__ import annotations
 
 import asyncio
+import importlib
 import ipaddress
 import logging
 import smtplib
@@ -42,7 +43,25 @@ _SSRF_BLOCKED_HOSTS = frozenset({
     "metadata.google.internal",
     "metadata.azure.com",
     "169.254.169.254",
+    "localhost",
+    "localhost.localdomain",
+    "metadata.goog",
+    "metadata",
 })
+
+
+def _blocked_address(addr: "ipaddress._BaseAddress") -> bool:
+    """True when this address is loopback, private, link-local, or reserved."""
+    if any(addr in net for net in _SSRF_BLOCKED_NETWORKS):
+        return True
+    return bool(
+        addr.is_loopback
+        or addr.is_private
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+        or addr.is_unspecified
+    )
 
 
 def _validate_endpoint_url(url: str) -> str:
@@ -60,18 +79,36 @@ def _validate_endpoint_url(url: str) -> str:
     if host.lower() in _SSRF_BLOCKED_HOSTS:
         raise ValueError(f"Endpoint host '{host}' is not allowed")
 
-    # Resolve to IP and check against blocked networks
+    # A literal IP can be checked directly.
     try:
         addr = ipaddress.ip_address(host)
-        for net in _SSRF_BLOCKED_NETWORKS:
-            if addr in net:
-                raise ValueError(f"Endpoint resolves to a private/reserved address: {addr}")
-    except ValueError as exc:
-        # Re-raise our own ValueError; ip_address() raises ValueError for hostnames
-        if "private/reserved" in str(exc) or "not allowed" in str(exc):
-            raise
-        # hostname — do a basic check; full DNS resolution would need async
-        # Block known metadata hostnames explicitly (already done above)
+    except ValueError:
+        addr = None
+    if addr is not None:
+        if _blocked_address(addr):
+            raise ValueError(
+                f"Endpoint resolves to a private/reserved address: {addr}"
+            )
+        return url
+
+    # A hostname must be resolved before it can be trusted. Checking only the
+    # literal text lets an attacker point a name they control at 127.0.0.1 or
+    # the cloud metadata address and reach straight through this guard, which
+    # is the standard DNS-based SSRF bypass.
+    try:
+        resolved = socket.getaddrinfo(host, parsed.port or 0, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise ValueError(f"Endpoint host '{host}' could not be resolved") from exc
+
+    for family, _type, _proto, _canon, sockaddr in resolved:
+        try:
+            candidate = ipaddress.ip_address(sockaddr[0])
+        except ValueError:
+            continue
+        if _blocked_address(candidate):
+            raise ValueError(
+                f"Endpoint host '{host}' resolves to a private/reserved address"
+            )
 
     return url
 
@@ -441,9 +478,212 @@ TEST_MAP = {
 }
 
 
+# Connector types served by a hand-written adapter module. Their credentials
+# are verified by asking the adapter for findings with real credentials, which
+# exercises the provider's own auth path.
+_NATIVE_TEST_MODULES: dict[str, tuple[str, str]] = {
+    "aws_security_hub": ("app.claws.cloudclaw.providers.aws", "AWS Security Hub"),
+    "aws_iam": ("app.claws.cloudclaw.providers.aws", "AWS IAM"),
+    "azure_defender": ("app.claws.cloudclaw.providers.azure", "Azure Defender for Cloud"),
+    "azure_arm": ("app.claws.cloudclaw.providers.azure", "Azure Resource Manager"),
+    "gcp_scc": ("app.claws.cloudclaw.providers.gcp", "GCP Security Command Center"),
+    "gcp_iam": ("app.claws.cloudclaw.providers.gcp", "GCP IAM"),
+    "defender_endpoint": ("app.claws.endpointclaw.providers.defender", "Microsoft Defender for Endpoint"),
+    "sentinelone": ("app.claws.endpointclaw.providers.sentinelone", "SentinelOne"),
+    "okta": ("app.claws.accessclaw.providers.okta", "Okta"),
+    "entra_id": ("app.claws.accessclaw.providers.entra", "Microsoft Entra ID"),
+    "splunk": ("app.claws.logclaw.providers.splunk", "Splunk"),
+}
+
+# Local tooling invoked by Terraform Governance rather than remote APIs; there
+# are no credentials to verify.
+_LOCAL_TOOLING = {
+    "terraform_mcp": "Local Terraform MCP tooling — no remote credentials required.",
+    "tfsec": "Local IaC scanner — no remote credentials required.",
+    "checkov": "Local IaC scanner — no remote credentials required.",
+    "infracost": "Local cost analysis — no remote credentials required.",
+}
+
+
+# Microsoft connectors verified by calling an identity endpoint rather than by
+# asking for findings.
+#
+# Testing "did this return findings?" conflated three different outcomes: bad
+# credentials, a healthy tenant with nothing to report, and a token missing one
+# optional scope. A tenant with no risky users failed its connector test even
+# though Graph accepted the token and returned the organisation. These probes
+# answer only the question being asked — does the provider accept this
+# credential — using an endpoint covered by the base scope every sign-in grants.
+_MICROSOFT_IDENTITY_PROBES: dict[str, tuple[str, str, str]] = {
+    "entra_id":          ("https://graph.microsoft.com/v1.0/organization", "Microsoft Entra ID", "graph"),
+    "azure_ad":          ("https://graph.microsoft.com/v1.0/organization", "Microsoft Entra ID", "graph"),
+    "purview":           ("https://graph.microsoft.com/v1.0/organization", "Microsoft Purview", "graph"),
+    "mcas":              ("https://graph.microsoft.com/v1.0/organization", "Microsoft Defender for Cloud Apps", "graph"),
+    "defender_endpoint": ("https://graph.microsoft.com/v1.0/organization", "Microsoft Defender for Endpoint", "graph"),
+    "azure":             ("https://management.azure.com/subscriptions?api-version=2020-01-01", "Microsoft Azure", "arm"),
+    "azure_arm":         ("https://management.azure.com/subscriptions?api-version=2020-01-01", "Azure Resource Manager", "arm"),
+    "azure_defender":    ("https://management.azure.com/subscriptions?api-version=2020-01-01", "Microsoft Defender for Cloud", "arm"),
+    "sentinel":          ("https://management.azure.com/subscriptions?api-version=2020-01-01", "Microsoft Sentinel", "arm"),
+}
+
+
+async def _test_microsoft_identity(connector_type: str, creds: dict) -> Optional[TestResult]:
+    """Verify a Microsoft credential against an endpoint its scope covers."""
+    probe = _MICROSOFT_IDENTITY_PROBES.get(connector_type)
+    if not probe:
+        return None
+    url, label, audience = probe
+
+    from app.services import device_code_auth
+
+    token = await device_code_auth.resolve_access_token(dict(creds))
+    if not token:
+        # Not an interactive sign-in: fall through to the adapter's own
+        # client-credentials path rather than guessing.
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0)) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+    except httpx.HTTPError as exc:
+        return TestResult(False, f"{label} could not be reached ({type(exc).__name__})")
+
+    if resp.status_code == 200:
+        return TestResult(
+            True,
+            f"{label} accepted the sign-in.",
+            verification_level="credential",
+        )
+    if resp.status_code in (401, 403):
+        # A token for the other audience is a real, and common, mistake:
+        # Graph scopes do not work against Azure Resource Manager.
+        hint = (
+            " The stored token is for a different Microsoft audience — sign in "
+            "again from this connector so the grant matches."
+            if audience == "arm"
+            else " Sign in again to refresh the grant."
+        )
+        return TestResult(False, f"{label} rejected the stored sign-in (HTTP {resp.status_code}).{hint}")
+    return TestResult(False, f"{label} returned HTTP {resp.status_code} for the sign-in check.")
+
+
+async def _test_native_adapter(connector_type: str, creds: dict) -> Optional[TestResult]:
+    """Verify credentials through a hand-written provider module."""
+    entry = _NATIVE_TEST_MODULES.get(connector_type)
+    if not entry:
+        return None
+    module_path, label = entry
+    try:
+        module = importlib.import_module(module_path)
+    except Exception as exc:
+        return TestResult(False, f"{label} adapter could not be loaded ({type(exc).__name__})")
+
+    # Imported lazily: provider modules import this module for its SSRF guard.
+    from app.claws import credential_aliases
+
+    creds = credential_aliases.resolve(connector_type, dict(creds))
+
+    # ``get_findings`` swallows failures and returns demonstration data so a
+    # screen is never blank, which makes it useless for deciding whether a
+    # credential works. ``fetch_findings`` raises, so the failure reaching this
+    # handler is the provider's real answer.
+    authenticated = getattr(module, "fetch_findings", None)
+    try:
+        if callable(authenticated):
+            findings = await authenticated(creds)
+        else:
+            findings = await module.get_findings(credentials=creds)
+    except ValueError as exc:
+        # The adapter rejected the credentials before making a call, which is
+        # a configuration problem the operator can actually fix.
+        return TestResult(False, str(exc))
+    except httpx.HTTPError as exc:
+        return TestResult(
+            False,
+            f"{label} could not be reached ({type(exc).__name__}) — check the host and network path.",
+        )
+    except Exception as exc:
+        return TestResult(False, f"{label} test failed ({type(exc).__name__})")
+
+    live = [f for f in findings if f.get("data_origin") == "live"]
+    if live:
+        return TestResult(
+            True,
+            f"{label} accepted the credentials — {len(live)} finding(s) returned",
+            verification_level="credential",
+        )
+    # The call succeeded and returned nothing. That is a healthy provider with
+    # nothing to report, not a rejected credential.
+    return TestResult(
+        True,
+        f"{label} accepted the credentials — no findings to report.",
+        verification_level="credential",
+    )
+
+
 async def test_connector(connector_type: str, creds: dict, endpoint: str = "") -> TestResult:
     """Run the appropriate connectivity test for this connector type."""
     handler = TEST_MAP.get(connector_type)
     if handler:
         return await handler(creds)
+
+    local_note = _LOCAL_TOOLING.get(connector_type)
+    if local_note:
+        return TestResult(True, local_note, verification_level="local")
+
+    # An interactive Microsoft sign-in is verified against an identity endpoint
+    # before any findings query, so an empty-but-healthy tenant is not reported
+    # as a credential failure.
+    microsoft = await _test_microsoft_identity(connector_type, creds)
+    if microsoft is not None:
+        return microsoft
+
+    native = await _test_native_adapter(connector_type, creds)
+    if native is not None:
+        return native
+
+    # A connector with a declarative adapter can be verified for real: call the
+    # provider with the stored credentials and see whether it accepts them.
+    # Reachability alone was never trust — an unauthenticated 200 from a login
+    # page told an operator nothing about whether their key works.
+    spec_result = await _test_via_adapter(connector_type, creds)
+    if spec_result is not None:
+        return spec_result
+
     return await _test_generic(creds, endpoint)
+
+
+async def _test_via_adapter(connector_type: str, creds: dict) -> Optional[TestResult]:
+    """
+    Verify credentials by exercising the connector's own adapter.
+
+    Returns None when the connector has no declarative adapter, so the caller
+    falls back to a reachability probe.
+    """
+    # Imported lazily: the adapter registry imports provider modules that in
+    # turn import this module for its SSRF validator.
+    from app.claws.adapters import registry
+    from app.claws.rest_adapter import AdapterError, fetch_findings
+
+    spec = registry.spec_for(connector_type)
+    if spec is None:
+        return None
+
+    missing = [f for f in spec.required_fields if not creds.get(f)]
+    if missing:
+        return TestResult(False, f"Missing required fields: {', '.join(missing)}")
+
+    try:
+        findings = await fetch_findings(spec, dict(creds))
+    except AdapterError as exc:
+        # The adapter already distinguishes a credential rejection from an
+        # unreachable host, so its message is the useful one to surface.
+        return TestResult(False, str(exc))
+    except Exception as exc:
+        return TestResult(False, f"{spec.label} test failed ({type(exc).__name__})")
+
+    return TestResult(
+        True,
+        f"{spec.label} accepted the credentials — {len(findings)} finding(s) returned",
+        verification_level="credential",
+    )

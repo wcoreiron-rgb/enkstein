@@ -44,17 +44,53 @@ const MESSAGE_MARKER = 'data-enkstein-message-fingerprint';
 const SAFE_MESSAGE_ID_ATTRIBUTES = ['data-message-id', 'data-turn-id', 'data-response-id'];
 const elementFirstSeen = new WeakMap();
 
+// Providers render generated files as download affordances inside the
+// assistant turn. Collecting them lets Enkstein take the provider's real
+// binary (a genuine .docx/.xlsx/.pptx/.zip) instead of re-deriving a file
+// from prose. Only links inside the correlated assistant turn are read.
+const ATTACHMENT_SELECTORS = [
+  'a[download]',
+  'a[href^="blob:"]',
+  'a[href*="/backend-api/files/"]',
+  'a[href*="/backend-api/estuary/content"]',
+  'a[href*="sandbox:"]',
+  'a[href*="files.oaiusercontent.com"]',
+];
+const MAX_ATTACHMENTS = 20;
+const MAX_ATTACHMENT_BYTES = 5_000_000;
+// Extensions Enkstein is willing to accept from a provider download. The host
+// broker independently re-checks its own allowlist before anything is written.
+const ATTACHMENT_EXTENSIONS = new Set([
+  'docx', 'pptx', 'xlsx', 'pdf', 'csv', 'json', 'md', 'txt', 'html', 'htm',
+  'py', 'ps1', 'sh', 'bash', 'js', 'ts', 'tsx', 'jsx', 'sql', 'yaml', 'yml',
+  'tf', 'toml', 'ini', 'cfg', 'xml', 'zip', 'rb', 'go', 'java', 'cs', 'css',
+]);
+
+function markObservedAssistant(node, seenAt) {
+  const element = node instanceof Element ? node : node?.parentElement;
+  if (!element) return;
+  // ChatGPT commonly streams by replacing text nodes inside an existing
+  // assistant container. The old observer only saw newly-added Elements, so
+  // a perfectly visible completed answer could have no post-submit timestamp
+  // and never be correlated to the pending Enkstein task. Mark the nearest
+  // assistant response container as well as the changed element.
+  elementFirstSeen.set(element, seenAt);
+  const assistant = element.closest?.('[data-message-author-role="assistant"], [data-testid="assistant-message"], model-response, .model-response-text');
+  if (assistant) elementFirstSeen.set(assistant, seenAt);
+}
+
 const messageObserver = new MutationObserver((mutations) => {
   const seenAt = Date.now();
   for (const mutation of mutations) {
+    markObservedAssistant(mutation.target, seenAt);
     for (const node of mutation.addedNodes) {
+      markObservedAssistant(node, seenAt);
       if (!(node instanceof Element)) continue;
-      elementFirstSeen.set(node, seenAt);
-      for (const child of node.querySelectorAll('*')) elementFirstSeen.set(child, seenAt);
+      for (const child of node.querySelectorAll('*')) markObservedAssistant(child, seenAt);
     }
   }
 });
-messageObserver.observe(document.documentElement, { childList: true, subtree: true });
+messageObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
 
 function sessionTaskKey(taskId) {
   return `${TASK_SESSION_PREFIX}${taskId}`;
@@ -145,8 +181,30 @@ function normalizedInputText(text) {
     .trim();
 }
 
+function requiredPromptMarkers(text) {
+  const normalized = normalizedInputText(text);
+  return [
+    'GOVERNED EXECUTION CONTRACT',
+    'GOVERNED FILE OUTPUT',
+    'CURRENT USER TURN',
+    'marcellus_changes',
+  ].filter((marker) => normalized.includes(marker));
+}
+
 function inputMatches(element, text) {
-  return normalizedInputText(inputText(element)) === normalizedInputText(text);
+  const expected = normalizedInputText(text);
+  const observed = normalizedInputText(inputText(element));
+  if (observed === expected) return true;
+  // React contenteditables can normalize a handful of punctuation/line-break
+  // characters after a successful paste. A 21k-character Cowork handoff once
+  // differed by 18 display characters and was wrongly rejected even though
+  // the provider had the full task. Keep the truncation defense strict for
+  // short prompts and require every execution marker to survive; only accept
+  // a very small bounded delta on large prompts.
+  if (expected.length < 2_000) return false;
+  const tolerance = Math.max(24, Math.floor(expected.length * 0.002));
+  if (Math.abs(expected.length - observed.length) > tolerance) return false;
+  return requiredPromptMarkers(expected).every((marker) => observed.includes(marker));
 }
 
 async function waitForInput(element, text, timeoutMs = 2500) {
@@ -369,6 +427,92 @@ function assistantDescriptor(element) {
   };
 }
 
+function safeAttachmentName(raw, href) {
+  let candidate = (raw || '').trim();
+  if (!candidate) {
+    try {
+      const url = new URL(href, location.href);
+      candidate = decodeURIComponent(url.pathname.split('/').pop() || '');
+    } catch { candidate = ''; }
+  }
+  // Flatten to a single safe leaf name; the backend re-validates the final
+  // project-relative path before any write.
+  candidate = candidate.split(/[\\/]/).pop() || '';
+  candidate = candidate.replace(/[^A-Za-z0-9._ -]/g, '').replace(/^\.+/, '').trim().slice(0, 120);
+  if (!candidate || !candidate.includes('.')) return null;
+  const extension = candidate.split('.').pop().toLowerCase();
+  return ATTACHMENT_EXTENSIONS.has(extension) ? candidate : null;
+}
+
+function attachmentCandidates(element) {
+  const found = new Map();
+  for (const selector of ATTACHMENT_SELECTORS) {
+    for (const anchor of element.querySelectorAll(selector)) {
+      if (found.size >= MAX_ATTACHMENTS) break;
+      const href = anchor.getAttribute('href') || '';
+      if (!href) continue;
+      const name = safeAttachmentName(
+        anchor.getAttribute('download') || anchor.textContent || '',
+        href,
+      );
+      if (!name || found.has(name)) continue;
+      found.set(name, anchor.href);
+    }
+  }
+  return [...found.entries()].map(([name, url]) => ({ name, url }));
+}
+
+async function readAttachment(candidate) {
+  // Fetched in the provider page's own context with its existing session, so
+  // no cookie or token is ever read, copied, or forwarded by Enkstein.
+  const response = await fetch(candidate.url, { credentials: 'include' });
+  if (!response.ok) throw new Error(`download failed (${response.status})`);
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new Error('attachment size is outside the supported range');
+  }
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 8192));
+  }
+  return { name: candidate.name, size: buffer.byteLength, content_base64: btoa(binary) };
+}
+
+async function collectAttachments(element) {
+  const candidates = attachmentCandidates(element);
+  if (!candidates.length) return [];
+  const collected = [];
+  let total = 0;
+  for (const candidate of candidates) {
+    try {
+      const attachment = await readAttachment(candidate);
+      if (total + attachment.size > MAX_ATTACHMENT_BYTES) break;
+      total += attachment.size;
+      collected.push(attachment);
+    } catch {
+      // A single unreadable download must not fail the turn; Enkstein falls
+      // back to rendering that file from the response text.
+    }
+  }
+  return collected;
+}
+
+// Attachments are harvested once per task and cached until it is finalized, so
+// a retried observe/poll never re-downloads the same provider files.
+const attachmentCache = new Map();
+
+async function attachmentsForTask(taskId) {
+  if (attachmentCache.has(taskId)) return attachmentCache.get(taskId);
+  const record = taskRecords.get(taskId);
+  if (!record) return [];
+  const descriptor = correlatedAssistant(record.provider, record);
+  if (!descriptor) return [];
+  const attachments = await collectAttachments(descriptor.element);
+  attachmentCache.set(taskId, attachments);
+  return attachments;
+}
+
 function lastAssistantDescriptor(kind) {
   const elements = responseElements(kind);
   return elements.length ? assistantDescriptor(elements[elements.length - 1]) : null;
@@ -535,6 +679,7 @@ function handleObserve(taskId) {
 }
 
 function handleCancel(taskId) {
+  attachmentCache.delete(taskId);
   // Replace with a minimal tombstone: keeps the cancellation visible to a pending
   // observe call while discarding the baseline/sample state (the volatile record).
   taskRecords.set(taskId, { status: 'cancelled' });
@@ -558,7 +703,10 @@ async function composeExecute(task) {
   await new Promise((resolve) => setTimeout(resolve, 2000));
   while (Date.now() < deadline) {
     const observation = handleObserve(taskId);
-    if (observation.state === 'completed') return observation.response;
+    if (observation.state === 'completed') {
+      const attachments = await attachmentsForTask(taskId).catch(() => []);
+      return { response: observation.response, attachments };
+    }
     if (observation.state === 'cancelled') throw new Error('The task was cancelled.');
     if (observation.state === 'failed' && !taskRecords.has(taskId)) throw new Error(observation.detail || 'Browser invocation failed.');
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -576,15 +724,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
   if (message?.type === 'marcellus-observe') {
-    sendResponse(handleObserve(message.task_id));
-    return false;
+    const observation = handleObserve(message.task_id);
+    if (observation.state !== 'completed') {
+      sendResponse(observation);
+      return false;
+    }
+    // The turn is finished: harvest any real files the provider generated
+    // before reporting completion, so Enkstein can save the provider's own
+    // binaries instead of re-deriving them from the response text.
+    attachmentsForTask(message.task_id)
+      .then((attachments) => sendResponse(attachments.length ? { ...observation, attachments } : observation))
+      .catch(() => sendResponse(observation));
+    return true;
   }
   if (message?.type === 'marcellus-cancel') {
     sendResponse(handleCancel(message.task_id));
     return false;
   }
   if (message?.type === 'marcellus-execute') {
-    composeExecute(message.task).then((response) => sendResponse({ success: true, response })).catch((error) => {
+    composeExecute(message.task).then((result) => sendResponse({
+      success: true,
+      response: result.response,
+      attachments: result.attachments || [],
+    })).catch((error) => {
       sendResponse({ success: false, detail: error instanceof Error ? error.message : 'Browser invocation failed.' });
     });
     return true;

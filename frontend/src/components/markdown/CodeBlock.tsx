@@ -42,6 +42,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
   css: 'CSS',
   md: 'Markdown',
   markdown: 'Markdown',
+  mermaid: 'Mermaid diagram',
   diff: 'Diff',
   dockerfile: 'Dockerfile',
   ini: 'INI',

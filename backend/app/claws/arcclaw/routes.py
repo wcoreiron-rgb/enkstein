@@ -220,6 +220,34 @@ async def get_arcclaw_findings(limit: int = 50, db: AsyncSession = Depends(get_d
     return findings
 
 
+@router.post("/scan", summary="Run an AI Security telemetry scan")
+async def run_arc_scan(db: AsyncSession = Depends(get_db)):
+    """Aggregate already-governed AI events into the common scan contract."""
+    total = (await db.execute(select(func.count(AIEvent.id)))).scalar() or 0
+    blocked = (
+        await db.execute(
+            select(func.count(AIEvent.id)).where(AIEvent.outcome == AIEventOutcome.BLOCKED)
+        )
+    ).scalar() or 0
+    flagged = (
+        await db.execute(
+            select(func.count(AIEvent.id)).where(AIEvent.outcome == AIEventOutcome.FLAGGED)
+        )
+    ).scalar() or 0
+    sensitive = (
+        await db.execute(select(func.count(AIEvent.id)).where(AIEvent.is_sensitive == True))
+    ).scalar() or 0
+    return {
+        "status": "completed",
+        "mode": "live" if total else "simulated",
+        "events_scanned": total,
+        "blocked_events": blocked,
+        "flagged_events": flagged,
+        "sensitive_events": sensitive,
+        "message": "No AI events have been submitted for inspection yet." if not total else None,
+    }
+
+
 class ArcTaskRequest(PydanticBase):
     swarm_job_id: Opt[str] = None
     task_type: str = "investigate_ai_risk"

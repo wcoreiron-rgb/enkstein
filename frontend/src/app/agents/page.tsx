@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import Link from 'next/link';
-import { getAgents, updateAgent, triggerAgent, getAgentRuns } from '@/lib/api';
+import { getAgents, updateAgent, triggerAgent, getAgentRuns, approveAction } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
 import { capabilityName } from '@/lib/capability-names';
 
@@ -53,12 +53,22 @@ interface AgentRun {
   actions_blocked: string | null;
   actions_pending: string | null;
   summary: string | null;
+  run_log: string | null;
   error_message: string | null;
   started_at: string | null;
   completed_at: string | null;
   duration_sec: number | null;
   created_at: string;
 }
+
+const SEVERITY_DOT: Record<string, string> = {
+  critical: '#ef4444',
+  high:     '#f97316',
+  medium:   '#facc15',
+  low:      '#60a5fa',
+  info:          '#94a3b8',
+  informational: '#94a3b8',
+};
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -135,12 +145,31 @@ function RunStatusBadge({ status }: { status: RunStatus }) {
 function RunDrawer({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   const [runs, setRuns]     = useState<AgentRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [decideErr, setDecideErr] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     getAgentRuns(agent.id, 20)
       .then(data => { setRuns(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
   }, [agent.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  /** Approve or reject a single pending action. The backend indexes into the
+   *  run's actions_pending list, so the index must match what is rendered. */
+  const decide = async (runId: string, index: number, approved: boolean) => {
+    setDeciding(`${runId}:${index}`);
+    setDecideErr(null);
+    try {
+      await approveAction(agent.id, runId, { action_index: index, approved });
+      load();
+    } catch (e: any) {
+      setDecideErr(e?.data?.detail || e?.message || 'Could not record the decision.');
+    } finally {
+      setDeciding(null);
+    }
+  };
 
   return (
     <div
@@ -171,8 +200,16 @@ function RunDrawer({ agent, onClose }: { agent: Agent; onClose: () => void }) {
         )}
         {runs.map(run => {
           const acted   = run.actions_taken   ? JSON.parse(run.actions_taken).length   : 0;
-          const pending = run.actions_pending ? JSON.parse(run.actions_pending).length : 0;
           const blocked = run.actions_blocked ? JSON.parse(run.actions_blocked).length : 0;
+          const pendingActions: any[] = run.actions_pending ? JSON.parse(run.actions_pending) : [];
+          const pending = pendingActions.length;
+          // Findings live in the run log's scan phase; older runs recorded
+          // only a count, so this is best-effort and degrades to the tally.
+          let findingsDetail: any[] = [];
+          try {
+            const log = run.run_log ? JSON.parse(run.run_log) : [];
+            findingsDetail = log.find((e: any) => e?.phase === 'scan')?.findings_detail || [];
+          } catch { findingsDetail = []; }
           return (
             <div
               key={run.id}
@@ -218,6 +255,41 @@ function RunDrawer({ agent, onClose }: { agent: Agent; onClose: () => void }) {
                   ⛔ Blocked by Trust Fabric: {run.policy_name}
                 </p>
               )}
+
+              {findingsDetail.length > 0 && (
+                <div className="space-y-1 border-t pt-2" style={{ borderColor: 'var(--rc-border)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Findings</p>
+                  {findingsDetail.map((f: any, i: number) => (
+                    <div key={f?.id || i} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: SEVERITY_DOT[f?.severity] || 'var(--rc-text-3)' }} />
+                      <span style={{ color: 'var(--rc-text-2)' }}>{f?.title || 'Untitled finding'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pendingActions.length > 0 && (
+                <div className="space-y-1.5 border-t pt-2" style={{ borderColor: 'var(--rc-border)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--rc-text-3)' }}>Awaiting your decision</p>
+                  {pendingActions.map((a: any, i: number) => (
+                    <div key={a?.id || i} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--rc-text-2)' }}>
+                        {a?.type || 'action'} → {a?.target || 'unknown'}
+                      </span>
+                      <button type="button" disabled={deciding === `${run.id}:${i}`}
+                        onClick={() => decide(run.id, i, true)}
+                        className="rounded px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
+                        style={{ background: 'var(--rc-brand)' }}>Approve</button>
+                      <button type="button" disabled={deciding === `${run.id}:${i}`}
+                        onClick={() => decide(run.id, i, false)}
+                        className="rounded border px-2 py-1 text-[11px] disabled:opacity-50"
+                        style={{ borderColor: 'var(--rc-border-2)', color: 'var(--rc-text-2)' }}>Reject</button>
+                    </div>
+                  ))}
+                  {decideErr && <p className="text-[11px]" style={{ color: '#f87171' }}>{decideErr}</p>}
+                </div>
+              )}
+
               {run.error_message && (
                 <p className="text-xs" style={{ color: '#f87171' }}>Error: {run.error_message}</p>
               )}

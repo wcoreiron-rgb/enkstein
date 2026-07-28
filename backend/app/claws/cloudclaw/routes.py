@@ -196,28 +196,52 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
     Uses the finding pipeline for deduplication, policy evaluation, and alert routing.
     """
     from app.services.finding_pipeline import ingest_findings
+    from app.services.claw_scan import fetch_via_adapter
+    from app.core.config import settings
 
     provider_results = {}
     errors = []
     total_created = 0
     total_updated = 0
+    any_live = False
 
     for cfg in PROVIDER_CONFIG:
         provider_name = cfg["provider"]
         creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]))
 
+        if not creds and settings.REQUIRE_LIVE_DATA:
+            # Production data policy: do not manufacture an estate this tenant
+            # does not have. Reported as unconfigured rather than successful.
+            provider_results[provider_name] = {"status": "not_configured"}
+            continue
+
         try:
-            raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+            # With credentials, use the authenticated path that raises on
+            # failure so a broken connector cannot be reported as a successful
+            # scan that merely returned demonstration findings.
+            if creds:
+                raw_findings = await fetch_via_adapter(cfg["adapter"], creds)
+            else:
+                raw_findings = await cfg["adapter"].get_findings(credentials=None)
 
             # Ensure each finding has the correct claw/provider fields
             for f in raw_findings:
                 f.setdefault("claw", CLAW_NAME)
                 f.setdefault("provider", provider_name)
+                # Adapters tag their own origin; anything untagged is treated as
+                # demonstration data rather than the tenant's real estate.
+                f.setdefault("data_origin", "live" if creds else "simulated")
+                if creds and not f.get("source_connector"):
+                    f["source_connector"] = cfg["connector_type"] if isinstance(cfg.get("connector_type"), str) else provider_name
 
             summary = await ingest_findings(db, CLAW_NAME, raw_findings)
 
+            if creds:
+                any_live = True
             provider_results[provider_name] = {
-                "status": "success",
+                # A provider with no credentials returned demonstration data,
+                # not a successful scan of the tenant's estate.
+                "status": "success" if creds else "not_configured",
                 "created": summary["created"],
                 "updated": summary["updated"],
                 "critical": summary["critical"],
@@ -235,6 +259,9 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
     status_msg = "completed" if not errors else "completed_with_errors"
     return {
         "status": status_msg,
+        # Callers (agent runs, workflows, the console) branch on this to decide
+        # whether a result may be treated as the tenant's real estate.
+        "mode": "live" if any_live else ("empty" if settings.REQUIRE_LIVE_DATA else "simulated"),
         "findings_created": total_created,
         "findings_updated": total_updated,
         "providers": provider_results,

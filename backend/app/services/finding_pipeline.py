@@ -64,6 +64,20 @@ def _event_severity_from_finding(sev: FindingSeverity) -> EventSeverity:
     return mapping.get(sev, EventSeverity.INFO)
 
 
+_VALID_ORIGINS = {"live", "simulated", "unknown"}
+
+
+def _normalize_origin(raw: Any) -> str:
+    """Constrain adapter-declared origin to the known vocabulary.
+
+    Defaults to "unknown" rather than "live": an adapter that forgets to
+    declare its origin must never have its output presented to an operator as
+    verified data from their own environment.
+    """
+    value = str(raw or "").strip().lower()
+    return value if value in _VALID_ORIGINS else "unknown"
+
+
 def _build_finding(claw: str, data: dict[str, Any]) -> Finding:
     """Construct a Finding ORM object from raw adapter dict."""
     severity = _sev_from_str(data.get("severity", "medium"))
@@ -90,6 +104,8 @@ def _build_finding(claw: str, data: dict[str, Any]) -> Finding:
         external_id=data.get("external_id"),
         reference_url=data.get("reference_url"),
         raw_data=json.dumps(data.get("raw_data", {})) if isinstance(data.get("raw_data"), dict) else data.get("raw_data"),
+        data_origin=_normalize_origin(data.get("data_origin")),
+        source_connector=(str(data["source_connector"])[:64] if data.get("source_connector") else None),
         first_seen=now,
         last_seen=now,
         created_at=now,
@@ -142,6 +158,15 @@ def _update_finding(existing: Finding, data: dict[str, Any]) -> dict:
         existing.epss_score = data["epss_score"]
     if data.get("remediation") and not existing.remediation:
         existing.remediation = data["remediation"]
+
+    # Origin can legitimately change once a tenant configures a real connector
+    # and a previously simulated finding is confirmed against live data.
+    new_origin = _normalize_origin(data.get("data_origin"))
+    if new_origin != "unknown" and new_origin != existing.data_origin:
+        changes["data_origin_changed"] = {"from": existing.data_origin, "to": new_origin}
+        existing.data_origin = new_origin
+    if data.get("source_connector"):
+        existing.source_connector = str(data["source_connector"])[:64]
 
     return changes
 

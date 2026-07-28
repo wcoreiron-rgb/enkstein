@@ -25,3 +25,8 @@ email-validator==2.1.1
 agent-governance-toolkit==3.2.2
 # Credential encryption
 cryptography==42.0.8
+# Office document rendering for Cowork (.docx/.pptx/.xlsx). Brains can only
+# return text, so Enkstein renders real binaries locally from their markdown.
+python-docx==1.1.2
+python-pptx==0.6.23
+openpyxl==3.1.5

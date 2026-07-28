@@ -24,7 +24,11 @@ PATTERNS = [
     ("Private Key", r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----", "credential_access_attempt"),
     ("SSN", r"\b\d{3}-\d{2}-\d{4}\b", "ai_sensitive_pattern"),
     ("Credit Card", r"\b(?:\d[ -]?){13,16}\b", "ai_sensitive_pattern"),
-    ("Email Address", r"\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b", "ai_sensitive_pattern"),
+    # A JSON-encoded code payload contains sequences such as ``\n@routes.route``.
+    # Without the backslash boundary guard, the scanner interpreted
+    # ``n@routes.route`` as an email address and corrupted framework
+    # decorators inside otherwise safe generated files.
+    ("Email Address", r"(?<![\\a-zA-Z0-9._%+\-])[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b", "ai_sensitive_pattern"),
     ("Connection String", r"(?i)(Server=|Data Source=|mongodb\+srv://|postgresql://|mysql://)", "credential_access_attempt"),
     ("Secret/Token var", r"(?i)(secret|token|auth_token)\s*[:=]\s*['\"]?([A-Za-z0-9_\-]{10,})", "ai_sensitive_pattern"),
     ("Shell command", r"(?:bash|sh|cmd|powershell)\s+-c\s+['\"]", "shell_access_attempt"),

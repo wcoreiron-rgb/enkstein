@@ -11,6 +11,7 @@ from sqlalchemy import desc
 from app.core.database import get_db
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.connector_check import is_connector_configured
+from app.services.claw_scan import has_live_adapter, run_claw_scan
 
 router = APIRouter(prefix="/saasclaw", tags=["SaaS Security"])
 CLAW_NAME = "saasclaw"
@@ -329,7 +330,10 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
             await is_connector_configured(db, p["connector_type"])
             for p in PROVIDER_MAP if p.get("connector_type")
         ])
-        if not any_configured:
+        if not any_configured or not has_live_adapter(PROVIDER_MAP):
+            # Showing labelled demonstration findings is more honest than an
+            # empty module: this Claw has no adapter that could have returned
+            # tenant data, so an empty list would read as a broken scan.
             return _FINDINGS
         return []
     return [
@@ -359,22 +363,12 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 @router.post("/scan", summary="Run SaaS Security scan and persist findings")
 async def run_scan(db: AsyncSession = Depends(get_db)):
     """Run a SaaS Security scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
-    from app.services.finding_pipeline import ingest_findings
-    pipeline_findings = []
-    for f in _FINDINGS:
-        entry = dict(f)
-        entry.setdefault("claw", CLAW_NAME)
-        if "severity" in entry:
-            entry["severity"] = str(entry["severity"]).lower()
-        pipeline_findings.append(entry)
-    summary = await ingest_findings(db, CLAW_NAME, pipeline_findings)
-    return {
-        "status": "completed",
-        "findings_created": summary["created"],
-        "findings_updated": summary["updated"],
-        "critical": summary.get("critical", 0),
-        "high": summary.get("high", 0),
-    }
+    return await run_claw_scan(
+        db,
+        claw=CLAW_NAME,
+        provider_config=PROVIDER_MAP,
+        demo_findings=_FINDINGS,
+    )
 
 
 @router.get("/apps", summary="SaaS app discovery summary")

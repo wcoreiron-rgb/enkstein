@@ -213,12 +213,12 @@ export default function DashboardPage() {
           </div>
         </div>
         <div>
-          {data.recent_events.length === 0 && (
+          {(data.recent_events ?? []).length === 0 && (
             <p className="text-sm p-6" style={{ color: 'var(--rc-text-3)' }}>
               No events yet. Submit an AI Security event to get started.
             </p>
           )}
-          {data.recent_events.map((e: any, i: number) => (
+          {(data.recent_events ?? []).map((e: any, i: number) => (
             <div
               key={e.id}
               className="px-6 py-3 flex items-center gap-4"

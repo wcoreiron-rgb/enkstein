@@ -31,12 +31,28 @@ def _parse_status(value: str) -> FindingStatus:
         raise HTTPException(status_code=400, detail=f"Invalid status. Allowed values: {allowed}")
 
 
+VALID_DATA_ORIGINS = ("live", "simulated", "unknown")
+
+
+def _parse_data_origin(value: str) -> str:
+    normalized = value.strip().lower()
+    if normalized not in VALID_DATA_ORIGINS:
+        allowed = ", ".join(VALID_DATA_ORIGINS)
+        raise HTTPException(
+            status_code=400, detail=f"Invalid data_origin. Allowed values: {allowed}"
+        )
+    return normalized
+
+
 @router.get("", response_model=list[FindingRead])
 async def list_findings(
     claw: Optional[str] = Query(None, description="Filter by claw name (e.g. cloudclaw)"),
     provider: Optional[str] = Query(None, description="Filter by provider (e.g. aws, azure)"),
     severity: Optional[str] = Query(None, description="Filter by severity"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    data_origin: Optional[str] = Query(
+        None, description="Filter by data origin: live, simulated, or unknown"
+    ),
     search: Optional[str] = Query(None, description="Search in title"),
     sort: str = Query("risk", pattern="^(risk|recent|last_seen)$", description="Sort by risk, recent creation, or last_seen"),
     limit: int = Query(100, le=500),
@@ -54,6 +70,8 @@ async def list_findings(
         stmt = stmt.where(Finding.severity == _parse_severity(severity))
     if status:
         stmt = stmt.where(Finding.status == _parse_status(status))
+    if data_origin:
+        stmt = stmt.where(Finding.data_origin == _parse_data_origin(data_origin))
     if search:
         stmt = stmt.where(Finding.title.ilike(f"%{search}%"))
 
@@ -103,9 +121,19 @@ async def get_findings_stats(db: AsyncSession = Depends(get_db)):
     )
     critical_count = critical_result.scalar() or 0
 
+    # Data-origin breakdown so operators can separate their own estate from
+    # the demonstration data that unconfigured Claws still produce.
+    origin_result = await db.execute(
+        select(Finding.data_origin, func.count(Finding.id)).group_by(Finding.data_origin)
+    )
+    by_origin: dict = {origin: 0 for origin in VALID_DATA_ORIGINS}
+    for origin, count in origin_result.all():
+        by_origin[origin or "unknown"] = count
+
     return {
         "by_claw": by_claw,
         "totals": totals,
+        "by_origin": by_origin,
         "open_count": open_count,
         "critical_count": critical_count,
     }

@@ -16,7 +16,9 @@ from app.services.risk_scoring import calculate_event_risk
 from app.services.audit_service import log_action
 from app.services.secrets_manager import get_credential
 from app.models.connector import Connector, ConnectorStatus
+from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.claws.accessclaw.providers import entra as entra_adapter
+from app.services.claw_scan import run_claw_scan
 
 router = APIRouter(prefix="/identityclaw", tags=["Identity Security"])
 
@@ -84,6 +86,24 @@ IDENTITY_PROVIDER_CONFIG = [
         "label": "Microsoft Entra ID",
         "adapter": entra_adapter,
     },
+]
+# Shared name used by health/coverage tooling. The original constant stays for
+# compatibility with the focused identity task implementation below.
+PROVIDER_MAP = IDENTITY_PROVIDER_CONFIG
+
+_SCAN_DEMO_FINDINGS = [
+    {
+        "provider": "identity_inventory",
+        "title": "Identity posture baseline pending a live directory scan",
+        "description": "Connect Microsoft Entra ID to replace this labelled demonstration baseline with tenant findings.",
+        "category": "identity",
+        "severity": "medium",
+        "resource_id": "identity-posture-baseline",
+        "resource_type": "identity_directory",
+        "resource_name": "Identity Security",
+        "external_id": "IDENTITY-POSTURE-BASELINE",
+        "remediation": "Connect a directory provider and rerun the Identity Security scan.",
+    }
 ]
 
 
@@ -249,12 +269,46 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 @router.get("/findings", summary="Identity Security findings compatibility endpoint")
 async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get_db)):
     """
-    Compatibility endpoint for left-blade testing parity with other claws.
+    Findings for this Capability Node.
+
+    A connector scan writes to the shared ``Finding`` table, but this endpoint
+    only ever read the identity registry -- so a scan could create findings and
+    this node would still report none, which made a working Entra connector
+    look broken. Connector findings are authoritative here; registry risk is
+    then appended so directory signal that never becomes a Finding row is still
+    visible on the same screen.
     """
-    findings = []
+    findings: list[dict] = []
+
+    scanned = await db.execute(
+        select(Finding)
+        .where(Finding.claw == "identityclaw")
+        .order_by(desc(Finding.risk_score), desc(Finding.created_at))
+        .limit(limit)
+    )
+    for f in scanned.scalars().all():
+        findings.append({
+            "id": str(f.id),
+            "claw": "identityclaw",
+            "severity": f.severity.value if hasattr(f.severity, "value") else str(f.severity),
+            "title": f.title,
+            "description": f.description,
+            "resource": f.resource_name or f.resource_id,
+            "provider": f.provider,
+            "status": f.status.value if hasattr(f.status, "value") else str(f.status),
+            "risk_score": float(f.risk_score or 0.0),
+            "remediation": f.remediation,
+            "data_origin": f.data_origin,
+            "timestamp": f.created_at.isoformat() if f.created_at else None,
+        })
+
+    if len(findings) >= limit:
+        return findings
 
     risk_events = await db.execute(
-        select(IdentityRiskEvent).order_by(desc(IdentityRiskEvent.timestamp)).limit(limit)
+        select(IdentityRiskEvent)
+        .order_by(desc(IdentityRiskEvent.timestamp))
+        .limit(limit - len(findings))
     )
     for e in risk_events.scalars().all():
         findings.append({
@@ -265,6 +319,7 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
             "resource": e.identity_name or e.identity_id,
             "status": "resolved" if e.is_resolved else "open",
             "risk_score": float(e.risk_score or 0.0),
+            "data_origin": "registry",
             "timestamp": e.timestamp.isoformat() if e.timestamp else None,
         })
 
@@ -282,10 +337,22 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
                 "resource": i.name,
                 "status": "open" if i.status == IdentityStatus.ACTIVE else "resolved",
                 "risk_score": float(i.risk_score or 0.0),
+                "data_origin": "registry",
                 "timestamp": i.updated_at.isoformat() if i.updated_at else None,
             })
 
     return findings
+
+
+@router.post("/scan", summary="Run an Identity Security connector scan")
+async def run_identity_scan(db: AsyncSession = Depends(get_db)):
+    """Run configured directory providers through the shared live-scan path."""
+    return await run_claw_scan(
+        db,
+        claw="identityclaw",
+        provider_config=IDENTITY_PROVIDER_CONFIG,
+        demo_findings=_SCAN_DEMO_FINDINGS,
+    )
 
 
 @router.get("/providers", summary="Identity Security provider connection status")

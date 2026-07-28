@@ -105,96 +105,111 @@ def _trust_fabric_check(agent: Agent, run: AgentRun) -> Tuple[str, str, float]:
 
 # ─── Simulated Agent Logic ────────────────────────────────────────────────────
 
-def _simulate_agent_logic(agent: Agent) -> Dict[str, Any]:
-    CLAW_SCENARIOS = {
-        "identityclaw": {
-            "findings": [
-                {"id": "F001", "severity": "high",   "title": "Stale admin account detected",   "user": "redacted_user"},
-                {"id": "F002", "severity": "medium", "title": "MFA not enforced on 3 accounts", "count": 3},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "disable_account",    "target": "redacted_user",   "risk": "low"},
-                {"id": "A002", "type": "enforce_mfa_policy", "target": "Marketing group", "risk": "medium"},
-            ],
-            "summary": "Identity Security found 2 identity hygiene issues. 1 stale admin, 3 accounts without MFA.",
-        },
-        "cloudclaw": {
-            "findings": [
-                {"id": "F001", "severity": "critical", "title": "S3 bucket publicly accessible",       "resource": "logs-bucket-prod"},
-                {"id": "F002", "severity": "medium",   "title": "Unused IAM role with broad permissions", "role": "LegacyDevRole"},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "block_public_access", "target": "logs-bucket-prod", "risk": "low"},
-                {"id": "A002", "type": "disable_iam_role",    "target": "LegacyDevRole",    "risk": "medium"},
-            ],
-            "summary": "Cloud Security found 1 critical and 1 medium cloud misconfiguration.",
-        },
-        "accessclaw": {
-            "findings": [
-                {"id": "F001", "severity": "high", "title": "Shared privileged credential in use", "account": "svc-deploy"},
-                {"id": "F002", "severity": "low",  "title": "Session token not rotated in 90d",    "count": 7},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "rotate_credential",   "target": "svc-deploy", "risk": "low"},
-                {"id": "A002", "type": "revoke_stale_tokens", "target": "all",        "risk": "low"},
-            ],
-            "summary": "Privileged Access identified 1 shared privileged credential and 7 stale session tokens.",
-        },
-        "endpointclaw": {
-            "findings": [
-                {"id": "F001", "severity": "high",    "title": "12 endpoints missing EDR agent",    "count": 12},
-                {"id": "F002", "severity": "critical","title": "Unpatched CVE-2024-1234 on 4 hosts","cve": "CVE-2024-1234"},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "deploy_edr",       "target": "unmanaged_group", "risk": "low"},
-                {"id": "A002", "type": "quarantine_hosts", "target": "CVE-1234-hosts",  "risk": "high"},
-            ],
-            "summary": "Endpoint Security found 12 unmanaged endpoints and 4 hosts with critical unpatched CVE.",
-        },
-        "arcclaw": {
-            "findings": [
-                {"id": "F001", "severity": "high",   "title": "Prompt injection attempt detected", "model": "gpt-4o"},
-                {"id": "F002", "severity": "medium", "title": "LLM output exceeded DLP threshold", "tokens": 12000},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "block_llm_session", "target": "session-abc123", "risk": "low"},
-                {"id": "A002", "type": "flag_for_review",   "target": "output-xyz789",  "risk": "low"},
-            ],
-            "summary": "AI Security intercepted 1 prompt injection and 1 DLP violation in LLM traffic.",
-        },
-        "threatclaw": {
-            "findings": [
-                {"id": "F001", "severity": "critical", "title": "Lateral movement indicators on 2 hosts"},
-                {"id": "F002", "severity": "high",     "title": "C2 beaconing detected from 192.168.1.50"},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "isolate_host",    "target": "192.168.1.50", "risk": "medium"},
-                {"id": "A002", "type": "create_incident", "target": "SOC queue",    "risk": "low"},
-            ],
-            "summary": "Threat Analysis detected active C2 beaconing and lateral movement indicators.",
-        },
-        "complianceclaw": {
-            "findings": [
-                {"id": "F001", "severity": "medium", "title": "SOC 2 CC6.1 gap: logging not enabled on 5 systems"},
-                {"id": "F002", "severity": "low",    "title": "Access review overdue for Finance group (90d)"},
-            ],
-            "proposed_actions": [
-                {"id": "A001", "type": "enable_logging",  "target": "5-systems",     "risk": "low"},
-                {"id": "A002", "type": "schedule_review", "target": "Finance group",  "risk": "low"},
-            ],
-            "summary": "Compliance Assurance found 1 medium SOC 2 gap and 1 overdue access review.",
-        },
+async def _run_agent_scan(agent: Agent, db: AsyncSession) -> Dict[str, Any]:
+    """
+    Execute the agent's Capability Node scan and report what it actually found.
+
+    This used to return a hardcoded scenario per node, so an agent reported the
+    same two findings forever whether or not a connector existed. It now runs
+    the node's real ``/scan`` — the same governed path the console uses — and
+    reads back the findings that scan persisted.
+
+    A node with nothing configured returns no findings and says so, rather than
+    inventing them. Proposed actions are derived from real findings, so an
+    approval queue can never contain an action for something that was not found.
+    """
+    from app.services.claw_scan_dispatch import run_node_scan
+
+    try:
+        scan = await run_node_scan(agent.claw, db)
+    except Exception as exc:
+        logger.exception("Agent %s scan failed", agent.id)
+        raise RuntimeError(f"{agent.claw} scan failed: {type(exc).__name__}") from exc
+
+    if scan is None:
+        return {
+            "findings": [],
+            "proposed_actions": [],
+            "summary": f"{agent.claw} has no scan entrypoint; nothing was executed.",
+            "scan": {"status": "no_scan_entrypoint"},
+        }
+
+    findings = await _recent_findings(agent.claw, db)
+    mode = scan.get("mode", "unknown")
+    live = mode == "live"
+
+    if not findings:
+        summary = (
+            f"{agent.name} completed a {mode} scan and found nothing to report."
+        )
+    else:
+        criticals = sum(1 for f in findings if f["severity"] == "critical")
+        highs = sum(1 for f in findings if f["severity"] == "high")
+        origin = "connector-backed" if live else "unverified"
+        summary = (
+            f"{agent.name} completed a {mode} scan: {len(findings)} {origin} "
+            f"finding(s), {criticals} critical and {highs} high."
+        )
+
+    return {
+        "findings": findings,
+        "proposed_actions": _actions_for(findings, live=live),
+        "summary": summary,
+        "scan": scan,
     }
 
-    default = {
-        "findings": [
-            {"id": "F001", "severity": "informational", "title": f"{agent.claw} scan completed — no critical findings"},
-        ],
-        "proposed_actions": [],
-        "summary": f"{agent.name} completed monitoring scan. No immediate action required.",
-    }
 
-    return CLAW_SCENARIOS.get(agent.claw, default)
+async def _recent_findings(claw: str, db: AsyncSession, limit: int = 25) -> List[Dict[str, Any]]:
+    """Read back the open findings this node's scan just refreshed."""
+    from app.models.finding import Finding
+
+    result = await db.execute(
+        select(Finding)
+        .where(Finding.claw == claw, Finding.status == "open")
+        .order_by(Finding.risk_score.desc(), Finding.last_seen.desc())
+        .limit(limit)
+    )
+    return [
+        {
+            "id": str(row.id),
+            "severity": str(row.severity).lower(),
+            "title": row.title,
+            "provider": row.provider,
+            "resource": row.resource_name or row.resource_id,
+            "risk_score": row.risk_score,
+            "data_origin": row.data_origin,
+            "source_connector": row.source_connector,
+        }
+        for row in result.scalars().all()
+    ]
+
+
+def _actions_for(findings: List[Dict[str, Any]], *, live: bool) -> List[Dict[str, Any]]:
+    """
+    Propose remediation only for findings that came from a real connector.
+
+    An action against demonstration data has no real target, so surfacing it
+    for approval invites an operator to authorise a no-op.
+    """
+    if not live:
+        return []
+    actions: List[Dict[str, Any]] = []
+    for finding in findings:
+        if finding["severity"] not in ("critical", "high"):
+            continue
+        target = finding.get("resource")
+        if not target:
+            continue
+        actions.append({
+            "id": finding["id"],
+            "type": "investigate_finding",
+            "target": target,
+            "risk": "high" if finding["severity"] == "critical" else "medium",
+            "finding_id": finding["id"],
+            "title": finding["title"],
+        })
+    return actions
+
 
 
 # ─── Runner ───────────────────────────────────────────────────────────────────
@@ -303,7 +318,7 @@ class AgentRunner:
                     "ssrf_check": "passed",
                 })
             else:
-                result_data = _simulate_agent_logic(agent)
+                result_data = await _run_agent_scan(agent, db)
 
             findings       = result_data.get("findings", [])
             proposed_acts  = result_data.get("proposed_actions", [])
@@ -313,6 +328,15 @@ class AgentRunner:
             log_entries.append({
                 "ts": _now(), "phase": "scan",
                 "findings": len(findings), "proposed_actions": len(proposed_acts),
+                # Carry the findings themselves, not just a tally. Without
+                # this the run records that it found things but not what,
+                # leaving the operator to reconstruct the result from the
+                # Events feed by correlating on run id.
+                "findings_detail": findings,
+                # Provenance: whether these came from an authenticated
+                # connector or are unverified demonstration data, and what each
+                # provider actually returned.
+                "scan": result_data.get("scan", {}),
             })
 
             # Step 3: Mode-gated action dispatch
@@ -330,14 +354,17 @@ class AgentRunner:
             elif mode == ExecutionMode.ASSIST:
                 # Suggest and surface for human review — no auto-execution
                 actions_pending = proposed_acts
-                run.status = RunStatus.AWAITING
+                # Only park the run when there is genuinely something to decide.
+                # Marking an empty run AWAITING left it in the approval queue
+                # forever with no action an operator could ever act on.
+                run.status = RunStatus.AWAITING if proposed_acts else RunStatus.COMPLETED
                 log_entries.append({"ts": _now(), "phase": "mode", "mode": "ASSIST",
                                     "note": f"{len(proposed_acts)} actions surfaced for human review"})
 
             elif mode == ExecutionMode.APPROVAL:
                 # Full action plan prepared — wait for explicit human approval before anything
                 actions_pending = proposed_acts
-                run.status = RunStatus.AWAITING
+                run.status = RunStatus.AWAITING if proposed_acts else RunStatus.COMPLETED
                 log_entries.append({"ts": _now(), "phase": "mode", "mode": "APPROVAL",
                                     "note": f"Action plan ready — {len(proposed_acts)} actions await explicit approval"})
 

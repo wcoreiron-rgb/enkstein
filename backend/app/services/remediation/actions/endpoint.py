@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from .base import ActionResult, simulated
+from .base import ActionResult, not_configured
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ async def execute(
             return await _defender_isolate(target_id, True, creds)
         if _has_s1_creds(creds):
             return await _s1_disconnect(target_id, True, creds)
-        return simulated(action_type, target_id, {"was_contained": False})
+        return not_configured(action_type, target_id, {"was_contained": False})
 
     if action_type == "unquarantine_device":
         if _has_cs_creds(creds):
@@ -259,12 +259,12 @@ async def execute(
             return await _defender_isolate(target_id, False, creds)
         if _has_s1_creds(creds):
             return await _s1_disconnect(target_id, False, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     if action_type == "kill_process":
         if _has_cs_creds(creds):
             return await _cs_kill_process(target_id, params, creds)
-        return simulated(action_type, target_id)
+        return not_configured(action_type, target_id)
 
     return ActionResult(success=False, message=f"Unknown endpoint action: {action_type}", error="unsupported_action")
 
@@ -286,7 +286,7 @@ async def rollback(
             return await _defender_isolate(target_id, False, creds)
         if provider == "sentinelone" or _has_s1_creds(creds):
             return await _s1_disconnect(target_id, False, creds)
-        return simulated("unquarantine_device", target_id)
+        return not_configured("unquarantine_device", target_id)
 
     return ActionResult(
         success=False,

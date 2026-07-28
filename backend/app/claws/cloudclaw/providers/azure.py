@@ -10,6 +10,9 @@ from typing import Optional
 
 import httpx
 
+from app.claws import provenance
+from app.services import device_code_auth
+
 logger = logging.getLogger("cloudclaw.azure")
 
 TIMEOUT = httpx.Timeout(30.0)
@@ -166,10 +169,15 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     client_secret = credentials.get("client_secret", "")
     subscription_id = credentials.get("subscription_id", "")
 
-    if not all([tenant_id, client_id, client_secret, subscription_id]):
-        raise ValueError("Missing required Azure credentials fields")
-
-    token = await _get_azure_token(tenant_id, client_id, client_secret)
+    # Interactive device sign-in supplies a delegated token directly, so the
+    # client-secret fields are only required for the app-registration path.
+    token = await device_code_auth.resolve_access_token(credentials)
+    if not token:
+        if not all([tenant_id, client_id, client_secret]):
+            raise ValueError("Missing required Azure credentials fields")
+        token = await _get_azure_token(tenant_id, client_id, client_secret)
+    if not subscription_id:
+        raise ValueError("Azure requires a subscription_id")
 
     url = (
         f"{AZURE_MGMT_BASE}/subscriptions/{subscription_id}"
@@ -234,6 +242,17 @@ def _parse_azure_assessment(raw: dict, subscription_id: str) -> dict:
 
 # ─── Public entry point ───────────────────────────────────────────────────────
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    raw_findings = await _fetch_real_findings(credentials)
+    subscription_id = credentials.get("subscription_id", "unknown")
+    return provenance.live(
+        [_parse_azure_assessment(f, subscription_id) for f in raw_findings],
+        provider="azure",
+        connector="azure_defender_for_cloud",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     Main entry point for the Azure adapter.
@@ -242,9 +261,7 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     """
     if credentials:
         try:
-            raw_findings = await _fetch_real_findings(credentials)
-            subscription_id = credentials.get("subscription_id", "unknown")
-            return [_parse_azure_assessment(f, subscription_id) for f in raw_findings]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("Azure Defender call failed: %s — falling back to simulated findings", exc)
 
@@ -258,5 +275,5 @@ async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
             "status": "open",
             **f,
         }
-        results.append(finding)
+        results.append({**finding, "data_origin": provenance.SIMULATED})
     return results

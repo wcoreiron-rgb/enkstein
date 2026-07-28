@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.marcellus.runtime_security import actor_id, actor_name, resolve_tenant
+from app.core.marcellus.ai_rate_limit import enforce_ai_rate_limit
 from app.core.marcellus.research import TOOLS, invoke_tool, run_research
 from app.core.marcellus.workspace import (
     archive_conversation,
@@ -130,10 +131,24 @@ def _turn_content_frames(turn):
         yield _sse("response_delta", {"delta": content[offset : offset + _STREAM_CHUNK_CHARS]})
     proposal_ids = governance.get("change_proposal_ids", [])
     if proposal_ids:
-        yield _sse("changes_proposed", {"proposal_ids": proposal_ids, "count": len(proposal_ids)})
+        yield _sse(
+            "changes_proposed",
+            {
+                "proposal_ids": proposal_ids,
+                "count": len(proposal_ids),
+                "changes": governance.get("file_changes", []),
+            },
+        )
     applied_paths = governance.get("applied_change_paths", [])
     if applied_paths:
-        yield _sse("changes_applied", {"paths": applied_paths, "count": len(applied_paths)})
+        yield _sse(
+            "changes_applied",
+            {
+                "paths": applied_paths,
+                "count": len(applied_paths),
+                "changes": governance.get("file_changes", []),
+            },
+        )
     yield _sse("turn_completed", turn.model_dump(mode="json"))
 
 
@@ -203,6 +218,8 @@ async def post_project_research(
     user: dict = Depends(get_current_user),
 ):
     tenant_id = resolve_tenant(user, payload.tenant_id)
+    # Research fans out to fetches plus a synthesis Brain call.
+    enforce_ai_rate_limit(actor_id(user))
     return await run_research(
         db,
         tenant_id,
@@ -458,6 +475,7 @@ async def post_turn(
     user: dict = Depends(get_current_user),
 ):
     tenant_id = resolve_tenant(user, payload.tenant_id)
+    enforce_ai_rate_limit(actor_id(user))
     return await execute_turn(
         db,
         tenant_id,
@@ -480,6 +498,7 @@ async def post_turn_stream(
     user: dict = Depends(get_current_user),
 ):
     tenant_id = resolve_tenant(user, payload.tenant_id)
+    enforce_ai_rate_limit(actor_id(user))
     trusted_payload = payload.model_copy(update={"tenant_id": tenant_id})
     # A small positive floor prevents a misconfigured 0/negative interval from
     # busy-looping; the deadline can never be shorter than one heartbeat.
@@ -505,6 +524,49 @@ async def post_turn_stream(
             "turn_started",
             {"conversation_id": conversation_id, "agent_mode": trusted_payload.agent_mode},
         )
+        # Real intermediate Brain lifecycle events (currently only emitted for browser
+        # sources) are pushed here from within the background turn task as they happen,
+        # and drained below alongside the existing heartbeat loop so they reach the wire
+        # promptly instead of waiting for the turn to fully resolve.
+        progress_queue: asyncio.Queue[tuple[str, str, str | None]] = asyncio.Queue()
+        file_progress_queue: asyncio.Queue[tuple[str, str, str]] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def on_progress(source: str, state: str, label: str | None) -> None:
+            # invoke_subscription_brain calls this synchronously from inside an async
+            # context already on this loop, so put_nowait is safe here (never called
+            # from a different thread/loop).
+            loop.call_soon_threadsafe(progress_queue.put_nowait, (source, state, label))
+
+        def on_file_progress(path: str, operation: str, outcome: str) -> None:
+            loop.call_soon_threadsafe(file_progress_queue.put_nowait, (path, operation, outcome))
+
+        # Watches for a real ASGI http.disconnect message exactly once, in its own
+        # task, for the entire life of the stream. request.is_disconnected() calls
+        # request._receive() internally; calling it repeatedly from a polling loop
+        # (as this endpoint previously did, once per heartbeat) competes with
+        # uvicorn's own use of the same ASGI receive channel and is a documented
+        # false-positive source on long-lived streaming responses -- a multi-minute
+        # browser Brain turn could have its request wrongly treated as disconnected
+        # partway through, silently cancelling and rolling back a turn that was
+        # still genuinely in progress (the Brain itself would go on to complete
+        # normally, orphaned, with no live request left to receive its answer).
+        # Reading the receive channel exactly once here, from a single dedicated
+        # task, avoids that contention entirely.
+        disconnected = asyncio.Event()
+
+        async def watch_disconnect() -> None:
+            try:
+                while True:
+                    message = await request.receive()
+                    if message.get("type") == "http.disconnect":
+                        disconnected.set()
+                        return
+            except asyncio.CancelledError:
+                pass
+
+        disconnect_watcher = asyncio.ensure_future(watch_disconnect())
+
         # Run the governed turn as a supervised task so the request coroutine can
         # keep the wire warm with heartbeats and enforce a hard deadline. The turn
         # is executed exactly once; the terminal event (completed/failed/timeout)
@@ -517,24 +579,33 @@ async def post_turn_stream(
                 trusted_payload,
                 user=user,
                 actor_id=actor_id(user),
+                on_progress=on_progress,
+                on_file_progress=on_file_progress,
             )
         )
         started = time.monotonic()
         try:
             while True:
+                while not progress_queue.empty():
+                    source, state, label = progress_queue.get_nowait()
+                    yield _sse("brain_progress", {"source": source, "state": state, "label": label})
+                while not file_progress_queue.empty():
+                    path, operation, outcome = file_progress_queue.get_nowait()
+                    yield _sse("file_progress", {"path": path, "operation": operation, "outcome": outcome})
                 await asyncio.wait({task}, timeout=heartbeat)
                 if task.done():
                     break
                 elapsed = time.monotonic() - started
                 # If the client has gone away, stop the governed work and release
                 # the transaction rather than streaming into a dead socket.
-                if await request.is_disconnected():
+                if disconnected.is_set():
                     task.cancel()
                     try:
                         await task
                     except BaseException:  # noqa: BLE001 - cancellation/teardown
                         pass
                     await db.rollback()
+                    disconnect_watcher.cancel()
                     return
                 if elapsed >= deadline:
                     # Hard bound reached: cancel the stalled turn, roll back, and
@@ -545,6 +616,7 @@ async def post_turn_stream(
                     except BaseException:  # noqa: BLE001 - cancellation/teardown
                         pass
                     await db.rollback()
+                    disconnect_watcher.cancel()
                     yield _sse(
                         "turn_timeout",
                         {
@@ -558,7 +630,17 @@ async def post_turn_stream(
             # The server is tearing down the response (client disconnect at the
             # transport layer): abandon the turn without leaving it running.
             task.cancel()
+            disconnect_watcher.cancel()
             raise
+
+        disconnect_watcher.cancel()
+
+        while not progress_queue.empty():
+            source, state, label = progress_queue.get_nowait()
+            yield _sse("brain_progress", {"source": source, "state": state, "label": label})
+        while not file_progress_queue.empty():
+            path, operation, outcome = file_progress_queue.get_nowait()
+            yield _sse("file_progress", {"path": path, "operation": operation, "outcome": outcome})
 
         try:
             turn = task.result()

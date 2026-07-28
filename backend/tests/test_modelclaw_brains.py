@@ -749,6 +749,51 @@ async def test_browser_brain_survives_beyond_the_direct_call_timeout(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_browser_status_poll_recovers_after_transient_bridge_failure(monkeypatch):
+    """One failed status request must not become an immediate false timeout
+    while the provider tab continues generating its response."""
+    calls = 0
+    progress: list[tuple[str, str | None]] = []
+
+    async def fake_request(method, path, payload=None, **_kwargs):
+        nonlocal calls
+        if path == "/v1/browser-invoke/start":
+            return {"task_id": "browser-task-1"}
+        assert path == "/v1/browser-invoke/status"
+        calls += 1
+        if calls == 1:
+            raise OSError("transient host bridge interruption")
+        if calls == 2:
+            return {"state": "streaming", "provider": "chatgpt"}
+        return {
+            "state": "completed",
+            "provider": "chatgpt",
+            "response": "The complete browser response.",
+        }
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(brain_bridge, "_bridge_request", fake_request)
+    monkeypatch.setattr(brain_bridge.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(brain_bridge, "_BROWSER_BRAIN_TIMEOUT_SECONDS", 5.0)
+    vote = await brain_bridge._invoke_browser_polled(
+        "chatgpt_browser",
+        "Build the application",
+        session_id="a" * 64,
+        started=brain_bridge.perf_counter(),
+        input_scan=brain_bridge.scan_text("Build the application", redact=True),
+        on_progress=lambda state, label: progress.append((state, label)),
+    )
+
+    assert vote["counted"] is True
+    assert vote["response"] == "The complete browser response."
+    assert calls == 3
+    assert any(state == "reconnecting" for state, _label in progress)
+    assert any(state == "streaming" for state, _label in progress)
+
+
+@pytest.mark.asyncio
 async def test_browser_brain_still_times_out_eventually(monkeypatch):
     """The browser budget is longer, not unbounded: a browser session that
     never returns must still fail safely rather than hang the turn."""

@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Enkstein Browser Companion",
-  "version": "0.1.12",
+  "version": "0.4.9",
   "description": "Connects visible signed-in AI browser sessions to the governed Enkstein Brain Bridge.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["storage", "alarms"],
   "host_permissions": [
     "http://127.0.0.1:47831/*",
@@ -24,5 +30,13 @@
       "js": ["content.js"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
 }

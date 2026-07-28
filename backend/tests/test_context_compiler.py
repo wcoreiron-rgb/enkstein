@@ -106,7 +106,7 @@ async def test_explicit_under_limit_artifact_is_sent_full_with_manifest(client, 
 
     captured = {}
 
-    async def fake_gateway(db, payload):
+    async def fake_gateway(db, payload, **_kwargs):
         captured["prompt"] = payload.messages[-1].content
         return _gateway_response("Reviewed")
 
@@ -149,7 +149,7 @@ async def test_artifact_secret_is_redacted_and_final_provenance_preserves_identi
     )
     captured = {}
 
-    async def fake_gateway(db, payload):
+    async def fake_gateway(db, payload, **_kwargs):
         captured["prompt"] = payload.messages[-1].content
         response = _gateway_response("Reviewed")
         response["votes"] = [{
@@ -224,7 +224,7 @@ async def test_automatic_context_shows_truncation_and_omission_in_manifest(clien
 
     captured = {}
 
-    async def fake_gateway(db, payload):
+    async def fake_gateway(db, payload, **_kwargs):
         captured["prompt"] = payload.messages[-1].content
         return _gateway_response("Summarized")
 

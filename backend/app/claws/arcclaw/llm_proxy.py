@@ -163,6 +163,7 @@ async def call_ollama(
     model: str = "llama3.2",
     system: str = "You are a helpful assistant.",
     api_key: Optional[str] = None,   # unused for Ollama — accepted for uniform signature
+    max_tokens: Optional[int] = None,
 ) -> LLMResponse:
     async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         try:
@@ -175,6 +176,7 @@ async def call_ollama(
                         {"role": "system", "content": system},
                         {"role": "user", "content": prompt},
                     ],
+                    **({"options": {"num_predict": max_tokens}} if max_tokens else {}),
                 },
             )
             resp.raise_for_status()
@@ -354,6 +356,7 @@ async def call_llm(
     model: Optional[str] = None,
     system: str = "You are a helpful assistant.",
     api_key: Optional[str] = None,
+    max_tokens: Optional[int] = None,
 ) -> LLMResponse:
     """Route a prompt to the specified LLM provider."""
     handler = PROVIDER_MAP.get(provider)
@@ -364,6 +367,14 @@ async def call_llm(
             success=False,
         )
     resolved_model = model or MODEL_DEFAULTS.get(provider, "")
+    if provider == "ollama":
+        return await handler(
+            prompt,
+            model=resolved_model,
+            system=system,
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
     return await handler(prompt, model=resolved_model, system=system, api_key=api_key)
 
 

@@ -19,6 +19,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+from app.claws import provenance
+from app.services import device_code_auth
 
 logger = logging.getLogger("endpointclaw.defender")
 
@@ -186,10 +188,12 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     client_id = credentials.get("client_id", "")
     client_secret = credentials.get("client_secret", "")
 
-    if not all([tenant_id, client_id, client_secret]):
-        raise ValueError("MDE requires tenant_id, client_id, client_secret")
-
-    token = await _get_token(tenant_id, client_id, client_secret)
+    # Interactive device sign-in supplies a delegated token directly.
+    token = await device_code_auth.resolve_access_token(credentials)
+    if not token:
+        if not all([tenant_id, client_id, client_secret]):
+            raise ValueError("MDE requires tenant_id, client_id, client_secret")
+        token = await _get_token(tenant_id, client_id, client_secret)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     since = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -230,11 +234,20 @@ def _parse_mde_alert(raw: dict) -> dict:
     }
 
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    raw = await _fetch_real_findings(credentials)
+    return provenance.live(
+        [_parse_mde_alert(a) for a in raw],
+        provider="defender_endpoint",
+        connector="defender_endpoint",
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     if credentials:
         try:
-            raw = await _fetch_real_findings(credentials)
-            return [_parse_mde_alert(a) for a in raw]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("Defender for Endpoint API failed: %s — using simulated data", exc)
-    return [{**f, "provider": "defender_endpoint"} for f in SIMULATED_FINDINGS]
+    return provenance.simulated(SIMULATED_FINDINGS, provider="defender_endpoint")

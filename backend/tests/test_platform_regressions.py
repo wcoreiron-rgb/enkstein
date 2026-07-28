@@ -724,7 +724,12 @@ async def test_swarm_ticket_handoff_policy_outcome_low_risk_auto_approved(client
     assert action["target_id"] == "swarm_job_123"
     assert action["risk_level"] == "low"
     assert action["requires_approval"] is False
-    assert action["status"] == "completed"
+    # The policy outcome is what this test governs: low risk auto-approves and
+    # dispatches without waiting for a human. Execution then fails because no
+    # Jira credential is configured in this tenant — it must not report a
+    # created ticket that does not exist.
+    assert action["status"] == "failed"
+    assert action["error"] == "provider_not_configured"
     assert action["triggered_by"] == "swarm:test"
     assert isinstance(action.get("parameters"), dict)
     assert action["parameters"]["project_key"] == "SEC"

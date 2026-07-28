@@ -334,6 +334,807 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.4.9 — Connector credential verification -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A connector test answers the question it was asked</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.9</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Production readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Every Microsoft connector reported &ldquo;did not accept these credentials&rdquo; after a successful sign-in. The credentials were fine; the test was wrong, and it was wrong in a way that hid two separate defects.</p>
+      <ul>
+        <li><strong>A connector was tested by asking it for findings.</strong> That conflates three different outcomes &mdash; a rejected credential, a healthy tenant with nothing to report, and a token missing one optional scope &mdash; and reports all three as a credential failure. A Microsoft sign-in is now verified against an identity endpoint covered by the base scope every sign-in grants, so an empty tenant tests as connected. The probe is matched to the audience the connector actually signed in for, because a Microsoft Graph token cannot verify an Azure Resource Manager connector and the reverse is equally untrue.</li>
+        <li><strong>Entra ID read only Identity Protection.</strong> That endpoint needs an Entra ID P2 licence and an additional scope, so a correctly connected tenant without one produced no findings at all &mdash; which the test above then read as a bad credential. Entra now also reads directory defaults and standing privileged-role membership, each degrading on its own, so a licensed tenant gains checks rather than losing them.</li>
+        <li><strong>The Configure form and six adapters disagreed on field names.</strong> Okta stored <code>domain</code> while its adapter read <code>org_url</code>, so a correctly filled form failed before it ever reached Okta. Splunk, CrowdStrike, GCP and AWS had the same drift. Stored credentials are now reconciled through an alias layer, so connectors configured before this release keep working without being re-entered, and the fields those adapters genuinely need were added to the form.</li>
+        <li><strong>An unreachable host was reported as a rejected credential.</strong> A network failure, a provider that returned nothing, and a refused token now read as three different messages, because they call for three different fixes.</li>
+      </ul>
+      <p><strong>Verification.</strong> Confirmed against a live Microsoft tenant, not by reading code: Entra ID and Sentinel now pass their connector test and Entra returns real findings on the directory's default user permissions. A new contract test asserts that every field a hand-written adapter reads is either on the Configure form or derived from it, and that a provider returning no findings tests as connected rather than as a failure &mdash; so this class of mismatch cannot return silently. 1,158 backend tests pass.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.8 — Simulated results removed -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Nothing reports success for work it did not do</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.8</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Production readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Four paths reported real-looking results for work that never executed. Each is now honest about what happened.</p>
+      <ul>
+        <li><strong>Remediation recorded success for actions it never ran.</strong> With no credentials configured, a shared helper returned <code>success=true</code> with a &ldquo;Simulated:&rdquo; message, so the engine marked the action <em>completed</em> and wrote a matching audit event. An operator reviewing the queue saw a disabled account or an isolated host that had never been touched, and the audit trail agreed with them. All twenty call sites across identity, cloud, endpoint, code and ticketing now fail with <code>provider_not_configured</code> instead.</li>
+        <li><strong>Agent runs returned a fixed scenario per Capability Node.</strong> The AI Security agent always &ldquo;found&rdquo; one prompt injection and one DLP violation whether or not a connector existed, and parked approval actions for targets that were not real. A run now executes the node's own governed scan &mdash; the same path the console uses &mdash; and reports the findings that scan actually persisted, including none. Remediation is proposed only for connector-backed findings, so the approval queue cannot contain an action against demonstration data.</li>
+        <li><strong>Workflow gates approved everything.</strong> A policy check returned PASS unconditionally with a &ldquo;(simulated)&rdquo; note, so a workflow's guardrail waved through every branch it was asked about. Gates now evaluate against real workflow context, and a gate that cannot be evaluated fails rather than passing. An agent step whose agent did not exist reported <em>completed</em>; it now fails, and steps without a bespoke intel path run the node's real scan.</li>
+        <li><strong>Two Capability Nodes reported unconfigured providers as successful scans.</strong> Cloud and Endpoint returned <code>status: success</code> alongside <code>simulated: true</code>, and omitted the <code>mode</code> field that callers use to tell demonstration data from a connector result.</li>
+      </ul>
+      <p><strong>Production data policy.</strong> A new <code>REQUIRE_LIVE_DATA</code> setting makes every Capability Node return nothing rather than demonstration findings, so everything on screen came from an authenticated connector. It defaults to off, which keeps a fresh install explorable; set it to true for a real deployment.</p>
+      <p><strong>Verification.</strong> Confirmed against a running stack, not by reading code: an agent run that previously invented two findings now reports an honest zero, and with the policy enabled Cloud and Identity return <code>mode: empty</code> with an explanation instead of a fabricated estate. One existing test asserted that a Jira ticket &ldquo;completed&rdquo; without any Jira credential; it now asserts the failure. 1,084 backend tests pass and all twenty-nine console surfaces still load.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.7 — Cortex & Hearts release sweep -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Every Cortex &amp; Hearts surface verified against a live install</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.7</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>All twenty-nine navigation entries were walked against a running backend rather than reviewed by reading code. Four were broken.</p>
+      <ul>
+        <li><strong>Findings returned a server error on any upgraded install.</strong> Startup creates missing tables but cannot alter existing ones, so a column added to a model after first run was simply absent from the database while the migration revision still read as current &mdash; and the first query selecting it failed. Because a local database outlives every upgrade, this would have hit every existing operator. Startup now reconciles additive column drift before anything queries it, adding only columns the models declare and never dropping, renaming or retyping.</li>
+        <li><strong>Mission Control was taken down by one stale row.</strong> The listing decrypted each objective inline, so a single mission written under a previous runtime key raised and returned a server error for the entire page. Unreadable rows are now listed and labelled as such, which keeps the page working and makes the bad row visible enough to remove.</li>
+        <li><strong>Remediation could not reach the backend from the packaged app.</strong> It bypassed the shared API client and called an absolute <code>localhost:8000</code> URL with no bearer token, so requests were blocked cross-origin. It now uses the same-origin proxy and the operator's session. Approvals also posted a hardcoded <code>admin</code> identity; the backend already derives the approver from the token, and the client no longer claims otherwise.</li>
+        <li><strong>The connector list fetched vendor logos from a third-party CDN.</strong> Every render told an outside service which connectors an operator was viewing, and eleven brands had been removed upstream so those requests 404'd permanently. Seventeen marks are now bundled locally and the rest use the existing initials badge. Nothing about the connector inventory leaves the machine.</li>
+      </ul>
+      <p><strong>Verification.</strong> A new end-to-end sweep walks all twenty-nine routes and fails on a server error, a render crash, or an uncaught exception. Running it against deliberately truncated responses found four more pages that would white-screen on a payload from a version-skewed backend; those now degrade or report an error instead. 1,076 backend tests pass, including new coverage for schema reconciliation and unreadable encrypted rows.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.6 — Microsoft device-code auth, agent run output -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Microsoft connectors sign in the way they can, and an agent run says what it found</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.6</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Two things that looked finished but were not.</p>
+      <ul>
+        <li><strong>Microsoft browser sign-in could never have worked.</strong> Every Microsoft connector offered &ldquo;Sign in with your browser,&rdquo; which borrowed the Azure CLI public client and sent it a loopback callback path that client does not register &mdash; so Entra rejected the request with <code>AADSTS50011</code> before any consent screen appeared. Browser auth is no longer offered for Microsoft; the device-code flow, which needs no registered redirect, now covers all nine Microsoft connector types including Purview and Azure Resource Manager. GitHub, GitLab, Okta and the rest keep browser sign-in unchanged.</li>
+        <li><strong>An agent run recorded a tally, not a result.</strong> A completed run stored how many findings it had produced but not the findings themselves, so the only way to see what an agent actually found was to correlate the Events feed by run id. The run log now carries each finding, and the run history panel lists them by severity. Separately, a run parked in &ldquo;Awaiting Approval&rdquo; had no way to be approved or rejected &mdash; the endpoint and the client call both existed but nothing in the console used them. Each pending action now shows its type and target with Approve and Reject beside it.</li>
+      </ul>
+      <p><strong>Verification.</strong> Agent runs had no test coverage at all, which is how the missing output survived; two now assert that a completed run records what it found and that a parked action carries enough detail to decide on. The Microsoft change is covered by an assertion that all nine connector types decline browser auth and name a device provider instead. 1,072 backend tests pass.</p>
+      <p><strong>Known limitation.</strong> Built-in agents still run scenario data rather than querying a live tenant. The plumbing above is what surfaces a result once real scan logic is attached.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.5 — Clean open, conditional file panel, Mission Control nav -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Opening Chat or Cowork now actually starts something new</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.5</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>0.4.1 stopped the workspace grabbing the first project in the list, but two other paths still decided where you landed.</p>
+      <ul>
+        <li><strong>A plain open is a fresh start.</strong> Both the workspace and the blade restored the last remembered project from local storage, and the workspace then loaded the most recent conversation and rewrote the URL to point at it &mdash; so there was no way to reach an empty page. Opening <code>/marcellus/chat</code> or <code>/marcellus/cowork</code> now stays put with nothing selected. Deep links to a specific project or conversation resolve exactly as before, and earlier threads remain one click away in the blade.</li>
+        <li><strong>The file panel appears only when it has something to show.</strong> Cowork rendered its right-hand rail on every open, including when no project was bound, spending roughly a third of the width on an empty &ldquo;No project selected&rdquo; placeholder. It now appears once a project is actually bound, and the composer takes the full width until then.</li>
+        <li><strong>Mission Control is reachable from the navigation.</strong> It renders at the top of the Security workspace but had no entry in the blade, so it could only be found by switching modes. It is now the first item under Cortex &amp; Hearts.</li>
+      </ul>
+      <p><strong>Verification.</strong> The end-to-end test that previously asserted a base route would adopt a conversation now asserts the opposite &mdash; that the route stays clean, no file panel renders without a project, and a deep link still resolves to its exact conversation. 1,070 backend tests pass; the workspace suite is 14 of 15 with the one failure a pre-existing flake that passes in isolation.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.4 — Build version on the lock screen -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The lock screen now names the build it belongs to</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.4</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The sign-in screen showed no version, so confirming which build was actually installed meant unlocking the console first. The running version now appears quietly beneath the sign-in card, read from the same unauthenticated runtime endpoint the console sidebar uses &mdash; the locked screen cannot report a different build than the application behind it. When the runtime is unreachable it says so rather than showing a stale or assumed number.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.3 — Unfiled by default, honest Claude readiness, named local models -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Chat and Cowork open unfiled &mdash; and Claude readiness finally tells the truth</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.3</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Three things that made the workspace feel like it was deciding for you.</p>
+      <ul>
+        <li><strong>No project is selected on open.</strong> Both the workspace and the sidebar fell back to the first project in the list when nothing was remembered, silently scoping everything to a folder you never chose and hiding every conversation outside it. Both now rest on no selection, so a fresh open shows all threads including unfiled ones. Cowork no longer refuses to start a conversation without a project either &mdash; file writes are project-scoped and the backend already skips them when a conversation has none, so thinking through a problem before binding a folder is a supported path rather than a blocked one.</li>
+        <li><strong>Claude subscription readiness was structurally unable to work.</strong> The native bridge treated a zero exit code from <code>claude auth status</code> as proof of sign-in, but that command exits 0 whether or not a session exists &mdash; a signed-out host returns success with <code>{"loggedIn": false}</code>. No amount of re-authenticating in a terminal could have changed the result. Readiness now reads the reported login flag, with a text fallback for older builds that do not emit JSON.</li>
+        <li><strong>Local Brains are named.</strong> Several profiles share the Ollama provider &mdash; a general, an authoring and a scanner profile &mdash; and all three rendered as an identical &ldquo;Ollama&rdquo; row in both the Brain picker and the swarm builder, with no way to tell which engine you were choosing. Each row now carries its model, so the choice reads as <code>Ollama &middot; qwen2.5:14b-instruct</code> rather than three indistinguishable entries.</li>
+      </ul>
+      <p><strong>Verification.</strong> 1,070 backend tests pass, including a new guard that fails if Claude readiness regresses to an exit-code check. The workspace suite is 14 of 15, with the one failure a pre-existing flake that passes in isolation. Four end-to-end tests encoded the old auto-selection behaviour and were updated to select a project explicitly.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.2 — Red reserved for severity; brand chrome separated -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Red now means critical &mdash; and nothing else</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.2</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Red was doing two contradictory jobs. It marked critical findings, failed checks and destructive actions &mdash; but it also coloured the Send button, folder icons, the Brain Connections header, the login password field and the &ldquo;Agent tools&rdquo; toggle. In a security console that trade is a bad one: when ordinary chrome shouts as loudly as a critical CVE, the eye learns to stop listening, and the loudest signal is spent before anything is actually wrong.</p>
+      <ul>
+        <li><strong>Severity keeps red.</strong> Open findings, KEV badges, failure icons, blocked actions, policy denials and destructive-intent controls are unchanged. The Codex &ldquo;Approve once&rdquo; control also stays red, because authorising an agent action genuinely is consequential.</li>
+        <li><strong>Brand chrome moves to its own token.</strong> A new <code>--rc-brand</code> pair carries navigation icons, primary actions and product marks. It is tuned to the octopus logo rather than fighting it, so the workspace reads as one product instead of a permanent alert state.</li>
+        <li><strong>Two more undefined tokens fixed.</strong> <code>--rc-accent-violet</code> was referenced eleven times in Custom Capability and never defined, so those chips and buttons rendered with no colour at all &mdash; the same class of defect as the <code>--rc-bg</code> gap closed in 0.4.1. Two Release Governance controls also paired an indigo background with red text. Both now resolve.</li>
+        <li><strong>Consistent across both themes.</strong> The new tokens are defined for light and dark, so primary actions, the sidebar and Cowork no longer drift apart when the theme changes.</li>
+      </ul>
+      <p><strong>How this was checked.</strong> Brain Connections and Cowork were rendered and inspected rather than assumed. A diff of the severity surfaces &mdash; Findings, Threat Intelligence and the shared stat card &mdash; confirms no colour changes landed there at all. Typecheck, lint and the 66-route build pass; the workspace suite is 14 of 15, with the one failure being a pre-existing flake that passes in isolation.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.4.1 — Verified readiness across nodes, connectors and controls; workspace UI polish -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Every Capability Node, connector and execution control is now exercised, not just declared &mdash; plus a rebuilt Cowork workspace surface</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.4.1</span>
+          <span class="release-date">July 28, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Previous releases established that the platform's parts existed. This one drives them: every node, connector, platform route and execution control is executed against the running application, and three real defects surfaced that no amount of code review had caught.</p>
+      <ul>
+        <li><strong>SSRF guard was bypassable.</strong> The connector URL check blocked <code>127.0.0.1</code> but allowed <code>localhost</code>, and never resolved hostnames at all &mdash; so any attacker-controlled domain pointing at the cloud metadata address passed straight through. Hostnames are now resolved and rejected when they land on loopback, private, link-local, reserved, multicast or unspecified space. This guard protects every self-hosted connector URL and the entire Custom Capability surface.</li>
+        <li><strong>Authenticated fetches were not tagged.</strong> Twenty connectors returned findings without a data-origin stamp, leaving the console unable to distinguish tenant data from demonstration data. Provenance is now applied where authentication actually happens, so no call site can emit untagged results.</li>
+        <li><strong>One malformed row killed an entire connector.</strong> Parsers written against documented vendor shapes crashed on real-world deviations, discarding every valid row alongside the bad one. Row parsing is now contained, and a summarizer failure raises a named error identifying the endpoint.</li>
+        <li><strong>Execution channels were never exercised end to end.</strong> The shell, browser, credential and production channels opened their own session for the policy call, so every test attempt failed closed at 503 and the real decision path went unverified. It is now driven directly: production shell commands are held for approval, destructive commands are not auto-approved, a self-asserted <code>caller_role</code> cannot escalate a decision, and Trust Fabric evaluates and flags every request.</li>
+        <li><strong>Complete node surface.</strong> Custom Capability gained the <code>/findings</code> and <code>/providers</code> routes it was missing, so all 26 nodes expose an identical contract. The four collapsed sidebar arms now open by default, making every node visible on load rather than only the nine under Protection.</li>
+        <li><strong>AWS Security Hub is honest about its limits.</strong> It was registered as a native adapter but could not sign requests, returning an empty list indistinguishable from a clean account. It now raises with an explanation.</li>
+        <li><strong>Workspace UI.</strong> The <code>--rc-bg</code> token was referenced in eleven places and never defined, so Cowork inputs and search fields rendered with no background &mdash; the root cause of that surface looking unfinished next to Chat and Security. Panel headers, hover states, file-tree density, context selection and the active-conversation indicator now follow one shared vocabulary in both light and dark themes.</li>
+      </ul>
+      <p><strong>What is verified and what is not.</strong> 26 of 26 nodes answer every operator call, 57 of 57 connectors complete a full fetch and correctly reject bad credentials, 189 platform routes load on an empty tenant, and 98 adversarial checks hold. Connectors are still exercised against responses shaped like vendor documentation; GitHub, VirusTotal and CISA KEV remain the only three confirmed against a live tenant.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.45 — Complete Security Capability Node connector coverage -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security mode: every declared provider is now adapter-backed and every Capability Node has a real scan contract</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.45</span>
+          <span class="release-date">July 27, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Security mode previously had twelve provider names that could be configured but had no adapter behind them. That is now a build-breaking condition rather than a hidden product gap.</p>
+      <ul>
+        <li><strong>All declared provider types are live-capable.</strong> Veracode, Orca, Jenkins, Code42, DTEX, Fortinet, OneTrust, Transcend, Google Workspace, Salesforce, Exabeam, and Securonix now have read-only adapters with matching configure forms, bounded outbound calls, Trust Fabric-gated credentials, provenance tagging, and explicit failure states.</li>
+        <li><strong>No partial Capability Nodes.</strong> Application Security, Attack Path Analysis, Security Automation, Insider Risk, Network Security, Privacy Governance, SaaS Security, and User Risk no longer contain a provider that silently has no execution path. A coverage test now rejects any mapped provider without an adapter.</li>
+        <li><strong>Special nodes scan what they actually own.</strong> Identity Security now uses the shared live connector scan path. AI Security aggregates governed AI-event telemetry. Release Governance evaluates the tenant deployment posture and control catalog. Custom Capability has a bounded root scan across configured definitions, with SSRF validation on every custom endpoint.</li>
+        <li><strong>Adapter failures are honest.</strong> The registry no longer converts an adapter error into a false successful empty response. Failed calls are reported as failures and the node keeps clearly labelled demonstration data instead of claiming a clean live scan.</li>
+      </ul>
+      <p><strong>Operational validation still matters.</strong> The adapters are complete in the product contract, but a vendor can change endpoint details or response envelopes. Enkstein fails closed to labelled demo data when that happens. The next production step is tenant-by-tenant connector verification through the now-real credential test rather than accepting a generic reachability result.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.44 — Wider browser sign-in, key form demoted -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Connectors: sign-in leads, API keys become the fallback</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.44</span>
+          <span class="release-date">July 27, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Auditing every connector's authentication path surfaced a contradiction: a connector could offer &ldquo;Sign in with Microsoft&rdquo; and still show Client ID and Client Secret fields directly underneath, which makes signing in look pointless.</p>
+      <ul>
+        <li><strong>The credential form is now the fallback.</strong> Where browser sign-in is available the key fields collapse behind <em>&ldquo;Or enter API credentials manually&rdquo;</em>, and say plainly that they are only needed when you cannot sign in — an unattended service principal, for example. Connectors with no sign-in path are unchanged.</li>
+        <li><strong>Snyk and PagerDuty gain browser sign-in,</strong> bringing the total to 18 of 63 connectors: 6 that need no setup at all, and 12 that need a one-time OAuth client ID.</li>
+      </ul>
+      <p><strong>Why the remaining 45 stay key-based.</strong> Tenable, Qualys, CrowdStrike, Splunk, Wiz and the rest publish no OAuth authorization endpoint; their documented integration path is an API token. Converting a logged-in browser session into API access would mean reading session cookies or driving the vendor's pages, which breaks on any UI change and is the wrong trade for a tool holding production credentials. When those vendors ship OAuth, adding them is a table entry.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.43 — Browser sign-in for connectors -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Connectors: sign in with your browser instead of minting API keys</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.43</span>
+          <span class="release-date">July 27, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Interactive sign-in previously reached four connectors, because it used the device grant (RFC 8628) and few vendors publish a device endpoint. Enkstein is a desktop application, so it now uses the flow desktop applications are actually meant to use: an OAuth authorization code grant with PKCE, redirected to a loopback address only this machine can receive.</p>
+      <ul>
+        <li><strong>Approve in a browser, no app registration.</strong> Microsoft connectors — Entra ID, Azure, Defender, Sentinel, Purview — sign in with one approval and no client secret, because Azure CLI publishes a loopback-registered public client. GitHub, GitLab, Google Cloud, Okta, Slack, Jira, ServiceNow, Auth0, and Datadog are supported once a client ID is supplied.</li>
+        <li><strong>You do not copy a code.</strong> Enkstein listens on <code>127.0.0.1</code> for the provider's redirect, so approving in the browser completes the connection. The listener starts only while a sign-in is in flight and never logs the authorization code.</li>
+        <li><strong>A connector says what it needs.</strong> Vendors that publish no shared public client ask for a one-time OAuth client ID and show the exact redirect URI to register. A connector with no OAuth endpoint at all does not offer a button that could only fail.</li>
+        <li><strong>Tokens keep working.</strong> Refresh tokens renew transparently through the same path adapters already use, so a scheduled scan does not stop an hour after sign-in.</li>
+      </ul>
+      <p><strong>What this is not.</strong> No cookies are read, no page is driven, and no vendor session is reused. Enkstein opens the provider's own consent screen; the grant is visible and revocable there. PKCE means no client secret is embedded in the distributed application. Sign-in passes the same Trust Fabric gate as manual credential configuration, a sign-in request is single-use, and a code issued for one connector cannot be redeemed into another.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.42 — Connector coverage and real credential verification -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security mode: every connector now has an adapter, the right form, and a test that proves the key works</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.42</span>
+          <span class="release-date">July 27, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A marketplace of 56 connectors is only worth having if a stranger can configure one and trust what it tells them. This release closes the three gaps between "the connector is listed" and "the connector works".</p>
+      <ul>
+        <li><strong>Connected now means the credential was accepted.</strong> Previously most connectors were tested by reachability, so an unauthenticated 200 from a vendor's login page reported success and told an operator nothing. Every connector is now verified by calling the provider with the stored credential through the connector's own adapter. Local Terraform tooling is the one honest exception, and it says so.</li>
+        <li><strong>The configure form asks for the right fields.</strong> Security Hub and Defender for Cloud were asking for a bare API key that no AWS or Azure credential can satisfy. Adapter requirements and form fields are now reconciled, and a test fails the build if a connector ever requires a field the form does not collect.</li>
+        <li><strong>Vendor Risk is no longer inert.</strong> It was the one Capability Node where every provider it referenced lacked an adapter, so it could only ever show demonstration data. SecurityScorecard, Bitsight, and UpGuard adapters are added, and a test now asserts that no Capability Node is left without a live path.</li>
+        <li><strong>CISA KEV works with no credential at all.</strong> Threat Intelligence referenced the Known Exploited Vulnerabilities catalog but had no adapter for it. It is a free public feed, verified here against the live catalog: 1,653 real exploited vulnerabilities parsing correctly. ThreatFox and MISP adapters are added alongside it.</li>
+        <li><strong>Provider pills say when a credential would not help.</strong> A provider with no adapter used to look merely unconfigured, so an operator could connect a key and reasonably conclude the product was broken when the node kept showing sample data. Those providers now read <em>"no live adapter yet"</em> and are visually distinct from ones that are simply not connected. The pill was duplicated across 21 Capability Node pages and is now one shared component.</li>
+      </ul>
+      <p><strong>Honest limitation.</strong> The declarative adapters are written from vendor API documentation, not verified against live tenants. Some endpoint paths and field names will be wrong on first contact. The framework fails safe: a provider error falls back to clearly labelled demonstration data rather than inventing findings. GitHub, VirusTotal, and CISA KEV are the connectors confirmed against real responses so far.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.41 — Connector wiring and device sign-in -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security mode: connectors reach the Capability Nodes that were already built for them</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.41</span>
+          <span class="release-date">July 26, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Several Capability Nodes shipped with working provider adapters that their own scan route never called, and connecting a connector could make a module look broken. Both are fixed, and Microsoft connectors gain one-approval sign-in.</p>
+      <ul>
+        <li><strong>Adapters are actually invoked.</strong> Privileged Access now calls its Entra and Okta adapters and Security Telemetry calls Splunk, taking the platform from five connector-backed Capability Nodes to seven. Nineteen nodes now share one scan path so behaviour cannot drift apart again.</li>
+        <li><strong>A configured connector no longer empties a module.</strong> Previously, connecting a credential to a node with no live adapter hid its demonstration findings and showed nothing, which reads as a broken scan. Those nodes now keep showing clearly labelled demonstration data and say why: <em>"Connector configured, but no live adapter is available yet."</em> A connector that errors keeps its demonstration data too, and reports the failure rather than silently showing an empty list.</li>
+        <li><strong>Interactive sign-in for Microsoft.</strong> Entra ID, Azure, Defender, and Sentinel connectors can be connected with the OAuth device grant: Enkstein shows a code, you approve once in a browser, and it receives a refresh token. No app registration and no client secret. This is a documented provider flow — no cookies, page automation, or vendor session tokens are involved, and the grant is revocable from the provider's own consent screen. Device sign-in passes the same Trust Fabric gate as manual credential configuration.</li>
+        <li><strong>Tokens refresh on their own.</strong> Adapters accept a device-code token in place of client credentials and renew it transparently when it expires, so scheduled scans do not quietly stop after an hour. GitHub device sign-in is present but stays disabled until a deployment supplies its own OAuth client ID, because GitHub offers no first-party public client; PAT configuration is unaffected.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.40 — Finding data provenance -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security mode: every finding now declares whether it describes your real estate</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.40</span>
+          <span class="release-date">July 26, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; Beta readiness</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The blocker for beta testing Security mode was that a tenant with one live connector still saw hundreds of demonstration findings with no way to tell them apart. Findings now carry a data origin.</p>
+      <ul>
+        <li><strong>Origin on every finding.</strong> A new <code>data_origin</code> field records <code>live</code>, <code>simulated</code>, or <code>unknown</code>, alongside <code>source_connector</code> naming the connector behind a live result. Provider adapters tag their own output: the authenticated path reports live, the fallback path reports simulated.</li>
+        <li><strong>Fails toward honesty.</strong> The finding pipeline constrains whatever an adapter sends to a known vocabulary and defaults to <code>unknown</code> rather than <code>live</code>, so an untagged or unrecognised adapter can never be presented as verified customer data. A rescan that omits the origin cannot downgrade a finding already confirmed live.</li>
+        <li><strong>Filter and see it.</strong> The findings console gains a data-origin filter, a per-row badge, a live-of-total count in the stats bar, and connector attribution in the detail drawer. The API accepts <code>?data_origin=</code> and <code>/findings/stats</code> returns a <code>by_origin</code> breakdown.</li>
+        <li><strong>Migration <code>0004</code>.</strong> Adds both columns and an origin index. Existing rows backfill to <code>unknown</code>, never <code>live</code>, so nothing already stored can be mistaken for real estate data.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.39 — Security hardening -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Security hardening: binary DLP, AI endpoint rate limits, and enforced override justification</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.39</span>
+          <span class="release-date">July 26, 2026 &nbsp;·&nbsp; Enkstein &nbsp;·&nbsp; OWASP LLM02 / LLM04 / LLM09</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Three gaps closed ahead of release, each with regression coverage.</p>
+      <ul>
+        <li><strong>LLM02 — binary output handling.</strong> Provider-generated downloads introduced in v0.3.38 were opaque bytes, so a credential inside a generated script or workbook could reach the project folder unexamined. Downloads are now unpacked (including compressed OOXML/ZIP members) and DLP-scanned before they can become a governed change; a sensitive file is dropped and named in the reply instead of written.</li>
+        <li><strong>LLM04 — AI denial of service.</strong> Governed turn, streaming, and research endpoints are rate limited per authenticated identity. The key is the identity rather than the client IP, because every desktop request arrives from the same loopback address and an IP bucket would let one runaway conversation throttle the whole tenant. Tunable via <code>AI_RATE_LIMIT_WINDOW_SECONDS</code> and <code>AI_RATE_LIMIT_MAX_REQUESTS</code>.</li>
+        <li><strong>LLM09 — overreliance.</strong> Lowering a detected data classification is the direction that can route restricted content to a cloud provider, so it now requires an explicit <code>override_reason</code>. The audit entry retains both the detected and the asserted level. Raising a classification stays frictionless, so operators are not nudged into leaving it unset.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.38 — Provider file harvesting -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Enkstein now saves the real files ChatGPT generates, instead of rebuilding them from the answer text</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.38</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; provider file harvesting</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>When a provider runs its own tooling it produces a genuine document, spreadsheet, or archive — better than anything reconstructed from prose. Enkstein now asks for those files first, collects them from the visible completed turn, and writes them into the project folder byte for byte. Local rendering remains the automatic fallback.</p>
+      <ul>
+        <li>Downloads are read in the provider page's own session; no cookie, token, or credential is read, copied, or forwarded, and nothing is persisted to the broker journal.</li>
+        <li>A provider file supersedes any text-derived change with the same filename, and inherits the directory the response chose, so it lands beside its siblings rather than at the project root.</li>
+        <li>Attachments are bounded and re-validated at every boundary — extension, native broker, and backend — for name shape, count, and decoded size; traversal names and malformed payloads are rejected.</li>
+        <li>Plain-text files (code, config, markdown) continue through the normal governed manifest, so a turn mixing scripts and documents applies completely.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.37 — Office rendering & resizable review panel -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Word and PowerPoint files now land in the project folder, and the review panel is resizable</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.37</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; Office rendering &amp; review ergonomics</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A Brain can only return text, so a requested <code>.docx</code> or <code>.pptx</code> previously reached the folder as markdown under an Office extension — a file Word and PowerPoint refuse to open. Enkstein now renders the real Office binary locally from the Brain's markdown and mirrors that through the same governed write boundary.</p>
+      <ul>
+        <li><code>.docx</code>, <code>.pptx</code>, and <code>.xlsx</code> are rendered in the backend; headings, bullets, page breaks, code blocks, and markdown/CSV tables are preserved, and each <code>#</code>/<code>##</code> heading starts a new slide.</li>
+        <li>Binary content travels to the approved host root base64-encoded through the native broker, which applies the same containment, allowlist, and size checks as text writes.</li>
+        <li>A document that cannot be rendered is skipped rather than written as broken text, so an unopenable file is never reported as applied.</li>
+        <li>The Cowork project/review panel can be dragged wider (or maximized) up to 900px, with the width persisted; wide panels show full-height diffs and larger editor type for reading scripts before approval.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.36 — Batched Cowork file execution -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Large Cowork changes failed when the Brain refused to return an entire project in one response</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.36</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; batched file execution</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The governed Cowork execution contract now explicitly allows batching. When a change set is too large for a single response, the Brain delivers a coherent subset of complete files and names what remains, and Enkstein applies each governed batch as it arrives.</p>
+      <ul>
+        <li>The strict (smart) contract no longer implies emitting every file twice — file content is included once, inside the <code>marcellus_changes</code> array.</li>
+        <li>Partial or truncated files are still never accepted; only complete files are applied, and the automatic recovery retry uses the same batch-friendly instruction.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.35 — Response typography -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Chat and Cowork responses now use a refined, screen-optimized typography system</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.35</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein UI &nbsp;·&nbsp; response typography</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The interface now renders in Inter — self-hosted at build time with native SF Pro, Segoe UI, and Roboto fallbacks — for higher-contrast, more readable UI and chat text.</p>
+      <ul>
+        <li>Assistant Markdown gets a taller body rhythm, clearer heading hierarchy (with an underlined H1 and small-caps H5/H6), and roomier list spacing.</li>
+        <li>Tables use tabular figures, zebra striping, and cleaner row rules; fenced code renders slightly smaller in a dedicated monospace stack with ligatures disabled for exact alignment.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.34 — Durable Cowork file-result ledger -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork could write files while the finished response did not show what changed</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.34</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; response presentation</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Completed Cowork turns now retain an expandable <strong>Files changed</strong> ledger beside their governed context and Brain provenance.</p>
+      <ul>
+        <li>Every row identifies the relative project path, create/update/delete operation, and actual applied, proposed, skipped, or blocked result.</li>
+        <li>The ledger is content-free, tenant-scoped governance metadata and remains visible when a conversation is reopened.</li>
+        <li>Assistant output continues to render as sanitized Markdown with readable tables, labeled copyable code blocks, and Mermaid diagram labeling.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.33 — Bare Browser manifest parsing and code-safe DLP -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A complete ChatGPT file manifest could be dumped into chat while Cowork created no files</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.33</span>
+          <span class="release-date">July 24, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; manifest execution</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Cowork now accepts an exact standalone <code>marcellus_changes</code> label followed by a JSON array even when a Browser Brain omits Markdown fences. The array is removed from chat, validated, and routed through the existing governed proposal or Auto-apply writer.</p>
+      <ul>
+        <li>Every operation and relative path still passes the existing schema, protected-directory, project-root, and Trust Fabric checks.</li>
+        <li>Output DLP no longer mistakes JSON-escaped framework decorators such as <code>\n@routes.route</code> for email addresses; real email addresses remain redacted.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.32 — Resilient native browser status polling -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">One transient native status-poll error could be mislabeled as an immediate Browser session timeout</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.32</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Browser Companion &nbsp;·&nbsp; transport recovery</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Once a browser task has started, transient host-bridge status failures no longer terminate the turn. Enkstein reports a reconnecting state and continues polling until the task completes or reaches the existing governed browser deadline.</p>
+      <ul>
+        <li>The 890-second Brain bound and 900-second workspace bound remain unchanged.</li>
+        <li>A focused regression test covers status failure, reconnection, streaming, and successful completion.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.31 — Browser turn stream deadline alignment -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The desktop UI could abandon a healthy Browser Companion turn after 75 seconds</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.31</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; browser wait repair</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Browser turns are now allowed to wait for the same bounded 15-minute deadline enforced by the governed backend. This prevents a desktop WebKit/proxy heartbeat gap from turning a still-running ChatGPT task into a false UI failure.</p>
+      <ul>
+        <li>Local and API turns retain the short 75-second dead-stream guard.</li>
+        <li>Browser tasks remain bounded by Trust Fabric and the backend deadline; this does not create unbounded background execution.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.30 — Browser Companion completion correlation -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A completed ChatGPT answer could remain stuck as Browser Companion streaming</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.30</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Browser Companion &nbsp;·&nbsp; completion repair</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>ChatGPT streams by replacing text nodes inside an existing assistant container. The Companion now records text and descendant mutations against that assistant message, allowing the stable completed answer to be correlated and returned to Enkstein.</p>
+      <ul>
+        <li>Reloading the extension can recover a pending task from its session metadata without persisting prompts, responses, cookies, or account tokens.</li>
+        <li>Browser task lifecycle remains visible as queued, submitted, streaming, and completed; provider DOM content is still never journaled.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.29 — Complete Hybrid/local Cowork authoring handoff -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Hybrid Cowork could select Ollama, receive a plan-only answer, and skip the local file-author stage</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.29</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; local execution repair</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The dedicated local Qwen file author now runs after a plan-only response from either a Browser Companion or a Hybrid/local profile. Cowork no longer treats an Ollama architecture answer as a reason to skip implementation.</p>
+      <ul>
+        <li>The author receives its configured Ollama output budget, avoiding the short default reply that cut multi-file manifests off mid-generation.</li>
+        <li>Complete entries in a truncated ordinary JSON fence are recovered, validated, and governed; the incomplete trailing entry is discarded.</li>
+        <li>Live verification used the installed <code>qwen2.5:7b</code> runtime to produce a parsed <code>README.md</code>, <code>.env.example</code>, and <code>app.py</code> manifest.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.28 — Browser advisor to governed local file author -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork could receive a useful Browser Companion implementation plan and still leave the selected local project unchanged</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.28</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; browser-to-local execution</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Browser Brains now act as advisors for Cowork implementation requests. When they return a plan rather than Enkstein’s governed file manifest, Cowork hands a bounded copy of that answer to the local Qwen file author.</p>
+      <ul>
+        <li>The local author produces a project-relative create/update/delete manifest, which is still checked by Trust Fabric and written only through the connected project-root bridge.</li>
+        <li>Auto-apply writes each file individually; approval-first keeps the exact same changes reviewable. The live timeline now shows Browser plan handoff, local file author work, and each resulting write instead of presenting a plan as completed execution.</li>
+        <li>Browser credentials, cookies, and sessions remain outside Enkstein. The local author receives only the user request and a bounded, redacted browser answer.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.27 — Complete Browser and local-model Cowork file handoff -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork could receive a valid local-model file payload or a large Browser handoff yet create no files</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.27</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; execution completion</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>This release completes two provider compatibility paths that prevented the deterministic local writer from receiving an otherwise valid change request.</p>
+      <ul>
+        <li>Browser handoffs now use a bounded continuity capsule rather than inserting the full prior transcript into ChatGPT, avoiding contenteditable normalization failures on large conversations while preserving recent task context.</li>
+        <li>Local-model JSON fences are normalized when they use common field names such as <code>type</code> and <code>file_path</code>, including JSON-encoded object entries. They still pass the exact same project-relative path, protected-directory, Trust Fabric, and approved-folder checks as Enkstein-native manifests.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.26 — Require complete file manifests for Cowork execution -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A browser Brain could return an implementation plan while Cowork had no actual files to create</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.26</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork &nbsp;·&nbsp; file execution fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Cowork previously accepted a browser response such as “the files were already staged” even when the response contained no file contents. That could leave a connected local project unchanged while the answer sounded as though implementation had happened.</p>
+      <ul>
+        <li>File requests now require complete project-relative file output in the current response. The provider is explicitly told not to substitute a plan or refer to an earlier answer.</li>
+        <li>If no parseable files arrive, Cowork makes one bounded governed retry in the same Brain session for the actual file manifest. It only writes after the normal Trust Fabric and local-folder checks pass, and otherwise says plainly that no local files were created.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.25 — Repair the desktop release dependency lock -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The first 0.3.24 installer could not start because its frontend dependency lock referenced a package version that does not exist</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.25</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein desktop &nbsp;·&nbsp; release repair</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The installer copied the new runtime correctly, but its frontend image could not build because an unrelated lockfile dependency had been changed to a nonexistent registry release during version stamping. The lock now retains the package's real published version, and a clean install and production build were completed before this replacement installer was signed.</p>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.24 — Preserve workspace SSE through the desktop web proxy -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A long Browser Companion turn could be marked stalled in the desktop UI while ChatGPT was still answering</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.24</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork/Chat &nbsp;·&nbsp; critical streaming fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The generic Next.js API rewrite can buffer or end a long-lived SSE response even when the FastAPI backend is emitting regular heartbeats. That made Enkstein's 45-second client watchdog report a failed turn while the Browser Companion continued to stream and ultimately completed the provider answer.</p>
+      <ul>
+        <li>Cortex turns now use a dedicated Node.js streaming route with a 15-minute maximum duration and explicit no-buffer headers. Provider progress and backend heartbeats reach the desktop UI as they arrive.</li>
+        <li>The desktop idle guard now allows 75 seconds for a genuine network or WebKit scheduling delay, while the backend remains responsible for the 15-minute governed browser-turn deadline.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.23 — Keep the Companion connected while a browser Brain is streaming -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">An active ChatGPT browser turn could appear disconnected after 50 seconds and make the next request fail</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.23</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Browser Companion &nbsp;·&nbsp; critical connection fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Long browser generations now keep their Companion connection live for their entire observed lifecycle. Previously, the extension correctly reported a submitted or streaming task, but the native bridge only refreshed readiness when it was idle and polling for new work. After its 50-second idle threshold, Enkstein could wrongly say it could not reach ChatGPT while the same signed-in tab was still actively producing the requested answer.</p>
+      <ul>
+        <li>A successful prompt submission, live streaming update, or completed browser task now acts as a verified Companion heartbeat for that provider.</li>
+        <li>Subsequent turns and Brain Connections status stay ready while a large ChatGPT/Claude/Gemini response is in progress, without creating a second browser task or weakening pairing boundaries.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.22 — Fix spurious mid-turn disconnect on long browser Brain generations -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A long ChatGPT/Claude/Gemini browser generation could be silently cancelled and lose its answer, despite the provider completing correctly</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.22</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork/Chat &nbsp;·&nbsp; critical streaming fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A request that legitimately took several minutes for a browser Brain to answer (for example, generating a full application scaffold) could still fail with "the governed turn stream stalled," even after the 0.3.20 timeout increase, and even though the browser session went on to complete the answer correctly. Root-caused by watching a real live 6-minute request: the governed turn's own request was being wrongly treated as disconnected by the client partway through, rolling the turn back before the Brain's answer could be persisted, while the browser task kept running to completion with nobody left to receive it.</p>
+      <ul>
+        <li>The turn stream previously checked <code>request.is_disconnected()</code> once per heartbeat (every 10s by default). That call internally reads the same raw ASGI receive channel uvicorn itself uses; polling it repeatedly for the several minutes a long browser generation can take is a known false-positive source, and it is what was silently tearing the connection down mid-turn.</li>
+        <li>The stream now watches for a real client disconnect exactly once, in a single dedicated background task for the life of the turn, instead of repeatedly polling the same channel. Verified against a live 6-minute end-to-end reproduction through the real Docker/Next.js stack with no false disconnect and a clean completion.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.21 — Fix stuck Brain Bridge process surviving app restarts and updates -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A stale Brain Bridge process could survive every app update and restart, silently running old code indefinitely</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.21</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein desktop &nbsp;·&nbsp; critical restart fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Codex/Claude subscription and browser session detection could keep showing "needs setup" after a real, successful CLI login, and package updates could appear to install with no effect at all. The cause was not the detection logic -- it was that the native Brain Bridge (a separate always-on background process from the desktop app) could end up detached from launchd's supervision and never actually exit when the launcher tried to restart it. A brand new, correctly updated process would then repeatedly fail to bind its port behind the stuck old one and crash-loop forever, while the stale process from an earlier install kept answering every request with outdated code and stale Brain readiness.</p>
+      <ul>
+        <li>The Brain Bridge now installs real SIGTERM/SIGINT handlers, so a normal stop request always releases its port immediately instead of potentially being ignored.</li>
+        <li>The launcher now verifies the port is actually free after asking the bridge to stop, force-killing whatever still holds it if it does not exit in time, and confirms a fresh process is genuinely listening before treating the restart as successful -- rather than assuming a requested stop/start always worked.</li>
+        <li>The installer's postinstall step now also restarts the Brain Bridge service itself (previously it only relaunched the desktop app), so a package update takes effect immediately without requiring a manual process kill or reboot.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.20 — Browser Brain timeouts now match real long-task generation time -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Browser session timeouts no longer cut off a long ChatGPT/Claude/Gemini generation</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.20</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork/Chat &nbsp;·&nbsp; timeout fix</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>A large multi-file/full-app request could legitimately take a browser session (ChatGPT, Claude, Gemini) several minutes to generate. Every layer of the request budget -- the outer turn stream deadline, the per-Brain wait, the native bridge's own wait, and the bridge HTTP client's own timeout -- was sized for a normal chat answer, not a long generation, so the turn was silently abandoned partway through even though the provider tab went on to finish the answer.</p>
+      <ul>
+        <li>The outer streamed-turn deadline for browser sources raised from 210s to 900s (15 minutes).</li>
+        <li>The per-Brain browser wait in the Cortex Gateway raised from 170s to 890s, staying inside the new outer deadline.</li>
+        <li>The native Brain Bridge's own browser wait raised from 180s to 900s to match.</li>
+        <li>The bridge's internal HTTP client timeout, previously fixed at 180s for every call, now accepts a per-call override so the (fallback) blocking browser invocation is no longer cut off underneath the bridge's own longer wait.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Enkstein v0.3.19 — Real per-Brain and per-file live execution timeline; browser companion matches app version -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A real live execution timeline for every Brain, not just Codex -- plus per-file write events</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.3.19</span>
+          <span class="release-date">July 23, 2026 &nbsp;·&nbsp; Enkstein Cowork/Chat &nbsp;·&nbsp; execution transparency</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The native Brain Bridge already tracked real browser-session states (queued, leased, submitted, streaming) internally, but those states were discarded at the bridge boundary -- the backend only ever saw one final response after up to 170 seconds of silence. Cowork's file-apply step also only ever reported one summary count, never which files actually changed.</p>
+      <ul>
+        <li>The native bridge now exposes non-blocking <code>/v1/browser-invoke/start</code> and <code>/v1/browser-invoke/status</code> endpoints alongside the existing blocking call, so a ChatGPT/Claude/Gemini browser turn's real lifecycle state is polled and forwarded live instead of only surfacing after the fact. Older bridge builds without these endpoints fall back to the original blocking call automatically.</li>
+        <li>Cowork's auto-apply writer now reports each file's write/delete outcome individually as it happens, instead of a single end-of-batch count.</li>
+        <li>The in-flight activity feed is now a real two-layer execution timeline: Enkstein's own pipeline stages (context compiled, sent, files written) apply to every Brain, including a fully local Ollama turn that has nothing else to show; a separate Brain-native layer surfaces the answering Brain's own real states only when that source actually reports one -- a browser turn now genuinely shows "waiting for ChatGPT to respond" / "ChatGPT is streaming" rather than a single opaque "Cortex is working" badge, and nothing is invented for sources that have no native state.</li>
+        <li>The browser companion extension's manifest version now tracks the desktop app version on every release (starting here at 0.3.19) instead of its own separate counter, and it ships the same octopus mark as the desktop app icon instead of the browser's default puzzle-piece icon.</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Enkstein v0.3.18 — Cowork always shows the correct project's files, never mixes them across projects -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>

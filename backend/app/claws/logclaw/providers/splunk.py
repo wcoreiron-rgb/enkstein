@@ -21,6 +21,7 @@ import logging
 from typing import Optional
 
 import httpx
+from app.claws import credential_aliases, provenance
 
 logger = logging.getLogger("logclaw.splunk")
 TIMEOUT = httpx.Timeout(60.0)
@@ -102,9 +103,10 @@ SIMULATED_FINDINGS = [
 
 async def _fetch_real_findings(credentials: dict) -> list[dict]:
     """Run a Splunk search via the REST API to fetch notable events from Enterprise Security."""
+    credentials = credential_aliases.resolve("splunk", credentials)
     base_url = credentials.get("base_url", "").rstrip("/")
     if not base_url:
-        raise ValueError("Splunk requires base_url")
+        raise ValueError("Splunk requires a management host or base URL")
 
     token = credentials.get("token", "")
     if token:
@@ -152,11 +154,18 @@ def _parse_splunk_event(raw: dict) -> dict:
     }
 
 
+async def fetch_findings(credentials: dict) -> list[dict]:
+    """Authenticated fetch that propagates failure to the caller."""
+    raw = await _fetch_real_findings(credentials)
+    return provenance.live(
+        [_parse_splunk_event(e) for e in raw], provider="splunk", connector="splunk"
+    )
+
+
 async def get_findings(credentials: Optional[dict] = None) -> list[dict]:
     if credentials:
         try:
-            raw = await _fetch_real_findings(credentials)
-            return [_parse_splunk_event(e) for e in raw]
+            return await fetch_findings(credentials)
         except Exception as exc:
             logger.warning("Splunk API failed: %s — using simulated data", exc)
-    return [{**f, "provider": "splunk"} for f in SIMULATED_FINDINGS]
+    return provenance.simulated(SIMULATED_FINDINGS, provider="splunk")

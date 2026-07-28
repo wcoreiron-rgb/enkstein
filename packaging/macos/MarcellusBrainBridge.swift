@@ -60,6 +60,9 @@ private struct BrowserTaskRecord {
     var prompt: String
     var response: String?
     var success: Bool?
+    // Provider-generated files for this turn, held in memory only and cleared
+    // on the first peek. Never journaled: the on-disk record is metadata only.
+    var attachments: [[String: Any]]?
 
     private var safeJournalDetail: String {
         guard !detail.isEmpty else { return "" }
@@ -244,6 +247,12 @@ private final class BrowserSessionBroker {
         record.progressAt = Date()
         record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
         tasks[taskID] = record
+        // A successful ACK proves that this paired Companion can reach the
+        // provider tab. Keep readiness alive while a long turn is in flight;
+        // otherwise an active five-minute generation could look disconnected
+        // after the idle poll staleness window elapsed.
+        providers.insert(record.provider)
+        lastSeen = Date()
         persistJournal()
         return true
     }
@@ -261,11 +270,22 @@ private final class BrowserSessionBroker {
         record.leaseExpiresAt = Date().addingTimeInterval(Self.leaseDuration)
         if let detail { record.detail = String(detail.prefix(500)) }
         tasks[taskID] = record
+        // Browser progress is a real Companion heartbeat. The extension sends
+        // it while observing provider streaming, even though it deliberately
+        // does not request new work from /poll until its current task ends.
+        providers.insert(record.provider)
+        lastSeen = Date()
         persistJournal()
         return true
     }
 
-    func complete(taskID: String, success: Bool, response: String?, detail: String?) {
+    func complete(
+        taskID: String,
+        success: Bool,
+        response: String?,
+        detail: String?,
+        attachments: [[String: Any]]? = nil
+    ) {
         condition.lock()
         defer { condition.unlock() }
         guard var record = tasks[taskID],
@@ -274,9 +294,12 @@ private final class BrowserSessionBroker {
         record.response = response?.prefix(120_000).description ?? ""
         record.detail = detail?.prefix(500).description ?? ""
         record.success = success
+        record.attachments = attachments
         record.progressAt = Date()
         record.prompt = ""
         tasks[taskID] = record
+        providers.insert(record.provider)
+        lastSeen = Date()
         queue.removeAll { $0 == taskID }
         persistJournal()
         condition.broadcast()
@@ -299,6 +322,14 @@ private final class BrowserSessionBroker {
     }
 
     func invoke(brain: String, prompt: String, sessionID: String?, timeout: TimeInterval) throws -> [String: Any] {
+        let record = try enqueue(brain: brain, prompt: prompt, sessionID: sessionID)
+        return try awaitCompletion(taskID: record, timeout: timeout)
+    }
+
+    // Enqueues a browser task and waits only for the readiness grace period (not full completion),
+    // returning the task ID immediately once leased/queued. Lets the caller poll intermediate states
+    // (queued/leased/submitted/streaming) instead of blocking for the whole 180s invocation.
+    func enqueue(brain: String, prompt: String, sessionID: String?) throws -> String {
         let provider = Self.provider(for: brain)
         condition.lock()
         // Wait a bounded grace period for the companion to (re)connect rather
@@ -327,31 +358,69 @@ private final class BrowserSessionBroker {
         queue.append(record.taskID)
         persistJournal()
         condition.broadcast()
+        condition.unlock()
+        return record.taskID
+    }
 
+    // Non-blocking: returns the task's current lifecycle state/detail without waiting. When the task
+    // has already reached a terminal state this finalizes and clears it exactly like awaitCompletion's
+    // tail, so a caller that only ever peeks (never calls awaitCompletion) still releases the record.
+    func peek(taskID: String) -> [String: Any] {
+        condition.lock()
+        defer { condition.unlock() }
+        guard let current = tasks[taskID] else {
+            return ["state": "unknown", "detail": "Unknown or already-finalized task."]
+        }
+        if BrowserTaskState.terminal.contains(current.state) {
+            let result: [String: Any] = [
+                "state": current.state.rawValue,
+                "success": current.success ?? false,
+                "response": current.response ?? "",
+                "detail": current.detail,
+                "provider": current.provider,
+                "attachments": current.attachments ?? [],
+            ]
+            var retained = current
+            retained.prompt = ""
+            retained.response = nil
+            retained.success = nil
+            retained.attachments = nil
+            tasks[taskID] = retained
+            return result
+        }
+        return [
+            "state": current.state.rawValue,
+            "detail": current.detail,
+            "provider": current.provider,
+        ]
+    }
+
+    private func awaitCompletion(taskID: String, timeout: TimeInterval) throws -> [String: Any] {
+        condition.lock()
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            guard let current = tasks[record.taskID] else { break }
+            guard let current = tasks[taskID] else { break }
             if BrowserTaskState.terminal.contains(current.state) { break }
             if !condition.wait(until: deadline) || Date() >= deadline { break }
         }
 
         var result: [String: Any]?
-        if let final = tasks[record.taskID], final.state == .completed || final.state == .failed {
+        if let final = tasks[taskID], final.state == .completed || final.state == .failed {
             result = ["success": final.success ?? false, "response": final.response ?? "", "detail": final.detail]
             var retained = final
             retained.prompt = ""
             retained.response = nil
             retained.success = nil
-            tasks[record.taskID] = retained
-        } else if var timedOut = tasks[record.taskID] {
+            tasks[taskID] = retained
+        } else if var timedOut = tasks[taskID] {
             timedOut.state = timedOut.attempts > 0 ? .cancelled : .expired
             timedOut.detail = "Browser session invocation timed out before the extension completed the task."
             timedOut.progressAt = Date()
             timedOut.prompt = ""
             timedOut.response = nil
-            tasks[record.taskID] = timedOut
-            pendingCancelSignals.append(record.taskID)
-            queue.removeAll { $0 == record.taskID }
+            tasks[taskID] = timedOut
+            pendingCancelSignals.append(taskID)
+            queue.removeAll { $0 == taskID }
         }
         persistJournal()
         condition.unlock()
@@ -509,6 +578,9 @@ private final class BrainBridge {
         "dart", "php", "vue", "svelte", "scss", "sass", "less", "svg", "gradle",
         "properties", "bat", "env", "gitignore", "gitattributes", "dockerignore",
         "editorconfig", "keep", "gitkeep",
+        // Office documents Enkstein renders locally from Brain-provided text.
+        // They arrive as base64 because they are binary, never as UTF-8.
+        "docx", "pptx", "xlsx",
     ])
     // Files with no extension whose exact name is a common, safe project
     // marker/config. `.keep`/`.gitkeep` and similar dotfiles report an empty
@@ -527,6 +599,28 @@ private final class BrainBridge {
     private func isAllowedWorkspaceFile(_ url: URL) -> Bool {
         if allowedExtensions.contains(url.pathExtension.lowercased()) { return true }
         return allowedFilenames.contains(url.lastPathComponent.lowercased())
+    }
+
+    // Provider-generated downloads relayed by the paired companion. Bounded in
+    // count, name shape, and decoded size; the extension is untrusted input.
+    static func sanitizedAttachments(_ raw: Any?) -> [[String: Any]] {
+        guard let items = raw as? [[String: Any]] else { return [] }
+        var sanitized: [[String: Any]] = []
+        var total = 0
+        for item in items.prefix(20) {
+            guard let name = item["name"] as? String,
+                  name.count <= 120,
+                  name.range(of: "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.[A-Za-z0-9]{1,12}$", options: .regularExpression) != nil,
+                  !name.contains(".."),
+                  let encoded = item["content_base64"] as? String,
+                  encoded.count <= 8_000_000,
+                  let data = Data(base64Encoded: encoded, options: [.ignoreUnknownCharacters]),
+                  !data.isEmpty, data.count <= 5_000_000,
+                  total + data.count <= 20_000_000 else { continue }
+            total += data.count
+            sanitized.append(["name": name, "size": data.count, "content_base64": encoded])
+        }
+        return sanitized
     }
 
     private lazy var codexSessions = CodexAppServerSessionManager(
@@ -701,7 +795,8 @@ private final class BrainBridge {
                 taskID: taskID,
                 success: payload["success"] as? Bool ?? false,
                 response: payload["response"] as? String,
-                detail: payload["detail"] as? String
+                detail: payload["detail"] as? String,
+                attachments: Self.sanitizedAttachments(payload["attachments"])
             )
             send(connection, status: 200, body: ["accepted": true])
             return
@@ -747,6 +842,56 @@ private final class BrainBridge {
                 } catch {
                     self.send(connection, status: 200, body: ["success": false, "detail": "Brain invocation failed"])
                 }
+            }
+            return
+        }
+
+        // Non-blocking companion to /v1/invoke, used only for chatgpt_browser/claude_browser/
+        // gemini_browser so the backend can poll real intermediate states (queued/leased/submitted/
+        // streaming) instead of only ever seeing a final response after up to 170s of silence.
+        if request.method == "POST", request.path == "/v1/browser-invoke/start" {
+            guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let brain = payload["brain"] as? String,
+                  ["chatgpt_browser", "claude_browser", "gemini_browser"].contains(brain),
+                  let prompt = payload["prompt"] as? String,
+                  !prompt.isEmpty, prompt.count <= 128_000 else {
+                send(connection, status: 400, body: ["detail": "Invalid invocation payload"])
+                return
+            }
+            let sessionID = payload["session_id"] as? String
+            if let sessionID, sessionID.range(of: "^[a-f0-9]{64}$", options: .regularExpression) == nil {
+                send(connection, status: 400, body: ["detail": "Invalid session identifier"])
+                return
+            }
+            let governedPrompt = """
+            You are a reasoning-only Brain inside Enkstein. Do not claim tools or systems were changed. Answer concisely and identify uncertainty.
+
+            QUESTION:
+            \(prompt)
+            """
+            queue.async { [weak self] in
+                guard let self else { return }
+                do {
+                    let taskID = try self.browserBroker.enqueue(brain: brain, prompt: governedPrompt, sessionID: sessionID)
+                    self.send(connection, status: 200, body: ["task_id": taskID])
+                } catch BridgeError.runtimeUnavailable(let detail) {
+                    self.send(connection, status: 200, body: ["task_id": NSNull(), "detail": detail])
+                } catch {
+                    self.send(connection, status: 200, body: ["task_id": NSNull(), "detail": "Browser invocation could not be started."])
+                }
+            }
+            return
+        }
+
+        if request.method == "POST", request.path == "/v1/browser-invoke/status" {
+            guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
+                  let taskID = payload["task_id"] as? String else {
+                send(connection, status: 400, body: ["detail": "A task_id is required"])
+                return
+            }
+            queue.async { [weak self] in
+                guard let self else { return }
+                self.send(connection, status: 200, body: self.browserBroker.peek(taskID: taskID))
             }
             return
         }
@@ -856,9 +1001,14 @@ private final class BrainBridge {
                     case "/v1/workspace/list":
                         body = try self.listWorkspace(token: token)
                     case "/v1/workspace/write":
-                        guard let path = payload["path"] as? String,
-                              let content = payload["content"] as? String else { throw BridgeError.invalidRequest }
-                        body = try self.writeWorkspace(token: token, path: path, content: content)
+                        guard let path = payload["path"] as? String else { throw BridgeError.invalidRequest }
+                        if let encoded = payload["content_base64"] as? String {
+                            body = try self.writeWorkspaceBinary(token: token, path: path, base64: encoded)
+                        } else if let content = payload["content"] as? String {
+                            body = try self.writeWorkspace(token: token, path: path, content: content)
+                        } else {
+                            throw BridgeError.invalidRequest
+                        }
                     case "/v1/workspace/trash":
                         guard let path = payload["path"] as? String else { throw BridgeError.invalidRequest }
                         body = try self.trashWorkspace(token: token, path: path)
@@ -1006,6 +1156,21 @@ private final class BrainBridge {
         return ["success": true, "path": path, "size_bytes": content.utf8.count]
     }
 
+    // Office documents are binary, so they arrive base64-encoded. The backend
+    // renders them locally from Brain-provided text; the broker only decodes
+    // and writes, applying the same containment and allowlist checks.
+    private func writeWorkspaceBinary(token: String, path: String, base64: String) throws -> [String: Any] {
+        guard base64.utf8.count <= 8_000_000,
+              let data = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]),
+              data.count <= 5_000_000 else { throw BridgeError.invalidRequest }
+        let root = try workspaceRoot(token: token)
+        let target = try safeWorkspaceURL(root: root, relativePath: path, allowMissingLeaf: true)
+        guard isAllowedWorkspaceFile(target) else { throw BridgeError.invalidRequest }
+        try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: target, options: .atomic)
+        return ["success": true, "path": path, "size_bytes": data.count]
+    }
+
     private func trashWorkspace(token: String, path: String) throws -> [String: Any] {
         let root = try workspaceRoot(token: token)
         let source = try safeWorkspaceURL(root: root, relativePath: path)
@@ -1025,7 +1190,23 @@ private final class BrainBridge {
 
         let claudePath = findExecutable("claude")
         let claudeStatus = claudePath.flatMap { try? run($0, arguments: ["auth", "status"], timeout: 12) }
-        let claudeAuthenticated = claudeStatus.map { $0.code == 0 } ?? false
+        // `claude auth status` exits 0 whether or not a subscription session
+        // exists — a signed-out host still returns success with
+        // {"loggedIn": false}. Keying readiness on the exit code therefore
+        // never reflected real state. Read the reported flag instead, and
+        // require the command to have actually succeeded.
+        let claudeAuthenticated: Bool = {
+            guard let result = claudeStatus, result.code == 0 else { return false }
+            if let data = result.output.data(using: .utf8),
+               let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let loggedIn = parsed["loggedIn"] as? Bool {
+                return loggedIn
+            }
+            // Older builds print human-readable text rather than JSON.
+            let lowered = result.output.lowercased()
+            if lowered.contains("not logged in") || lowered.contains("logged out") { return false }
+            return lowered.contains("logged in")
+        }()
 
         let desktopTrusted = accessibilityTrusted(prompt: false)
         return [
@@ -1163,7 +1344,7 @@ private final class BrainBridge {
             brain: brain,
             prompt: governedPrompt,
             sessionID: sessionID,
-            timeout: 180
+            timeout: 900
         )
         guard result["success"] as? Bool == true,
               let response = result["response"] as? String,
@@ -2492,6 +2673,22 @@ private final class CodexAppServerSessionManager {
 }
 
 private var activeBridge: BrainBridge?
+
+// Without an explicit handler, launchd's default stop signal (SIGTERM) does
+// not reliably terminate this process on every macOS configuration --
+// leaving a prior instance detached and still holding the listen port while
+// a freshly bootstrapped instance repeatedly fails to bind behind it. These
+// handlers guarantee the listener is torn down and the process exits
+// promptly on either signal, so a launcher-initiated restart always gets a
+// clean port handoff instead of a stuck predecessor.
+signal(SIGTERM, SIG_IGN)
+signal(SIGINT, SIG_IGN)
+let terminationSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+terminationSource.setEventHandler { exit(0) }
+terminationSource.resume()
+let interruptSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+interruptSource.setEventHandler { exit(0) }
+interruptSource.resume()
 
 do {
     activeBridge = BrainBridge(config: try BridgeConfig.load())

@@ -243,7 +243,7 @@ export default function CustomClawPage() {
         <div className="flex flex-col items-center justify-center py-24 gap-4"
              style={{ border: '2px dashed var(--rc-border)', borderRadius: '1rem' }}>
           <Globe size={48} style={{ color: 'var(--rc-text-3)' }} />
-          <p className="text-lg font-semibold" style={{ color: 'var(--rc-text-2)' }}>No custom claws yet</p>
+          <p className="text-lg font-semibold" style={{ color: 'var(--rc-text-2)' }}>No custom capabilities yet</p>
           <p className="text-sm" style={{ color: 'var(--rc-text-3)' }}>
             Define a REST API integration and use it in any workflow
           </p>

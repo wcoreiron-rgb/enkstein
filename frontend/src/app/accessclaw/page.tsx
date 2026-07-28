@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Key, RefreshCw, Plug, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { ProviderPill } from '@/components/ProviderPill';
 
 const SEVERITY_STYLE = {
   critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-800',    dot: 'bg-red-500'    },
@@ -107,12 +108,7 @@ export default function AccessClawPage() {
         <div className="flex flex-wrap gap-2">
           {loading ? <p className="text-xs" style={{ color: 'var(--rc-text-3)' }}>Loading…</p> :
             providers.map((p: any) => (
-              <div key={p.provider} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs ${p.configured ? 'text-green-400 bg-green-900/20 border-green-700' : 'border-gray-700'}`}
-                style={p.configured ? {} : { color: 'var(--rc-text-3)', background: 'var(--rc-bg-elevated)' }}>
-                <div className={`w-1.5 h-1.5 rounded-full ${p.configured ? 'bg-green-500' : 'bg-gray-600'}`} />
-                {p.label}
-                {!p.configured && <span className="opacity-50">· not connected</span>}
-              </div>
+              <ProviderPill key={p.provider} provider={p} />
             ))
           }
         </div>

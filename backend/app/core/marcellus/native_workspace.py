@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import posixpath
@@ -171,13 +172,26 @@ async def list_native_files(tenant_id: str, project_id: uuid.UUID) -> list[dict[
     return files
 
 
-async def mirror_write(tenant_id: str, project_id: uuid.UUID, *, path: str, content: str) -> None:
+async def mirror_write(
+    tenant_id: str,
+    project_id: uuid.UUID,
+    *,
+    path: str,
+    content: str,
+    binary: bytes | None = None,
+) -> None:
     binding = get_binding(tenant_id, project_id)
     if not binding:
         return
     validate_contained_relpath(path)
+    payload: dict[str, Any] = {"token": binding["token"], "path": path}
+    if binary is None:
+        payload["content"] = content
+    else:
+        # Office documents are binary and cannot survive a UTF-8 round trip.
+        payload["content_base64"] = base64.b64encode(binary).decode("ascii")
     try:
-        await invoke_native_workspace("write", {"token": binding["token"], "path": path, "content": content})
+        await invoke_native_workspace("write", payload)
     except HTTPException:
         raise
     except Exception as exc:

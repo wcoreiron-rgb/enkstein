@@ -29,14 +29,14 @@
 | # | Category | Status | Test Coverage |
 |---|----------|--------|---------------|
 | LLM01 | Prompt Injection | **Shipped** | `test_owasp_asi_evidence.py::test_asi01_prompt_injection_flagged_by_audit` (same prompt injection control as ASI-01) |
-| LLM02 | Insecure Output Handling | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` |
+| LLM02 | Insecure Output Handling | **Shipped** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response`, `test_cortex_workspace.py::test_provider_download_with_secrets_is_blocked_not_written` |
 | LLM03 | Training Data Poisoning | **N/A** | N/A |
-| LLM04 | Model Denial of Service | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold` |
+| LLM04 | Model Denial of Service | **Shipped** | `test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold`, `test_cortex_workspace.py::test_ai_turn_endpoint_is_rate_limited` |
 | LLM05 | Supply-Chain Vulnerabilities | **In Progress** | `test_owasp_asi_evidence.py::test_asi04_supply_chain_scan_returns_result`, `test_owasp_asi_evidence.py::test_asi04_tampered_hash_blocked_on_install` |
 | LLM06 | Sensitive Information Disclosure | **Shipped** | No automated test (see gap note below) |
 | LLM07 | Insecure Plugin Design | **Partially Shipped** | `test_ring_policy.py::test_ring0_always_blocked`, `test_owasp_asi_evidence.py::test_asi05_ring0_always_blocked_regardless_of_role_or_trust` |
 | LLM08 | Excessive Agency | **Shipped** (strengthened) | `test_ring_policy.py::test_ring1_requires_two_approvals`, `test_owasp_asi_evidence.py::test_asi09_self_approval_is_blocked` |
-| LLM09 | Overreliance | **Shipped (baseline)** | `test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` (override audit fields asserted) |
+| LLM09 | Overreliance | **Shipped** | `test_model_router_hardening.py::test_classification_downgrade_requires_justification`, `::test_justified_downgrade_is_recorded_in_the_audit_trail` |
 | LLM10 | Model Theft | **N/A / Partial** | No automated test |
 
 ---
@@ -71,21 +71,25 @@
 
 **Description:** Failures to validate or sanitize LLM outputs before they are passed to downstream systems, rendered in browsers, or executed as code. Can lead to XSS, SQL injection, SSRF, or arbitrary command execution.
 
-**RegentClaw Status:** Partially Shipped
+**RegentClaw Status:** Shipped
 
 **Evidence:**
 
 - `backend/app/claws/arcclaw/scanner.py`: `scan_text()` redacts secrets, API keys, and PII patterns from content.
 - DLP scanner (`backend/app/services/finding_pipeline.py`) flags sensitive patterns in event payloads.
 - API responses do not reflect raw LLM output directly to clients — outputs pass through structured Pydantic schemas before serialization.
-- `backend/app/services/model_router.py::route_and_call()`: model responses are now re-scanned via `scan_text()` before return, with redaction applied when sensitive patterns are detected; scan metadata is attached as `output_scan`.
+- `backend/app/services/model_router.py::route_and_call()`: model responses are re-scanned via `scan_text()` before return, with redaction applied when sensitive patterns are detected; scan metadata is attached as `output_scan`.
+- `backend/app/core/modelclaw/brain_bridge.py`: every Brain vote (browser, CLI, and profile paths) re-scans the provider response before it leaves the bridge.
+- `backend/app/core/marcellus/office.py::extract_scannable_text()` + `workspace.py::_attachment_changes()`: provider-generated *binary* downloads are unpacked (OOXML/ZIP members included) and DLP-scanned before they can become a governed file change. A file carrying a live credential is dropped and reported instead of written to the project folder.
 
 **Test Coverage:**
 - `backend/tests/test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` — injects a sensitive mock model completion and asserts redaction + output-scan findings.
+- `backend/tests/test_cortex_workspace.py::test_provider_download_with_secrets_is_blocked_not_written` — a leaky harvested download never reaches the folder.
+- `backend/tests/test_cortex_workspace.py::test_secrets_inside_generated_office_documents_are_detected` — a credential inside compressed OOXML XML is still recovered and flagged.
 
 **Known Limitations:**
-- No HTML sanitization layer exists for outputs rendered in the frontend.
-- Output sanitization is currently enforced in Model Router paths; additional Capability Node-local AI paths should converge on the same output-scan contract.
+- Frontend rendering relies on `SafeMarkdown` rather than a separate server-side HTML sanitization layer.
+- Binary scanning recovers text from OOXML/ZIP and UTF-8 payloads; genuinely opaque formats (images, compiled binaries) cannot be inspected and are bounded by the extension allowlist instead.
 
 ---
 
@@ -119,15 +123,16 @@
 
 - `backend/main.py`: `slowapi` rate limiter applied to authentication endpoints.
 - `backend/app/api/routes/model_router.py`: per-IP rate limiting is enforced on `POST /api/v1/model-router/route` (30 requests / 60s window, in-process limiter).
+- `backend/app/core/marcellus/ai_rate_limit.py`: the governed Cowork/Chat AI surface is rate limited **per authenticated identity** (not per IP, since every desktop request shares the loopback address). Applied to `POST /conversations/{id}/turns`, its streaming variant, and project research. Tunable via `AI_RATE_LIMIT_WINDOW_SECONDS` / `AI_RATE_LIMIT_MAX_REQUESTS`.
 - Prompt length is capped by request schema (`max_length=32_000`) on model-router route payloads.
 
 **Test Coverage:**
 - `backend/tests/test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold` — asserts 429 after threshold is exceeded.
+- `backend/tests/test_cortex_workspace.py::test_ai_turn_endpoint_is_rate_limited` — asserts the governed turn endpoint returns 429 once the per-identity budget is spent.
 
 **Known Limitations:**
 - In-process limiter is single-instance scoped; multi-replica deployments should use Redis-backed distributed limits.
-- Per-tenant quotas and token-budget controls are still planned.
-- AI Security-specific chat/event endpoints should adopt the same limiter contract for full parity.
+- Per-tenant quotas and token-budget controls are still planned; the current limit counts requests, not tokens or fan-out cost.
 
 ---
 
@@ -248,10 +253,13 @@
 - AI events are never auto-executed — they are written to the event log and surface as findings requiring human review or policy-matched auto-response.
 - Remediation playbooks have `requires_approval` flag — high-risk playbooks require human sign-off before execution.
 - Findings include `severity` and `confidence` fields to help operators contextualize AI-generated detections.
-- `backend/app/services/model_router.py::route_and_call()`: override paths now record explicit audit fields (`override_used`, `override_reason`) to make human override behavior attributable.
+- `backend/app/services/model_router.py::route_and_call()`: override paths record explicit audit fields (`override_used`, `override_reason`) to make human override behavior attributable.
+- Lowering a detected data classification (the direction that can route restricted content to a cloud provider) is refused unless an `override_reason` is supplied, and the audit entry retains both the detected and the asserted level via `classification_downgraded` / `detected_sensitivity`.
 
 **Test Coverage:**
-- `backend/tests/test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response` — verifies override use/reason are persisted in routing audit.
+- `backend/tests/test_model_router_hardening.py::test_classification_downgrade_requires_justification` — an unjustified downgrade is refused.
+- `backend/tests/test_model_router_hardening.py::test_justified_downgrade_is_recorded_in_the_audit_trail` — detected level, asserted level, and reason all survive into the audit entry.
+- `backend/tests/test_model_router_hardening.py::test_upgrade_override_needs_no_justification` — raising the classification stays frictionless.
 
 **Known Limitations:**
 - Risk scores are displayed to users but there is no enforcement mechanism preventing operators from always approving high-risk AI recommendations without review.

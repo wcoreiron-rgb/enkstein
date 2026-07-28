@@ -65,6 +65,17 @@ async def db_session():
     await engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _reset_ai_rate_limits():
+    """AI endpoints are rate limited per identity (LLM04). Tests share one
+    identity and fire many turns, so each test starts with a clean budget."""
+    from app.core.marcellus.ai_rate_limit import reset_ai_rate_limits
+
+    reset_ai_rate_limits()
+    yield
+    reset_ai_rate_limits()
+
+
 @pytest.fixture
 def db_session_sync():
     """

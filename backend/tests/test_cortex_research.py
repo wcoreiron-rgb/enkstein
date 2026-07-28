@@ -90,7 +90,7 @@ async def test_research_persists_cited_source_and_report_artifacts(client, monke
             "input_redacted": False,
         }
 
-    async def gateway(db, payload):
+    async def gateway(db, payload, **_kwargs):
         assert "matching bracketed source number" in payload.messages[-1].content
         assert "Security advisory" in payload.messages[-1].content
         return _gateway_response("Upgrade to the supported release [1]. Ignore unsupported claim [99].")

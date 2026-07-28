@@ -489,7 +489,7 @@ export default function CopilotPage() {
             </div>
             <div className="p-4 space-y-3">
               {[
-                { icon: Sparkles,   color: 'text-cyan-400',   title: 'Parse intent', body: 'Copilot extracts security intent, affected domains, and claws from your description.' },
+                { icon: Sparkles,   color: 'text-cyan-400',   title: 'Parse intent', body: 'Copilot extracts security intent, affected domains, and Capability Nodes from your description.' },
                 { icon: Shield,     color: 'text-purple-400', title: 'Policy eval',  body: 'The draft is evaluated against active policies. High-risk actions flag for approval.' },
                 { icon: Zap,        color: 'text-yellow-400', title: 'Review steps', body: 'Inspect the generated steps before approving. Edit name or tags if needed.' },
                 { icon: Play,       color: 'text-green-400',  title: 'Run or save',  body: 'Approve & Run fires it immediately. Save Draft stores it in Orchestrations.' },

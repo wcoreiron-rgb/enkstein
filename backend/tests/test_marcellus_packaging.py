@@ -70,6 +70,15 @@ def test_native_brain_bridge_restricts_subscription_model_overrides() -> None:
     assert '"supports_custom_model": false' in bridge
 
 
+def test_claude_readiness_reads_reported_login_not_exit_code() -> None:
+    """`claude auth status` exits 0 even when signed out, so readiness must
+    come from the reported flag rather than the process exit code."""
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert 'parsed["loggedIn"] as? Bool' in bridge
+    assert "let claudeAuthenticated = claudeStatus.map { $0.code == 0 }" not in bridge
+
+
 def test_codex_app_server_process_launches_without_prompt() -> None:
     bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
 
@@ -329,6 +338,9 @@ def test_native_browser_broker_implements_leased_protocol_with_metadata_only_jou
     assert '"/v1/browser/ack"' in bridge
     assert '"/v1/browser/progress"' in bridge
     assert '"/v1/browser/cancel"' in bridge
+    assert "Browser progress is a real Companion heartbeat" in bridge
+    assert "providers.insert(record.provider)" in bridge
+    assert "lastSeen = Date()" in bridge
 
     assert "case queued, leased, submitted, streaming, completed, failed, cancelled, expired" in bridge
 
@@ -359,6 +371,25 @@ def test_browser_extension_acks_submission_and_reports_streaming_progress() -> N
     assert "'/v1/browser/progress'" in background
     assert "task_id: entry.task_id" in background
     assert "state: 'streaming'" in background
+
+
+def test_browser_companion_accepts_only_bounded_contenteditable_normalization() -> None:
+    content = _read("browser-extension/content.js")
+
+    assert "function requiredPromptMarkers" in content
+    assert "expected.length < 2_000" in content
+    assert "Math.floor(expected.length * 0.002)" in content
+    assert "requiredPromptMarkers(expected).every" in content
+
+
+def test_workspace_turns_use_a_dedicated_streaming_proxy() -> None:
+    route = _read("frontend/src/app/api/v1/marcellus/workspace/conversations/[id]/turns/stream/route.ts")
+
+    assert "export const maxDuration = 900" in route
+    assert "text/event-stream" in route
+    assert "X-Accel-Buffering" in route
+    assert "no-cache, no-transform" in route
+    assert "INTERNAL_API_URL" in route
 
 
 def test_native_bridge_defines_reusable_codex_app_server_process() -> None:
