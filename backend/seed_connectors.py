@@ -399,6 +399,23 @@ CONNECTORS = [
         "endpoint": "https://api.us1.app.wiz.io/graphql",
         "network_access": True,
     },
+    {
+        "name": "Prowler Cloud Posture",
+        "connector_type": "prowler",
+        "category": "Cloud & Infrastructure",
+        "description": (
+            "Governed local Prowler CLI integration for read-only AWS, Azure, "
+            "GCP, Kubernetes, and GitHub posture checks. Prowler must be installed "
+            "on the Enkstein host; credentials stay in the host cloud identity "
+            "chain or encrypted connector storage."
+        ),
+        "status": "pending", "risk_level": "medium",
+        "requested_scopes": json.dumps(["read-only cloud posture"]),
+        "approved_scopes": json.dumps([]),
+        "endpoint": "local://prowler",
+        "network_access": True,
+        "shell_access": True,
+    },
 
     # ══════════════════════════════════════════════════════════════════
     # NETWORK & ZERO TRUST  (5)

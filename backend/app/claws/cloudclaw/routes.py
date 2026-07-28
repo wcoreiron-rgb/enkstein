@@ -19,6 +19,7 @@ from app.services.secrets_manager import get_credential
 from app.claws.cloudclaw.providers import aws as aws_adapter
 from app.claws.cloudclaw.providers import azure as azure_adapter
 from app.claws.cloudclaw.providers import gcp as gcp_adapter
+from app.claws.cloudclaw.providers import prowler as prowler_adapter
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger("cloudclaw")
@@ -47,6 +48,12 @@ PROVIDER_CONFIG = [
         "connector_type": "gcp_scc",
         "label": "GCP Security Command Center",
         "adapter": gcp_adapter,
+    },
+    {
+        "provider": "prowler",
+        "connector_type": "prowler",
+        "label": "Prowler Cloud Posture",
+        "adapter": prowler_adapter,
     },
 ]
 

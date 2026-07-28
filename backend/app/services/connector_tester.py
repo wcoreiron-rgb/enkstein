@@ -493,6 +493,7 @@ _NATIVE_TEST_MODULES: dict[str, tuple[str, str]] = {
     "okta": ("app.claws.accessclaw.providers.okta", "Okta"),
     "entra_id": ("app.claws.accessclaw.providers.entra", "Microsoft Entra ID"),
     "splunk": ("app.claws.logclaw.providers.splunk", "Splunk"),
+    "prowler": ("app.claws.cloudclaw.providers.prowler", "Prowler"),
 }
 
 # Local tooling invoked by Terraform Governance rather than remote APIs; there
@@ -626,6 +627,22 @@ async def test_connector(connector_type: str, creds: dict, endpoint: str = "") -
     handler = TEST_MAP.get(connector_type)
     if handler:
         return await handler(creds)
+
+    if connector_type == "prowler":
+        from app.services import prowler
+
+        status = prowler.installation_status(creds.get("executable"))
+        if status["installed"]:
+            return TestResult(
+                True,
+                f"Prowler is installed ({status['executable']}); ready for a read-only {creds.get('provider', 'aws')} scan.",
+                verification_level="local",
+            )
+        return TestResult(
+            False,
+            "Prowler is not installed on this host. Install the Prowler CLI, then test again.",
+            verification_level="none",
+        )
 
     local_note = _LOCAL_TOOLING.get(connector_type)
     if local_note:

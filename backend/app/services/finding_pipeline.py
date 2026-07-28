@@ -28,6 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finding import Finding, FindingSeverity, FindingStatus
+from app.models.control import Control, ControlStatus
 from app.models.event import Event, EventSeverity, EventOutcome
 
 logger = logging.getLogger("finding_pipeline")
@@ -112,6 +113,44 @@ def _build_finding(claw: str, data: dict[str, Any]) -> Finding:
         first_seen=now,
         last_seen=now,
         created_at=now,
+    )
+
+
+async def _ensure_control(db: AsyncSession, claw: str, data: dict[str, Any]) -> None:
+    """Materialize a control carried by scanner output."""
+    control_id = data.get("control_id")
+    source = data.get("control_source")
+    if not control_id or not source:
+        return
+    result = await db.execute(
+        select(Control).where(
+            Control.control_id == str(control_id),
+            Control.source == str(source),
+        )
+    )
+    if result.scalar_one_or_none():
+        return
+    frameworks = data.get("frameworks")
+    db.add(
+        Control(
+            control_id=str(control_id)[:128],
+            source=str(source)[:32],
+            source_version=data.get("source_version"),
+            title=str(data.get("control_title") or data.get("title") or control_id)[:512],
+            description=data.get("control_description") or data.get("description"),
+            zt_pillar=str(data.get("zt_pillar") or "governance")[:32],
+            zt_tenets=json.dumps(data.get("zt_tenets")) if data.get("zt_tenets") is not None else None,
+            claw=claw,
+            provider=data.get("provider"),
+            resource_type=data.get("resource_type"),
+            frameworks=json.dumps(frameworks) if frameworks is not None else None,
+            severity=str(data.get("severity") or "medium"),
+            remediation=data.get("remediation"),
+            remediation_action=data.get("remediation_action"),
+            status=ControlStatus.ACTIVE,
+            automated=True,
+            reference_url=data.get("reference_url"),
+        )
     )
 
 
@@ -300,6 +339,7 @@ async def ingest_findings(
 
     for raw in findings:
         try:
+            await _ensure_control(db, claw, raw)
             external_id = raw.get("external_id")
             is_new = False
             finding_obj: Finding

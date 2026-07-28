@@ -791,6 +791,14 @@ CREDENTIAL_FIELDS: dict[str, list[dict]] = {
     "tfsec": [],
     "checkov": [],
     "infracost": [],
+    "prowler": [
+        {"name": "provider", "label": "Prowler Provider", "type": "text", "hint": "aws, azure, gcp, kubernetes, or github"},
+        {"name": "executable", "label": "Executable (optional)", "type": "text", "hint": "prowler or /path/to/prowler-cli.py"},
+        {"name": "profile", "label": "Cloud Profile (optional)", "type": "text", "hint": "AWS or provider profile name"},
+        {"name": "region", "label": "Region (optional)", "type": "text", "hint": "AWS region or provider region"},
+        {"name": "access_key_id", "label": "AWS Access Key (optional)", "type": "text", "hint": "Prefer the host's existing cloud identity"},
+        {"name": "secret_access_key", "label": "AWS Secret (optional)", "type": "secret", "hint": "Prefer the host's existing cloud identity"},
+    ],
     # Public feeds: free, unauthenticated, and live from the moment they are
     # enabled, so the form asks for nothing.
     "cisa_kev": [],

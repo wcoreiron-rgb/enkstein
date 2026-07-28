@@ -34,6 +34,9 @@ class FindingCreate(BaseModel):
     raw_data: Optional[str] = None
     data_origin: str = "unknown"
     source_connector: Optional[str] = None
+    control_id: Optional[str] = None
+    control_source: Optional[str] = None
+    zt_pillar: Optional[str] = None
 
 
 class FindingUpdate(BaseModel):
@@ -71,6 +74,9 @@ class FindingRead(BaseModel):
     raw_data: Optional[str] = None
     data_origin: str = "unknown"
     source_connector: Optional[str] = None
+    control_id: Optional[str] = None
+    control_source: Optional[str] = None
+    zt_pillar: Optional[str] = None
     first_seen: datetime
     last_seen: datetime
     resolved_at: Optional[datetime] = None

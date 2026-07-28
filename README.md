@@ -477,6 +477,7 @@ Every Capability Node module supports real integrations. Go to **Connectors** an
 | Category | Supported integrations |
 |---|---|
 | Cloud | AWS (Security Hub), Azure (Defender), GCP (Security Command Center) |
+| Cloud posture | Prowler CLI (read-only AWS, Azure, GCP, Kubernetes, and GitHub checks) |
 | Endpoint | CrowdStrike Falcon, Microsoft Defender for Endpoint, SentinelOne |
 | Identity | Okta, Microsoft Entra ID, AWS IAM |
 | AI/LLM | Anthropic, OpenAI, Azure OpenAI, Ollama (local) |
@@ -492,6 +493,15 @@ connector named), `simulated` (locally generated demonstration data), or `unknow
 that supplies no origin is recorded as `unknown` rather than `live`, so nothing can be presented
 as verified estate data by omission. Filter with `GET /api/v1/findings?data_origin=live`, or use
 the data-origin filter in the Findings console.
+
+Prowler is an optional local executable. Register the Prowler Cloud Posture connector, choose a provider, and run
+Cloud Security. Enkstein invokes Prowler without a shell, passes cloud secrets through the child environment rather
+than command arguments, caps execution time and output, and labels results with a stable Prowler control ID. A
+missing executable or failed run is reported honestly; demonstration findings are not substituted for a failed scan.
+
+The read-only control catalog is available at GET /api/v1/controls and GET /api/v1/controls/summary. Controls are
+grouped by the CISA Zero Trust Maturity Model pillars and retain their source, version, automation state, and
+remediation metadata.
 
 ### Which Capability Nodes return live data
 

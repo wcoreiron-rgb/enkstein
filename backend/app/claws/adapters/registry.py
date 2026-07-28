@@ -38,6 +38,7 @@ NATIVE_ADAPTERS: dict[str, str] = {
     "defender_endpoint": "endpointclaw.providers.defender",
     "sentinelone": "endpointclaw.providers.sentinelone",
     "github": "devclaw.github_scanner",
+    "prowler": "cloudclaw.providers.prowler",
 }
 
 # Connector types that are deliberately not finding sources. These are action
@@ -68,6 +69,7 @@ ALIASES: dict[str, str] = {
     "azure_policy": "azure_defender",
     "gcp_org_policy": "gcp_scc",
     "google_dlp": "gcp_scc",
+    "prowler_cloud": "prowler",
 }
 
 
