@@ -106,6 +106,9 @@ def _build_finding(claw: str, data: dict[str, Any]) -> Finding:
         raw_data=json.dumps(data.get("raw_data", {})) if isinstance(data.get("raw_data"), dict) else data.get("raw_data"),
         data_origin=_normalize_origin(data.get("data_origin")),
         source_connector=(str(data["source_connector"])[:64] if data.get("source_connector") else None),
+        control_id=(str(data["control_id"])[:128] if data.get("control_id") else None),
+        control_source=(str(data["control_source"])[:32] if data.get("control_source") else None),
+        zt_pillar=(str(data["zt_pillar"])[:32] if data.get("zt_pillar") else None),
         first_seen=now,
         last_seen=now,
         created_at=now,
@@ -158,6 +161,17 @@ def _update_finding(existing: Finding, data: dict[str, Any]) -> dict:
         existing.epss_score = data["epss_score"]
     if data.get("remediation") and not existing.remediation:
         existing.remediation = data["remediation"]
+
+    # Control identity backfills onto findings that predate control tagging.
+    # Without this a re-scan updates an existing row and the control mapping
+    # never lands, so a tenant would have to delete its findings to gain it.
+    if data.get("control_id") and not existing.control_id:
+        existing.control_id = str(data["control_id"])[:128]
+        changes["control_mapped"] = existing.control_id
+    if data.get("control_source") and not existing.control_source:
+        existing.control_source = str(data["control_source"])[:32]
+    if data.get("zt_pillar") and not existing.zt_pillar:
+        existing.zt_pillar = str(data["zt_pillar"])[:32]
 
     # Origin can legitimately change once a tenant configures a real connector
     # and a previously simulated finding is confirmed against live data.

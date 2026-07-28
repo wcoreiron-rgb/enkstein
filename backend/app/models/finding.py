@@ -88,6 +88,16 @@ class Finding(Base):
     # traced back to the credential that fetched it.
     source_connector: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Control identity. A finding is evidence that a control failed, so it
+    # carries the control's identifier rather than restating its definition.
+    # These stay nullable: findings imported from a vendor platform describe
+    # that vendor's own verdict and may not map to a catalog control.
+    control_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    control_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # CISA Zero Trust pillar, denormalised from the control so per-pillar
+    # posture can be aggregated without joining the catalog on every query.
+    zt_pillar: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     # Timestamps
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

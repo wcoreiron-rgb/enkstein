@@ -92,15 +92,42 @@ def _load_store() -> dict:
     try:
         raw = _SECRETS_FILE.read_text()
         return json.loads(raw)
-    except Exception:
-        return {}
+    except Exception as exc:
+        # Returning {} here is what made this dangerous: every caller that
+        # loads, mutates and saves would then write an empty store back over
+        # a file that still held every credential in the deployment. A read
+        # failure must not be indistinguishable from "no credentials exist".
+        raise RuntimeError(
+            f"Credential store at {_SECRETS_FILE} could not be read: {exc}"
+        ) from exc
 
 
-def _save_store(store: dict):
+def _save_store(store: dict, *, allow_empty: bool = False):
+    # Refuse to empty a store that currently holds credentials. Nothing in
+    # normal operation clears every connector at once, so an empty write over
+    # populated data is a bug somewhere upstream, and silently obeying it
+    # destroys the operator's sign-ins.
+    #
+    # ``allow_empty`` is for the one legitimate case: deliberately deleting
+    # the last remaining credential.
+    if not store and not allow_empty and _SECRETS_FILE.exists():
+        try:
+            existing = json.loads(_SECRETS_FILE.read_text())
+        except Exception:
+            existing = None
+        if existing:
+            raise RuntimeError(
+                "Refusing to overwrite a populated credential store with an "
+                "empty one; this indicates a load failure upstream."
+            )
     _SECRETS_DIR.mkdir(parents=True, exist_ok=True)
-    _SECRETS_FILE.write_text(json.dumps(store, indent=2))
+    # Write to a temporary file and rename, so a crash mid-write leaves the
+    # previous store intact rather than a truncated one that fails to parse.
+    tmp = _SECRETS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(store, indent=2))
     # Restrict permissions — credential store must not be world-readable (Finding 11)
-    _SECRETS_FILE.chmod(0o600)
+    tmp.chmod(0o600)
+    tmp.replace(_SECRETS_FILE)
     _SECRETS_DIR.chmod(0o700)
 
 
@@ -158,7 +185,8 @@ def delete_credential(connector_id: str):
     """Remove stored credentials for a connector."""
     store = _load_store()
     store.pop(connector_id, None)
-    _save_store(store)
+    # An explicit delete may legitimately empty the store.
+    _save_store(store, allow_empty=True)
 
 
 def list_configured() -> list[str]:

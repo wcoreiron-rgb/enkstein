@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.connector import Connector
 from app.core.config import settings
+from app.core.zero_trust import default_pillar
 from app.services import secrets_manager
 from app.services.finding_pipeline import ingest_findings
 
@@ -124,6 +125,12 @@ def _prepare(
         entry.setdefault("data_origin", origin)
         if connector and entry.get("data_origin") == "live":
             entry.setdefault("source_connector", connector)
+        # Every finding carries a Zero Trust pillar so posture can be
+        # aggregated per pillar without joining the control catalog. An
+        # adapter that states its own pillar keeps it; the node's default
+        # only fills the gap, because pillar belongs to the control rather
+        # than to whichever node happened to evaluate it.
+        entry.setdefault("zt_pillar", default_pillar(claw))
         prepared.append(entry)
     return prepared
 
