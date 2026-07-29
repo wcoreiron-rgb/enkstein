@@ -161,3 +161,36 @@ class TestProwlerCatalog:
         from app.services import prowler as runner
 
         assert provider in runner.SUPPORTED_PROVIDERS
+
+
+class TestAdapterEmittedControls:
+    """An adapter that emits a control has, by definition, just evaluated it.
+
+    The regression these guard: an emitted control was materialized without an
+    evaluator, so it read as RECOMMENDATION forever and an open live violation
+    could never fail its own control.
+    """
+
+    def test_emitted_control_inherits_its_connector_collector(self):
+        from app.services.finding_pipeline import _emitted_evaluator
+
+        data = {"provider": "entra_id", "source_connector": "entra_id"}
+        assert _emitted_evaluator(data, "accessclaw") == "identity.entra"
+
+    def test_explicit_evaluator_key_wins(self):
+        from app.services.finding_pipeline import _emitted_evaluator
+
+        data = {"evaluator_key": "custom.thing", "provider": "entra_id"}
+        assert _emitted_evaluator(data, "accessclaw") == "custom.thing"
+
+    def test_unmapped_connector_still_gets_an_evaluator(self):
+        from app.services.finding_pipeline import _emitted_evaluator
+
+        # Falls back to a node-scoped key rather than None, because None would
+        # make the control permanently advisory.
+        assert _emitted_evaluator({"provider": "mystery"}, "netclaw") == "netclaw.adapter"
+
+    def test_no_connector_yields_no_evaluator(self):
+        from app.services.finding_pipeline import _emitted_evaluator
+
+        assert _emitted_evaluator({}, "netclaw") is None

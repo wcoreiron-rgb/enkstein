@@ -128,7 +128,14 @@ async def _ensure_control(db: AsyncSession, claw: str, data: dict[str, Any]) -> 
             Control.source == str(source),
         )
     )
-    if result.scalar_one_or_none():
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        # A control materialized before it carried an evaluator would stay
+        # RECOMMENDATION forever, so an open violation could never fail it.
+        # Repair it in place rather than requiring the tenant to delete rows.
+        if not existing.evaluator_key:
+            existing.evaluator_key = _emitted_evaluator(data, claw)
+            existing.recommendation_only = False
         return
     frameworks = data.get("frameworks")
     if isinstance(frameworks, str):
@@ -158,11 +165,41 @@ async def _ensure_control(db: AsyncSession, claw: str, data: dict[str, Any]) -> 
             severity=str(data.get("severity") or "medium"),
             remediation=data.get("remediation"),
             remediation_action=data.get("remediation_action"),
+            # An emitted control was evaluated by the adapter that emitted it,
+            # so it is assessable rather than advisory.
+            evaluator_key=_emitted_evaluator(data, claw),
+            evidence_method=(
+                f"Evaluated by the {data.get('provider') or claw} adapter, which emitted this control."
+            ),
+            recommendation_only=False,
             status=ControlStatus.ACTIVE,
             automated=True,
             reference_url=data.get("reference_url"),
         )
     )
+
+
+def _emitted_evaluator(data: dict[str, Any], claw: str) -> str | None:
+    """Evaluator key for a control an adapter emitted alongside a finding.
+
+    A scanner that emits a control id has, by definition, just evaluated that
+    control -- the finding in hand is the evidence. Leaving ``evaluator_key``
+    unset made every such control permanently RECOMMENDATION, so a live
+    violation could never fail its own control. The connector that produced
+    the finding is the collector, so it is recorded as one.
+    """
+    explicit = data.get("evaluator_key")
+    if explicit:
+        return str(explicit)[:128]
+    connector = data.get("source_connector") or data.get("provider")
+    if not connector:
+        return None
+    from app.services.control_collectors import COLLECTORS
+
+    for key, spec in COLLECTORS.items():
+        if str(connector) in (spec.get("connectors") or []):
+            return key
+    return f"{claw}.adapter"
 
 
 def _update_finding(existing: Finding, data: dict[str, Any]) -> dict:
@@ -408,7 +445,10 @@ async def ingest_findings(
             summary["errors"] += 1
 
     # Commit all findings + events
-    if summary["created"] + summary["updated"] > 0:
+    # Catalog repairs from _ensure_control happen even when every finding is
+    # unchanged, so gating the commit on created/updated alone silently rolled
+    # those back and a control could never gain its evaluator on a re-scan.
+    if summary["created"] + summary["updated"] > 0 or db.dirty or db.new:
         await db.commit()
 
     # Policy evaluation (import here to avoid circular)

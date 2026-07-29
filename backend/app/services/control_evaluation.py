@@ -116,8 +116,6 @@ async def evaluate_controls(
 
     active = await configured_connectors(db)
     statement = select(Control)
-    if claw:
-        statement = statement.where(Control.claw == claw)
     if control_id:
         statement = statement.where(Control.control_id == control_id)
     controls = (await db.execute(statement)).scalars().all()
@@ -126,6 +124,19 @@ async def evaluate_controls(
     if claw:
         finding_statement = finding_statement.where(Finding.claw == claw)
     findings = (await db.execute(finding_statement)).scalars().all()
+
+    if claw:
+        # A control belongs to the node that registered it, but several nodes
+        # can share an adapter and therefore evaluate the same control. Scoping
+        # strictly by Control.claw hid a shared control from every node but the
+        # first, so an open violation reported against the second node left its
+        # own control silently passing. Controls this node has evidence for are
+        # included alongside the ones it owns.
+        evaluated_here = {row.control_id for row in findings if row.control_id}
+        controls = [
+            row for row in controls
+            if row.claw == claw or row.control_id in evaluated_here
+        ]
 
     by_control: dict[str, list[Finding]] = {}
     for row in findings:
