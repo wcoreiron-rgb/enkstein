@@ -82,7 +82,12 @@ def test_command_rejects_untrusted_executable():
 
 def test_installation_status_is_safe_when_missing():
     status = installation_status("/tmp/prowler-not-installed")
-    assert status == {"installed": False, "executable": None}
+    # Asserted by behaviour rather than exact shape: readiness must report
+    # not-installed and must not leak a path or version for a missing binary.
+    assert status["installed"] is False
+    assert status["executable"] is None
+    assert status.get("path") is None
+    assert status.get("version") is None
 
 
 @pytest.mark.asyncio

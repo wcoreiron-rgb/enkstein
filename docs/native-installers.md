@@ -93,7 +93,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.4.9 verifies Codex with `codex login status` and Claude Code with
+Version 0.5.0 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -104,11 +104,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.4.9
-open dist/Enkstein-0.4.9-macos.pkg
+./scripts/build_macos_pkg.sh 0.5.0
+open dist/Enkstein-0.5.0-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.4.9-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.5.0-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 

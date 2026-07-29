@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.4.9` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.5.0` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -83,7 +83,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.4.9` keeps a paired Browser Companion marked ready while it is
+Version `0.5.0` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -494,14 +494,26 @@ that supplies no origin is recorded as `unknown` rather than `live`, so nothing 
 as verified estate data by omission. Filter with `GET /api/v1/findings?data_origin=live`, or use
 the data-origin filter in the Findings console.
 
-Prowler is an optional local executable. Register the Prowler Cloud Posture connector, choose a provider, and run
+Prowler ships inside the backend image in its own virtual environment, so its dependency tree cannot collide with
+the backend's pinned requirements. Register the Prowler Cloud Posture connector, choose a provider, and run
 Cloud Security. Enkstein invokes Prowler without a shell, passes cloud secrets through the child environment rather
 than command arguments, caps execution time and output, and labels results with a stable Prowler control ID. A
 missing executable or failed run is reported honestly; demonstration findings are not substituted for a failed scan.
 
-The read-only control catalog is available at GET /api/v1/controls and GET /api/v1/controls/summary. Controls are
-grouped by the CISA Zero Trust Maturity Model pillars and retain their source, version, automation state, and
-remediation metadata.
+### Zero Trust control plane
+
+Enkstein measures posture against a control catalog of 1,426 controls: 324 from the NIST SP 800-53 Rev 5 OSCAL
+catalog, 1,038 from Prowler's AWS/Azure/GCP/Kubernetes/GitHub checks, and 64 authored for Capability Nodes.
+Controls are grouped by CISA Zero Trust Maturity Model pillar and retain their source, version, automation state,
+and remediation metadata.
+
+Each Security Arm carries its own tailored profile rather than sharing one flat pool, so its coverage percentage is
+measured against controls it can actually produce evidence for. A control passes only when a collector ran and
+returned no violation: silence is never success, demonstration data never produces a verdict, and stale evidence
+downgrades to NOT ASSESSED. Failing controls propose the remediation they declare through the governed remediation
+engine, which keeps its own risk classification and approval gate.
+
+See [Zero Trust controls](docs/zero-trust-controls.md) for the full API surface and verdict rules.
 
 ### Which Capability Nodes return live data
 

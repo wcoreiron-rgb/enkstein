@@ -39,11 +39,26 @@ class ProwlerError(RuntimeError):
 
 
 def _executable(value: str | None) -> str:
-    candidate = value or shutil.which("prowler") or "prowler"
+    candidate = value or resolve_executable() or "prowler"
     name = Path(candidate).name
     if name not in ALLOWED_EXECUTABLES:
         raise ProwlerError("Prowler executable must be prowler or prowler-cli.py")
     return candidate
+
+
+# Prowler is installed into its own virtual environment so its large
+# dependency tree cannot conflict with the backend's. ``shutil.which`` will not
+# find it there, so the known install location is checked as well.
+VENDORED_PROWLER = "/opt/prowler-venv/bin/prowler"
+
+
+def resolve_executable() -> str | None:
+    """Return a usable prowler path, or None when it is not installed."""
+    found = shutil.which("prowler")
+    if found and Path(found).exists():
+        return found
+    vendored = Path(VENDORED_PROWLER)
+    return str(vendored) if vendored.exists() else None
 
 
 def _provider(value: Any) -> str:
@@ -207,12 +222,33 @@ async def run(credentials: dict[str, Any]) -> list[dict[str, Any]]:
             raise ProwlerError(detail[0][:300] if detail else f"Prowler exited with code {process.returncode}")
         return normalize(records, _provider(credentials.get("provider", "aws")))
 
+def _installed_version(path: str | None) -> str | None:
+    """Read the installed prowler version from package metadata.
+
+    Package metadata is read instead of running ``prowler --version`` so a
+    readiness check never spawns a subprocess.
+    """
+    if not path:
+        return None
+    base = Path(path).resolve().parent.parent
+    for site in sorted(base.glob("lib/python3.*/site-packages")):
+        for dist in sorted(site.glob("prowler-*.dist-info")):
+            name = dist.name[len("prowler-"):-len(".dist-info")]
+            if name:
+                return name
+    return None
+
 
 def installation_status(executable: str | None = None) -> dict[str, Any]:
     """Return safe local readiness metadata without running a scan."""
-    path = executable or shutil.which("prowler")
+    path = executable or resolve_executable()
     installed = bool(path) and Path(path).exists() and Path(path).name in ALLOWED_EXECUTABLES
-    return {"installed": installed, "executable": Path(path).name if installed else None}
+    return {
+        "installed": installed,
+        "executable": Path(path).name if installed else None,
+        "path": str(path) if installed else None,
+        "version": _installed_version(path) if installed else None,
+    }
 
 
 async def fetch_findings(credentials: dict[str, Any]) -> list[dict[str, Any]]:

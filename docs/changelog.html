@@ -334,6 +334,32 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.0 — Zero Trust control plane -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Posture you can score, because absence of evidence stopped counting as a pass</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.5.0</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Zero Trust controls</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Enkstein could list what was wrong. It could not say what was right, which meant it could not answer the question an operator actually asks: how many controls do I have, and how many are failing? This release adds the control catalog, the profiles that make coverage meaningful, and the verdicts that make a score honest.</p>
+      <ul>
+        <li><strong>1,426 controls, from three sources.</strong> The NIST SP 800-53 Rev 5 OSCAL catalog (324), Prowler's check catalog for AWS, Azure, GCP, Kubernetes and GitHub (1,038), and Enkstein's own node objectives, TerraClaw rules and ArcClaw patterns (64). Only factual fields are imported &mdash; identifier, severity, service, remediation reference &mdash; never framework prose.</li>
+        <li><strong>Every Security Arm gets its own denominator.</strong> A catalog is not a profile. Showing all 1,426 controls under every node would claim Identity Security is accountable for physical facility access. Each Arm now declares the NIST families it can plausibly produce evidence for and inherits only those, so coverage means something.</li>
+        <li><strong>A control only passes when something looked at it.</strong> Silence is never success: PASS requires a collector to have actually run and returned no violation. Demonstration data can no longer produce a compliance verdict, and evidence older than seven days downgrades to NOT ASSESSED rather than standing as a stale pass. The pass rate is scored only over controls that were genuinely assessed; the rest are reported as the coverage gap they are.</li>
+        <li><strong>Failing controls propose the fix they declare.</strong> A control that can only report FAIL is an alert. Failing controls now route their declared remediation through the existing governed engine, which keeps its own risk classification and approval gate &mdash; a medium-risk action still waits for a human. Enkstein never infers a destructive action from a finding's text, and an executed action is not treated as proof the control now passes; verification is a fresh evaluation after a rescan.</li>
+        <li><strong>Prowler is a real dependency now, not a plan.</strong> It ships in the backend image in its own virtual environment so its dependency tree cannot collide with the backend's, and it runs read-only: no shell, allowlisted executables, credentials passed through the child environment rather than argv, bounded timeouts and capped output. A non-zero exit without parseable results is a failure, never a clean scan. When it is absent, readiness says so.</li>
+        <li><strong>Saved state stopped freezing shipped capabilities.</strong> A persisted model profile replaced its built-in wholesale, so a policy change in a release never reached a deployment that already had state on disk. Operator-tunable fields are still restored from disk; the policy allow-lists are owned by the code again.</li>
+      </ul>
+      <p><strong>Verification.</strong> Confirmed against the running stack rather than by reading code. All five Prowler providers execute and fail closed with genuine credential errors instead of reporting a clean scan. A live finding drove the full loop end to end: FAIL verdict, actionable proposal, a governed <code>force_mfa_reset</code> correctly held at pending approval, and re-verification. Cross-node AI analysis ran over 40 findings from 14 Security Arms on the local Brain with no cloud key configured, and a Swarm investigation across 8 Arms returned a critical verdict at 0.88 confidence, correctly requiring approval. 1,225 backend tests pass.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.4.9 — Connector credential verification -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

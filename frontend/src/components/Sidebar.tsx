@@ -53,6 +53,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'CoreOS',           href: '/coreos',           icon: Cpu },
       { label: 'Policies',         href: '/policies',         icon: FileText },
       { label: 'Policy Packs',     href: '/policy-packs',     icon: Layers,           tag: 'Compliance' },
+      { label: 'Zero Trust',       href: '/zero-trust',       icon: Shield,           tag: 'Coverage' },
       { label: 'Events',           href: '/events',           icon: Activity },
       { label: 'Audit',            href: '/audit',            icon: ScrollText },
       { label: 'Connectors',       href: '/connectors',       icon: Plug },

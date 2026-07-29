@@ -1321,3 +1321,26 @@ export const getFindings = (params?: Record<string, string>) => {
 export const getFindingsStats = () => apiFetch<any>('/findings/stats');
 export const updateFinding = (id: string, body: object) =>
   apiFetch<any>(`/findings/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+
+// ── Zero Trust control catalog ────────────────────────────────────────────────
+export const getControlSummary = () => apiFetch<any>('/controls/summary');
+export const getControlCoverage = () => apiFetch<any>('/controls/profiles/coverage');
+export const getArmControlProfile = (claw: string) =>
+  apiFetch<any>(`/controls/profiles/${claw}`);
+export const getControlEvaluation = (claw?: string) =>
+  apiFetch<any>(`/controls/evaluation${claw ? `?claw=${encodeURIComponent(claw)}` : ''}`);
+export const getControlCollectors = () => apiFetch<any>('/controls/collectors');
+export const getProwlerStatus = () => apiFetch<any>('/controls/prowler/status');
+export const getControlRemediationProposals = (claw?: string) =>
+  apiFetch<any>(`/controls/remediation/proposals${claw ? `?claw=${encodeURIComponent(claw)}` : ''}`);
+export const syncProwlerCatalog = () =>
+  apiFetch<any>('/controls/sync/prowler', { method: 'POST' });
+export const syncNistCatalog = () =>
+  apiFetch<any>('/controls/sync/nist', { method: 'POST' });
+export const attachControlEvaluators = () =>
+  apiFetch<any>('/controls/collectors/attach', { method: 'POST' });
+export const remediateControl = (control_id: string, requested_by = 'operator') =>
+  apiFetch<any>('/controls/remediation/execute', {
+    method: 'POST',
+    body: JSON.stringify({ control_id, requested_by }),
+  });

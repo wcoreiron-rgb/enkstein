@@ -52,7 +52,11 @@ _PROFILES: dict[str, dict[str, Any]] = {
         "model": "qwen2.5:14b-instruct",
         # An empty allowlist means any model reported by the local Ollama runtime.
         "allowed_models": [],
-        "allowed_claws": ["executive", "arcclaw", "threatclaw"],
+        # swarm_judge is included so cross-node synthesis and control analysis
+        # still run on the local Brain when no cloud provider is configured.
+        # Without it the judge profile's own fallback is rejected here, and an
+        # offline deployment loses AI analysis entirely.
+        "allowed_claws": ["executive", "arcclaw", "threatclaw", "swarm_judge"],
         "allowed_data_classes": ["public", "internal", "confidential", "restricted", "top_secret"],
         "temperature": 0.2,
         "max_tokens": 3000,
@@ -138,6 +142,13 @@ _PROFILES: dict[str, dict[str, Any]] = {
 _MODEL_CALLS: list[dict[str, Any]] = []
 _STATE_PATH = Path(".state/modelclaw_state.json")
 
+# Snapshot of the profiles this build ships with, taken before any persisted
+# state is loaded. Policy allow-lists are read back from here so saved state
+# cannot pin a deployment to an older profile's capabilities.
+_BUILTIN_PROFILES: dict[str, dict[str, Any]] = {
+    key: dict(value) for key, value in _PROFILES.items()
+}
+
 
 def _profile_storage_key(tenant_id: str, name: str) -> str:
     """Keep tenant-owned profiles distinct without changing their public names."""
@@ -186,7 +197,21 @@ def _load_state() -> None:
             profile.setdefault("tenant_id", "global")
             profile.setdefault("allowed_models", [profile["model"]])
             public_name = profile.get("name", name)
-            _PROFILES[_profile_storage_key(profile["tenant_id"], public_name)] = profile
+            key = _profile_storage_key(profile["tenant_id"], public_name)
+            builtin = _BUILTIN_PROFILES.get(key)
+            if builtin is not None:
+                # A persisted copy must not freeze a built-in profile at the
+                # capabilities it shipped with. Operator-tunable fields are
+                # restored from disk; the policy allow-lists stay owned by the
+                # code, so a released capability change reaches deployments
+                # that already have saved state.
+                merged = dict(builtin)
+                for field in ("model", "allowed_models", "temperature", "max_tokens",
+                              "provider", "fallback_profile", "created_at"):
+                    if field in profile:
+                        merged[field] = profile[field]
+                profile = merged
+            _PROFILES[key] = profile
         _MODEL_CALLS.clear()
         for row in calls:
             ts = row.get("timestamp")

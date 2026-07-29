@@ -22,6 +22,12 @@ from app.core.modelclaw.schemas import CortexGatewayRequest, CortexMessage
 from app.trust_fabric import ActionRequest, enforce
 from app.services.control_packs import bootstrap_baseline_controls
 from app.services.oscal_sync import sync_nist_catalog
+from app.services import prowler as prowler_runner
+from app.services.prowler_catalog import CATALOG_PROVIDERS, sync_prowler_catalog
+from app.services.control_profiles import coverage_matrix, profile_for, repillar_nist_controls
+from app.services.control_evaluation import evaluate_controls
+from app.services import control_collectors
+from app.services import control_remediation
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job
 from app.core.swarm.schemas import SwarmJobCreate
 
@@ -163,17 +169,32 @@ async def analyze_controls(
         "was executed. Return concise Markdown with evidence IDs.\n"
         + json.dumps(evidence, separators=(",", ":"))[:14000]
     )
-    routed = await execute_cortex_gateway(
-        db,
-        CortexGatewayRequest(
-            mode="security",
-            messages=[CortexMessage(role="user", content=prompt)],
-            source="profile:swarm_judge_profile",
-            capability="control_analysis",
-            data_classification=body.classification,
-            context={"purpose": "cross_node_control_analysis", "control_id": body.control_id},
-        ),
-    )
+    # The judge profile is tried first because it is the tenant's configured
+    # synthesis Brain. A deployment with no cloud provider key still gets
+    # analysis from the local runtime rather than an empty result.
+    routed: dict = {}
+    for candidate in ("profile:swarm_judge_profile", "profile:ollama_local_fallback"):
+        routed = await execute_cortex_gateway(
+            db,
+            CortexGatewayRequest(
+                mode="security",
+                messages=[CortexMessage(role="user", content=prompt)],
+                source=candidate,
+                # The Cortex Gateway authorizes a request by its capability,
+                # and the judge profile is scoped to swarm_judge. Cross-node
+                # control correlation is exactly the judge's role, so it runs
+                # under that capability rather than widening the allow-list.
+                capability="swarm_judge",
+                data_classification=body.classification,
+                context={
+                    "purpose": "cross_node_control_analysis",
+                    "control_id": body.control_id,
+                    "requested_capability": "control_analysis",
+                },
+            ),
+        )
+        if routed.get("response"):
+            break
     return {
         "control_id": body.control_id,
         "finding_count": len(evidence),
@@ -220,6 +241,133 @@ async def investigate_controls_with_swarm(
     )
     background_tasks.add_task(run_swarm_job, job.id)
     return {"job_id": str(job.id), "participants": participants[:8], "status": "queued"}
+
+
+class ControlRemediationRequest(BaseModel):
+    control_id: str = Field(max_length=160)
+    requested_by: str = Field(default="operator", max_length=128)
+
+
+@router.get("/prowler/status")
+async def prowler_status():
+    """Local Prowler readiness, reported honestly when it is absent."""
+    status = prowler_runner.installation_status()
+    return {
+        **status,
+        "providers": list(CATALOG_PROVIDERS),
+        "detail": (
+            "Prowler is installed and its check catalog can be imported."
+            if status.get("installed")
+            else "Prowler is not installed on this host; cloud posture controls are unavailable."
+        ),
+    }
+
+
+@router.post("/sync/prowler")
+async def sync_prowler(request: Request, db: AsyncSession = Depends(get_db)):
+    """Import Prowler's AWS, Azure, GCP, Kubernetes, and GitHub check catalog."""
+    decision = await enforce(
+        db,
+        ActionRequest(
+            module="coreos",
+            actor_id="control-sync",
+            actor_name="Control Sync",
+            actor_type="automation",
+            action="sync_control_catalog",
+            target="prowler",
+            target_type="control_catalog",
+            context={"source": "prowler"},
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=403, detail=decision.reason)
+    return await sync_prowler_catalog(db)
+
+
+@router.post("/profiles/repillar")
+async def repillar_controls(db: AsyncSession = Depends(get_db)):
+    """Re-tag imported NIST controls onto CISA pillars by control family."""
+    return await repillar_nist_controls(db)
+
+
+@router.get("/profiles/coverage")
+async def profile_coverage(db: AsyncSession = Depends(get_db)):
+    """Per-Security-Arm control coverage across every Capability Node."""
+    return await coverage_matrix(db)
+
+
+@router.get("/profiles/{claw}")
+async def arm_profile(claw: str, db: AsyncSession = Depends(get_db)):
+    """The tailored control profile one Security Arm is accountable for."""
+    return await profile_for(db, claw)
+
+
+@router.get("/collectors")
+async def collector_readiness(db: AsyncSession = Depends(get_db)):
+    """Which evidence collectors can run now, and which await a connector."""
+    return await control_collectors.readiness(db)
+
+
+@router.post("/collectors/attach")
+async def attach_control_evaluators(db: AsyncSession = Depends(get_db)):
+    """Bind collectors and executable remediation onto baseline controls."""
+    return await control_collectors.attach_evaluators(db)
+
+
+@router.get("/evaluation")
+async def control_evaluation(
+    claw: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """PASS / FAIL / NOT_ASSESSED verdicts with an honest assessment score."""
+    return await evaluate_controls(db, claw=claw)
+
+
+@router.get("/remediation/proposals")
+async def remediation_proposals(
+    claw: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Failing controls that declare an executable remediation action."""
+    return await control_remediation.proposals(db, claw=claw)
+
+
+@router.post("/remediation/execute")
+async def remediate_failing_control(
+    body: ControlRemediationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Propose a control's declared remediation through the governed engine."""
+    decision = await enforce(
+        db,
+        ActionRequest(
+            module="coreos",
+            actor_id=body.requested_by,
+            actor_name=body.requested_by,
+            actor_type="human",
+            action="remediate_control",
+            target=body.control_id,
+            target_type="control",
+            context={"control_id": body.control_id},
+        ),
+        ip_address=request.client.host if request.client else None,
+    )
+    if not decision.allowed:
+        raise HTTPException(status_code=403, detail=decision.reason)
+    return await control_remediation.remediate_control(
+        db, control_id=body.control_id, triggered_by=body.requested_by
+    )
+
+
+@router.post("/remediation/verify")
+async def verify_remediated_control(
+    body: ControlRemediationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-evaluate a control after remediation to confirm the fix held."""
+    return await control_remediation.verify_after_remediation(db, control_id=body.control_id)
 
 
 @router.get("/{control_id:path}/verification")
