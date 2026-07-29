@@ -193,6 +193,25 @@
       gap: 8px;
     }
     .btn-primary:hover { background: var(--blue-dim); transform: translateY(-1px); }
+    .hero-reqs {
+      margin: 1.25rem auto 0;
+      max-width: 640px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--text2);
+    }
+    .hero-reqs .req {
+      margin: 0.35rem 0;
+      text-align: left;
+      padding-left: 1.1rem;
+      text-indent: -1.1rem;
+    }
+    .hero-reqs .req b { color: var(--text); font-weight: 600; }
+    .hero-meta {
+      margin-top: 0.9rem;
+      font-size: 0.8rem;
+      color: var(--text2);
+    }
     .btn-ghost {
       background: transparent;
       color: var(--text2);
@@ -538,13 +557,30 @@
   <h1>AI Security Automation.<br><span class="accent">Governed by Default.</span></h1>
   <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 25 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
   <div class="hero-ctas">
-    <a href="docs.html" class="btn-primary">View Documentation →</a>
-    <a href="https://github.com/wcoreiron-rgb/enkstein/releases" target="_blank" rel="noopener" class="btn-ghost">Download macOS / Windows</a>
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.8-macos.pkg" class="btn-primary">
+      <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.365 1.43c0 1.14-.42 2.2-1.12 3.02-.85.99-2.24 1.76-3.4 1.67a3.6 3.6 0 0 1 1.15-2.92c.77-.86 2.1-1.5 3.37-1.77zM20.9 17.02c-.55 1.27-.81 1.84-1.52 2.96-1 1.57-2.4 3.52-4.15 3.53-1.55.02-1.95-1.01-4.06-1-2.1.01-2.54 1.02-4.1 1-1.74-.01-3.07-1.77-4.06-3.33C.24 15.8-.06 10.7 2.15 8.02c1.05-1.29 2.7-2.1 4.26-2.1 1.6 0 2.6 1.02 3.92 1.02 1.28 0 2.06-1.02 3.9-1.02 1.4 0 2.87.76 3.92 2.07-3.45 1.89-2.89 6.8.75 8.03z"/></svg>
+      Download for macOS
+    </a>
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.8-windows-x64-setup.exe" class="btn-primary">
+      <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 3.45 9.75 2.1v9.4H0zM10.95 1.93 24 0v11.4H10.95zM0 12.6h9.75V22L0 20.65zM10.95 12.6H24V24l-13.05-1.9z"/></svg>
+      Download for Windows
+    </a>
+    <a href="docs.html" class="btn-ghost">View Documentation →</a>
     <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-ghost">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.1.82-.26.82-.58v-2.04c-3.34.72-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.72.08-.72 1.2.08 1.83 1.23 1.83 1.23 1.06 1.82 2.8 1.3 3.48.99.1-.77.41-1.3.75-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.004 2.04.14 3 .4 2.28-1.55 3.28-1.23 3.28-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58A12 12 0 0 0 24 12C24 5.37 18.63 0 12 0z"/></svg>
       GitHub
     </a>
   </div>
+
+  <div class="hero-reqs">
+    <p class="req"><b>Required &mdash; Docker Desktop.</b> Enkstein runs its governed services locally. The installer starts Docker for you; the first launch builds images and takes a few minutes. Allow 4&nbsp;GB RAM.</p>
+    <p class="req"><b>Optional &mdash; Ollama.</b> Free local Brains that work offline. Without it Enkstein still runs on your own Codex or Claude subscription, or an API key.</p>
+  </div>
+
+  <p class="hero-meta">
+    v0.5.8 &nbsp;&middot;&nbsp; macOS 14+ signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest" target="_blank" rel="noopener">all downloads &amp; checksums</a>
+  </p>
 </section>
 
 <!-- STATS BAR -->

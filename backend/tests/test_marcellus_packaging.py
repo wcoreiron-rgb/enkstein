@@ -183,6 +183,29 @@ def test_release_bundle_is_named_for_the_product() -> None:
     assert "dist/enkstein-${GITHUB_REF_NAME#v}" in workflow
 
 
+def test_readme_leads_with_working_installer_links() -> None:
+    """The first thing a visitor sees should be a download that works.
+
+    The download URLs name the current version, so they must be bumped with the
+    release; a stale name resolves to a 404 on the latest release.
+    """
+    readme = _read("README.md")
+    version = _read("frontend/package.json").split('"version": "', 1)[1].split('"')[0]
+
+    mac = f"releases/latest/download/Enkstein-{version}-macos.pkg"
+    win = f"releases/latest/download/Enkstein-{version}-windows-x64-setup.exe"
+    assert mac in readme
+    assert win in readme
+
+    # Requirements belong beside the button, not buried further down.
+    head = readme.split("## ", 1)[0]
+    assert "Docker Desktop" in head
+    assert "Ollama" in head
+    # Ollama is genuinely optional; saying otherwise turns people away.
+    assert "Optional" in head
+
+
+
 
 def test_sidebar_exposes_capabilities_not_legacy_claw_labels() -> None:
     sidebar = _read("frontend/src/components/Sidebar.tsx")

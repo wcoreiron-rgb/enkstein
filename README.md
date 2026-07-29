@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Enkstein architecture working copy.** This repository is an independent, compatibility-first evolution of Enkstein. Enkstein remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md). Existing Enkstein names and routes remain available while the new runtime is implemented and verified.
+> **Early preview (v0.x).** Enkstein is an independent, compatibility-first evolution of the RegentClaw project. Its architecture is organism-inspired: a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md).
 
 <p align="center">
   <img src="frontend/public/logo.png" alt="Enkstein" width="120" />
@@ -8,6 +8,40 @@
 <h1 align="center">Enkstein Architecture Lab</h1>
 
 <p align="center">Distributed, organism-inspired security automation with Zero Trust enforcement across every Cortex, Heart, Arm, Node, and action.</p>
+
+<p align="center">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.8-macos.pkg">
+    <img src="https://img.shields.io/badge/Download%20for-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
+  </a>
+  &nbsp;
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.8-windows-x64-setup.exe">
+    <img src="https://img.shields.io/badge/Download%20for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>
+    <b>v0.5.8</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
+  </sub>
+</p>
+
+<h3 align="center">Before you launch</h3>
+
+<p align="center">
+  <b>Required &mdash; <a href="https://www.docker.com/products/docker-desktop/">Docker Desktop</a>.</b><br />
+  <sub>Enkstein runs its own governed services locally. The installer starts Docker for you if it is not already running; first launch builds the images and takes a few minutes. Allow 4&nbsp;GB RAM.</sub>
+</p>
+
+<p align="center">
+  <b>Optional &mdash; <a href="https://ollama.com/download">Ollama</a>, for free local Brains.</b><br />
+  <sub>Without it Enkstein still runs; you supply your own model access instead (Codex or Claude subscription, or an API key). With it, Chat, Cowork, and Security work offline at no cost. Enkstein discovers whatever models you have pulled.</sub>
+</p>
+
+<p align="center">
+  <sub>Prefer to run it yourself? See <a href="#quick-start">Quick Start</a> for the self-hosted bundle, and the <a href="docs/testing-guide.md">Testing Guide</a> for what to try first.</sub>
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-v0.x%20preview-f59e0b?style=flat-square" alt="v0.x preview" />
