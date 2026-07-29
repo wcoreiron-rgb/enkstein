@@ -58,6 +58,11 @@ def scan_text(text: str, redact: bool = True) -> ScanResult:
                     "pattern": name,
                     "count": len(matches),
                     "signal": signal,
+                    "control_id": "arcclaw:pattern:" + "".join(
+                        ch.lower() if ch.isalnum() else "-" for ch in name
+                    ).strip("-"),
+                    "control_source": "authored",
+                    "zt_pillar": "applications",
                 })
                 signals.add(signal)
                 if redact:

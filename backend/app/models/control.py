@@ -16,7 +16,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Index, String, Text
+from sqlalchemy import Boolean, DateTime, Index, String, Text, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,7 +63,7 @@ class Control(Base):
     zt_pillar: Mapped[str] = mapped_column(String(32), nullable=False)
     # JSON array of 800-207 tenet ids. Stored as Text to match the codebase
     # convention and stay portable across Postgres and SQLite.
-    zt_tenets: Mapped[str | None] = mapped_column(Text, nullable=True)
+    zt_tenets: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Which Capability Node evaluates this control, and against what.
     claw: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -72,12 +72,16 @@ class Control(Base):
 
     # Compliance cross-references, as {framework: [control ids]}. These are
     # factual mappings, not licensed benchmark prose.
-    frameworks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    frameworks: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     severity: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")
     remediation: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Action type from the remediation engine that fixes this, when one exists.
     remediation_action: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    remediation_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="recommendation_only")
+    evidence_method: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evaluator_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    recommendation_only: Mapped[bool] = mapped_column(Boolean, default=True)
 
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=ControlStatus.PENDING_REVIEW)
     automated: Mapped[bool] = mapped_column(Boolean, default=False)

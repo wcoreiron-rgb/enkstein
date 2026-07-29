@@ -131,6 +131,17 @@ async def _ensure_control(db: AsyncSession, claw: str, data: dict[str, Any]) -> 
     if result.scalar_one_or_none():
         return
     frameworks = data.get("frameworks")
+    if isinstance(frameworks, str):
+        try:
+            frameworks = json.loads(frameworks)
+        except json.JSONDecodeError:
+            frameworks = {"references": [frameworks]}
+    tenets = data.get("zt_tenets")
+    if isinstance(tenets, str):
+        try:
+            tenets = json.loads(tenets)
+        except json.JSONDecodeError:
+            tenets = [tenets]
     db.add(
         Control(
             control_id=str(control_id)[:128],
@@ -139,11 +150,11 @@ async def _ensure_control(db: AsyncSession, claw: str, data: dict[str, Any]) -> 
             title=str(data.get("control_title") or data.get("title") or control_id)[:512],
             description=data.get("control_description") or data.get("description"),
             zt_pillar=str(data.get("zt_pillar") or "governance")[:32],
-            zt_tenets=json.dumps(data.get("zt_tenets")) if data.get("zt_tenets") is not None else None,
+            zt_tenets=tenets,
             claw=claw,
             provider=data.get("provider"),
             resource_type=data.get("resource_type"),
-            frameworks=json.dumps(frameworks) if frameworks is not None else None,
+            frameworks=frameworks,
             severity=str(data.get("severity") or "medium"),
             remediation=data.get("remediation"),
             remediation_action=data.get("remediation_action"),

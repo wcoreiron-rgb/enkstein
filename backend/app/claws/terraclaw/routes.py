@@ -920,6 +920,9 @@ def _make_finding(rule: dict, hcl: str) -> dict:
 
     return {
         "id": rule["id"],
+        "control_id": f"terraclaw:{rule['id']}",
+        "control_source": "authored",
+        "zt_pillar": "applications",
         "name": rule["name"],
         "category": rule["category"],
         "severity": rule["severity"],
