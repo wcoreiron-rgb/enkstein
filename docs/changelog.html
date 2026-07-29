@@ -334,6 +334,29 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.1 — Zero Trust page follows the theme -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The Zero Trust page respects your theme</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.1</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Interface</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Zero Trust Control Coverage shipped with dark slate colours written directly into the markup rather than read from the theme, so it stayed dark and washed-out when the rest of the console was in light mode.</p>
+      <ul>
+        <li><strong>Surfaces, text, borders and hover states now read from the shared theme variables</strong> the other pages already use, so the page switches with the console instead of ignoring it.</li>
+        <li><strong>Card corners, toolbar buttons and table rows match the surrounding design system</strong>, rather than using their own slightly different radius and treatment.</li>
+        <li><strong>Verdict and pillar accent colours were re-picked for contrast on a light background</strong>, so pass, fail and recommendation stay legible either way.</li>
+      </ul>
+      <p><strong>Verification.</strong> Rendered and inspected in both light and dark mode against the running console, not asserted from the stylesheet.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.0 — Zero Trust control plane -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

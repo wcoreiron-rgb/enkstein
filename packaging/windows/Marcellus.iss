@@ -1,5 +1,5 @@
 #ifndef Version
-  #define Version "0.5.0"
+  #define Version "0.5.1"
 #endif
 #ifndef StageDir
   #error StageDir is required

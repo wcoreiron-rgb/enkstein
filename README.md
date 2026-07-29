@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.5.0` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.5.1` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -83,7 +83,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.5.0` keeps a paired Browser Companion marked ready while it is
+Version `0.5.1` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being

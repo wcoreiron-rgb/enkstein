@@ -10,6 +10,12 @@ import {
   syncProwlerCatalog, syncNistCatalog, attachControlEvaluators,
 } from '@/lib/api';
 
+const surface = { background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' };
+const elevated = { background: 'var(--rc-bg-elevated)', borderColor: 'var(--rc-border)' };
+const text1 = { color: 'var(--rc-text-1)' };
+const text2 = { color: 'var(--rc-text-2)' };
+const text3 = { color: 'var(--rc-text-3)' };
+
 const PILLAR_COLOR: Record<string, string> = {
   identity: 'bg-indigo-500',
   devices: 'bg-cyan-500',
@@ -18,15 +24,15 @@ const PILLAR_COLOR: Record<string, string> = {
   data: 'bg-rose-500',
   visibility: 'bg-sky-500',
   automation: 'bg-violet-500',
-  governance: 'bg-slate-500',
+  governance: 'bg-slate-400',
 };
 
 const VERDICT_META: Record<string, { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
-  pass: { label: 'Pass', cls: 'text-emerald-400', Icon: CheckCircle2 },
-  fail: { label: 'Fail', cls: 'text-rose-400', Icon: XCircle },
+  pass: { label: 'Pass', cls: 'text-emerald-500', Icon: CheckCircle2 },
+  fail: { label: 'Fail', cls: 'text-rose-500', Icon: XCircle },
   not_assessed: { label: 'Not assessed', cls: 'text-slate-400', Icon: HelpCircle },
-  recommendation: { label: 'Recommendation', cls: 'text-amber-400', Icon: Info },
-  error: { label: 'Error', cls: 'text-rose-500', Icon: AlertTriangle },
+  recommendation: { label: 'Recommendation', cls: 'text-amber-500', Icon: Info },
+  error: { label: 'Error', cls: 'text-rose-600', Icon: AlertTriangle },
 };
 
 function labelOf(claw: string) {
@@ -98,54 +104,53 @@ export default function ZeroTrustPage() {
     <div className="p-6 space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100 flex items-center gap-2">
-            <Shield className="h-5 w-5 text-indigo-400" />
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={text1}>
+            <Shield className="h-5 w-5 text-indigo-500" />
             Zero Trust Control Coverage
           </h1>
-          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+          <p className="text-sm mt-1 max-w-2xl" style={text2}>
             CISA pillars, per-Arm control profiles, and the evidence collectors behind them.
             A control only passes when a collector ran and returned no violation.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
+          <ToolbarButton
             onClick={() => run('nist', syncNistCatalog)}
             disabled={busy !== null}
-            className="inline-flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            {busy === 'nist' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Sync NIST
-          </button>
-          <button
+            busy={busy === 'nist'}
+            Icon={Download}
+            label="Sync NIST"
+          />
+          <ToolbarButton
             onClick={() => run('prowler', syncProwlerCatalog)}
             disabled={busy !== null || !prowler?.installed}
+            busy={busy === 'prowler'}
+            Icon={Download}
+            label="Sync Prowler"
             title={prowler?.installed ? 'Import the Prowler check catalog' : 'Prowler is not installed on this host'}
-            className="inline-flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            {busy === 'prowler' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Sync Prowler
-          </button>
-          <button
+          />
+          <ToolbarButton
             onClick={() => run('attach', attachControlEvaluators)}
             disabled={busy !== null}
-            className="inline-flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            {busy === 'attach' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
-            Attach collectors
-          </button>
-          <button
+            busy={busy === 'attach'}
+            Icon={Wrench}
+            label="Attach collectors"
+          />
+          <ToolbarButton
             onClick={load}
             disabled={busy !== null}
-            className="inline-flex items-center gap-2 rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+            busy={loading}
+            Icon={RefreshCw}
+            label="Refresh"
+          />
         </div>
       </header>
 
       {error && (
-        <div className="rounded border border-rose-800 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
+        <div
+          className="rounded-xl border border-rose-500/40 px-4 py-3 text-sm text-rose-500"
+          style={{ background: 'var(--rc-bg-surface)' }}
+        >
           {error}
         </div>
       )}
@@ -166,33 +171,33 @@ export default function ZeroTrustPage() {
         />
       </section>
 
-      <section className="rounded border border-slate-800 bg-slate-900/60 p-4">
-        <h2 className="text-sm font-semibold text-slate-200 mb-3">Controls by CISA pillar</h2>
+      <section className="rounded-xl border p-4" style={surface}>
+        <h2 className="text-sm font-semibold mb-3" style={text1}>Controls by CISA pillar</h2>
         <div className="space-y-2">
           {pillars.map((p: any) => (
             <div key={p.pillar} className="flex items-center gap-3">
-              <span className="w-44 shrink-0 text-xs text-slate-400">{p.label}</span>
-              <div className="h-2 flex-1 rounded bg-slate-800">
+              <span className="w-44 shrink-0 text-xs" style={text2}>{p.label}</span>
+              <div className="h-2 flex-1 rounded" style={{ background: 'var(--rc-bg-elevated)' }}>
                 <div
-                  className={`h-2 rounded ${PILLAR_COLOR[p.pillar] ?? 'bg-slate-500'}`}
+                  className={`h-2 rounded ${PILLAR_COLOR[p.pillar] ?? 'bg-slate-400'}`}
                   style={{ width: `${Math.round(100 * (p.controls ?? 0) / maxPillar)}%` }}
                 />
               </div>
-              <span className="w-12 shrink-0 text-right text-xs tabular-nums text-slate-300">{p.controls}</span>
+              <span className="w-12 shrink-0 text-right text-xs tabular-nums" style={text1}>{p.controls}</span>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="rounded border border-slate-800 bg-slate-900/60">
-        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-200">Security Arm profiles</h2>
-          <span className="text-xs text-slate-500">{coverage?.profile_version}</span>
+      <section className="rounded-xl border overflow-hidden" style={surface}>
+        <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+          <h2 className="text-sm font-semibold" style={text1}>Security Arm profiles</h2>
+          <span className="text-xs" style={text3}>{coverage?.profile_version}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+              <tr className="text-left text-xs uppercase tracking-wide" style={text3}>
                 <th className="px-4 py-2 font-medium">Security Arm</th>
                 <th className="px-4 py-2 font-medium">NIST families</th>
                 <th className="px-4 py-2 font-medium text-right">Controls</th>
@@ -206,26 +211,28 @@ export default function ZeroTrustPage() {
                 <tr
                   key={arm.claw}
                   onClick={() => openArm(arm.claw)}
-                  className={`cursor-pointer border-t border-slate-800 hover:bg-slate-800/50 ${
-                    selected === arm.claw ? 'bg-slate-800/70' : ''
-                  }`}
+                  className="cursor-pointer border-t transition-colors"
+                  style={{
+                    borderColor: 'var(--rc-border)',
+                    background: selected === arm.claw ? 'var(--rc-panel-hover)' : 'transparent',
+                  }}
                 >
-                  <td className="px-4 py-2 text-slate-200">{labelOf(arm.claw)}</td>
-                  <td className="px-4 py-2 text-xs uppercase text-slate-500">
+                  <td className="px-4 py-2" style={text1}>{labelOf(arm.claw)}</td>
+                  <td className="px-4 py-2 text-xs uppercase" style={text3}>
                     {(arm.nist_families ?? []).join(' ') || '—'}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-300">{arm.total}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-300">{arm.with_evaluator}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-300">{arm.collector_ready ?? 0}</td>
+                  <td className="px-4 py-2 text-right tabular-nums" style={text2}>{arm.total}</td>
+                  <td className="px-4 py-2 text-right tabular-nums" style={text2}>{arm.with_evaluator}</td>
+                  <td className="px-4 py-2 text-right tabular-nums" style={text2}>{arm.collector_ready ?? 0}</td>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 rounded bg-slate-800">
+                      <div className="h-1.5 w-24 rounded" style={{ background: 'var(--rc-bg-elevated)' }}>
                         <div
                           className="h-1.5 rounded bg-emerald-500"
                           style={{ width: `${Math.min(100, arm.ready_percent ?? 0)}%` }}
                         />
                       </div>
-                      <span className="text-xs tabular-nums text-slate-400">{arm.ready_percent ?? 0}%</span>
+                      <span className="text-xs tabular-nums" style={text2}>{arm.ready_percent ?? 0}%</span>
                     </div>
                   </td>
                 </tr>
@@ -236,13 +243,13 @@ export default function ZeroTrustPage() {
       </section>
 
       {selected && (
-        <section className="rounded border border-slate-800 bg-slate-900/60">
-          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-200">
+        <section className="rounded-xl border overflow-hidden" style={surface}>
+          <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+            <h2 className="text-sm font-semibold" style={text1}>
               {labelOf(selected)} — control verdicts
             </h2>
             {evaluation && (
-              <span className="text-xs text-slate-400">
+              <span className="text-xs" style={text2}>
                 {evaluation.assessed} assessed of {evaluation.evaluated}
                 {evaluation.pass_rate !== null && evaluation.pass_rate !== undefined
                   ? ` · ${evaluation.pass_rate}% passing`
@@ -251,19 +258,23 @@ export default function ZeroTrustPage() {
             )}
           </div>
           {!evaluation ? (
-            <p className="px-4 py-6 text-sm text-slate-500">Evaluating…</p>
+            <p className="px-4 py-6 text-sm" style={text3}>Evaluating…</p>
           ) : (
-            <ul className="divide-y divide-slate-800">
+            <ul>
               {(evaluation.results ?? []).slice(0, 40).map((r: any) => {
                 const meta = VERDICT_META[r.verdict] ?? VERDICT_META.not_assessed;
                 const { Icon } = meta;
                 return (
-                  <li key={r.control_id} className="flex items-start gap-3 px-4 py-2.5">
+                  <li
+                    key={r.control_id}
+                    className="flex items-start gap-3 border-t px-4 py-2.5"
+                    style={{ borderColor: 'var(--rc-border)' }}
+                  >
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.cls}`} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-slate-200">{r.title}</p>
-                      <p className="truncate text-xs text-slate-500">{r.control_id}</p>
-                      <p className="text-xs text-slate-400">{r.reason}</p>
+                      <p className="truncate text-sm" style={text1}>{r.title}</p>
+                      <p className="truncate text-xs" style={text3}>{r.control_id}</p>
+                      <p className="text-xs" style={text2}>{r.reason}</p>
                     </div>
                     <span className={`shrink-0 text-xs ${meta.cls}`}>{meta.label}</span>
                   </li>
@@ -272,15 +283,15 @@ export default function ZeroTrustPage() {
             </ul>
           )}
           {proposals && proposals.actionable?.length > 0 && (
-            <div className="border-t border-slate-800 px-4 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="border-t px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={text3}>
                 Failing controls with an executable remediation
               </p>
               <ul className="space-y-1">
                 {proposals.actionable.map((a: any) => (
                   <li key={a.control_id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="truncate text-slate-300">{a.title}</span>
-                    <span className="shrink-0 text-xs text-slate-500">
+                    <span className="truncate" style={text1}>{a.title}</span>
+                    <span className="shrink-0 text-xs" style={text3}>
                       {a.action_type} via {a.provider}
                     </span>
                   </li>
@@ -292,14 +303,14 @@ export default function ZeroTrustPage() {
       )}
 
       {collectors && (
-        <section className="rounded border border-slate-800 bg-slate-900/60 p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
-            <Plug className="h-4 w-4 text-slate-400" />
+        <section className="rounded-xl border p-4" style={surface}>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold" style={text1}>
+            <Plug className="h-4 w-4 text-indigo-500" />
             Evidence collectors
           </h2>
           <div className="grid gap-4 md:grid-cols-2">
-            <CollectorList title="Ready" items={collectors.ready} tone="emerald" />
-            <CollectorList title="Awaiting a connector" items={collectors.blocked} tone="slate" />
+            <CollectorList title="Ready" items={collectors.ready} ready />
+            <CollectorList title="Awaiting a connector" items={collectors.blocked} />
           </div>
         </section>
       )}
@@ -307,36 +318,56 @@ export default function ZeroTrustPage() {
   );
 }
 
+function ToolbarButton({ onClick, disabled, busy, Icon, label, title }: {
+  onClick: () => void; disabled: boolean; busy: boolean;
+  Icon: typeof Download; label: string; title?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-50"
+      style={{ ...elevated, color: 'var(--rc-text-1)' }}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+      {label}
+    </button>
+  );
+}
+
 function Stat({ label, value, hint, tone }: {
   label: string; value: string | number; hint?: string; tone?: 'good' | 'warn';
 }) {
-  const valueCls =
-    tone === 'good' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : 'text-slate-100';
+  const valueColor =
+    tone === 'good' ? '#10b981' : tone === 'warn' ? '#f59e0b' : 'var(--rc-text-1)';
   return (
-    <div className="rounded border border-slate-800 bg-slate-900/60 p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold tabular-nums ${valueCls}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <div className="rounded-xl border p-4" style={surface}>
+      <p className="text-xs uppercase tracking-wide" style={text3}>{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums" style={{ color: valueColor }}>{value}</p>
+      {hint && <p className="mt-1 text-xs" style={text3}>{hint}</p>}
     </div>
   );
 }
 
-function CollectorList({ title, items, tone }: {
-  title: string; items: any[]; tone: 'emerald' | 'slate';
+function CollectorList({ title, items, ready }: {
+  title: string; items: any[]; ready?: boolean;
 }) {
-  const dot = tone === 'emerald' ? 'bg-emerald-500' : 'bg-slate-600';
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={text3}>
         {title} ({items?.length ?? 0})
       </p>
       <ul className="space-y-1.5">
         {(items ?? []).map((c: any) => (
           <li key={c.evaluator_key} className="flex items-start gap-2 text-sm">
-            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+            <span
+              className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${ready ? 'bg-emerald-500' : ''}`}
+              style={ready ? undefined : { background: 'var(--rc-text-3)' }}
+            />
             <div className="min-w-0">
-              <p className="truncate text-slate-300">{c.evaluator_key}</p>
-              <p className="truncate text-xs text-slate-500">
+              <p className="truncate" style={text1}>{c.evaluator_key}</p>
+              <p className="truncate text-xs" style={text3}>
                 {c.local ? 'Local scanner' : (c.connectors ?? []).join(', ') || 'No connector mapped'}
               </p>
             </div>
