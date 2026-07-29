@@ -603,7 +603,7 @@ regentclaw evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./regentclaw_core-0.7.0-py3-none-any.whl
+pip install ./regentclaw_core-0.5.6-py3-none-any.whl
 ```
 ```python
 from regentclaw_core import classify_ring, evaluate_ring, scan_text, verify_package

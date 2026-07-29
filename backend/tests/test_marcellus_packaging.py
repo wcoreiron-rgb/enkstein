@@ -713,6 +713,39 @@ def test_windows_release_is_not_blocked_by_missing_signing_cert() -> None:
     assert 'throw "Windows installer signing failed"' in workflow
 
 
+def test_release_publishes_without_apple_secrets_in_ci() -> None:
+    """A tag must still yield downloadable assets on a repo without Apple certs.
+
+    macOS packages are signed and notarized on the maintainer's machine. When CI
+    has no Apple secrets the macOS job used to fail outright, and ``publish``
+    needed it, so tagging produced no release at all.
+    """
+    workflow = _read(".github/workflows/release.yml")
+
+    assert "skipping the CI macOS build" in workflow
+    assert "Missing required Apple signing/notarization secret" not in workflow
+    # publish no longer dies with the macOS job, but still requires real assets.
+    assert "needs.portable.result == 'success'" in workflow
+
+
+def test_python_package_versions_match_the_app_version() -> None:
+    """The release workflow refuses to build when these drift from the tag."""
+    expected = _read("frontend/package.json").split('"version": "', 1)[1].split('"')[0]
+
+    for manifest in (
+        "cli/pyproject.toml",
+        "regentclaw-core/pyproject.toml",
+        "mcp-server/pyproject.toml",
+    ):
+        line = next(
+            candidate
+            for candidate in _read(manifest).splitlines()
+            if candidate.replace(" ", "").startswith("version=")
+        )
+        assert expected in line, f"{manifest} is {line.strip()}, app is {expected}"
+
+
+
 def test_testing_guide_states_what_a_connector_test_proves() -> None:
     """Evaluators need the limits stated, not discovered."""
     guide = _read("docs/testing-guide.md")
