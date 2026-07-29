@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.2 — Adapter-emitted controls stop passing while violated -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">A control can no longer pass while the violation is open in front of you</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.2</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Zero Trust</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Two live Entra findings &mdash; any user can create tenants, any user can register applications &mdash; were open in the console while Identity and Privileged Access both reported 100% passing. Four faults had to line up for that, and all four are fixed.</p>
+      <ul>
+        <li><strong>A control created from a finding now inherits an evaluator</strong> from the connector that produced it. Without one it read as advisory forever, so a live violation could never fail its own control.</li>
+        <li><strong>Controls created before this fix are repaired in place</strong> on the next scan, instead of needing the catalog rebuilt by hand.</li>
+        <li><strong>A re-scan that changes nothing still commits catalog repairs.</strong> The commit was gated on new or updated findings, so an unchanged scan silently rolled the repair back and the control never gained its evaluator.</li>
+        <li><strong>Nodes that share an adapter now both see the shared control.</strong> Identity and Access share the Entra collector, so the control was visible only to whichever node registered it first and passed silently on the other.</li>
+      </ul>
+      <p><strong>Verification.</strong> Measured against the running stack with real Entra credentials. Identity and Privileged Access each moved from a reported 100% to 50%, with both genuine violations failing on both nodes.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.1 — Zero Trust page follows the theme -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
