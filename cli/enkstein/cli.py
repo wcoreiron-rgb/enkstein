@@ -1,6 +1,6 @@
 """
-RegentClaw CLI — Main entrypoint
-Usage:  regentclaw <group> <command> [options]
+Enkstein CLI — Main entrypoint
+Usage:  enkstein <group> <command> [options]
 """
 import sys
 import json
@@ -9,8 +9,8 @@ import typer
 from . import client, fmt
 
 app = typer.Typer(
-    name="regentclaw",
-    help="RegentClaw Zero Trust Ecosystem — CLI",
+    name="enkstein",
+    help="Enkstein Zero Trust Ecosystem — CLI",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -127,7 +127,7 @@ def status_dashboard(
     json_flag: bool = typer.Option(False, "--json", "-j", help="Output raw JSON"),
 ):
     """Show platform dashboard summary."""
-    fmt.header("RegentClaw — Platform Dashboard")
+    fmt.header("Enkstein — Platform Dashboard")
     try:
         data = client.get("/dashboard")
         if json_flag:
@@ -656,7 +656,7 @@ def skillpacks_deactivate(pack_id: str = typer.Argument(..., help="Skill pack ID
 @app.command()
 def version():
     """Show CLI version."""
-    fmt.header("RegentClaw CLI")
+    fmt.header("Enkstein CLI")
     fmt.kv("Version", "0.2.0")
     fmt.kv("API URL", client.BASE_URL)
 

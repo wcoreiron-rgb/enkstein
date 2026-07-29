@@ -15,7 +15,7 @@ on:
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
       - "mcp-server/pyproject.toml"
-      - "regentclaw-core/pyproject.toml"
+      - "enkstein-core/pyproject.toml"
       - ".env.example"
   pull_request:
     paths:
@@ -29,7 +29,7 @@ on:
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
       - "mcp-server/pyproject.toml"
-      - "regentclaw-core/pyproject.toml"
+      - "enkstein-core/pyproject.toml"
       - ".env.example"
 
 permissions:

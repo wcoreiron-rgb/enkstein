@@ -1,21 +1,21 @@
 """
-RegentClaw MCP Server
+Enkstein MCP Server
 =====================
-Exposes RegentClaw's governed security capabilities as Model Context Protocol
+Exposes Enkstein's governed security capabilities as Model Context Protocol
 (MCP) tools, so AI agents inside Cursor, VS Code, Claude Desktop, etc. can call
-them — with every call mediated by the running RegentClaw backend (Trust Fabric
+them — with every call mediated by the running Enkstein backend (Trust Fabric
 policy, risk scoring, and audit apply server-side).
 
-The server is a thin, stateless bridge: it forwards tool calls to the RegentClaw
+The server is a thin, stateless bridge: it forwards tool calls to the Enkstein
 REST API. It never holds credentials or executes anything locally.
 
 Run (stdio transport, the default for editors):
-    regentclaw-mcp
+    enkstein-mcp
 
 Configure via environment:
-    REGENTCLAW_API_URL   default http://localhost:8000
-    REGENTCLAW_TOKEN     Bearer JWT (required when the server runs DEBUG=false)
-    REGENTCLAW_TIMEOUT   request timeout seconds (default 30)
+    ENKSTEIN_API_URL   default http://localhost:8000
+    ENKSTEIN_TOKEN     Bearer JWT (required when the server runs DEBUG=false)
+    ENKSTEIN_TIMEOUT   request timeout seconds (default 30)
 """
 from __future__ import annotations
 
@@ -25,15 +25,15 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-BASE_URL = os.environ.get("REGENTCLAW_API_URL", "http://localhost:8000").rstrip("/")
+BASE_URL = os.environ.get("ENKSTEIN_API_URL", "http://localhost:8000").rstrip("/")
 PREFIX = "/api/v1"
-TIMEOUT = float(os.environ.get("REGENTCLAW_TIMEOUT", "30"))
+TIMEOUT = float(os.environ.get("ENKSTEIN_TIMEOUT", "30"))
 
-mcp = FastMCP("regentclaw")
+mcp = FastMCP("enkstein")
 
 
 def _headers() -> dict:
-    token = os.environ.get("REGENTCLAW_TOKEN", "").strip()
+    token = os.environ.get("ENKSTEIN_TOKEN", "").strip()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
@@ -53,8 +53,8 @@ async def _post(path: str, body: dict | None = None) -> Any:
 
 def _safe(coro_result_err: str) -> str:
     return (
-        f"⚠️ Could not reach RegentClaw at {BASE_URL}. "
-        f"Is the server running and REGENTCLAW_API_URL set? ({coro_result_err})"
+        f"⚠️ Could not reach Enkstein at {BASE_URL}. "
+        f"Is the server running and ENKSTEIN_API_URL set? ({coro_result_err})"
     )
 
 
@@ -64,7 +64,7 @@ def _safe(coro_result_err: str) -> str:
 async def scan_text_for_secrets(text: str) -> str:
     """
     Scan a block of text or code for exposed secrets, API keys, PII, and
-    prompt-injection patterns using RegentClaw's ArcClaw scanner + AGT audit.
+    prompt-injection patterns using Enkstein's ArcClaw scanner + AGT audit.
     Use this before committing code or pasting config. Returns the risk score,
     whether sensitive data was detected, and the governance outcome.
     """
@@ -87,7 +87,7 @@ async def scan_text_for_secrets(text: str) -> str:
 @mcp.tool()
 async def get_security_posture() -> str:
     """
-    Get the current platform security posture from RegentClaw — module counts,
+    Get the current platform security posture from Enkstein — module counts,
     identities, connectors, high-risk events, blocked actions, and pending
     approvals. Use to answer "what's my current security status?".
     """
@@ -134,7 +134,7 @@ async def list_findings(claw: str = "", severity: str = "", limit: int = 20) -> 
 @mcp.tool()
 async def list_connectors() -> str:
     """
-    List configured RegentClaw connectors (integrations) and their status.
+    List configured Enkstein connectors (integrations) and their status.
     Useful to see which security tools are connected (Okta, CrowdStrike, AWS…).
     """
     try:
@@ -152,7 +152,7 @@ async def list_connectors() -> str:
 @mcp.tool()
 async def run_swarm_investigation(prompt: str, window: str = "24h") -> str:
     """
-    Launch a governed multi-agent Swarm investigation in RegentClaw. The swarm
+    Launch a governed multi-agent Swarm investigation in Enkstein. The swarm
     runs multiple security claws in parallel, then a judge synthesizes findings.
     High-risk remediation actions still require human approval in the platform.
     Returns the swarm job id and initial status. Describe what to investigate in
@@ -178,7 +178,7 @@ async def run_swarm_investigation(prompt: str, window: str = "24h") -> str:
         return (
             f"Swarm job created: {r.get('id', r.get('job_id', '?'))}\n"
             f"Status: {r.get('status', 'submitted')}\n"
-            f"Track progress in the RegentClaw UI → Swarm."
+            f"Track progress in the Enkstein UI → Swarm."
         )
     except Exception as e:  # noqa: BLE001
         return _safe(str(e))

@@ -1,17 +1,17 @@
 """
-regentclaw-core — the embeddable RegentClaw governance + scanning primitives.
+enkstein-core — the embeddable Enkstein governance + scanning primitives.
 
 These run **in-process with no server, no database, no Docker** — just
-`pip install regentclaw-core`. They are the dependency-light heart of
-RegentClaw's Zero Trust enforcement:
+`pip install enkstein-core`. They are the dependency-light heart of
+Enkstein's Zero Trust enforcement:
 
-    from regentclaw_core import classify_ring, evaluate_ring     # execution ring policy
-    from regentclaw_core import verify_package, compute_manifest_hash  # provenance
-    from regentclaw_core import scan_text, classify_prompt        # secret / PII scanner
+    from enkstein_core import classify_ring, evaluate_ring     # execution ring policy
+    from enkstein_core import verify_package, compute_manifest_hash  # provenance
+    from enkstein_core import scan_text, classify_prompt        # secret / PII scanner
 
 Example — gate an action locally:
 
-    from regentclaw_core import classify_ring, evaluate_ring
+    from enkstein_core import classify_ring, evaluate_ring
     ring = classify_ring("quarantine_device")
     decision = evaluate_ring(ring, trust_score=72, caller_role="analyst")
     if not decision["allowed"]:
@@ -19,7 +19,7 @@ Example — gate an action locally:
 
 Example — scan a string for secrets before committing:
 
-    from regentclaw_core import scan_text
+    from enkstein_core import scan_text
     result = scan_text(open("config.env").read())
     if result.is_sensitive:
         print("Blocked: secrets detected", result.findings)

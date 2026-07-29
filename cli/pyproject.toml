@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name            = "regentclaw-cli"
+name            = "enkstein-cli"
 version         = "0.5.7"
-description     = "RegentClaw Zero Trust Ecosystem — Command Line Interface"
+description     = "Enkstein Zero Trust Ecosystem — Command Line Interface"
 readme          = "README.md"
 requires-python = ">=3.11"
 license         = "MIT"
 keywords        = ["security", "zero-trust", "soc", "automation", "cli"]
-authors         = [{ name = "RegentClaw" }]
+authors         = [{ name = "Enkstein" }]
 
 dependencies = [
     "typer[all]>=0.12",
@@ -22,8 +22,8 @@ Homepage      = "https://github.com/wcoreiron-rgb/enkstein"
 Documentation = "https://wcoreiron-rgb.github.io/enkstein/"
 
 [project.scripts]
-regentclaw = "regentclaw.cli:main"
+enkstein = "enkstein.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["regentclaw*"]
+include = ["enkstein*"]

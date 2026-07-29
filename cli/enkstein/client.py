@@ -1,6 +1,6 @@
 """
-RegentClaw CLI — HTTP client
-All API calls go through here. Reads REGENTCLAW_API_URL from env (default: localhost:8000).
+Enkstein CLI — HTTP client
+All API calls go through here. Reads ENKSTEIN_API_URL from env (default: localhost:8000).
 """
 import os
 import json
@@ -12,14 +12,14 @@ try:
 except ImportError:
     httpx = None  # type: ignore
 
-BASE_URL = os.environ.get("REGENTCLAW_API_URL", "http://localhost:8000").rstrip("/")
+BASE_URL = os.environ.get("ENKSTEIN_API_URL", "http://localhost:8000").rstrip("/")
 PREFIX = "/api/v1"
 
 
 def _headers() -> dict:
-    """Attach a Bearer token if REGENTCLAW_TOKEN is set (required when the
+    """Attach a Bearer token if ENKSTEIN_TOKEN is set (required when the
     server runs with DEBUG=false). In DEBUG mode the server bypasses auth."""
-    token = os.environ.get("REGENTCLAW_TOKEN", "").strip()
+    token = os.environ.get("ENKSTEIN_TOKEN", "").strip()
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
@@ -27,14 +27,14 @@ def _client() -> "httpx.Client":
     if httpx is None:
         print("Error: httpx is not installed. Run: pip install httpx")
         sys.exit(1)
-    timeout = float(os.environ.get("REGENTCLAW_TIMEOUT", "30"))
+    timeout = float(os.environ.get("ENKSTEIN_TIMEOUT", "30"))
     return httpx.Client(base_url=BASE_URL, timeout=timeout, headers=_headers())
 
 
 def _handle(r) -> Any:
     """Raise friendly errors instead of raw tracebacks."""
     if r.status_code == 401:
-        print("Error: unauthorized. Set REGENTCLAW_TOKEN to a valid JWT "
+        print("Error: unauthorized. Set ENKSTEIN_TOKEN to a valid JWT "
               "(get one from POST /api/v1/auth/token).", file=sys.stderr)
         sys.exit(1)
     if r.status_code == 403:
@@ -63,8 +63,8 @@ def _request(method: str, path: str, **kw) -> Any:
             r = c.request(method, PREFIX + path, **kw)
             return _handle(r)
     except httpx.ConnectError:
-        print(f"Error: cannot reach RegentClaw at {BASE_URL}. "
-              f"Set REGENTCLAW_API_URL or start the server.", file=sys.stderr)
+        print(f"Error: cannot reach Enkstein at {BASE_URL}. "
+              f"Set ENKSTEIN_API_URL or start the server.", file=sys.stderr)
         sys.exit(1)
 
 

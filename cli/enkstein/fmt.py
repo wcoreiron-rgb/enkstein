@@ -1,5 +1,5 @@
 """
-RegentClaw CLI — Output formatters
+Enkstein CLI — Output formatters
 Clean, consistent terminal output using ANSI colours and rich tables.
 """
 import json

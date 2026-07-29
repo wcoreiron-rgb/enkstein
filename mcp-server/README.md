@@ -1,12 +1,12 @@
-# RegentClaw MCP Server
+# Enkstein MCP Server
 
 Bring **governed security tools** into Cursor, VS Code, and Claude Desktop.
 
 This [Model Context Protocol](https://modelcontextprotocol.io) server exposes
-RegentClaw's security capabilities as tools your AI coding agent can call —
+Enkstein's security capabilities as tools your AI coding agent can call —
 scanning code for secrets, checking security posture, listing findings, and
 launching multi-agent investigations. Every call is forwarded to your running
-RegentClaw backend, where the **Trust Fabric** applies policy, risk scoring, and
+Enkstein backend, where the **Trust Fabric** applies policy, risk scoring, and
 audit. The MCP server itself holds no credentials and executes nothing locally.
 
 ## Tools
@@ -27,7 +27,7 @@ audit. The MCP server itself holds no credentials and executes nothing locally.
 ## Install
 
 ```bash
-pip install ./regentclaw_mcp-0.7.0-py3-none-any.whl
+pip install ./enkstein_mcp-0.7.0-py3-none-any.whl
 ```
 
 Download the wheel from the matching GitHub Release. PyPI publication is not
@@ -35,19 +35,19 @@ part of the current release workflow.
 
 ## Configure your editor
 
-You need a running RegentClaw backend (`docker compose up`) reachable at
-`REGENTCLAW_API_URL`.
+You need a running Enkstein backend (`docker compose up`) reachable at
+`ENKSTEIN_API_URL`.
 
 ### Cursor — `~/.cursor/mcp.json`
 
 ```json
 {
   "mcpServers": {
-    "regentclaw": {
-      "command": "regentclaw-mcp",
+    "enkstein": {
+      "command": "enkstein-mcp",
       "env": {
-        "REGENTCLAW_API_URL": "http://localhost:8000",
-        "REGENTCLAW_TOKEN": ""
+        "ENKSTEIN_API_URL": "http://localhost:8000",
+        "ENKSTEIN_TOKEN": ""
       }
     }
   }
@@ -59,9 +59,9 @@ You need a running RegentClaw backend (`docker compose up`) reachable at
 ```json
 {
   "mcpServers": {
-    "regentclaw": {
-      "command": "regentclaw-mcp",
-      "env": { "REGENTCLAW_API_URL": "http://localhost:8000" }
+    "enkstein": {
+      "command": "enkstein-mcp",
+      "env": { "ENKSTEIN_API_URL": "http://localhost:8000" }
     }
   }
 }
@@ -69,9 +69,9 @@ You need a running RegentClaw backend (`docker compose up`) reachable at
 
 ### VS Code (with an MCP-capable extension)
 
-Point the extension at the `regentclaw-mcp` command with the same env vars.
+Point the extension at the `enkstein-mcp` command with the same env vars.
 
-Set `REGENTCLAW_TOKEN` to a JWT when your server runs with `DEBUG=false`
+Set `ENKSTEIN_TOKEN` to a JWT when your server runs with `DEBUG=false`
 (get one from `POST /api/v1/auth/token`). In local DEBUG mode it can be empty.
 
 ## Example prompts (once connected)

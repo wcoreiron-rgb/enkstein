@@ -563,7 +563,7 @@ Enkstein ships in three installable forms beyond the web platform. All three tal
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./regentclaw_mcp-0.7.0-py3-none-any.whl
+pip install ./enkstein_mcp-0.5.7-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -572,7 +572,7 @@ Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
 {
   "mcpServers": {
     "regentclaw": {
-      "command": "regentclaw-mcp",
+      "command": "enkstein-mcp",
       "env": { "REGENTCLAW_API_URL": "http://localhost:8000" }
     }
   }
@@ -590,7 +590,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install ./regentclaw_cli-0.7.0-py3-none-any.whl
+pip install ./enkstein_cli-0.5.7-py3-none-any.whl
 export REGENTCLAW_API_URL=http://localhost:8000
 regentclaw status dashboard
 regentclaw connectors test okta
@@ -603,12 +603,12 @@ regentclaw evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./regentclaw_core-0.5.7-py3-none-any.whl
+pip install ./enkstein_core-0.5.7-py3-none-any.whl
 ```
 ```python
-from regentclaw_core import classify_ring, evaluate_ring, scan_text, verify_package
+from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package
 ```
-→ [full core docs](regentclaw-core/README.md)
+→ [full core docs](enkstein-core/README.md)
 
 ## API Reference
 

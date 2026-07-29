@@ -8,7 +8,7 @@ it" moment is the whole pitch.
 ## Before you record
 
 - [ ] Enkstein server running: `docker compose up` (backend reachable on :8000)
-- [ ] `pip install regentclaw-mcp` and add it to `~/.cursor/mcp.json` (see README)
+- [ ] `pip install enkstein-mcp` and add it to `~/.cursor/mcp.json` (see README)
 - [ ] Restart Cursor; confirm the `regentclaw` MCP server shows green in Settings → MCP
 - [ ] Open a sample file with a planted secret, e.g. `demo.env`:
       ```
@@ -51,7 +51,7 @@ github.com/wcoreiron-rgb/enkstein
 
 ## Fallback (if the live blocked-by-policy moment is flaky on camera)
 
-Record the `regentclaw-cli` equivalent instead — it's deterministic:
+Record the `enkstein-cli` equivalent instead — it's deterministic:
 ```bash
 regentclaw status dashboard
 # then in another pane, show the MCP scan via a quick python one-liner

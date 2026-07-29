@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name            = "regentclaw-mcp"
+name            = "enkstein-mcp"
 version         = "0.5.7"
-description     = "RegentClaw MCP server — governed security tools for AI agents in Cursor, VS Code, and Claude Desktop"
+description     = "Enkstein MCP server — governed security tools for AI agents in Cursor, VS Code, and Claude Desktop"
 readme          = "README.md"
 requires-python = ">=3.11"
 license         = "MIT"
 keywords        = ["mcp", "security", "zero-trust", "cursor", "vscode", "ai-agents"]
-authors         = [{ name = "RegentClaw" }]
+authors         = [{ name = "Enkstein" }]
 
 dependencies = [
     "mcp>=1.2.0",
@@ -22,8 +22,8 @@ Homepage      = "https://github.com/wcoreiron-rgb/enkstein"
 Documentation = "https://wcoreiron-rgb.github.io/enkstein/"
 
 [project.scripts]
-regentclaw-mcp = "regentclaw_mcp.server:main"
+enkstein-mcp = "enkstein_mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["regentclaw_mcp*"]
+include = ["enkstein_mcp*"]

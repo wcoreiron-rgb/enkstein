@@ -1072,7 +1072,7 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
                 "analyze_plan",
                 "map_controls",
             ]
-            provider["mode"] = "regentclaw_mcp_tool" if provider["configured"] else "local_guarded_fallback"
+            provider["mode"] = "enkstein_mcp_tool" if provider["configured"] else "local_guarded_fallback"
         elif provider["provider"] == "terraform_cloud":
             provider["capabilities"] = ["workspace_status", "plan_run_metadata", "policy_set_context"]
             provider["mode"] = "connector" if provider["configured"] else "not_configured"
@@ -1213,7 +1213,7 @@ async def generate_terraform(
         "environment": body.environment,
         "output_mode": body.output_mode,
         "mcp": {
-            "server": "regentclaw-mcp",
+            "server": "enkstein-mcp",
             "tool": "terraclaw_generate_secure_terraform",
             "mode": "configured" if await is_connector_configured(db, "terraform_mcp") else "local_guarded_fallback",
             "terraform_cloud_ready": await is_connector_configured(db, "terraform_cloud"),

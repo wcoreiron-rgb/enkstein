@@ -1,16 +1,16 @@
-# regentclaw-core
+# enkstein-core
 
-The embeddable heart of [RegentClaw](https://github.com/wcoreiron-rgb/enkstein) —
+The embeddable heart of [Enkstein](https://github.com/wcoreiron-rgb/enkstein) —
 its Zero Trust governance and scanning primitives, runnable **in-process with no
-server, no database, no Docker**. Just `pip install regentclaw-core`.
+server, no database, no Docker**. Just `pip install enkstein-core`.
 
-Use it to drop RegentClaw's enforcement logic directly into your own scripts,
+Use it to drop Enkstein's enforcement logic directly into your own scripts,
 agents, CI pipelines, or pre-commit hooks.
 
 ## Install
 
 ```bash
-pip install ./regentclaw_core-0.5.7-py3-none-any.whl
+pip install ./enkstein_core-0.5.7-py3-none-any.whl
 ```
 
 Only dependency: `cryptography`.
@@ -27,7 +27,7 @@ Only dependency: `cryptography`.
 
 **Gate an action locally:**
 ```python
-from regentclaw_core import classify_ring, evaluate_ring
+from enkstein_core import classify_ring, evaluate_ring
 
 ring = classify_ring("quarantine_device")          # -> "ring1"
 decision = evaluate_ring(ring, trust_score=72, caller_role="analyst")
@@ -37,7 +37,7 @@ if not decision["allowed"]:
 
 **Scan for secrets before commit (e.g. in a pre-commit hook):**
 ```python
-from regentclaw_core import scan_text
+from enkstein_core import scan_text
 
 result = scan_text(open("config.env").read())
 if result.is_sensitive:
@@ -47,7 +47,7 @@ if result.is_sensitive:
 
 **Verify a manifest's integrity:**
 ```python
-from regentclaw_core import verify_package
+from enkstein_core import verify_package
 
 res = verify_package(manifest_json, expected_hash=h, signature_b64=sig, public_key_pem=key)
 assert res.valid, res.error
@@ -55,12 +55,12 @@ assert res.valid, res.error
 
 ## Scope
 
-This package is the subset of RegentClaw that is genuinely standalone. The full
+This package is the subset of Enkstein that is genuinely standalone. The full
 platform — 24+ security claws, multi-agent swarms, autonomous remediation, and
 the Trust Fabric audit layer — runs as a server (FastAPI + Postgres). For that,
 see the [main repo](https://github.com/wcoreiron-rgb/enkstein) or talk to it
-with [`regentclaw-cli`](https://github.com/wcoreiron-rgb/enkstein/tree/main/cli)
-and [`regentclaw-mcp`](https://github.com/wcoreiron-rgb/enkstein/tree/main/mcp-server).
+with [`enkstein-cli`](https://github.com/wcoreiron-rgb/enkstein/tree/main/cli)
+and [`enkstein-mcp`](https://github.com/wcoreiron-rgb/enkstein/tree/main/mcp-server).
 
 > These modules are mirrored from the main repo's backend and kept in sync via
 > `scripts/sync_core.sh`. The canonical source lives in `backend/app/`.

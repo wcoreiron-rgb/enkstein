@@ -1,8 +1,8 @@
 # NOTE: mirrored from backend/app/services/provenance.py — keep in sync via scripts/sync_core.sh.
 # This module is intentionally dependency-light (stdlib + cryptography) so it
-# can run embedded with no RegentClaw server.
+# can run embedded with no Enkstein server.
 """
-RegentClaw — Connector / Skill-Pack Provenance Service
+Enkstein — Connector / Skill-Pack Provenance Service
 Verifies manifest integrity at install time via SHA-256 content hash
 and optional Ed25519 signature (when publisher key is available).
 """
@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.exceptions import InvalidSignature
 
-logger = logging.getLogger("regentclaw.provenance")
+logger = logging.getLogger("enkstein.provenance")
 
 
 # ─── Core utilities ───────────────────────────────────────────────────────────

@@ -65,14 +65,14 @@ encrypted connector credentials, and runtime state.
 
 Release assets also include wheels and source distributions for:
 
-- `regentclaw-cli`
-- `regentclaw-core`
-- `regentclaw-mcp`
+- `enkstein-cli`
+- `enkstein-core`
+- `enkstein-mcp`
 
 Install a downloaded wheel with `pipx` or `pip`:
 
 ```bash
-pipx install ./regentclaw_cli-VERSION-py3-none-any.whl
+pipx install ./enkstein_cli-VERSION-py3-none-any.whl
 ```
 
 The compatibility CLI and MCP packages connect to a running Enkstein server; they do not

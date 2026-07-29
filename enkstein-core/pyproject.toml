@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name            = "regentclaw-core"
+name            = "enkstein-core"
 version         = "0.5.7"
-description     = "Embeddable RegentClaw governance primitives — execution ring policy, provenance verification, and secret/PII scanning. No server required."
+description     = "Embeddable Enkstein governance primitives — execution ring policy, provenance verification, and secret/PII scanning. No server required."
 readme          = "README.md"
 requires-python = ">=3.11"
 license         = "MIT"
 keywords        = ["security", "zero-trust", "secret-scanning", "policy", "governance"]
-authors         = [{ name = "RegentClaw" }]
+authors         = [{ name = "Enkstein" }]
 
 dependencies = [
     "cryptography>=42.0",
@@ -22,4 +22,4 @@ Documentation = "https://wcoreiron-rgb.github.io/enkstein/"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["regentclaw_core*"]
+include = ["enkstein_core*"]

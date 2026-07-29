@@ -1,6 +1,6 @@
 # NOTE: mirrored from backend/app/claws/arcclaw/scanner.py — keep in sync via scripts/sync_core.sh.
 # This module is intentionally dependency-light (stdlib + cryptography) so it
-# can run embedded with no RegentClaw server.
+# can run embedded with no Enkstein server.
 """
 ArcClaw — Sensitive Pattern Scanner
 Inspects AI prompts and outputs for sensitive data patterns.

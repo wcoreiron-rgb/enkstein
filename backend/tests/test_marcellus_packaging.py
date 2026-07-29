@@ -763,7 +763,7 @@ def test_python_package_versions_match_the_app_version() -> None:
 
     for manifest in (
         "cli/pyproject.toml",
-        "regentclaw-core/pyproject.toml",
+        "enkstein-core/pyproject.toml",
         "mcp-server/pyproject.toml",
     ):
         line = next(
