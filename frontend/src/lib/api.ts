@@ -621,6 +621,31 @@ export const startBrowserBrainPairing = () =>
   );
 export const openBrowserCompanionFolder = () =>
   apiFetch<{ opened: boolean; detail?: string }>('/modelclaw/brains/browser-companion', { method: 'POST' });
+/** Downloads the companion as a zip. Kept out of `apiFetch` because that
+ * helper parses JSON, and revealing a folder on the host only helps someone
+ * sitting at that machine. */
+export async function downloadBrowserCompanion(): Promise<void> {
+  const token = getAuthToken();
+  const response = await fetch(`${BASE}/modelclaw/brains/browser-companion/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? 'The browser companion is not bundled with this runtime.'
+        : 'The browser companion could not be downloaded.',
+    );
+  }
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'enkstein-browser-companion.zip';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 export const invokeSubscriptionBrain = (body: object) =>
   apiFetch<any>('/modelclaw/brains/invoke', { method: 'POST', body: JSON.stringify(body) });
 export const routeBrainConsensus = (body: object) =>

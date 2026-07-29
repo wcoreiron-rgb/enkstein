@@ -1021,3 +1021,32 @@ def test_windows_claude_invocation_sends_prompt_via_stdin_not_arguments() -> Non
     arguments_expr, stdin_expr = invocation_line.split("Invoke-Process $runtime", 1)[1].rsplit(")", 1)
     assert "governedPrompt" not in arguments_expr
     assert stdin_expr.strip() == "$governedPrompt"
+
+
+@pytest.mark.asyncio
+async def test_browser_companion_downloads_as_a_loadable_zip(client):
+    """Revealing a folder only helps someone sitting at the host.
+
+    A tester on another machine needs the bytes, so the companion is served as
+    a zip that Chrome/Edge can load unpacked.
+    """
+    import io
+    import zipfile
+
+    response = await client.get(f"{BASE}/brains/browser-companion/download")
+
+    # A source checkout has the extension; a stripped runtime honestly 404s.
+    if response.status_code == 404:
+        pytest.skip("browser-extension is not present in this runtime")
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "application/zip"
+    assert "attachment;" in response.headers["content-disposition"]
+
+    archive = zipfile.ZipFile(io.BytesIO(response.content))
+    names = archive.namelist()
+    # A manifest is what makes the folder loadable at all.
+    assert "enkstein-browser-companion/manifest.json" in names
+    assert any(name.endswith("background.js") for name in names)
+    # Dotfiles and OS metadata make Chrome reject an unpacked load.
+    assert not any("/." in name for name in names)

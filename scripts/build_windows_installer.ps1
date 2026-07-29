@@ -39,6 +39,10 @@ Copy-Item (Join-Path $Root "docs\installation.md") (Join-Path $Runtime "docs\ins
 Copy-Item (Join-Path $Root "docs\native-installers.md") (Join-Path $Runtime "docs\native-installers.md")
 Copy-Item (Join-Path $Root "docs\brain-bridges.md") (Join-Path $Runtime "docs\brain-bridges.md")
 Copy-Item (Join-Path $Root "docs\production-deployment.md") (Join-Path $Runtime "docs\production-deployment.md")
+# The browser companion ships with the runtime so the console can serve it as a
+# download, matching the macOS package. Without it, Windows testers have no way
+# to load the extension.
+Copy-Tree (Join-Path $Root "browser-extension") (Join-Path $Runtime "browser-extension")
 Set-Content -NoNewline -Path (Join-Path $Runtime "VERSION") -Value "v$Version"
 
 $Compiler = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe"

@@ -684,3 +684,43 @@ def test_claude_models_come_from_real_entitlement_not_three_aliases() -> None:
     # Aliases remain, and remain the fallback when the cache is unreadable.
     assert 'let aliases = ["sonnet", "opus", "haiku"]' in bridge
     assert "if entitled.isEmpty { return aliases }" in bridge
+
+
+def test_browser_companion_ships_in_both_installers() -> None:
+    """A tester cannot load an extension that was never packaged.
+
+    macOS bundled it, Windows did not, so Windows testers had no way to use the
+    Browser Companion at all.
+    """
+    mac_build = _read("scripts/build_macos_pkg.sh")
+    windows_build = _read("scripts/build_windows_installer.ps1")
+
+    assert "browser-extension" in mac_build
+    assert "browser-extension" in windows_build
+
+
+def test_windows_release_is_not_blocked_by_missing_signing_cert() -> None:
+    """Signing is applied when configured, but does not gate the release.
+
+    Throwing on absent Authenticode secrets meant no Windows build shipped at
+    all, rather than an unsigned one testers could still run.
+    """
+    workflow = _read(".github/workflows/release.yml")
+
+    assert "publishing an unsigned installer" in workflow
+    assert "Windows Authenticode signing secrets are required" not in workflow
+    # Signing still runs and still fails loudly when a certificate is present.
+    assert 'throw "Windows installer signing failed"' in workflow
+
+
+def test_testing_guide_states_what_a_connector_test_proves() -> None:
+    """Evaluators need the limits stated, not discovered."""
+    guide = _read("docs/testing-guide.md")
+    readme = _read("README.md")
+
+    assert "docs/testing-guide.md" in readme
+    # The honest boundary: authentication is not the same as live findings.
+    assert "does not by itself mean the connector" in guide
+    # Known gaps are declared rather than left for a tester to trip over.
+    assert "Known gaps" in guide
+    assert "unsigned" in guide

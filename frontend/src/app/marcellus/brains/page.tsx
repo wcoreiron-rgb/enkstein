@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Cloud,
   Cpu,
+  Download,
   ExternalLink,
   HardDrive,
   Loader2,
@@ -23,6 +24,7 @@ import {
   getArcProviders,
   getBrainStatuses,
   getModelClawProfiles,
+  downloadBrowserCompanion,
   launchCliLogin,
   openBrowserCompanionFolder,
   requestDesktopBrainAccess,
@@ -300,6 +302,18 @@ export default function BrainConnectionsPage() {
   };
 
   const openCompanion = async () => {
+    // Downloading works from any browser that can reach the console. Revealing
+    // the folder only helps an operator sitting at the host, so it is kept as
+    // a fallback for when the download is unavailable.
+    try {
+      await downloadBrowserCompanion();
+      setWarnings([
+        'Unzip the download, then in Chrome or Edge open Extensions, enable Developer mode, choose Load unpacked, and select the unzipped enkstein-browser-companion folder. Return here and press Pair browser.',
+      ]);
+      return;
+    } catch {
+      // fall through to revealing the bundled folder
+    }
     try {
       const result = await openBrowserCompanionFolder();
       if (!result.opened) throw new Error(result.detail || 'Browser companion folder could not be opened.');
@@ -399,8 +413,8 @@ export default function BrainConnectionsPage() {
               className="inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs"
               style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
             >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Install companion
+              <Download className="h-3.5 w-3.5" />
+              Download companion
             </button>
             <button
               type="button"

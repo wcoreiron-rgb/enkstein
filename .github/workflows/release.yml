@@ -155,22 +155,22 @@ jobs:
         shell: pwsh
         run: ./scripts/build_windows_installer.ps1 -Version "${{ github.ref_name }}"
 
-      - name: Verify Windows signing configuration
+      # Authenticode signing is applied when a certificate is configured. It is
+      # not a hard gate, because blocking the whole release on a Windows cert
+      # left testers with no Windows build at all. An unsigned installer still
+      # runs; SmartScreen shows a publisher warning, which the docs explain.
+      - name: Sign Windows installer
+        id: windows_signing
         shell: pwsh
         env:
           WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERT) -or [string]::IsNullOrWhiteSpace($env:WINDOWS_CERT_PASSWORD)) {
-            throw "Windows Authenticode signing secrets are required for a public release"
+            Write-Host "::warning::No Windows signing certificate configured; publishing an unsigned installer."
+            "signed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
           }
-
-      - name: Sign Windows installer
-        shell: pwsh
-        env:
-          WINDOWS_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_PFX_BASE64 }}
-          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
-        run: |
           $installer = "dist\Enkstein-$($env:GITHUB_REF_NAME.TrimStart('v'))-windows-x64-setup.exe"
           $certificate = Join-Path $env:RUNNER_TEMP "windows-signing.pfx"
           [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_CERT))
@@ -181,6 +181,7 @@ jobs:
           & $signtool.FullName sign /f $certificate /p $env:WINDOWS_CERT_PASSWORD /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $installer
           if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed" }
           & $signtool.FullName verify /pa /v $installer
+          "signed=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Remove temporary Windows signing certificate
         if: always()

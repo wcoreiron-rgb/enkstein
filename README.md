@@ -214,6 +214,12 @@ the desktop without copying subscription tokens into Docker:
   model profiles concurrently. Unavailable, policy-denied, failed, and
   simulated responses never count as votes.
 
+The Browser Companion ships inside the macOS and Windows packages. Press
+**Download companion** in Brain Connections to get it as a zip, unzip it, then
+load it in Chrome or Edge through Extensions → Developer mode → Load unpacked,
+and press **Pair browser**. The download works from any browser that can reach
+the console, including one on a different machine from the runtime.
+
 Every invocation is evaluated by Trust Fabric, tenant/profile constraints are
 rechecked, model output is rescanned and redacted, and call provenance is
 written to the Model Cortex audit. The host bridge uses a random per-install
@@ -285,16 +291,16 @@ account limitations.
   <img src="https://img.shields.io/badge/Mako-0.0%25-8B5CF6" alt="Mako 0.0%" />
 </p>
 
-## What is RegentClaw?
+## What is Enkstein?
 
-**RegentClaw is AI-driven security automation with a Zero Trust governance layer baked into every action.**
+**Enkstein is AI-driven security automation with a Zero Trust governance layer baked into every action.**
 
 Security teams today face a hard tradeoff:
 
 - **Agent frameworks & raw LLM agents** (AutoGPT / LangChain-style) are *powerful but ungoverned* — they can call any tool, hit any API, and execute anything, with no policy layer, no risk scoring, and no audit trail. You would never point one at production.
 - **Traditional SOAR platforms** are *governed but not intelligent* — rigid, pre-scripted playbooks that can't reason, correlate, or adapt to a novel incident.
 
-RegentClaw collapses that tradeoff. The thesis is simple:
+Enkstein collapses that tradeoff. The thesis is simple:
 
 > **AI agents should investigate and act on security problems autonomously — but every action they take must be authorized, risk-scored, and fully auditable.** That's Zero Trust, applied to AI automation.
 
@@ -321,11 +327,11 @@ RegentClaw collapses that tradeoff. The thesis is simple:
 
 > More views: [Trust Fabric](docs/screenshots/trust-fabric.png) · [Control Center](docs/screenshots/control-center.png) · [Connector Marketplace](docs/screenshots/connectors.png)
 
-## How RegentClaw Compares
+## How Enkstein Compares
 
-RegentClaw sits at the intersection of three tool categories — and is the only one that delivers all of it under one governed roof. Each category below has real strengths (shown honestly); the gap RegentClaw fills is **governance + intelligence + security-domain coverage together.**
+Enkstein sits at the intersection of three tool categories — and is the only one that delivers all of it under one governed roof. Each category below has real strengths (shown honestly); the gap Enkstein fills is **governance + intelligence + security-domain coverage together.**
 
-| Capability | Raw LLM Agents<br/><sub>(AutoGPT-style)</sub> | Agent Frameworks<br/><sub>(LangChain etc.)</sub> | Traditional SOAR<br/><sub>(playbook engines)</sub> | **RegentClaw** |
+| Capability | Raw LLM Agents<br/><sub>(AutoGPT-style)</sub> | Agent Frameworks<br/><sub>(LangChain etc.)</sub> | Traditional SOAR<br/><sub>(playbook engines)</sub> | **Enkstein** |
 |---|:---:|:---:|:---:|:---:|
 | Autonomous AI investigation & reasoning | ✅ | ✅ | ❌ rigid scripts | ✅ Copilot + multi-agent swarms |
 | Per-action policy enforcement | ❌ | ❌ build it yourself | ~ static rules | ✅ Trust Fabric on **every** action |
@@ -340,12 +346,12 @@ RegentClaw sits at the intersection of three tool categories — and is the only
 
 <sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
 
-**In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, RegentClaw gives you **autonomous capability that is governed by default.**
+**In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, Enkstein gives you **autonomous capability that is governed by default.**
 
 ## Architecture
 
 ```
-RegentClaw/
+Enkstein/
 ├── backend/           FastAPI — CoreOS, Trust Fabric, AI Security, Identity Security
 ├── frontend/          Next.js — Platform UI dashboard
 ├── docker-compose.yml Full local stack
@@ -353,7 +359,7 @@ RegentClaw/
 
 ## Security Compliance
 
-RegentClaw maintains an honest, evidence-backed self-assessment against the **OWASP Top 10 for LLM/Agentic AI Applications (2025)**.
+Enkstein maintains an honest, evidence-backed self-assessment against the **OWASP Top 10 for LLM/Agentic AI Applications (2025)**.
 
 | Document | Format |
 |---|---|
@@ -385,6 +391,12 @@ Supply-chain policy gating supports a temporary time-boxed waiver baseline at `s
 Compliance Assurance now exposes a Trust Fabric-governed evidence bundle export at `POST /api/v1/complianceclaw/evidence/export`, including findings, compliance-relevant audit logs, framework rollups, and a SHA-256 chain-of-custody hash.
 
 ## Quick Start
+
+> **Evaluating Enkstein or testing connectors?** Start with the
+> [Testing Guide](docs/testing-guide.md). It lists which connectors work
+> without a paid account, what a passing connector test does and does not
+> prove, how to tell live findings from demonstration data, and the gaps worth
+> knowing before you file an issue.
 
 ### Download a release package
 
@@ -446,7 +458,7 @@ the persistent local secret volume.
 ### Run locally
 
 ```bash
-cd RegentClaw
+cd marcellus
 docker-compose up --build
 ```
 
@@ -544,9 +556,9 @@ with a scoped app registration is the correct posture for unattended scanning.
 
 ## Use it from your terminal & editor
 
-RegentClaw ships in three installable forms beyond the web platform. All three talk to your running RegentClaw server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
+Enkstein ships in three installable forms beyond the web platform. All three talk to your running Enkstein server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
 
-### ⚡ Add RegentClaw to Cursor in 30 seconds (MCP)
+### ⚡ Add Enkstein to Cursor in 30 seconds (MCP)
 
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
@@ -588,7 +600,7 @@ regentclaw evidence collect --framework soc2
 
 ### 🧩 Embed the governance core (no server)
 
-Drop RegentClaw's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
+Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
 pip install ./regentclaw_core-0.7.0-py3-none-any.whl
@@ -634,9 +646,9 @@ Key endpoints:
 5. **Every risk is containable** — Isolation, revocation, kill switch
 6. **Every module is governed** — Plug-and-play = plug-and-governed
 
-## AGT + Multi-Agent Governance (New)
+## AGT + Multi-Agent Governance
 
-RegentClaw now exposes AGT rollout through a provider boundary instead of direct Capability Node coupling:
+Enkstein exposes AGT rollout through a provider boundary instead of direct Capability Node coupling:
 
 - Adapter boundary: `backend/app/fabric/providers/agt/`
 - Feature flags (opt-in): `AGT_ENABLE_MCP_GATEWAY`, `AGT_ENABLE_E2E_MESSAGING`, `AGT_ENABLE_AGENT_MESH`, `AGT_ENABLE_SHADOW_DISCOVERY`
@@ -646,170 +658,18 @@ RegentClaw now exposes AGT rollout through a provider boundary instead of direct
 
 Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
 
-## Latest Updates (May 31, 2026)
+## Release History
 
-- Command and channel control-plane convergence:
-  - Channel gateway ingress (`/channel-gateway/slack/events`, `/channel-gateway/teams/webhook`, `/channel-gateway/message`) now normalizes inbound requests into Command contract payloads.
-  - Normalized channel commands execute through the same policy-governed command path used by `POST /api/v1/commands`.
-  - Channel responses now include `command_result` metadata with command id, intent, target, and policy outcome.
-  - Added fallback behavior for unavailable command backend (`outcome: unavailable`) so channel ingestion remains non-breaking.
-  - `/channel-gateway/simulate` now mirrors the same command normalization path and returns `command_result` for parity testing.
-  - Added channel ingress adapters for generic webhook and email:
-    - `POST /api/v1/channel-gateway/webhook`
-    - `POST /api/v1/channel-gateway/email/inbound`
-    Both routes now normalize to the same Command contract and return `command_result`.
-  - Added CLI ingress adapter:
-    - `POST /api/v1/channel-gateway/cli/command`
-    with optional `tenant_id` for tenant-scoped command normalization.
-  - Remote-agent dispatch now enforces tenant match, kill-switch state, and per-agent allowed command intents.
-  - Remote-agent dispatch now also enforces heartbeat freshness and minimum trust-score threshold.
-  - Added remote agent health visibility endpoint:
-    - `GET /api/v1/remote-agents/health`
-  - Remote-agent lifecycle hardening now includes:
-    - `POST /api/v1/remote-agents/enrollment-token`
-    - `POST /api/v1/remote-agents/{agent_id}/rotate-key`
-    - signed enrollment token scope checks for tenant/owner/actions/claws/connectors
-    - public-key fingerprint tracking and key rotation audit metadata
-    - capability inventory updates on registration/heartbeat
-  - Added approval workflow APIs for command outcomes:
-    - `GET /api/v1/commands/pending`
-    - `POST /api/v1/commands/{command_id}/approve`
-    - `POST /api/v1/commands/{command_id}/reject`
-    - `POST /api/v1/commands/bulk-review`
-    - `GET /api/v1/commands/{command_id}/timeline`
-    - `GET /api/v1/commands/{command_id}/status`
-    - `POST /api/v1/commands/{command_id}/approval-policy`
-  - Command approval flow now supports persisted multi-operator state:
-    - approval progress (`approvals_received` / `required_approvals`) exposed in pending API
-    - self-approval blocked
-    - duplicate approver blocked
-    - approver principal is now JWT-bound (display name is informational only)
-    - final command allow only after required approvals are met
-    - explicit rejection path that marks pending command as blocked with reviewer reason
-    - command timeline endpoint for full approval/rejection audit trail
-    - pending list filters (`source`, `requester`, `min_risk`) for tighter triage views
-    - approval delegation control to raise/lower required approvals (within guardrails)
-  - Channel Gateway UI now includes:
-    - `Pending Commands` approval tab wired to Command approval APIs
-    - multi-select + bulk approve/reject controls for pending command batches
-    - bulk review outcome summary with per-command error visibility for partial-failure cases
-    - per-command timeline view for operator audit context
-    - timeline focus filters (All/Approvals/Rejections) for faster approval audit review
-    - timeline export actions (copy JSON, download JSON) for audit handoff
-    - pending command search + source/min-risk filters + consolidated status preview
-    - inline required-approvals selector for pending command delegation
-    - quick-ingest actions for CLI/Webhook/Email adapters
-    - expanded message detail with normalized `command_result` metadata
-  - Channel chat-ops review commands are now supported from ingress messages:
-    - `approve <command_id>`
-    - `reject <command_id>` / `deny <command_id>`
-    These invoke the same governed pending-command review path used by command APIs.
-  - Slack/Teams outbound responses now use configured channel webhooks when available:
-    - persisted messages expose `response_sent`
-    - API responses include `outbound_delivery.status` (`sent`, `failed`, or `skipped`)
-    - Slack replies include thread metadata (`thread_ts`) when the source event provides it
-    - approval-required responses include Slack Block Kit / Teams MessageCard action metadata for approve/reject review
-    - Channel Gateway message detail shows delivered/not-configured response status, card type, action count, thread id, and outbound card facts
-    - Control Center summary now tracks replies sent/pending-config in the last 24 hours
-  - Remediation ticket handoff validation now enforces stricter `create_jira_ticket` payload guardrails:
-    - `provider` must be `jira` and `target_type` must be `ticket`
-    - `project_key` must be uppercase alphanumeric (dashes/underscores allowed)
-    - minimum summary/description length checks before queueing remediation action
-  - External-agent and orchestration APIs now return sanitized error details (no raw internal exception bodies).
-  - AGT dependency and module scan paths are repository-scoped (including empty-path rejection) to prevent path traversal via untrusted scan inputs.
-  - CI workflow jobs define explicit least-privilege `permissions` for code-scanning workflow hardening.
-  - Added Playwright E2E coverage for Channel Gateway bulk pending-command approve flow.
-- Swarm runtime:
-  - Swarm background execution now uses bounded parallelism (Semaphore + gather) instead of sequential task loops.
-  - Dispatcher now routes supported capability nodes to real focused task handlers (`/task`) with deterministic fallback for unsupported capability nodes.
-  - Task outputs now include execution provenance metadata (`execution_mode`, `fallback_reason`) for operator/audit visibility.
-  - Swarm SSE `task_completed` events now include execution provenance fields for real-time operator context.
-  - Added live SSE stream endpoint: `GET /api/v1/swarm/jobs/{id}/stream` with `job_snapshot`, `task_started`, `task_completed`, and `job_completed` events.
-- Core Capability task contract:
-  - Added `POST /task` for:
-    - `/api/v1/identityclaw/task`
-    - `/api/v1/cloudclaw/task`
-    - `/api/v1/threatclaw/task`
-    - `/api/v1/arcclaw/task`
-    - `/api/v1/accessclaw/task`
-    - `/api/v1/dataclaw/task`
-    - `/api/v1/devclaw/task`
-    - `/api/v1/endpointclaw/task`
-    - `/api/v1/appclaw/task`
-    - `/api/v1/logclaw/task`
-    - `/api/v1/netclaw/task`
-    - `/api/v1/complianceclaw/task`
-    - `/api/v1/intelclaw/task`
-    - `/api/v1/recoveryclaw/task`
-    - `/api/v1/saasclaw/task`
-    - `/api/v1/privacyclaw/task`
-    - `/api/v1/userclaw/task`
-    - `/api/v1/insiderclaw/task`
-    - `/api/v1/vendorclaw/task`
-    - `/api/v1/attackpathclaw/task`
-    - `/api/v1/automationclaw/task`
-    - `/api/v1/configclaw/task`
-    - `/api/v1/terraclaw/task`
-    - `/api/v1/exposureclaw/task`
-    - `/api/v1/customclaw/task`
-  - Standard task response fields now align with Swarm Task Contract (`risk_score`, `confidence`, `recommended_actions`, `policy_decisions`, `execution_time_ms`, etc.).
-  - Focused task responses now include connector provenance metadata (`data_source`, `connector_state`) across all current swarm-routed Capability task handlers, including Access/Identity/Threat/Exposure/Cloud/Endpoint/Dev/Data/Net/Log/Config/Terra/AttackPath/App/Compliance/Recovery/Automation/Intel/Privacy/Vendor/Insider/User/SaaS/Custom.
-  - Cloud Security and Endpoint Security provider-scan failures now log sanitized provider context without raw exception payloads.
-- Model Cortex scaffold:
-  - Added `Model Cortex` module at `backend/app/core/modelclaw/` with providers, profiles, routed calls, and call audit surfaces.
-  - New endpoints:
-    - `GET /api/v1/modelclaw/providers`
-    - `GET /api/v1/modelclaw/profiles`
-    - `POST /api/v1/modelclaw/profiles`
-    - `POST /api/v1/modelclaw/route`
-    - `GET /api/v1/modelclaw/calls`
-  - Model routes are enforced through Trust Fabric decisions before response.
-  - Added tenant-scoped profile/call filtering (`tenant_id`) and persisted runtime state for profiles/call audit (`backend/.state/modelclaw_state.json`).
-- Swarm Judge synthesis:
-  - Added dedicated `swarm_judge_profile`.
-  - Swarm Judge now attempts Model Cortex-routed synthesis and falls back to deterministic summary when denied/unavailable.
-- Sprint 5 trigger/schedule swarm support:
-  - Added `start_swarm` / `fire_swarm` trigger execution path with profile-aware defaults and optional pre-execution approval gating.
-  - Added schedule swarm execution support for `SWARM_JOB`, `START_SWARM`, and `FIRE_SWARM` notes types.
-  - Added `/swarm/jobs/{id}/approve` behavior for both approval phases:
-    - pre-execution approval now starts/runs the job
-    - post-judge approval now finalizes the job
-  - Added shared swarm profile defaults (`FAST_TRIAGE`, `DEEP_INVESTIGATION`, `INCIDENT_RESPONSE`, `AUTONOMOUS_LOW_RISK`, `EMERGENCY_CONTAINMENT`) applied to trigger/schedule launches.
-- Memory Cortex runtime integration:
-  - Swarm tasks now receive short, redacted `memory_context` when relevant tenant/incidents memory exists.
-  - Task outputs expose `memory_context_loaded` for operator/audit visibility.
-  - High-risk Swarm Judge results now propose incident memory entries for analyst review.
-  - Memory runtime blocks proposed writes that look like secrets or prompt-injection payloads.
-  - Memory proposal review is now exposed through:
-    - `GET /api/v1/memory/proposals`
-    - `POST /api/v1/memory/proposals/{id}/approve`
-    - `POST /api/v1/memory/proposals/{id}/reject`
-    - `POST /api/v1/memory/incidents/{id}/rollback`
-  - Memory UI includes a review queue for Swarm-proposed memory and rollback controls for approved incident memory.
-- Sprint 6 operator workflow:
-  - Added one-click preset endpoint for **Suspicious Identity Investigation Swarm**:
-    - `POST /api/v1/swarm/jobs/presets/suspicious-identity`
-  - Preset launches Identity/Threat/Cloud/Data/Compliance/Automation participants with incident-response defaults and approval gate.
-  - Added Microsoft security demo preset endpoint:
-    - `POST /api/v1/swarm/jobs/presets/microsoft-identity-incident`
-    This launches Identity/Cloud/Endpoint/Log/Threat/Compliance/Automation with Entra/Azure Defender/Defender Endpoint/Sentinel connector preference metadata and deterministic fallback when credentials are absent.
-  - Identity Security focused `/task` now uses configured Entra ID credentials through the existing Entra adapter before falling back to persisted/seeded identity data.
-  - Swarm UI now includes quick-launch controls for the preset and richer judge output context (root cause, blast radius, next steps) on job detail.
-  - Swarm job detail now generates a live ticket draft and compliance impact rollup from judge/task evidence.
-  - Added direct **Create Ticket** handoff from Swarm detail to `POST /api/v1/remediation/trigger` using `create_jira_ticket` action specs.
-  - Remediation trigger now validates ticket action payload shape (`provider=jira`, `target_type=ticket`, `project_key`, `summary`, `description`) before queuing/executing.
-  - Added Playwright E2E coverage for the Swarm Create Ticket flow:
-    - `cd frontend && npm run test:e2e -- e2e/swarm-create-ticket.spec.ts`
-    - Local sandbox note: E2E requires the dev server to bind to `127.0.0.1:3100`.
- - Execution-channel/Remediation hardening:
-   - `exec_channels` create/execute routes now fail closed when Trust Fabric evaluation is unavailable.
-   - Production gate approve/reject now bind actor identity to JWT principal (body spoofing ignored) and block self-approval.
-   - Production gate execute now performs authoritative Trust Fabric re-check before completion.
-   - Remediation approve now fails closed when Trust Fabric evaluation is unavailable.
- - Control Center v2:
-   - Added backend summary endpoint for unified operator telemetry:
-     - `GET /api/v1/dashboard/control-center-summary`
-   - Control Center page now uses live summary cards for command queue, swarm pressure, remote-agent health, schedule load, channel pressure, execution gate status, and outbound channel reply health.
+Enkstein ships versioned macOS packages and self-hosted bundles. The
+authoritative, per-release record of what changed — including the root cause
+behind each fix — lives in two places:
+
+- [Changelog](docs/changelog.html) — every released version, newest first.
+- [GitHub Releases](https://github.com/wcoreiron-rgb/marcellus/releases) — downloadable installers and `SHA256SUMS`.
+
+For where the platform is strong versus still maturing, see the
+[Maturity Matrix](docs/maturity-matrix.md) and the *Known gaps* section of the
+[Testing Guide](docs/testing-guide.md).
 
 ## Platform Modules (25 Capability Nodes + 4 Core Surfaces + Core Engines)
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import io
 import uuid
+import zipfile
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.marcellus.runtime_security import actor_id, require_runtime_operator, resolve_tenant
@@ -230,6 +235,61 @@ async def start_browser_pairing(user: dict = Depends(get_current_user)):
 @router.post("/brains/browser-companion", summary="Open browser companion installation folder")
 async def open_browser_companion(user: dict = Depends(get_current_user)):
     return await open_browser_companion_folder()
+
+
+@router.get("/brains/browser-companion/download", summary="Download the browser companion as a zip")
+async def download_browser_companion(user: dict = Depends(get_current_user)):
+    """Return the unpacked companion as a zip the operator can load in a browser.
+
+    Revealing the folder in Finder only helps someone sitting at the machine
+    running Enkstein. A download works from any browser that can reach the
+    console, which is what a tester on another machine actually needs.
+    """
+    source = _browser_companion_source()
+    if source is None:
+        raise HTTPException(status_code=404, detail="Browser companion files are not bundled with this runtime")
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(source.rglob("*")):
+            if not path.is_file():
+                continue
+            # Keep the archive to the extension itself: a stray dotfile or
+            # OS metadata entry makes Chrome reject the unpacked load.
+            if any(part.startswith(".") for part in path.relative_to(source).parts):
+                continue
+            archive.write(path, arcname=str(Path("enkstein-browser-companion") / path.relative_to(source)))
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="enkstein-browser-companion-{settings.APP_VERSION}.zip"'
+            )
+        },
+    )
+
+
+def _browser_companion_source() -> Path | None:
+    """Locate the bundled companion in both a packaged app and a source checkout."""
+    module = Path(__file__).resolve()
+    candidates = [
+        # Packaged runtime (Resources/runtime/backend/app/core/modelclaw) and
+        # source checkout (repo/backend/app/core/modelclaw) both put the
+        # extension a fixed number of levels above the backend root, but the
+        # depth differs, so every plausible ancestor is checked rather than
+        # assuming one layout.
+        *[parent / "browser-extension" for parent in module.parents[:8]],
+        Path("/app/browser-extension"),
+    ]
+    for candidate in candidates:
+        try:
+            if (candidate / "manifest.json").is_file():
+                return candidate
+        except OSError:
+            continue
+    return None
 
 
 @router.post("/brains/invoke", response_model=BrainInvokeResponse, summary="Invoke a subscription Brain")

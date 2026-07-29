@@ -62,6 +62,10 @@ services:
       ALLOWED_ORIGINS: '["http://localhost:3000","http://frontend:3000"]'
     volumes:
       - ./backend:/app
+      # The image builds from ./backend, so the companion is outside its build
+      # context. Mounting it read-only lets the console serve the extension
+      # download in a Compose deployment the same way the packaged app does.
+      - ./browser-extension:/app/browser-extension:ro
     depends_on:
       db:
         condition: service_healthy
