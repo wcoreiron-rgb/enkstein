@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.7 — repository and artifact rename -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">One name everywhere &mdash; the repository, the downloads, and the docs site</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.7</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Packaging &amp; Docs</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The project is now <code>wcoreiron-rgb/enkstein</code>, and the leftover names were doing real damage rather than merely looking untidy.</p>
+      <ul>
+        <li><strong>&ldquo;Check for Updates&rdquo; would have stopped working.</strong> The macOS app reads its repository out of <code>Info.plist</code> and queries the GitHub releases API with it. That value still named the old repository, so every installed copy would have failed to find a release &mdash; quietly. It now names the current repository, and the app still accepts the old package filename so existing installs can update to this build.</li>
+        <li><strong>The build badge was showing another repository&rsquo;s status.</strong> Its link had been repointed but the badge image had not, so the README reported a different project&rsquo;s build result as though it were this one.</li>
+        <li><strong>Downloads carry the product name.</strong> Self-hosted bundles were still <code>marcellus-VERSION</code>; they are now <code>enkstein-VERSION</code>, along with the macOS packaging path that consumes that directory.</li>
+        <li><strong>The documentation site is published at its own address</strong> and no longer borrows the predecessor project&rsquo;s. Old links continue to resolve.</li>
+      </ul>
+      <p><strong>Deliberately unchanged.</strong> Anything a rename would break for an existing install stays as it is: the API route segments, the Brain Bridge and external-agent request headers, the Compose project and database names, and the application support directory holding your database and bridge secret. Renaming those would orphan working installations for no visible benefit.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.6 — Browser Companion download, Windows bundling, testing guide -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

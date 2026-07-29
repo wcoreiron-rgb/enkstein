@@ -26,7 +26,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.5.6` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.5.7` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -83,7 +83,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.5.6` keeps a paired Browser Companion marked ready while it is
+Version `0.5.7` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -603,7 +603,7 @@ regentclaw evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./regentclaw_core-0.5.6-py3-none-any.whl
+pip install ./regentclaw_core-0.5.7-py3-none-any.whl
 ```
 ```python
 from regentclaw_core import classify_ring, evaluate_ring, scan_text, verify_package
