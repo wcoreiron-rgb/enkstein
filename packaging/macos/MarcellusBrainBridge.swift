@@ -1639,10 +1639,17 @@ private final class BrainBridge {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        // USER and LOGNAME are required, not cosmetic: the Claude CLI resolves
+        // its login session through the user's Keychain and reports
+        // {"loggedIn": false} without them, so an authenticated host still read
+        // as signed out. The environment stays otherwise minimal.
+        let userName = NSUserName()
         process.environment = [
             "HOME": FileManager.default.homeDirectoryForCurrentUser.path,
             "PATH": "/Applications/ChatGPT.app/Contents/Resources:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
             "LANG": "en_US.UTF-8",
+            "USER": userName,
+            "LOGNAME": userName,
         ]
         let captureURL = FileManager.default.temporaryDirectory.appendingPathComponent("marcellus-process-\(UUID().uuidString).log")
         FileManager.default.createFile(atPath: captureURL.path, contents: nil)

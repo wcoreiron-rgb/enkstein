@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   BrainCircuit,
   CheckCircle2,
+  ChevronDown,
   Cloud,
   Cpu,
   ExternalLink,
@@ -74,6 +75,41 @@ function Status({ ready, checking, status }: { ready: boolean; checking?: boolea
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600"><CheckCircle2 className="h-4 w-4" />Ready</span>
   ) : (
     <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-600"><XCircle className="h-4 w-4" />Needs setup</span>
+  );
+}
+
+/** Model lists run from three entries to forty-four. Rendering them all inline
+ * made a single card taller than the rest of the page, so the full list is
+ * collapsed behind its own count and opened on demand. */
+function ModelList({ models, label = 'models' }: { models: string[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  if (models.length === 0) return null;
+  return (
+    <div className="mt-3 border-t pt-2" style={{ borderColor: 'var(--rc-border)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium"
+        style={{ color: 'var(--rc-text-2)' }}
+      >
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+        {models.length} {label}
+      </button>
+      {open && (
+        <div className="mt-2 flex max-h-48 flex-wrap gap-1.5 overflow-y-auto pr-1">
+          {models.map((name) => (
+            <span
+              key={name}
+              className="rounded px-1.5 py-0.5 text-[10px]"
+              style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-3)' }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -275,6 +311,17 @@ export default function BrainConnectionsPage() {
 
   const ollama = providers.find((provider) => provider.provider === 'ollama');
   const apiProviders = providers.filter((provider) => provider.provider !== 'ollama');
+  /** The providers endpoint carries a static catalogue while live discovery
+   * reports what is actually installed or reachable, and the two disagree
+   * (Anthropic listed 3 against 6 discovered). Live discovery wins when it
+   * returned anything for the provider. */
+  const modelNames = useCallback(
+    (provider: ProviderStatus): string[] => {
+      const live = (models[provider.provider] || []).map((row) => row.name || row.id).filter(Boolean);
+      return live.length ? live : provider.models || [];
+    },
+    [models],
+  );
   const readyCount = subscriptionBrains.filter((brain) => brain.status?.available && brain.status.authenticated).length
     + providers.filter((provider) => provider.ready).length;
 
@@ -312,7 +359,10 @@ export default function BrainConnectionsPage() {
           {[
             ['Ready Brains', String(readyCount), BrainCircuit],
             ['Approved Profiles', String(profiles.length), ShieldCheck],
-            ['Discovered Models', String(Object.values(models).reduce((total, rows) => total + rows.length, 0)), Cpu],
+            ['Discovered Models', String(
+              Object.values(models).reduce((total, rows) => total + rows.length, 0)
+              + brains.reduce((total, row) => total + (row.models?.length || 0), 0),
+            ), Cpu],
           ].map(([label, value, Icon]) => (
             <div key={String(label)} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
               <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4" style={{ color: 'var(--rc-brand)' }} /></div>
@@ -388,7 +438,7 @@ export default function BrainConnectionsPage() {
                   )}
                   {id.endsWith('_desktop') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option visibly opens the vendor app and remains subject to its normal plan and usage limits.</p>}
                   {id.endsWith('_browser') && <p className="mt-2 text-[11px] leading-4" style={{ color: 'var(--rc-text-3)' }}>This option uses only the visible signed-in page. Cookies and account tokens never enter Enkstein.</p>}
-                  {(status?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{status!.models!.join(' · ')}</p>}
+                  <ModelList models={status?.models || []} />
                 </article>
               );
             })}
@@ -403,7 +453,7 @@ export default function BrainConnectionsPage() {
               <Status ready={Boolean(ollama?.ready)} />
             </div>
             <p className="mt-4 text-xs leading-5" style={{ color: 'var(--rc-text-2)' }}>{ollama?.setup || 'Install Ollama and run: ollama pull llama3.2'}</p>
-            {(ollama?.models?.length || 0) > 0 && <p className="mt-3 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>Models: {ollama!.models!.join(' · ')}</p>}
+            {ollama && <ModelList models={modelNames(ollama)} label="models installed on this computer" />}
           </article>
         </section>
 
@@ -414,11 +464,13 @@ export default function BrainConnectionsPage() {
           </div>
           <div className="mt-3 divide-y rounded-md border" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
             {apiProviders.map((provider) => (
-              <div key={provider.provider} className="flex flex-wrap items-center gap-4 px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
-                <Cloud className="h-4 w-4 shrink-0" style={{ color: 'var(--rc-brand)' }} />
-                <div className="min-w-0 flex-1"><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{provider.label}</p><p className="mt-0.5 truncate text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.setup}</p></div>
-                <span className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.models?.length || 0} models</span>
-                <Status ready={provider.ready} />
+              <div key={provider.provider} className="px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Cloud className="h-4 w-4 shrink-0" style={{ color: 'var(--rc-brand)' }} />
+                  <div className="min-w-0 flex-1"><p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{provider.label}</p><p className="mt-0.5 truncate text-[11px]" style={{ color: 'var(--rc-text-3)' }}>{provider.setup}</p></div>
+                  <Status ready={provider.ready} />
+                </div>
+                <ModelList models={modelNames(provider)} />
               </div>
             ))}
             {!loading && apiProviders.length === 0 && <p className="p-4 text-xs" style={{ color: 'var(--rc-text-3)' }}>No API providers were returned by the runtime.</p>}

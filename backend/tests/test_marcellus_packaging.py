@@ -649,3 +649,19 @@ def test_release_bundle_carries_brain_bridge_operator_docs() -> None:
     bundle_builder = _read("scripts/build_release_bundle.sh")
 
     assert 'docs/brain-bridges.md" "$STAGE_DIR/docs/brain-bridges.md' in bundle_builder
+
+
+def test_cli_subprocess_environment_carries_user_identity() -> None:
+    """The Claude CLI resolves its login session through the user's Keychain.
+
+    Without USER/LOGNAME it reports {"loggedIn": false} on a host that is in
+    fact authenticated, so Claude Subscription read "Needs setup" forever.
+    """
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert "let userName = NSUserName()" in bridge
+    assert '"USER": userName,' in bridge
+    assert '"LOGNAME": userName,' in bridge
+
+    # The environment stays explicit rather than inheriting the caller's.
+    assert "process.environment = [" in bridge
