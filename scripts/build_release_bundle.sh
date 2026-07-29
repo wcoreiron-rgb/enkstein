@@ -5,7 +5,7 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 VERSION=${1:-$(git -C "$ROOT_DIR" describe --tags --always --dirty)}
 SAFE_VERSION=${VERSION#v}
 DIST_DIR="$ROOT_DIR/dist"
-PACKAGE_NAME="marcellus-${SAFE_VERSION}"
+PACKAGE_NAME="enkstein-${SAFE_VERSION}"
 STAGE_DIR="$DIST_DIR/$PACKAGE_NAME"
 
 rm -rf "$STAGE_DIR"

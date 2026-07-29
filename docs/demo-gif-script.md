@@ -1,4 +1,4 @@
-# Demo GIF Script — "RegentClaw in Cursor"
+# Demo GIF Script — "Enkstein in Cursor"
 
 A 20–30 second screen recording for LinkedIn / README / X. Goal: show an AI
 coding agent calling **governed** security tools — and an action getting
@@ -7,7 +7,7 @@ it" moment is the whole pitch.
 
 ## Before you record
 
-- [ ] RegentClaw server running: `docker compose up` (backend reachable on :8000)
+- [ ] Enkstein server running: `docker compose up` (backend reachable on :8000)
 - [ ] `pip install regentclaw-mcp` and add it to `~/.cursor/mcp.json` (see README)
 - [ ] Restart Cursor; confirm the `regentclaw` MCP server shows green in Settings → MCP
 - [ ] Open a sample file with a planted secret, e.g. `demo.env`:
@@ -24,23 +24,23 @@ it" moment is the whole pitch.
 | # | Time | Action on screen | Why |
 |---|------|------------------|-----|
 | 1 | 0–3s | Cursor open with `demo.env` visible (the planted secret on screen) | Sets context fast |
-| 2 | 3–6s | Open the AI chat, type: **"Scan this file for exposed secrets using RegentClaw."** | Shows it's the editor agent, not a separate app |
+| 2 | 3–6s | Open the AI chat, type: **"Scan this file for exposed secrets using Enkstein."** | Shows it's the editor agent, not a separate app |
 | 3 | 6–12s | Agent calls the `scan_text_for_secrets` tool — show the MCP tool-call chip/expander | Proves real tool calling, not a chat reply |
 | 4 | 12–18s | Result returns: **Sensitive data detected: True · Risk 35 · Outcome: BLOCKED · Policy: Block High-Risk AI Prompts** | The hero moment — governance fired |
 | 5 | 18–23s | Type: **"What's my current security posture?"** → posture summary streams back | Shows breadth beyond one tool |
-| 6 | 23–25s | Quick cut to the RegentClaw dashboard/audit log showing the event was recorded | Closes the loop: every action is audited |
+| 6 | 23–25s | Quick cut to the Enkstein dashboard/audit log showing the event was recorded | Closes the loop: every action is audited |
 
 ## On-screen captions (optional, burn into the GIF)
 
-- Shot 2: `Ask your editor's AI to scan with RegentClaw`
+- Shot 2: `Ask your editor's AI to scan with Enkstein`
 - Shot 4: `⛔ Blocked by policy — governed in real time`
 - Shot 6: `Every agent action is audited`
 
 ## End card (last frame, hold 2s)
 
 ```
-RegentClaw — AI security automation, governed by default.
-github.com/wcoreiron-rgb/marcellus
+Enkstein — AI security automation, governed by default.
+github.com/wcoreiron-rgb/enkstein
 ```
 
 ## Export settings

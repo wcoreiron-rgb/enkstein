@@ -25,7 +25,7 @@ Example — scan a string for secrets before committing:
         print("Blocked: secrets detected", result.findings)
 
 The full platform (24+ claws, swarms, remediation, Trust Fabric audit) runs
-as the server — see https://github.com/wcoreiron-rgb/regentclaw. This package
+as the server — see https://github.com/wcoreiron-rgb/enkstein. This package
 is the subset that is genuinely standalone.
 """
 __version__ = "0.7.0"

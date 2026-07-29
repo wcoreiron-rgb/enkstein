@@ -1,6 +1,6 @@
 # RegentClaw CLI
 
-Command-line client for the [RegentClaw](https://github.com/wcoreiron-rgb/regentclaw)
+Command-line client for the [RegentClaw](https://github.com/wcoreiron-rgb/enkstein)
 Zero Trust Security Ecosystem. Drives a running RegentClaw server over its REST API —
 the same way `kubectl` talks to a cluster.
 

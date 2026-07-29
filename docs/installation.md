@@ -35,8 +35,8 @@ Requirements:
 Installation:
 
 ```bash
-tar -xzf marcellus-VERSION.tar.gz
-cd marcellus-VERSION
+tar -xzf enkstein-VERSION.tar.gz
+cd enkstein-VERSION
 ./install.sh
 ```
 

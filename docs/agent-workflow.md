@@ -1,4 +1,4 @@
-# RegentClaw Agent Workflow
+# Enkstein Agent Workflow
 
 This project uses a repo-scoped agent operating structure to reduce drift and improve repeatability.
 

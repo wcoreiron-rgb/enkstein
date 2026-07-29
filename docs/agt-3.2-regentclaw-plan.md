@@ -1,4 +1,4 @@
-# RegentClaw AGT Upgrade Plan (v3.2 Track)
+# Enkstein AGT Upgrade Plan (v3.2 Track)
 
 This plan applies AGT new-release capabilities without coupling Capability Nodes to AGT internals.
 

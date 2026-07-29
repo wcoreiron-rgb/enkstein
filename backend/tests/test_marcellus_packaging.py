@@ -151,8 +151,37 @@ def test_macos_app_supports_github_updates_and_relaunch() -> None:
     assert "api.github.com/repos/" in mac_app
     assert "browser_download_url" in mac_app
     assert "EnksteinGitHubRepository" in mac_plist
-    assert "wcoreiron-rgb/marcellus" in mac_plist
+    assert "wcoreiron-rgb/enkstein" in mac_plist
     assert "rm -rf \"$WORK_DIR\"" in mac_build
+
+
+def test_no_stale_repository_names_in_user_facing_places() -> None:
+    """The repo is wcoreiron-rgb/enkstein; links to the old names 404.
+
+    The in-app update check reads the repository out of Info.plist, so a stale
+    name there silently breaks "Check for Updates" rather than failing loudly.
+    """
+    plist = _read("packaging/macos/Info.plist.in")
+    assert "wcoreiron-rgb/enkstein" in plist
+    assert "wcoreiron-rgb/marcellus" not in plist
+
+    for doc in ("README.md", "docs/index.html", "docs/testing-guide.md"):
+        text = _read(doc)
+        assert "wcoreiron-rgb/marcellus" not in text, doc
+        assert "wcoreiron-rgb/regentclaw" not in text, doc
+
+
+def test_release_bundle_is_named_for_the_product() -> None:
+    """Downloadable bundles carry the product name, not the former one."""
+    bundle = _read("scripts/build_release_bundle.sh")
+    workflow = _read(".github/workflows/release.yml")
+    mac_build = _read("scripts/build_macos_pkg.sh")
+
+    assert 'PACKAGE_NAME="enkstein-' in bundle
+    # The macOS package stages the bundle directory, so the two must agree.
+    assert "$DIST_DIR/enkstein-$VERSION" in mac_build
+    assert "dist/enkstein-${GITHUB_REF_NAME#v}" in workflow
+
 
 
 def test_sidebar_exposes_capabilities_not_legacy_claw_labels() -> None:

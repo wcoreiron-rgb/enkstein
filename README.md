@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Enkstein architecture working copy.** This repository is an independent, compatibility-first evolution of RegentClaw. RegentClaw remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md). Existing RegentClaw names and routes remain available while the new runtime is implemented and verified.
+> **Enkstein architecture working copy.** This repository is an independent, compatibility-first evolution of Enkstein. Enkstein remains untouched. The working architecture introduces a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md). Existing Enkstein names and routes remain available while the new runtime is implemented and verified.
 
 <p align="center">
   <img src="frontend/public/logo.png" alt="Enkstein" width="120" />
@@ -21,7 +21,7 @@
 > It runs on **realistic simulated findings out of the box** — connect your own API credentials to enable live integrations.
 > Security hardening is ongoing and the platform has **not yet had an independent third-party audit**. It is built for
 > evaluation, self-hosted testing, and community feedback — not yet for unmonitored production or multi-tenant SaaS use.
-> See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and
+> See the honest [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html) and
 > [Maturity Matrix](docs/maturity-matrix.md) for exactly what's shipped vs. in progress.
 
 ## Enkstein Distributed Runtime
@@ -233,10 +233,10 @@ authenticated desktop/browser setup routes under `/api/v1/modelclaw/brains/`. Se
 account limitations.
 
 <p align="center">
-  <a href="https://wcoreiron-rgb.github.io/marcellus/">
+  <a href="https://wcoreiron-rgb.github.io/enkstein/">
     <img src="https://img.shields.io/badge/Documentation-1f2937?style=for-the-badge&logo=gitbook&logoColor=white" alt="Documentation" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/marcellus/docs.html">
+  <a href="https://wcoreiron-rgb.github.io/enkstein/docs.html">
     <img src="https://img.shields.io/badge/Technical%20Docs-2563eb?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Technical Docs" />
   </a>
   <a href="http://localhost:3000">
@@ -245,38 +245,38 @@ account limitations.
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/marcellus/projects">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/projects">
     <img src="https://img.shields.io/badge/Roadmap%202026-7c3aed?style=for-the-badge&logo=githubprojects&logoColor=white" alt="Roadmap 2026" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/marcellus/issues/new?labels=bug&title=%5BBug%5D+">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/issues/new?labels=bug&title=%5BBug%5D+">
     <img src="https://img.shields.io/badge/Report%20Bug-dc2626?style=for-the-badge&logo=github&logoColor=white" alt="Report Bug" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/marcellus/issues/new?labels=enhancement&title=%5BFeature%5D+">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/issues/new?labels=enhancement&title=%5BFeature%5D+">
     <img src="https://img.shields.io/badge/Request%20Feature-2563eb?style=for-the-badge&logo=github&logoColor=white" alt="Request Feature" />
   </a>
-  <a href="https://github.com/wcoreiron-rgb/marcellus/discussions">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/discussions">
     <img src="https://img.shields.io/badge/GitHub%20Discussions-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Discussions" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/marcellus/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/wcoreiron-rgb/regentclaw/ci.yml?branch=main&label=Build%20and%20Test%20(Unit%20%2B%20E2E)" alt="Build and Test (Unit + E2E)" />
+  <a href="https://github.com/wcoreiron-rgb/enkstein/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/wcoreiron-rgb/enkstein/ci.yml?branch=main&label=Build%20and%20Test%20(Unit%20%2B%20E2E)" alt="Build and Test (Unit + E2E)" />
   </a>
-  <a href="https://codecov.io/gh/wcoreiron-rgb/regentclaw">
-    <img src="https://img.shields.io/codecov/c/github/wcoreiron-rgb/regentclaw?label=codecov" alt="codecov" />
+  <a href="https://codecov.io/gh/wcoreiron-rgb/enkstein">
+    <img src="https://img.shields.io/codecov/c/github/wcoreiron-rgb/enkstein?label=codecov" alt="codecov" />
   </a>
 </p>
 
 <p align="center"><strong>Full Documentation</strong></p>
 <p align="center">
-  <a href="https://wcoreiron-rgb.github.io/marcellus/">
+  <a href="https://wcoreiron-rgb.github.io/enkstein/">
     <img src="https://img.shields.io/badge/Quick%20Start-f59e0b?style=for-the-badge&logo=rocket&logoColor=white" alt="Quick Start" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/marcellus/docs.html#architecture">
+  <a href="https://wcoreiron-rgb.github.io/enkstein/docs.html#architecture">
     <img src="https://img.shields.io/badge/Specifications-0891b2?style=for-the-badge&logo=bookstack&logoColor=white" alt="Specifications" />
   </a>
-  <a href="https://wcoreiron-rgb.github.io/marcellus/changelog.html">
+  <a href="https://wcoreiron-rgb.github.io/enkstein/changelog.html">
     <img src="https://img.shields.io/badge/Changelog-4f46e5?style=for-the-badge&logo=readme&logoColor=white" alt="Changelog" />
   </a>
 </p>
@@ -344,7 +344,7 @@ Enkstein sits at the intersection of three tool categories — and is the only o
 | Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
 | Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
 
-<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
+<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
 
 **In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, Enkstein gives you **autonomous capability that is governed by default.**
 
@@ -363,7 +363,7 @@ Enkstein maintains an honest, evidence-backed self-assessment against the **OWAS
 
 | Document | Format |
 |---|---|
-| [OWASP Evidence Matrix (Interactive)](https://wcoreiron-rgb.github.io/marcellus/owasp-agentic.html) | Interactive HTML |
+| [OWASP Evidence Matrix (Interactive)](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html) | Interactive HTML |
 | [LLM Top 10 Mapping (Markdown)](docs/owasp-agentic-mapping.md) | Markdown |
 | [Agentic ASI Top 10 Mapping (Markdown)](docs/owasp-asi-mapping.md) | Markdown |
 | [Platform Maturity Matrix (Markdown)](docs/maturity-matrix.md) | Markdown |
@@ -401,13 +401,13 @@ Compliance Assurance now exposes a Trust Fabric-governed evidence bundle export 
 ### Download a release package
 
 The easiest installation path is a versioned bundle from
-[GitHub Releases](https://github.com/wcoreiron-rgb/marcellus/releases). Each
+[GitHub Releases](https://github.com/wcoreiron-rgb/enkstein/releases). Each
 release includes `.tar.gz` and `.zip` self-hosted bundles, Python package
 artifacts, and `SHA256SUMS` integrity checks.
 
 ```bash
-tar -xzf marcellus-VERSION.tar.gz
-cd marcellus-VERSION
+tar -xzf enkstein-VERSION.tar.gz
+cd enkstein-VERSION
 ./install.sh
 ```
 
@@ -665,7 +665,7 @@ authoritative, per-release record of what changed — including the root cause
 behind each fix — lives in two places:
 
 - [Changelog](docs/changelog.html) — every released version, newest first.
-- [GitHub Releases](https://github.com/wcoreiron-rgb/marcellus/releases) — downloadable installers and `SHA256SUMS`.
+- [GitHub Releases](https://github.com/wcoreiron-rgb/enkstein/releases) — downloadable installers and `SHA256SUMS`.
 
 For where the platform is strong versus still maturing, see the
 [Maturity Matrix](docs/maturity-matrix.md) and the *Known gaps* section of the

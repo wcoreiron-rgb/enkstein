@@ -1,8 +1,8 @@
-# OWASP Top 10 for Agentic Applications (ASI 2026) — RegentClaw Evidence Matrix
+# OWASP Top 10 for Agentic Applications (ASI 2026) — Enkstein Evidence Matrix
 
 **Date:** 2026-05-31  
 **Version:** 2.1  
-**Scope:** RegentClaw Zero Trust Security Platform (self-hosted)
+**Scope:** Enkstein Zero Trust Security Platform (self-hosted)
 
 > **Disclaimer:** This is a vendor self-assessment. Status values below are deliberately conservative and mapped to currently shipped code paths and automated tests. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
 
@@ -29,12 +29,12 @@
 
 **Description:** Adversarial manipulation of an agent's goals, instructions, or prompt context to redirect its actions away from intended behavior. Includes direct prompt injection, indirect injection via retrieved content, and jailbreak techniques.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
 - `backend/app/trust_fabric/agt_bridge.py::audit_prompt()`: AGT PromptDefenseEvaluator runs a 12-vector injection audit on every submitted prompt. The keyword-based fallback (`_fallback_prompt_audit`) provides deterministic coverage when AGT is unavailable.
-- `backend/app/claws/arcclaw/routes.py` (lines 69–109): Every `POST /api/v1/arcclaw/events` and `POST /api/v1/arcclaw/chat` submission runs both the AGT audit and RegentClaw's pattern scanner before any tool execution.
+- `backend/app/claws/arcclaw/routes.py` (lines 69–109): Every `POST /api/v1/arcclaw/events` and `POST /api/v1/arcclaw/chat` submission runs both the AGT audit and Enkstein's pattern scanner before any tool execution.
 - Events with `is_injection_risk=True` and `risk_score >= 50` are set to `AIEventOutcome.BLOCKED` before being stored — the raw injection payload is never executed.
 - Injection findings are persisted to the AI Governance audit log with vector detail and risk score.
 
@@ -54,7 +54,7 @@
 
 **Description:** Agents invoking tools with unintended parameters, accessing tool interfaces outside their privilege tier, or exploiting tool APIs to escalate privileges or exfiltrate data.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
@@ -78,7 +78,7 @@
 
 **Description:** Agents or users claiming false identities, abusing delegated credentials, or exploiting role misconfigurations to perform actions beyond their authorization level.
 
-**RegentClaw Status:** In Progress
+**Enkstein Status:** In Progress
 
 **Evidence:**
 
@@ -102,7 +102,7 @@
 
 **Description:** Malicious or tampered skills, plugins, connectors, model weights, or dependencies introduced into the agent supply chain, causing agents to execute attacker-controlled code.
 
-**RegentClaw Status:** In Progress
+**Enkstein Status:** In Progress
 
 **Evidence:**
 
@@ -128,7 +128,7 @@
 
 **Description:** Agents executing arbitrary system-level commands, loading kernel modules, modifying boot sequences, or bypassing execution sandboxes through privilege escalation.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
@@ -154,7 +154,7 @@
 
 **Description:** Injection of malicious or oversized data into agent memory stores, context windows, or retrieval systems to manipulate future agent behavior or degrade platform integrity.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
@@ -180,7 +180,7 @@
 
 **Description:** Agent-to-agent messages without cryptographic authentication, integrity protection, or replay prevention — enabling impersonation, man-in-the-middle, or message injection attacks.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
@@ -207,7 +207,7 @@
 
 **Description:** A failure in one agent propagating to downstream agents, overwhelming shared infrastructure, or exhausting error budgets in ways that destabilize the platform.
 
-**RegentClaw Status:** In Progress
+**Enkstein Status:** In Progress
 
 **Evidence:**
 
@@ -232,7 +232,7 @@
 
 **Description:** Attacks that exploit human-in-the-loop approval mechanisms — including social engineering approvers, exploiting trust relationships, or using self-approval to bypass governance gates.
 
-**RegentClaw Status:** Partially Shipped
+**Enkstein Status:** Partially Shipped
 
 **Evidence:**
 
@@ -258,7 +258,7 @@
 
 **Description:** Agents that deviate from their defined scope, perform unauthorized actions, persist after their authorization has expired, or resist containment actions.
 
-**RegentClaw Status:** In Progress
+**Enkstein Status:** In Progress
 
 **Evidence:**
 

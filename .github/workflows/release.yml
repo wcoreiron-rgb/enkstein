@@ -46,7 +46,7 @@ jobs:
       - name: Build and validate self-hosted bundles
         run: |
           ./scripts/build_release_bundle.sh "${GITHUB_REF_NAME}"
-          bundle_dir="dist/marcellus-${GITHUB_REF_NAME#v}"
+          bundle_dir="dist/enkstein-${GITHUB_REF_NAME#v}"
           test -x "$bundle_dir/install.sh"
           test -f "$bundle_dir/compose.yaml"
           test -f "$bundle_dir/.env.example"
@@ -100,7 +100,7 @@ jobs:
           INSTALLER_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
           INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
         run: |
-          keychain="$RUNNER_TEMP/marcellus-signing.keychain-db"
+          keychain="$RUNNER_TEMP/enkstein-signing.keychain-db"
           keychain_password=$(openssl rand -hex 24)
           echo "$keychain_password" > "$RUNNER_TEMP/keychain-password"
           echo "$APP_CERT" | /usr/bin/base64 -D > "$RUNNER_TEMP/application.p12"
@@ -148,7 +148,7 @@ jobs:
       - name: Remove temporary signing keychain
         if: always()
         run: |
-          security delete-keychain "$RUNNER_TEMP/marcellus-signing.keychain-db" 2>/dev/null || true
+          security delete-keychain "$RUNNER_TEMP/enkstein-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/application.p12" "$RUNNER_TEMP/installer.p12" "$RUNNER_TEMP/keychain-password"
 
   windows:

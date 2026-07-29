@@ -1,8 +1,8 @@
-# RegentClaw Production Deployment Guide
+# Enkstein Production Deployment Guide
 
 **Status:** baseline hardening guide, not a hosted-service certification.
 
-Use this guide when moving RegentClaw from local Docker development into a production-like environment.
+Use this guide when moving Enkstein from local Docker development into a production-like environment.
 
 ## Required Controls
 
@@ -65,7 +65,7 @@ identifies public network exposure, excessive IAM, hardcoded secrets,
 data-protection misconfiguration, missing diagnostics, and risky
 replacement/delete operations; Release Governance then gates the execution handoff.
 
-External coding agents can use the RegentClaw MCP server tools
+External coding agents can use the Enkstein MCP server tools
 `terraclaw_generate_secure_terraform`, `terraclaw_review_hcl`, and
 `terraclaw_analyze_plan`; the MCP server forwards to the backend API and does
 not execute Terraform locally or hold provider credentials.

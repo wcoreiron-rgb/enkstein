@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>OWASP Agentic Top 10 — RegentClaw</title>
-  <meta name="description" content="RegentClaw evidence matrix for the OWASP Top 10 for LLM/Agentic AI Applications (2025). Honest self-assessment of what's shipped, in progress, and planned." />
+  <title>OWASP Agentic Top 10 — Enkstein</title>
+  <meta name="description" content="Enkstein evidence matrix for the OWASP Top 10 for LLM/Agentic AI Applications (2025). Honest self-assessment of what's shipped, in progress, and planned." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -346,8 +346,8 @@
 <nav>
   <div class="nav-inner">
     <a href="index.html" class="nav-logo">
-      <div class="claw-icon"><img src="logo.png" alt="RegentClaw" /></div>
-      RegentClaw
+      <div class="claw-icon"><img src="logo.png" alt="Enkstein" /></div>
+      Enkstein
     </a>
     <ul class="nav-links">
       <li><a href="index.html#features">Features</a></li>
@@ -356,7 +356,7 @@
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html">Changelog</a></li>
       <li><a href="owasp-agentic.html" class="active-page">OWASP</a></li>
-      <li><a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
+      <li><a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
     </ul>
   </div>
 </nav>
@@ -367,7 +367,7 @@
   <div class="page-header">
     <div class="eyebrow">Security Compliance</div>
     <h1>OWASP Agentic Top 10 — Evidence Matrix</h1>
-    <p>An honest, evidence-backed mapping of RegentClaw against the
+    <p>An honest, evidence-backed mapping of Enkstein against the
        <strong>OWASP Top 10 for LLM/Agentic AI Applications (2025)</strong>.
        Each entry shows what is actually shipped, what is in progress, and where gaps remain.</p>
   </div>
@@ -539,14 +539,14 @@
       <div class="ev-section">
         <div class="ev-label">Rationale</div>
         <ul class="ev-list">
-          <li>RegentClaw does not train, fine-tune, or host model weights. All LLM capability is consumed via provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama).</li>
+          <li>Enkstein does not train, fine-tune, or host model weights. All LLM capability is consumed via provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama).</li>
           <li><code>backend/app/claws/arcclaw/llm_proxy.py</code>: <code>call_llm()</code> delegates to configured providers via API calls. No training pipeline, dataset, or weight files exist in this repository.</li>
         </ul>
       </div>
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>Supply-chain risk from model providers remains — if a hosted model is poisoned by a provider, RegentClaw has no detection mechanism. Covered partially under LLM05.</li>
+          <li>Supply-chain risk from model providers remains — if a hosted model is poisoned by a provider, Enkstein has no detection mechanism. Covered partially under LLM05.</li>
           <li>No model output consistency checks or behavior baseline comparisons are implemented.</li>
         </ul>
       </div>
@@ -617,7 +617,7 @@
         <ul class="limitations-list">
           <li>SBOM and dependency audit CI surfaces exist, but current dependency advisories still require triage and remediation before production reliance.</li>
           <li>Connector code is not sandboxed at the OS level — a malicious connector could access process memory or make unexpected system calls.</li>
-          <li>Provider API keys are encrypted at rest but transmitted to third-party endpoints — provider compromise is out of RegentClaw's direct threat model.</li>
+          <li>Provider API keys are encrypted at rest but transmitted to third-party endpoints — provider compromise is out of Enkstein's direct threat model.</li>
         </ul>
       </div>
     </div>
@@ -795,7 +795,7 @@
       <div class="ev-section">
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
-          <li>RegentClaw does not host model weights — inference is via provider APIs. Theft of model weights from the RegentClaw platform is not applicable.</li>
+          <li>Enkstein does not host model weights — inference is via provider APIs. Theft of model weights from the Enkstein platform is not applicable.</li>
           <li><code>backend/app/services/secrets_manager.py</code>: Provider API keys encrypted at rest with Fernet. Keys are never logged or returned via API response.</li>
           <li>AuditLog entries record API key usage events without embedding the key value.</li>
         </ul>
@@ -819,9 +819,9 @@
     <a href="docs.html">Docs</a>
     <a href="changelog.html">Changelog</a>
     <a href="owasp-agentic-mapping.md">Markdown version</a>
-    <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener">GitHub</a>
   </div>
-  <p>RegentClaw — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;·&nbsp; 2026-06-08</p>
+  <p>Enkstein — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;·&nbsp; 2026-06-08</p>
 </footer>
 
 <script>

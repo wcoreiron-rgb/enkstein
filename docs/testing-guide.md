@@ -18,7 +18,7 @@ The first launch builds images and can take several minutes.
 Pick one path.
 
 **macOS desktop.** Install `Enkstein-VERSION-macos.pkg` from
-[Releases](https://github.com/wcoreiron-rgb/marcellus/releases). It is signed
+[Releases](https://github.com/wcoreiron-rgb/enkstein/releases). It is signed
 and notarized, so Gatekeeper accepts it without a right-click bypass.
 
 **Windows desktop.** Run `Enkstein-VERSION-windows-x64-setup.exe`. The
@@ -125,7 +125,7 @@ Worth knowing before you file an issue:
 ## Reporting problems
 
 Open an issue at
-[github.com/wcoreiron-rgb/marcellus/issues](https://github.com/wcoreiron-rgb/marcellus/issues).
+[github.com/wcoreiron-rgb/enkstein/issues](https://github.com/wcoreiron-rgb/enkstein/issues).
 Useful details: the version from the sidebar footer, the connector type, what
 you expected, and what the response actually said. Never paste credentials,
 tokens, or unredacted findings.

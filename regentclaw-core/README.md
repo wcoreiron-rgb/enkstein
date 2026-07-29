@@ -1,6 +1,6 @@
 # regentclaw-core
 
-The embeddable heart of [RegentClaw](https://github.com/wcoreiron-rgb/regentclaw) —
+The embeddable heart of [RegentClaw](https://github.com/wcoreiron-rgb/enkstein) —
 its Zero Trust governance and scanning primitives, runnable **in-process with no
 server, no database, no Docker**. Just `pip install regentclaw-core`.
 
@@ -58,9 +58,9 @@ assert res.valid, res.error
 This package is the subset of RegentClaw that is genuinely standalone. The full
 platform — 24+ security claws, multi-agent swarms, autonomous remediation, and
 the Trust Fabric audit layer — runs as a server (FastAPI + Postgres). For that,
-see the [main repo](https://github.com/wcoreiron-rgb/regentclaw) or talk to it
-with [`regentclaw-cli`](https://github.com/wcoreiron-rgb/regentclaw/tree/main/cli)
-and [`regentclaw-mcp`](https://github.com/wcoreiron-rgb/regentclaw/tree/main/mcp-server).
+see the [main repo](https://github.com/wcoreiron-rgb/enkstein) or talk to it
+with [`regentclaw-cli`](https://github.com/wcoreiron-rgb/enkstein/tree/main/cli)
+and [`regentclaw-mcp`](https://github.com/wcoreiron-rgb/enkstein/tree/main/mcp-server).
 
 > These modules are mirrored from the main repo's backend and kept in sync via
 > `scripts/sync_core.sh`. The canonical source lives in `backend/app/`.

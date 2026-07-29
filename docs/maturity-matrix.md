@@ -1,4 +1,4 @@
-# RegentClaw Maturity Matrix (2026)
+# Enkstein Maturity Matrix (2026)
 
 **Date:** 2026-06-08
 **Purpose:** Public, conservative status tracking for platform security/runtime maturity.

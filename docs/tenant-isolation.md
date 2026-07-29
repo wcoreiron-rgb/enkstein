@@ -1,4 +1,4 @@
-# RegentClaw — Tenant Isolation Model
+# Enkstein — Tenant Isolation Model
 
 ## Enkstein native Brain and task-graph isolation
 
@@ -17,7 +17,7 @@ validated Project, classification, and dependency evidence ids.
 
 ## Current Isolation Model
 
-RegentClaw does not have an explicit `tenant_id` column. Ownership is expressed
+Enkstein does not have an explicit `tenant_id` column. Ownership is expressed
 inconsistently across models:
 
 | Model | Ownership field | Type | Enforced in API? |

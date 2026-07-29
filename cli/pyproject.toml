@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/wcoreiron-rgb/regentclaw"
-Documentation = "https://wcoreiron-rgb.github.io/regentclaw/"
+Homepage      = "https://github.com/wcoreiron-rgb/enkstein"
+Documentation = "https://wcoreiron-rgb.github.io/enkstein/"
 
 [project.scripts]
 regentclaw = "regentclaw.cli:main"

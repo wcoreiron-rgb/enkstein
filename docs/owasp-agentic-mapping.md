@@ -1,8 +1,8 @@
-# OWASP Top 10 for LLM Applications (2025) — RegentClaw Evidence Matrix
+# OWASP Top 10 for LLM Applications (2025) — Enkstein Evidence Matrix
 
 **Date:** 2026-05-31  
 **Version:** 1.1  
-**Scope:** RegentClaw Zero Trust Security Platform (self-hosted)
+**Scope:** Enkstein Zero Trust Security Platform (self-hosted)
 
 > **Disclaimer:** This is a vendor self-assessment. Claims have been matched against source code in this repository but have not been independently audited. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
 
@@ -45,7 +45,7 @@
 
 **Description:** Prompt injection attacks manipulate LLM inputs to override instructions, exfiltrate data, or cause unintended behavior. In agentic systems this is especially dangerous because agents have tool access and can take real-world actions based on injected instructions.
 
-**RegentClaw Status:** Shipped
+**Enkstein Status:** Shipped
 
 **Evidence:**
 
@@ -71,7 +71,7 @@
 
 **Description:** Failures to validate or sanitize LLM outputs before they are passed to downstream systems, rendered in browsers, or executed as code. Can lead to XSS, SQL injection, SSRF, or arbitrary command execution.
 
-**RegentClaw Status:** Shipped
+**Enkstein Status:** Shipped
 
 **Evidence:**
 
@@ -97,18 +97,18 @@
 
 **Description:** Manipulation of training data to introduce backdoors, biases, or vulnerabilities into a model's behavior.
 
-**RegentClaw Status:** N/A
+**Enkstein Status:** N/A
 
 **Evidence:**
 
-- RegentClaw does not train, fine-tune, or host model weights. All LLM capability is consumed via external provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama).
+- Enkstein does not train, fine-tune, or host model weights. All LLM capability is consumed via external provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama).
 - `backend/app/claws/arcclaw/llm_proxy.py`: `call_llm()` delegates to configured providers via API calls. No training pipeline exists.
 - Model selection is configured via `backend/app/core/config.py` settings — no weight files are bundled.
 
 **Test Coverage:** N/A
 
 **Known Limitations:**
-- Supply-chain risk from model providers remains (covered under LLM05). If a hosted model is poisoned by a provider, RegentClaw has no detection mechanism.
+- Supply-chain risk from model providers remains (covered under LLM05). If a hosted model is poisoned by a provider, Enkstein has no detection mechanism.
 - No model output consistency checks or behavior baseline comparisons are implemented.
 
 ---
@@ -117,7 +117,7 @@
 
 **Description:** Attacks that consume excessive compute, memory, or API quota by submitting crafted inputs (very long prompts, recursive queries, resource-intensive completions).
 
-**RegentClaw Status:** Shipped (baseline)
+**Enkstein Status:** Shipped (baseline)
 
 **Evidence:**
 
@@ -140,7 +140,7 @@
 
 **Description:** Vulnerabilities introduced through third-party model providers, plugins, datasets, fine-tuning services, or compromised Python packages in the dependency graph.
 
-**RegentClaw Status:** In Progress
+**Enkstein Status:** In Progress
 
 **Evidence:**
 
@@ -155,7 +155,7 @@
 
 **Known Limitations:**
 - Supply-chain reports are currently non-blocking CI artifacts; policy gating thresholds are not yet enforced as required checks.
-- Model provider API keys are encrypted at rest but transmitted via HTTPS to third-party endpoints — provider compromise is out of scope for RegentClaw's threat model.
+- Model provider API keys are encrypted at rest but transmitted via HTTPS to third-party endpoints — provider compromise is out of scope for Enkstein's threat model.
 - Plugin/connector installs require approval via policy (ZT — Block Connector Install Without Approval) but connector code is not sandboxed at the OS level.
 
 ---
@@ -164,7 +164,7 @@
 
 **Description:** LLMs inadvertently revealing sensitive data — PII, credentials, financial data, or system internals — through model memorization, prompt echoing, or insufficient output filtering.
 
-**RegentClaw Status:** Shipped
+**Enkstein Status:** Shipped
 
 **Evidence:**
 
@@ -190,7 +190,7 @@
 
 **Description:** Plugin/tool interfaces that are overly permissive, lack input validation, do not enforce authentication, or allow SSRF, privilege escalation, or injection via tool parameters.
 
-**RegentClaw Status:** Shipped (baseline)
+**Enkstein Status:** Shipped (baseline)
 
 **Evidence:**
 
@@ -217,7 +217,7 @@
 
 **Description:** LLM agents given more capabilities, permissions, or autonomy than needed to complete their task — leading to unauthorized actions, data destruction, or unintended side effects.
 
-**RegentClaw Status:** Shipped (strengthened by ring policy in this release)
+**Enkstein Status:** Shipped (strengthened by ring policy in this release)
 
 **Evidence:**
 
@@ -245,7 +245,7 @@
 
 **Description:** Users or automated systems trusting LLM outputs without verification — leading to incorrect decisions, missed alerts, or automated actions based on hallucinated information.
 
-**RegentClaw Status:** Shipped (baseline)
+**Enkstein Status:** Shipped (baseline)
 
 **Evidence:**
 
@@ -273,11 +273,11 @@
 
 **Description:** Attackers extracting model weights, system prompts, or training data through API abuse, timing attacks, or adversarial probing.
 
-**RegentClaw Status:** N/A / Partial
+**Enkstein Status:** N/A / Partial
 
 **Evidence:**
 
-- RegentClaw does not host model weights. All inference is via provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama). Model theft from the RegentClaw platform itself is not applicable.
+- Enkstein does not host model weights. All inference is via provider APIs (Anthropic, OpenAI, Azure OpenAI, Ollama). Model theft from the Enkstein platform itself is not applicable.
 - `backend/app/services/secrets_manager.py`: Provider API keys encrypted at rest with Fernet. Keys are never logged or returned via API.
 - System prompts used by AI Security's security agent (`backend/app/claws/arcclaw/security_agent.py`) are stored in source code — not separately protected.
 - No system prompt confidentiality enforcement (prompt extraction via token probabilities or completion nudging is not mitigated).
@@ -291,4 +291,4 @@
 
 ---
 
-*Last updated: 2026-05-31. Maintained by the RegentClaw security team.*
+*Last updated: 2026-05-31. Maintained by the Enkstein security team.*

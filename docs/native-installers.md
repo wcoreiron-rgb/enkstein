@@ -27,7 +27,7 @@ The package installs `/Applications/Enkstein.app`. Completing installation
 launches the app for the signed-in user. On first launch it:
 
 1. Copies the versioned runtime to
-   `~/Library/Application Support/Marcellus/runtime` (the compatibility data
+   `~/Library/Application Support/Enkstein/runtime` (the compatibility data
    location retained during the Enkstein rename).
 2. Starts Docker Desktop if it is not already running.
 3. Generates unique application, PostgreSQL, and Redis secrets.
@@ -46,7 +46,7 @@ frontend images. The app shows startup status instead of displaying the UI
 before the backend is ready. Startup diagnostics are written to:
 
 ```text
-~/Library/Logs/Marcellus/launcher.log
+~/Library/Logs/Enkstein/launcher.log
 ```
 
 Upgrades replace application source while preserving `.env`, PostgreSQL data,
@@ -84,7 +84,7 @@ not available after MFA enrollment.
 
 The macOS launcher starts a separate signed universal helper and leaves it
 running with the Docker services. A random bridge secret is generated once at
-`~/Library/Application Support/Marcellus/brain-bridge.secret` with owner-only
+`~/Library/Application Support/Enkstein/brain-bridge.secret` with owner-only
 permissions. The container reaches the host helper through Docker Desktop's
 host gateway; vendor subscription credentials never cross that boundary.
 

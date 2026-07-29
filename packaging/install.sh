@@ -46,7 +46,7 @@ if [ "$mode" = "check" ]; then
     check_env="$ROOT_DIR/../.env.example"
   fi
   docker compose --env-file "$check_env" -f "$COMPOSE_FILE" config --quiet
-  echo "Marcellus package prerequisites are available."
+  echo "Enkstein package prerequisites are available."
   exit 0
 fi
 
@@ -96,12 +96,12 @@ append_env_if_missing ADMIN_PASSWORD "$(generate_hex 24)"
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet
 
 if [ "$mode" = "no-start" ]; then
-  echo "Package configured. Run ./install.sh when ready to start Marcellus."
+  echo "Package configured. Run ./install.sh when ready to start Enkstein."
   exit 0
 fi
 
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
-echo "Marcellus is starting."
+echo "Enkstein is starting."
 echo "UI:       http://localhost:${FRONTEND_PORT:-3000}"
 echo "API docs: http://localhost:${BACKEND_PORT:-8000}/docs"
 echo "Status:   docker compose --env-file .env -f compose.yaml ps"

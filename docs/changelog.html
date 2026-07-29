@@ -312,7 +312,7 @@
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html" class="active-page">Changelog</a></li>
       <li><a href="owasp-agentic.html">OWASP</a></li>
-      <li><a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
+      <li><a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
     </ul>
   </div>
 </nav>
@@ -325,10 +325,10 @@
     <p>Every feature shipped, integration added, and fix landed — in order.
        New features are published here when they're tested and ready.</p>
     <div class="feed-links">
-      <a href="https://github.com/wcoreiron-rgb/marcellus/releases" target="_blank" rel="noopener">
+      <a href="https://github.com/wcoreiron-rgb/enkstein/releases" target="_blank" rel="noopener">
         &#9679; GitHub Releases
       </a>
-      <a href="https://github.com/wcoreiron-rgb/marcellus/commits/main" target="_blank" rel="noopener">
+      <a href="https://github.com/wcoreiron-rgb/enkstein/commits/main" target="_blank" rel="noopener">
         &#9679; Commit History
       </a>
     </div>
@@ -1873,13 +1873,13 @@
           <li><strong>Current-turn browser prompts:</strong> persistent provider threads receive only the current governed turn, avoiding repeated history and preserving full attachment capacity.</li>
           <li><strong>Durable thread recovery:</strong> local provider conversation URLs reopen the same ChatGPT, Claude, or Gemini thread after a tab or browser restart without storing authentication tokens.</li>
           <li><strong>Enkstein desktop:</strong> the visible app, login, workspace, dashboard, native shell, and browser companion use the new Enkstein identity.</li>
-          <li><strong>Safe migration:</strong> existing Marcellus API routes, bundle identifier, encrypted data path, credentials, projects, and conversations remain compatible.</li>
+          <li><strong>Safe migration:</strong> existing Enkstein API routes, bundle identifier, encrypted data path, credentials, projects, and conversations remain compatible.</li>
         </ul>
       </div>
     </div>
   </div>
 
-  <!-- Marcellus v0.2.24 — Persistent Browser Conversations -->
+  <!-- Enkstein v0.2.24 — Persistent Browser Conversations -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -1889,17 +1889,17 @@
           <span class="tag tag-fix">v0.2.24</span>
           <span class="tag tag-feat">Thread affinity</span>
           <span class="tag tag-sec">Tenant scoped</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.24</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.24</span>
         </div>
       </div>
     </div>
     <div class="release-body">
-      <div class="release-description">Browser Brains now continue in the same ChatGPT, Claude, or Gemini provider thread for every turn in a Marcellus conversation.</div>
+      <div class="release-description">Browser Brains now continue in the same ChatGPT, Claude, or Gemini provider thread for every turn in a Enkstein conversation.</div>
       <div class="change-section">
         <div class="change-section-title">Included</div>
         <ul class="change-list">
           <li><strong>Conversation affinity:</strong> the first turn opens a provider tab and subsequent turns reuse that exact tab.</li>
-          <li><strong>Clear boundaries:</strong> new and branched Marcellus conversations receive separate provider threads.</li>
+          <li><strong>Clear boundaries:</strong> new and branched Enkstein conversations receive separate provider threads.</li>
           <li><strong>Opaque identity:</strong> tenant and conversation identifiers are hashed before reaching the native bridge or companion.</li>
           <li><strong>Recovery:</strong> closing a bound provider tab clears its mapping and the next turn opens a replacement thread.</li>
         </ul>
@@ -1907,7 +1907,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.23 — Governed Browser Brains -->
+  <!-- Enkstein v0.2.23 — Governed Browser Brains -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -1917,12 +1917,12 @@
           <span class="tag tag-fix">v0.2.23</span>
           <span class="tag tag-feat">Browser Companion</span>
           <span class="tag tag-sec">Trust Fabric</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.23</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.23</span>
         </div>
       </div>
     </div>
     <div class="release-body">
-      <div class="release-description">Marcellus can now route explicit governed requests through visible signed-in ChatGPT, Claude, and Gemini browser sessions when a compatible desktop or CLI runtime is unavailable.</div>
+      <div class="release-description">Enkstein can now route explicit governed requests through visible signed-in ChatGPT, Claude, and Gemini browser sessions when a compatible desktop or CLI runtime is unavailable.</div>
       <div class="change-section">
         <div class="change-section-title">Included</div>
         <ul class="change-list">
@@ -1936,7 +1936,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.22 — Automatic Local Brain Selection -->
+  <!-- Enkstein v0.2.22 — Automatic Local Brain Selection -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -1946,12 +1946,12 @@
           <span class="tag tag-fix">v0.2.22</span>
           <span class="tag tag-feat">Ollama</span>
           <span class="tag tag-sec">Verified model</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.22</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.22</span>
         </div>
       </div>
     </div>
     <div class="release-body">
-      <div class="release-description">Marcellus now detects installed Ollama models and chooses a real available local Brain when a profile default is absent.</div>
+      <div class="release-description">Enkstein now detects installed Ollama models and chooses a real available local Brain when a profile default is absent.</div>
       <div class="change-section">
         <div class="change-section-title">Included</div>
         <ul class="change-list">
@@ -1964,7 +1964,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.21 — Governed Intelligence Workspace -->
+  <!-- Enkstein v0.2.21 — Governed Intelligence Workspace -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -1974,7 +1974,7 @@
           <span class="tag tag-feat">v0.2.21</span>
           <span class="tag tag-feat">Missions</span>
           <span class="tag tag-sec">Governed memory</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.21</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.21</span>
         </div>
       </div>
     </div>
@@ -1993,7 +1993,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.20 — Native Cowork Workspace -->
+  <!-- Enkstein v0.2.20 — Native Cowork Workspace -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2003,7 +2003,7 @@
           <span class="tag tag-feat">v0.2.20</span>
           <span class="tag tag-fix">Chat controls</span>
           <span class="tag tag-sec">Scoped folder grant</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.20</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.20</span>
         </div>
       </div>
     </div>
@@ -2021,7 +2021,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.19 — Governed Cowork Files and Chat Management -->
+  <!-- Enkstein v0.2.19 — Governed Cowork Files and Chat Management -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2031,7 +2031,7 @@
           <span class="tag tag-feat">v0.2.19</span>
           <span class="tag tag-fix">Cowork context</span>
           <span class="tag tag-sec">Trust Fabric</span>
-          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Marcellus v0.2.19</span>
+          <span class="release-date">July 15, 2026 &nbsp;·&nbsp; Enkstein v0.2.19</span>
         </div>
       </div>
     </div>
@@ -2049,7 +2049,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.18 — Live Brain Models and Native Cowork Folders -->
+  <!-- Enkstein v0.2.18 — Live Brain Models and Native Cowork Folders -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2059,7 +2059,7 @@
           <span class="tag tag-feat">v0.2.18</span>
           <span class="tag tag-feat">Brain inventory</span>
           <span class="tag tag-fix">Cowork</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.18</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.18</span>
         </div>
       </div>
     </div>
@@ -2079,7 +2079,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.17 — Mode-Aware Workspace Blade -->
+  <!-- Enkstein v0.2.17 — Mode-Aware Workspace Blade -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2089,7 +2089,7 @@
           <span class="tag tag-feat">v0.2.17</span>
           <span class="tag tag-feat">Chat + Cowork</span>
           <span class="tag tag-sec">Security isolation</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.17</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.17</span>
         </div>
       </div>
     </div>
@@ -2107,7 +2107,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.16 — Persistent Workspace Switch and Reliable Updates -->
+  <!-- Enkstein v0.2.16 — Persistent Workspace Switch and Reliable Updates -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2117,12 +2117,12 @@
           <span class="tag tag-fix">v0.2.16</span>
           <span class="tag tag-feat">Desktop</span>
           <span class="tag tag-sec">Runtime integrity</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.16</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.16</span>
         </div>
       </div>
     </div>
     <div class="release-body">
-      <div class="release-description">Chat, Cowork, and Security now remain directly beneath the Marcellus brand, and desktop updates can no longer retain a stale same-version runtime.</div>
+      <div class="release-description">Chat, Cowork, and Security now remain directly beneath the Enkstein brand, and desktop updates can no longer retain a stale same-version runtime.</div>
       <div class="change-section">
         <div class="change-section-title">Included</div>
         <ul class="change-list">
@@ -2134,7 +2134,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.15 — Persistent Projects and Adaptive Brains -->
+  <!-- Enkstein v0.2.15 — Persistent Projects and Adaptive Brains -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2144,7 +2144,7 @@
           <span class="tag tag-feat">v0.2.15</span>
           <span class="tag tag-feat">Projects</span>
           <span class="tag tag-sec">Governed routing</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.15</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.15</span>
         </div>
       </div>
     </div>
@@ -2163,7 +2163,7 @@
     </div>
   </div>
 
-  <!-- Marcellus v0.2.14 — Cortex Gateway and Unified AI Workspace -->
+  <!-- Enkstein v0.2.14 — Cortex Gateway and Unified AI Workspace -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
     <div class="release-header">
@@ -2173,12 +2173,12 @@
           <span class="tag tag-feat">v0.2.14</span>
           <span class="tag tag-feat">Chat + Cowork</span>
           <span class="tag tag-sec">Trust Fabric</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.14</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.14</span>
         </div>
       </div>
     </div>
     <div class="release-body">
-      <div class="release-description">A single governed reasoning boundary now fronts the Marcellus Chat and Cowork workspaces and Swarm Judge synthesis.</div>
+      <div class="release-description">A single governed reasoning boundary now fronts the Enkstein Chat and Cowork workspaces and Swarm Judge synthesis.</div>
       <div class="change-section">
         <div class="change-section-title">Included</div>
         <ul class="change-list">
@@ -2192,7 +2192,7 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  Marcellus v0.2.13 — Governed Subscription Brains                  -->
+  <!--  Enkstein v0.2.13 — Governed Subscription Brains                  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--blue);"></div>
@@ -2203,7 +2203,7 @@
           <span class="tag tag-feat">Codex Bridge</span>
           <span class="tag tag-feat">Claude Bridge</span>
           <span class="tag tag-sec">Trust Fabric</span>
-          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Marcellus v0.2.13</span>
+          <span class="release-date">July 14, 2026 &nbsp;·&nbsp; Enkstein v0.2.13</span>
         </div>
       </div>
     </div>
@@ -2224,7 +2224,7 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  Marcellus v0.2.12 — Owner MFA and Background Runtime              -->
+  <!--  Enkstein v0.2.12 — Owner MFA and Background Runtime              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--red);"></div>
@@ -2234,7 +2234,7 @@
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-sec">TOTP MFA</span>
           <span class="tag tag-feat">Background Runtime</span>
-          <span class="release-date">July 13, 2026 &nbsp;·&nbsp; Marcellus v0.2.12</span>
+          <span class="release-date">July 13, 2026 &nbsp;·&nbsp; Enkstein v0.2.12</span>
         </div>
       </div>
     </div>
@@ -2254,24 +2254,24 @@
   </div>
 
   <!-- ════════════════════════════════════════════════════════════════════ -->
-  <!--  Marcellus v0.2.0 — Distributed Runtime                            -->
+  <!--  Enkstein v0.2.0 — Distributed Runtime                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
     <div class="release-dot" style="background: var(--orange);"></div>
     <div class="release-header">
       <div>
-        <div class="release-title">Marcellus Distributed Runtime</div>
+        <div class="release-title">Enkstein Distributed Runtime</div>
         <div class="release-meta" style="margin-top:6px;">
           <span class="tag tag-feat">Plexus</span>
           <span class="tag tag-sec">Reflex Policy</span>
           <span class="tag tag-feat">Regeneration</span>
-          <span class="release-date">July 12, 2026 &nbsp;·&nbsp; Marcellus v0.2.0</span>
+          <span class="release-date">July 12, 2026 &nbsp;·&nbsp; Enkstein v0.2.0</span>
         </div>
       </div>
     </div>
     <div class="release-body">
       <div class="release-description">
-        The Marcellus working copy now runs governed peer messaging, local Reflex decisions, and signed-checkpoint restoration through one tenant-isolated runtime console.
+        The Enkstein working copy now runs governed peer messaging, local Reflex decisions, and signed-checkpoint restoration through one tenant-isolated runtime console.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -2282,8 +2282,8 @@
           <li><strong>Operator console:</strong> live Plexus, Reflex, checkpoint, approval, and regenerated-runtime controls at <code>/marcellus</code>.</li>
           <li><strong>Security:</strong> exact tenant-scoped approval lookups, self-approval defense in depth, atomic approval claims, and restricted decrypted-message access.</li>
           <li><strong>Brand:</strong> the supplied red octopus artwork replaces inherited application logo assets.</li>
-          <li><strong>Desktop packaging:</strong> one-click <code>Marcellus-VERSION-macos.pkg</code> and <code>Marcellus-VERSION-windows-x64-setup.exe</code> launchers use isolated app IDs, state paths, shortcuts, and the Marcellus icon.</li>
-          <li><strong>Native macOS shell:</strong> a universal Intel/Apple Silicon WebKit app owns the Marcellus window, shows first-launch progress, keeps local navigation in-app, and opens only external links in the system browser.</li>
+          <li><strong>Desktop packaging:</strong> one-click <code>Enkstein-VERSION-macos.pkg</code> and <code>Enkstein-VERSION-windows-x64-setup.exe</code> launchers use isolated app IDs, state paths, shortcuts, and the Enkstein icon.</li>
+          <li><strong>Native macOS shell:</strong> a universal Intel/Apple Silicon WebKit app owns the Enkstein window, shows first-launch progress, keeps local navigation in-app, and opens only external links in the system browser.</li>
           <li><strong>Startup readiness:</strong> the frontend waits for backend health, while the launcher verifies backend and UI endpoints before displaying the operator console.</li>
           <li><strong>Capability navigation:</strong> the operator sidebar presents Security Arms and Capability Nodes by function while retaining compatibility routes behind the UI.</li>
         </ul>
@@ -2308,7 +2308,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        Marcellus can publish versioned, checksum-protected self-hosted bundles, native desktop installers, and compatibility Python package artifacts from a Git tag.
+        Enkstein can publish versioned, checksum-protected self-hosted bundles, native desktop installers, and compatibility Python package artifacts from a Git tag.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -2317,7 +2317,7 @@
           <li><strong>Secure installer:</strong> <code>install.sh</code> validates prerequisites and generates unique application, PostgreSQL, and Redis secrets without replacing an existing environment file.</li>
           <li><strong>Persistent runtime:</strong> the release Compose model uses named volumes for PostgreSQL, encrypted connector credentials, and runtime state instead of development source mounts.</li>
           <li><strong>Python artifacts:</strong> tagged releases build CLI, governance-core, and MCP wheel/source packages.</li>
-          <li><strong>macOS:</strong> builds <code>/Applications/Marcellus.app</code> inside a Developer ID-signed, notarized, and stapled <code>.pkg</code>; installation launches Marcellus for the signed-in user.</li>
+          <li><strong>macOS:</strong> builds <code>/Applications/Enkstein.app</code> inside a Developer ID-signed, notarized, and stapled <code>.pkg</code>; installation launches Enkstein for the signed-in user.</li>
           <li><strong>Windows:</strong> builds a per-user Inno Setup executable with Start Menu/desktop shortcuts, Docker startup, secure environment initialization, and optional Authenticode signing.</li>
           <li><strong>Integrity:</strong> every published asset is covered by <code>SHA256SUMS</code>.</li>
         </ul>
@@ -2349,7 +2349,7 @@
         <div class="change-section-title">What's New</div>
         <ul class="change-list">
           <li><strong>Terraform MCP provider:</strong> Terraform Governance now reports Terraform MCP as a provider surface and maps the <code>terraform_mcp</code> connector to Terraform Governance.</li>
-          <li><strong>MCP tools:</strong> the RegentClaw MCP server exposes <code>terraclaw_generate_secure_terraform</code>, <code>terraclaw_review_hcl</code>, and <code>terraclaw_analyze_plan</code>.</li>
+          <li><strong>MCP tools:</strong> the Enkstein MCP server exposes <code>terraclaw_generate_secure_terraform</code>, <code>terraclaw_review_hcl</code>, and <code>terraclaw_analyze_plan</code>.</li>
           <li><strong>Agent response contract:</strong> <code>/api/v1/terraclaw/generate</code> returns MCP mode, agent trace, output artifacts, applied controls, framework metadata, and next actions.</li>
           <li><strong>Cloud coverage:</strong> added a secure GCP Cloud SQL PostgreSQL template with private networking, encrypted storage, backups, SSL-only connections, and deletion protection.</li>
           <li><strong>Generate UI:</strong> the Terraform Governance Generate tab now behaves like a chat-style agent surface with Review and Plan handoff buttons.</li>
@@ -2375,7 +2375,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice stabilizes the local Docker stack so the RegentClaw dashboard, Control Center, and frontend API proxy work reliably from <code>http://localhost:3000</code>.
+        This slice stabilizes the local Docker stack so the Enkstein dashboard, Control Center, and frontend API proxy work reliably from <code>http://localhost:3000</code>.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's Fixed</div>
@@ -2440,7 +2440,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice adds Terraform Governance as the Terraform and infrastructure-as-code governance claw, aligned with the standard RegentClaw findings, provider, scan, and Swarm task contracts.
+        This slice adds Terraform Governance as the Terraform and infrastructure-as-code governance claw, aligned with the standard Enkstein findings, provider, scan, and Swarm task contracts.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -2474,7 +2474,7 @@
     </div>
     <div class="release-body">
       <div class="release-description">
-        This slice adds Release Governance as RegentClaw's governed release authority for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments.
+        This slice adds Release Governance as Enkstein's governed release authority for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments.
       </div>
       <div class="change-section">
         <div class="change-section-title">What's New</div>
@@ -4102,7 +4102,7 @@
 
     <div class="release-body">
       <div class="release-description">
-        This release hardens RegentClaw's AGT and Swarm surfaces for production-style validation:
+        This release hardens Enkstein's AGT and Swarm surfaces for production-style validation:
         route reliability fixes, contract normalization, new regression coverage, and clearer operator
         visibility in Trust Fabric and Swarm UI.
       </div>
@@ -4200,7 +4200,7 @@
       </div>
 
       <div class="release-footer">
-        <a href="https://github.com/wcoreiron-rgb/marcellus/commit/c722a69" target="_blank" rel="noopener">
+        <a href="https://github.com/wcoreiron-rgb/enkstein/commit/c722a69" target="_blank" rel="noopener">
           &#9655; Security commit c722a69
         </a>
         <span style="color:var(--border);">|</span>
@@ -4265,18 +4265,18 @@
         <div class="change-section-title">How to Enable</div>
         <ul class="change-list">
           <li>Review NVIDIA's current API free-tier terms and obtain a key at <a href="https://build.nvidia.com/models" target="_blank" rel="noopener" style="color:var(--nvidia);">build.nvidia.com/models</a>.</li>
-          <li>Open RegentClaw → <strong>Connectors</strong> → search <em>NVIDIA NIM</em> → click <strong>Configure</strong>.</li>
+          <li>Open Enkstein → <strong>Connectors</strong> → search <em>NVIDIA NIM</em> → click <strong>Configure</strong>.</li>
           <li>Paste your key → complete the 4-step flow → done.</li>
           <li>Navigate to <strong>AI Security</strong> → Security Copilot auto-activates with NVIDIA NIM selected.</li>
         </ul>
       </div>
 
       <div class="release-footer">
-        <a href="https://github.com/wcoreiron-rgb/marcellus/releases/tag/v0.2.0-nvidia-nim" target="_blank" rel="noopener">
+        <a href="https://github.com/wcoreiron-rgb/enkstein/releases/tag/v0.2.0-nvidia-nim" target="_blank" rel="noopener">
           &#9655; View tag v0.2.0-nvidia-nim
         </a>
         <span class="divider">|</span>
-        <a href="https://github.com/wcoreiron-rgb/marcellus/compare/81cebdc...9877277" target="_blank" rel="noopener">
+        <a href="https://github.com/wcoreiron-rgb/enkstein/compare/81cebdc...9877277" target="_blank" rel="noopener">
           &#9655; Full diff
         </a>
         <span class="divider">|</span>
@@ -4307,7 +4307,7 @@
 
     <div class="release-body">
       <div class="release-description">
-        RegentClaw can now automatically respond to critical and high-severity findings.
+        Enkstein can now automatically respond to critical and high-severity findings.
         When a finding fires, the engine matches it against active playbooks, executes
         safe actions instantly, and gates high-risk actions (quarantine, account suspend)
         behind a human approval queue with a 30-minute expiry.
@@ -4326,7 +4326,7 @@
       </div>
 
       <div class="release-footer">
-        <a href="https://github.com/wcoreiron-rgb/marcellus/releases/tag/v0.1.1" target="_blank" rel="noopener">
+        <a href="https://github.com/wcoreiron-rgb/enkstein/releases/tag/v0.1.1" target="_blank" rel="noopener">
           &#9655; View tag v0.1.1
         </a>
       </div>
@@ -4352,7 +4352,7 @@
 
     <div class="release-body">
       <div class="release-description">
-        First public release of RegentClaw — a self-hosted, open-source Zero Trust Security
+        First public release of Enkstein — a self-hosted, open-source Zero Trust Security
         platform. 24 specialized security modules (Capability Nodes), a central Trust Fabric enforcement
         layer, AI governance, policy engine, and a full connector marketplace for integrating
         your own tools and credentials locally.
@@ -4373,7 +4373,7 @@
       </div>
 
       <div class="release-footer">
-        <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener">
+        <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener">
           &#9655; View on GitHub
         </a>
         <span class="divider">|</span>
@@ -4392,7 +4392,7 @@
     <a href="index.html">Home</a>
     <a href="docs.html">Docs</a>
     <a href="changelog.html">Changelog</a>
-    <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener">GitHub</a>
   </nav>
   <p>&copy; 2026 Enkstein. Distributed Zero Trust Security.</p>
 </footer>

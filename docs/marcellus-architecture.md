@@ -2,7 +2,7 @@
 
 Status: Runtime contract 0.2.0  
 Working name: Enkstein
-Lineage: Independent compatibility-first evolution of RegentClaw
+Lineage: Independent compatibility-first evolution of Enkstein
 
 ## Thesis
 
@@ -288,8 +288,8 @@ session and Mission memory cannot self-approve.
 
 ## Migration Rules
 
-1. RegentClaw remains untouched as the stable source repository.
-2. Enkstein evolves in a separate Git repository with push access to RegentClaw disabled.
+1. Enkstein remains untouched as the stable source repository.
+2. Enkstein evolves in a separate Git repository with push access to Enkstein disabled.
 3. Existing route prefixes and module names remain available during compatibility migration.
 4. Public terminology changes before physical package and database names.
 5. New runtime behavior must be real and tested before its status changes from `contract_only` or `partial`.

@@ -44,7 +44,7 @@ cp "$ROOT_DIR/packaging/macos/launcher.sh" "$RESOURCES_DIR/launcher.sh"
 chmod +x "$RESOURCES_DIR/launcher.sh"
 cp -R "$ROOT_DIR/browser-extension" "$RESOURCES_DIR/browser-extension"
 sed "s/__VERSION__/$VERSION/g" "$ROOT_DIR/packaging/macos/Info.plist.in" > "$CONTENTS_DIR/Info.plist"
-/usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/marcellus-$VERSION" "$RESOURCES_DIR/runtime"
+/usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/enkstein-$VERSION" "$RESOURCES_DIR/runtime"
 
 SWIFT_SOURCE="$ROOT_DIR/packaging/macos/MarcellusApp.swift"
 ARM_BINARY="$WORK_DIR/Enkstein-arm64"

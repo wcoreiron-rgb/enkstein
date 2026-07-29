@@ -523,7 +523,7 @@
       <li><a href="changelog.html">Changelog</a></li>
       <li><a href="owasp-agentic.html">OWASP</a></li>
       <li><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">☀️ Light</button></li>
-      <li><a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
+      <li><a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
     </ul>
     <div class="nav-hamburger">&#9776;</div>
   </div>
@@ -539,8 +539,8 @@
   <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 25 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
   <div class="hero-ctas">
     <a href="docs.html" class="btn-primary">View Documentation →</a>
-    <a href="https://github.com/wcoreiron-rgb/marcellus/releases" target="_blank" rel="noopener" class="btn-ghost">Download macOS / Windows</a>
-    <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener" class="btn-ghost">
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases" target="_blank" rel="noopener" class="btn-ghost">Download macOS / Windows</a>
+    <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-ghost">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.1.82-.26.82-.58v-2.04c-3.34.72-4.04-1.61-4.04-1.61-.54-1.38-1.33-1.75-1.33-1.75-1.08-.74.08-.72.08-.72 1.2.08 1.83 1.23 1.83 1.23 1.06 1.82 2.8 1.3 3.48.99.1-.77.41-1.3.75-1.6-2.66-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.004 2.04.14 3 .4 2.28-1.55 3.28-1.23 3.28-1.23.66 1.65.24 2.87.12 3.17.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.22.7.82.58A12 12 0 0 0 24 12C24 5.37 18.63 0 12 0z"/></svg>
       GitHub
     </a>
@@ -587,7 +587,7 @@
   <div class="section-inner">
     <span class="section-tag">Trust Fabric</span>
     <h2 class="section-title">Every Request. Every Action.<br>Governed End-to-End.</h2>
-    <p class="section-sub">The Trust Fabric is RegentClaw's central enforcement layer — a 6-stage pipeline that evaluates every security action before it executes.</p>
+    <p class="section-sub">The Trust Fabric is Enkstein's central enforcement layer — a 6-stage pipeline that evaluates every security action before it executes.</p>
     <div class="pipeline">
       <div class="pipeline-step">
         <span class="step-icon">📥</span>
@@ -789,7 +789,7 @@
       <div class="claw-card">
         <div class="claw-top"><span class="claw-emoji">🔌</span><span class="phase-badge phase-3">Phase 3</span></div>
         <div class="claw-name">Custom Capability</div>
-        <div class="claw-desc">Custom REST Integrations — extend RegentClaw to any security tool or API</div>
+        <div class="claw-desc">Custom REST Integrations — extend Enkstein to any security tool or API</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.04);">
@@ -921,7 +921,7 @@
   <div class="section-inner">
     <span class="section-tag">Zero Trust Principles</span>
     <h2 class="section-title">Six Pillars of Governed Security</h2>
-    <p class="section-sub">RegentClaw operationalizes zero trust beyond network segmentation — enforcing governance at every layer of the security stack.</p>
+    <p class="section-sub">Enkstein operationalizes zero trust beyond network segmentation — enforcing governance at every layer of the security stack.</p>
     <div class="principles-grid">
       <div class="principle-card">
         <span class="principle-icon">🪪</span>
@@ -977,8 +977,8 @@
           <span>🐚</span> bash
         </div>
         <pre><span class="c-comment"># Download a GitHub Release bundle</span>
-<span class="c-cmd">tar -xzf</span> <span class="c-str">regentclaw-VERSION.tar.gz</span>
-<span class="c-cmd">cd</span> regentclaw-VERSION
+<span class="c-cmd">tar -xzf</span> <span class="c-str">enkstein-VERSION.tar.gz</span>
+<span class="c-cmd">cd</span> enkstein-VERSION
 <span class="c-cmd">./install.sh</span>
 
 <span class="c-comment"># Open the platform</span>
@@ -1010,7 +1010,7 @@
       <a href="owasp-agentic.html">OWASP Matrix</a>
       <a href="#claws">Capability Nodes</a>
       <a href="#architecture">Architecture</a>
-      <a href="https://github.com/wcoreiron-rgb/marcellus" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener">GitHub</a>
     </nav>
     <div class="footer-copy">Built with zero trust. Governed by default.</div>
   </div>
@@ -1020,7 +1020,7 @@
   (function () {
     const root = document.documentElement;
     const toggle = document.getElementById('theme-toggle');
-    const stored = localStorage.getItem('regentclaw-theme');
+    const stored = localStorage.getItem('enkstein-theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialTheme = stored || (prefersDark ? 'dark' : 'light');
 
@@ -1037,7 +1037,7 @@
       toggle.addEventListener('click', function () {
         const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
         applyTheme(next);
-        localStorage.setItem('regentclaw-theme', next);
+        localStorage.setItem('enkstein-theme', next);
       });
     }
   })();
