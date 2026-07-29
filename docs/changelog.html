@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.3 — Claude login detection and collapsible model lists -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Claude reports the login you actually have, and model lists stop swallowing the page</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.3</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Brain Connections</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Claude Subscription showed &ldquo;Needs setup&rdquo; on hosts where <code>claude auth status</code> reports a live session, and Brain Connections printed model lists as one long run of text.</p>
+      <ul>
+        <li><strong>Claude now detects your real login.</strong> Enkstein runs vendor CLIs under a deliberately minimal environment, and that environment omitted <code>USER</code>. The Claude CLI resolves its session through your Keychain and needs it, so under the bridge it genuinely saw a signed-out machine. It is now passed, and nothing else about the environment changed.</li>
+        <li><strong>Model lists collapse behind a count and open on demand</strong>, so Codex&rsquo;s 44 models no longer make one card taller than the other seven combined.</li>
+        <li><strong>API providers show their model names</strong> instead of only a number with no way to see what is behind it.</li>
+        <li><strong>Counts come from live discovery</strong> where it returned anything, rather than a static catalogue that disagreed with it, and the Discovered Models tile now includes subscription models instead of ignoring all 47.</li>
+      </ul>
+      <p><strong>Verification.</strong> Measured against the real Claude session and the running console, not asserted from the source. Claude moved from authenticated=false to Ready, and all nine installed Ollama models render.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.2 — Adapter-emitted controls stop passing while violated -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
