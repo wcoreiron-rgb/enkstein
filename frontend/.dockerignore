@@ -1,0 +1,12 @@
+# node_modules and .next are rebuilt inside the image; shipping the host copies
+# bloats the build context and can carry platform-specific binaries.
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+.DS_Store

@@ -100,7 +100,46 @@ if [ "$mode" = "no-start" ]; then
   exit 0
 fi
 
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+# Bound the pull. A pull for an image that does not exist yet, or a registry
+# that accepts the connection then stalls, otherwise hangs indefinitely and the
+# launcher waits forever with no error. Prefer a timed attempt and a local build
+# over a launch that never finishes.
+run_bounded() {
+  timeout_seconds="$1"
+  shift
+  "$@" &
+  bounded_pid=$!
+  elapsed=0
+  while [ "$elapsed" -lt "$timeout_seconds" ]; do
+    if ! kill -0 "$bounded_pid" 2>/dev/null; then
+      wait "$bounded_pid"
+      return $?
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  kill -TERM "$bounded_pid" 2>/dev/null || true
+  sleep 2
+  kill -KILL "$bounded_pid" 2>/dev/null || true
+  wait "$bounded_pid" 2>/dev/null || true
+  return 124
+}
+
+# Prefer published images so a first launch is a download rather than a local
+# compile. Building the backend image installs a large toolchain and Prowler,
+# which is what made first launch take minutes. If the pull cannot complete —
+# offline, registry unreachable, or a local/dev checkout with no published tag —
+# fall back to building so the install still succeeds.
+if [ "${ENKSTEIN_FORCE_BUILD:-false}" = "true" ]; then
+  echo "ENKSTEIN_FORCE_BUILD=true — building images locally."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+elif run_bounded "${ENKSTEIN_PULL_TIMEOUT:-600}" docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" pull --quiet backend frontend; then
+  echo "Using published Enkstein images."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --no-build
+else
+  echo "Published images were unavailable — building locally instead. This takes a few minutes."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+fi
 echo "Enkstein is starting."
 echo "UI:       http://localhost:${FRONTEND_PORT:-3000}"
 echo "API docs: http://localhost:${BACKEND_PORT:-8000}/docs"

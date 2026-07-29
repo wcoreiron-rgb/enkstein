@@ -205,6 +205,47 @@ def test_readme_leads_with_working_installer_links() -> None:
     assert "Optional" in head
 
 
+def test_first_launch_prefers_published_images() -> None:
+    """Building the backend locally compiles Prowler; a pull should win."""
+    installer = _read("packaging/install.sh")
+    compose = _read("packaging/compose.release.yaml")
+    workflow = _read(".github/workflows/release.yml")
+
+    assert "ghcr.io/wcoreiron-rgb/enkstein-backend" in compose
+    assert "ghcr.io/wcoreiron-rgb/enkstein-frontend" in compose
+    assert "enkstein-backend:${{ steps.tags.outputs.version }}" in workflow
+    assert "linux/amd64,linux/arm64" in workflow
+
+    # A failed or absent pull must still produce a working install.
+    assert "up -d --build" in installer
+    assert "ENKSTEIN_FORCE_BUILD" in installer
+
+
+def test_image_pull_cannot_hang_the_launcher() -> None:
+    """A pull for an unpublished tag hangs rather than failing.
+
+    Measured against the real registry: `docker pull` on a tag that does not
+    exist yet does not return, so an unbounded pull would leave first launch
+    waiting forever with no error shown.
+    """
+    installer = _read("packaging/install.sh")
+
+    assert "run_bounded" in installer
+    assert "ENKSTEIN_PULL_TIMEOUT" in installer
+    assert "return 124" in installer
+
+
+def test_images_exclude_local_development_state() -> None:
+    """Published images must not carry a developer's venv, caches, or .env."""
+    backend = _read("backend/.dockerignore")
+    frontend = _read("frontend/.dockerignore")
+
+    assert ".venv/" in backend
+    assert ".env" in backend
+    assert "node_modules/" in frontend
+
+
+
 
 
 def test_sidebar_exposes_capabilities_not_legacy_claw_labels() -> None:

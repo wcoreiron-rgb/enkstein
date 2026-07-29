@@ -31,7 +31,7 @@
 
 <p align="center">
   <b>Required &mdash; <a href="https://www.docker.com/products/docker-desktop/">Docker Desktop</a>.</b><br />
-  <sub>Enkstein runs its own governed services locally. The installer starts Docker for you if it is not already running; first launch builds the images and takes a few minutes. Allow 4&nbsp;GB RAM.</sub>
+  <sub>Enkstein runs its own governed services locally. The installer starts Docker for you if it is not already running, then downloads prebuilt images &mdash; roughly a 1&nbsp;GB download on first launch, and near-instant afterwards. If the download is unavailable it builds locally instead, which takes several minutes. Allow 4&nbsp;GB RAM.</sub>
 </p>
 
 <p align="center">

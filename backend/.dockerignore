@@ -1,0 +1,20 @@
+# Keep local development state out of the published image. Without this the
+# build context includes the virtualenv and test caches, which bloats the image
+# and can leak a developer's local .env into a published artifact.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.env
+.env.*
+!.env.example
+.secrets/
+.state/
+*.db
+*.sqlite3
+.DS_Store
