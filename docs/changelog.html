@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.6 — Browser Companion download, Windows bundling, testing guide -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">You can finally get the Browser Companion without a copy of the source tree</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.5.6</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Brains &amp; Packaging</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Three things were quietly making Enkstein untestable by anyone who had not cloned the repository.</p>
+      <ul>
+        <li><strong>The companion is now a download, not a Finder reveal.</strong> The button opened a folder inside a local checkout, so anyone running the notarized package had no way to obtain the extension files. Brain Connections now serves the extension as a zip, resolved from the packaged layout or a source checkout, with dotfiles omitted because Chrome rejects an unpacked load that contains them. The instructions on the page name each step: unzip, open Extensions, enable Developer mode, Load unpacked, then Pair browser.</li>
+        <li><strong>The Windows installer now bundles the companion too.</strong> It had never been copied into the Windows runtime, which would have made the fix macOS-only.</li>
+        <li><strong>A missing Authenticode certificate no longer kills the Windows build.</strong> Signing was a hard gate on a repository with no signing secrets, so every Windows artifact failed before it was produced. It now warns and publishes unsigned, and still fails loudly if signing is configured and genuinely breaks. The resulting SmartScreen prompt is documented rather than left as a surprise.</li>
+        <li><strong>New Testing Guide.</strong> Which connectors work without a paid account, what a passing connector test does and does not prove, how to distinguish live findings from demonstration data, and the known gaps &mdash; written for someone evaluating this for the first time.</li>
+      </ul>
+      <p><strong>Verification.</strong> A real browser click downloaded the zip and it passed an integrity check with every extension file present. The Windows packaging script and release workflow were both validated by their own parsers.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.5 — Brain picker model lists -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
