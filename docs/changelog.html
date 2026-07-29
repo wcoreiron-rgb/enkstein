@@ -334,6 +334,29 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.5 — Brain picker model lists -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">One Ollama row instead of three, and all of Claude&rsquo;s models instead of a third</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.5</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Chat &amp; Cowork</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The Brain picker in Chat and Cowork listed three near-identical Ollama rows and offered only three Claude models.</p>
+      <ul>
+        <li><strong>Internal profiles no longer appear as operator choices.</strong> Cowork file authoring and workspace scanning are pinned by the runtime, not chosen; they rendered as extra &ldquo;Ollama&rdquo; rows that behaved differently from the general local Brain. Routing and policy are unchanged.</li>
+        <li><strong>The label reflects what is actually selectable.</strong> It named one model when the whole installed set is available, and named the wrong one when the profile&rsquo;s configured default was not installed &mdash; showing gemma2:9b for a profile configured as qwen2.5:14b-instruct, purely because gemma2 sorted first. Providers offering a live choice now show their count.</li>
+        <li><strong>Claude offers the models this account is entitled to</strong>, read from Claude Code&rsquo;s own state rather than three hardcoded aliases that never changed with your plan. The aliases remain available, and remain the fallback if that state cannot be read.</li>
+      </ul>
+      <p><strong>Verification.</strong> Measured against the running console and the real Claude session: three Ollama rows became one reading &ldquo;9 models&rdquo;, and Claude went from 3 models to 8.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.4 — Model router providers report real state -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
