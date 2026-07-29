@@ -8,7 +8,10 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException
 from fastapi import Depends, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
+from app.claws.arcclaw.routes import _resolve_llm_key
 from app.services.model_router import (
     route_and_call,
     classify_sensitivity,
@@ -16,6 +19,7 @@ from app.services.model_router import (
     update_routing_rule,
     reset_routing_table,
     get_provider_status,
+    probe_provider_status,
     get_routing_audit,
     _DEFAULT_ROUTING_TABLE,
     _SENSITIVITY_RANK,
@@ -151,10 +155,20 @@ def reset_rules():
 
 
 @router.get("/providers", summary="List providers and availability status")
-def list_providers():
-    status = get_provider_status()
+async def list_providers(db: AsyncSession = Depends(get_db)):
+    # Keys live in the connector store as often as in the environment, so the
+    # probe is given the same resolution the LLM proxy already uses. Without
+    # it a provider configured through the Connector Marketplace would report
+    # unconfigured while routed calls to it succeed.
+    resolved = {}
+    for provider in ("anthropic", "openai", "nvidia", "azure_openai"):
+        try:
+            resolved[provider] = await _resolve_llm_key(db, provider)
+        except Exception:
+            resolved[provider] = None
+    probed = await probe_provider_status(resolved)
     return {
-        "providers": list(status.values()),
+        "providers": list(probed.values()),
         "sensitivity_levels": list(_SENSITIVITY_RANK.keys()),
     }
 

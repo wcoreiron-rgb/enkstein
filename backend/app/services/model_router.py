@@ -15,6 +15,7 @@ import json
 import logging
 import hashlib
 import asyncio
+import os
 from datetime import datetime
 from typing import Any
 
@@ -330,6 +331,116 @@ def get_provider_status() -> dict[str, dict]:
             "tier": tier_map.get(p, "cloud"),
         }
         for p in providers
+    }
+
+
+_PROVIDER_TIERS = {
+    Provider.OLLAMA:       "local",
+    Provider.AZURE_OPENAI: "enterprise",
+    Provider.NVIDIA:       "cloud_free",
+}
+
+
+def _ollama_base_url() -> str:
+    try:
+        from app.claws.arcclaw.llm_proxy import OLLAMA_BASE_URL
+
+        return OLLAMA_BASE_URL
+    except Exception:
+        return "http://localhost:11434"
+
+
+async def probe_provider_status(
+    resolved_keys: dict[str, str | None] | None = None,
+) -> dict[str, dict]:
+    """Report what each routing target can actually do right now.
+
+    ``_provider_status`` was declared but never written by anything, so every
+    provider reported "unknown" permanently -- including Ollama running on the
+    host and the Mock backend that cannot fail. Readiness is determined here
+    from the same inputs the ``_call_*`` backends use, so the strip cannot
+    claim a provider is healthy while a real call would raise on a missing key.
+
+    Statuses:
+      healthy   -- reachable now, or holds a credential the backend will use
+      offline   -- the local runtime was probed and did not answer
+      unconfigured -- no credential, so a routed call would fail closed
+    """
+    keys = resolved_keys or {}
+    statuses: dict[str, str] = {}
+    details: dict[str, str] = {}
+
+    # Mock exists precisely so a dev/fallback route always resolves.
+    statuses[Provider.MOCK] = "healthy"
+    details[Provider.MOCK] = "Deterministic development backend."
+
+    # Ollama is local, so reachability is knowable rather than inferred.
+    try:
+        import httpx
+        # Reuse the proxy's resolved base URL rather than re-deriving it: the
+        # backend runs in a container where "localhost" is not the Ollama host,
+        # so a local default reports offline against a running daemon.
+        from app.claws.arcclaw.llm_proxy import OLLAMA_BASE_URL as base
+
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(f"{base}/api/tags")
+            response.raise_for_status()
+            installed = len(response.json().get("models") or [])
+        statuses[Provider.OLLAMA] = "healthy"
+        details[Provider.OLLAMA] = f"Reachable with {installed} model(s) installed."
+    except Exception:
+        statuses[Provider.OLLAMA] = "offline"
+        details[Provider.OLLAMA] = f"Ollama did not answer at {_ollama_base_url()}."
+
+    def _credentialed(provider: str, value: str | None, hint: str) -> None:
+        if value:
+            statuses[provider] = "healthy"
+            details[provider] = "Credential configured."
+        else:
+            statuses[provider] = "unconfigured"
+            details[provider] = hint
+
+    from app.core.config import settings
+
+    _credentialed(
+        Provider.ANTHROPIC,
+        keys.get(Provider.ANTHROPIC) or getattr(settings, "ANTHROPIC_API_KEY", ""),
+        "Add an Anthropic API key in Connectors.",
+    )
+    _credentialed(
+        Provider.OPENAI,
+        keys.get(Provider.OPENAI) or getattr(settings, "OPENAI_API_KEY", ""),
+        "Add an OpenAI API key in Connectors.",
+    )
+    _credentialed(
+        Provider.NVIDIA,
+        keys.get(Provider.NVIDIA) or os.getenv("NVIDIA_API_KEY", ""),
+        "Add an NVIDIA NIM API key in Connectors.",
+    )
+    # Azure needs an endpoint as well as a key; either one missing fails closed.
+    azure_key = keys.get(Provider.AZURE_OPENAI) or getattr(settings, "AZURE_OPENAI_KEY", "")
+    azure_endpoint = getattr(settings, "AZURE_OPENAI_ENDPOINT", "")
+    if azure_key and azure_endpoint:
+        statuses[Provider.AZURE_OPENAI] = "healthy"
+        details[Provider.AZURE_OPENAI] = "Endpoint and credential configured."
+    else:
+        statuses[Provider.AZURE_OPENAI] = "unconfigured"
+        details[Provider.AZURE_OPENAI] = (
+            "Azure OpenAI needs both an endpoint and a key."
+        )
+
+    _provider_status.update(statuses)
+    return {
+        provider: {
+            "provider": provider,
+            "status": statuses.get(provider, "unknown"),
+            "detail": details.get(provider, ""),
+            "tier": _PROVIDER_TIERS.get(provider, "cloud"),
+        }
+        for provider in [
+            Provider.OLLAMA, Provider.AZURE_OPENAI, Provider.ANTHROPIC,
+            Provider.OPENAI, Provider.NVIDIA, Provider.MOCK,
+        ]
     }
 
 

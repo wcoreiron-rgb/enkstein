@@ -126,3 +126,63 @@ async def test_upgrade_override_needs_no_justification(monkeypatch):
         provider_override=model_router.Provider.MOCK,
     )
     assert result["routing"]["sensitivity"] == model_router.Sensitivity.RESTRICTED
+
+
+@pytest.mark.asyncio
+async def test_provider_status_reports_real_state_not_unknown(monkeypatch):
+    """Every provider reported "unknown" forever.
+
+    ``_provider_status`` was declared and read but never written by anything,
+    so the strip showed "Unknown" even for the Mock backend that cannot fail
+    and for a local Ollama that was running. Status is now probed.
+    """
+    async def fake_get(self, url, *args, **kwargs):
+        raise RuntimeError("ollama unreachable")
+
+    monkeypatch.setattr("httpx.AsyncClient.get", fake_get)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+
+    status = await model_router.probe_provider_status()
+
+    assert all(row["status"] != "unknown" for row in status.values())
+    # Mock is the deterministic fallback, so it is always callable.
+    assert status[model_router.Provider.MOCK]["status"] == "healthy"
+    # A probed-and-silent local runtime is offline, not merely unconfigured.
+    assert status[model_router.Provider.OLLAMA]["status"] == "offline"
+    # No credential means a routed call fails closed, so it is not "healthy".
+    assert status[model_router.Provider.ANTHROPIC]["status"] == "unconfigured"
+    assert status[model_router.Provider.AZURE_OPENAI]["status"] == "unconfigured"
+
+
+@pytest.mark.asyncio
+async def test_connector_store_keys_make_a_provider_ready(monkeypatch):
+    """Keys configured through the Connector Marketplace count as configured.
+
+    Reading only environment settings reported "unconfigured" for providers
+    whose routed calls would in fact succeed.
+    """
+    async def fake_get(self, url, *args, **kwargs):
+        raise RuntimeError("ollama unreachable")
+
+    monkeypatch.setattr("httpx.AsyncClient.get", fake_get)
+
+    status = await model_router.probe_provider_status(
+        {model_router.Provider.ANTHROPIC: "key-from-connector-store"}
+    )
+
+    assert status[model_router.Provider.ANTHROPIC]["status"] == "healthy"
+
+
+@pytest.mark.asyncio
+async def test_azure_requires_both_endpoint_and_key(monkeypatch):
+    """A key without an endpoint cannot complete a call, so it is not ready."""
+    async def fake_get(self, url, *args, **kwargs):
+        raise RuntimeError("ollama unreachable")
+
+    monkeypatch.setattr("httpx.AsyncClient.get", fake_get)
+
+    status = await model_router.probe_provider_status(
+        {model_router.Provider.AZURE_OPENAI: "key-only"}
+    )
+
+    assert status[model_router.Provider.AZURE_OPENAI]["status"] == "unconfigured"

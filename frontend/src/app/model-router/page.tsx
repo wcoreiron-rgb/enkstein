@@ -24,6 +24,7 @@ type ProviderInfo = {
   provider: string;
   status: string;
   tier: string;
+  detail?: string;
 };
 
 type AuditEntry = {
@@ -204,12 +205,20 @@ export default function ModelRouterPage() {
                 <p className="text-white text-xs font-medium truncate">{PROVIDER_LABELS[p.provider] ?? p.provider}</p>
                 <p className="text-gray-500 text-xs capitalize">{p.tier} tier</p>
               </div>
-              <span className={`ml-auto text-xs px-1.5 py-0.5 rounded border capitalize flex-shrink-0 ${
-                p.status === 'healthy' ? 'text-green-400 bg-green-900/30 border-green-800' :
-                p.status === 'degraded' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-800' :
-                'text-gray-400 bg-gray-800 border-gray-700'
-              }`}>
-                {p.status}
+              <span
+                title={p.detail || undefined}
+                className={`ml-auto text-xs px-1.5 py-0.5 rounded border flex-shrink-0 ${
+                  p.status === 'healthy' ? 'text-green-400 bg-green-900/30 border-green-800' :
+                  p.status === 'degraded' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-800' :
+                  p.status === 'offline' ? 'text-red-400 bg-red-900/30 border-red-800' :
+                  p.status === 'unconfigured' ? 'text-yellow-400 bg-yellow-900/30 border-yellow-800' :
+                  'text-gray-400 bg-gray-800 border-gray-700'
+                }`}
+              >
+                {p.status === 'healthy' ? 'Ready'
+                  : p.status === 'unconfigured' ? 'No key'
+                  : p.status === 'offline' ? 'Offline'
+                  : p.status}
               </span>
             </div>
           );
