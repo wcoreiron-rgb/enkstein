@@ -334,6 +334,28 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.8 — Python package rename -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The command-line, core, and MCP packages carry the product name too</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.8</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Packaging</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The previous release page listed <code>enkstein-0.5.7.tar.gz</code> beside three wheels named for the predecessor project, which reads like two unrelated downloads.</p>
+      <ul>
+        <li><strong>Renamed to <code>enkstein-cli</code>, <code>enkstein-core</code>, and <code>enkstein-mcp</code></strong>, with matching import names and an <code>enkstein</code> console command. None were published to a package index, so no existing installation is affected.</li>
+        <li><strong>Fixed the references that would have broken the build.</strong> The release workflow builds the core package by directory name, and the packaging check watches that path; both still pointed at the old directory.</li>
+      </ul>
+      <p><strong>Verification.</strong> All three were built and installed into a clean virtual environment: <code>from enkstein_core import ...</code> imports and <code>enkstein --help</code> runs, which is exactly what the documentation now instructs.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.7 — repository and artifact rename -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

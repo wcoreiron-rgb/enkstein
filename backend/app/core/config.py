@@ -14,7 +14,7 @@ _INSECURE_DEFAULTS = frozenset({
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Enkstein"
-    APP_VERSION: str = "0.5.7"
+    APP_VERSION: str = "0.5.8"
     DEBUG: bool = False
 
     # Production data policy.
