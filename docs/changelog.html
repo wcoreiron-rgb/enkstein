@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.9 — prebuilt runtime images -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">First launch downloads the runtime instead of compiling it</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.5.9</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Installation</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Every new user was building the runtime on their own machine before they could see anything. The backend image is 3.47&nbsp;GB, and 2.22&nbsp;GB of that is Prowler&rsquo;s dependency tree &mdash; that compile is what made first launch take minutes.</p>
+      <ul>
+        <li><strong>Runtime images are now published for each release</strong>, built for both Apple silicon and x86, so installation is a download rather than a build.</li>
+        <li><strong>Building still works when the download cannot.</strong> An offline machine, an unreachable registry, or a source checkout falls back to building locally and says so. Set <code>ENKSTEIN_FORCE_BUILD=true</code> to always build.</li>
+        <li><strong>The download is time-bounded, and that is not a precaution.</strong> A pull against a tag that does not exist yet does not fail &mdash; it hangs indefinitely. Unbounded, that would have left first launch waiting forever with nothing on screen. It now gives up and builds instead.</li>
+        <li><strong>Published images exclude local development state.</strong> The build previously included the virtual environment and installed packages from the machine that built it, which bloats the image and risks carrying a local environment file into a public artifact.</li>
+      </ul>
+      <p>Running entirely without Docker, and a Docker-free installer variant, remain under consideration; this release makes the existing path fast rather than replacing it.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.8 — Python package rename -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
