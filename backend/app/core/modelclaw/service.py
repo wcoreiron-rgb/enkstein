@@ -69,6 +69,12 @@ _PROFILES: dict[str, dict[str, Any]] = {
     "ollama_cowork_author": {
         "name": "ollama_cowork_author",
         "provider": "ollama",
+        # Pinned by name from the Cowork file-authoring path, never chosen by
+        # an operator. Listing it in the Brain picker rendered a second
+        # indistinguishable "Ollama" row that behaved differently from the
+        # general local Brain, so it is marked internal for presentation only.
+        # Routing and policy are unaffected.
+        "internal_role": True,
         # Qwen 2.5 7B is a practical local coding model on ordinary developer
         # hardware. The invocation pins this model explicitly so a global
         # fallback preference cannot silently turn a file-authoring turn into
@@ -88,6 +94,9 @@ _PROFILES: dict[str, dict[str, Any]] = {
     "gemma_scanner": {
         "name": "gemma_scanner",
         "provider": "ollama",
+        # Pinned by the workspace scanner path, not operator-selectable.
+        # Presentation only; routing and policy are unaffected.
+        "internal_role": True,
         "model": "gemma2:9b",
         # Local Ollama Gemma only — distinct from any Gemini API/CLI provider,
         # which is intentionally not offered under this profile name. An empty

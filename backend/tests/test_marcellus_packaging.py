@@ -665,3 +665,22 @@ def test_cli_subprocess_environment_carries_user_identity() -> None:
 
     # The environment stays explicit rather than inheriting the caller's.
     assert "process.environment = [" in bridge
+
+
+def test_claude_models_come_from_real_entitlement_not_three_aliases() -> None:
+    """Claude offered only sonnet/opus/haiku regardless of plan.
+
+    Codex reads its own model cache, but Claude returned a hardcoded trio, so
+    models the account is actually entitled to were unreachable from the
+    picker. Entitlement is now read from Claude Code's own state file.
+    """
+    bridge = _read("packaging/macos/MarcellusBrainBridge.swift")
+
+    assert 'appendingPathComponent(".claude.json")' in bridge
+    assert 'payload["modelAccessCache"]' in bridge
+    assert 'row["entitled"] as? Bool == true' in bridge
+    # The org default is selectable even when absent from the access list.
+    assert 'payload["orgModelDefaultCache"]' in bridge
+    # Aliases remain, and remain the fallback when the cache is unreadable.
+    assert 'let aliases = ["sonnet", "opus", "haiku"]' in bridge
+    assert "if entitled.isEmpty { return aliases }" in bridge

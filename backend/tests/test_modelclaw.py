@@ -110,3 +110,37 @@ async def test_modelclaw_tenant_scoped_profiles_and_calls(client):
     assert tenant_a_calls.status_code == 200
     assert tenant_a_calls.json()
     assert all(c.get("tenant_id") == "tenant-a" for c in tenant_a_calls.json())
+
+
+@pytest.mark.asyncio
+async def test_runtime_pinned_profiles_are_flagged_internal(client):
+    """Cowork authoring and workspace scanning are pinned by the runtime.
+
+    Three Ollama profiles rendered as indistinguishable "Ollama" rows in the
+    Brain picker even though two of them are internal steps the runtime pins
+    by name. They stay routable and policy-governed; the flag only keeps them
+    out of the operator's choice list.
+    """
+    response = await client.get(f"{BASE}/profiles")
+    assert response.status_code == 200, response.text
+    rows = response.json()
+    by_name = {row["name"]: row for row in rows}
+
+    assert by_name["ollama_cowork_author"]["internal_role"] is True
+    assert by_name["gemma_scanner"]["internal_role"] is True
+    # The general local Brain remains an operator choice.
+    assert by_name["ollama_local_fallback"]["internal_role"] is False
+
+    # Exactly one selectable Ollama profile remains, so the picker cannot
+    # render duplicate rows that behave differently.
+    selectable_ollama = [
+        row for row in rows
+        if row["provider"] == "ollama"
+        and not row["internal_role"]
+        and "executive" in (row.get("allowed_claws") or [])
+    ]
+    assert len(selectable_ollama) == 1
+
+    # Flagging is presentation-only: the pinned profiles keep their routing.
+    assert by_name["gemma_scanner"]["provider"] == "ollama"
+    assert "executive" in by_name["ollama_cowork_author"]["allowed_claws"]

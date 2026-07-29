@@ -25,6 +25,10 @@ class ModelProfileCreate(BaseModel):
     tool_calling: bool = True
     requires_redaction: bool = True
     fallback_profile: str | None = None
+    # True for profiles the runtime pins by name for a specific internal step
+    # (Cowork file authoring, workspace scanning). They stay routable and
+    # policy-governed; they are simply not offered as an operator choice.
+    internal_role: bool = False
     tenant_id: str = Field(default="global", min_length=1, max_length=128)
 
     @model_validator(mode="after")

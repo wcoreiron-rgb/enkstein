@@ -656,6 +656,11 @@ export default function AIWorkspace({
       }));
       const profileOptions: SourceOption[] = profiles
         .filter((profile: any) => (profile.allowed_claws || []).includes('executive'))
+        // Profiles the runtime pins for its own internal steps (Cowork file
+        // authoring, workspace scanning) rendered as extra indistinguishable
+        // "Ollama" rows that behaved differently from the general local Brain.
+        // They remain routable; they are simply not an operator choice.
+        .filter((profile: any) => !profile.internal_role)
         .map((profile: any) => {
           const providerKey = profile.provider === 'nvidia_nim' ? 'nvidia' : profile.provider;
           const provider = providerState.get(providerKey) as any;
@@ -664,17 +669,24 @@ export default function AIWorkspace({
             .filter((item) => providerKey === 'ollama' || allowedModels.has(item.id))
             .map((item) => ({ id: item.id, label: item.name || item.id }));
           const models = liveModels.length ? liveModels : [{ id: profile.model, label: profile.model }];
-          // Several profiles can share one provider (Ollama in particular has
-          // a general, an authoring and a scanner profile), so the provider
-          // label alone renders three indistinguishable "Ollama" rows. Naming
-          // the model makes the choice legible: "Ollama · qwen2.5:14b-instruct".
           const providerLabel = provider?.label || profile.provider;
+          // The label named one model even when the whole installed set is
+          // selectable, and it named the wrong one whenever the profile's
+          // configured default was not installed -- "Ollama · gemma2:9b" for a
+          // profile configured as qwen2.5:14b-instruct, purely because gemma2
+          // happened to be first. Providers offering a live choice are labelled
+          // by their count; a single fixed model is still named.
           const defaultModel = models.some((item) => item.id === profile.model)
             ? profile.model
             : models[0]?.id || profile.model;
+          const label = models.length > 1
+            ? `${providerLabel} · ${models.length} models`
+            : defaultModel
+              ? `${providerLabel} · ${defaultModel}`
+              : providerLabel;
           return {
             value: `profile:${profile.name}`,
-            label: defaultModel ? `${providerLabel} · ${defaultModel}` : providerLabel,
+            label,
             ready: Boolean(provider?.ready),
             detail: provider?.setup || 'Provider is not connected.',
             models,

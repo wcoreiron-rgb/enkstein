@@ -1299,7 +1299,37 @@ private final class BrainBridge {
     }
 
     private func claudeModels() -> [String] {
-        return ["sonnet", "opus", "haiku"]
+        // Aliases only ("sonnet", "opus", "haiku") hid the models this account
+        // is actually entitled to, and pinned the list to three regardless of
+        // plan. Claude Code records real entitlement in ~/.claude.json, so read
+        // that the way codexModels() reads its own cache, and fall back to the
+        // stable aliases when the cache is absent or unreadable.
+        let aliases = ["sonnet", "opus", "haiku"]
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude.json")
+        guard let data = try? Data(contentsOf: url),
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return aliases
+        }
+        var entitled: [String] = []
+        if let rows = payload["modelAccessCache"] as? [[String: Any]] {
+            for row in rows {
+                guard row["entitled"] as? Bool == true,
+                      let name = row["apiName"] as? String,
+                      !name.isEmpty else { continue }
+                entitled.append(name)
+            }
+        }
+        // The org default is selectable even when it is not listed above.
+        if let orgDefault = payload["orgModelDefaultCache"] as? [String: Any],
+           let name = orgDefault["name"] as? String,
+           !name.isEmpty,
+           !entitled.contains(name) {
+            entitled.insert(name, at: 0)
+        }
+        if entitled.isEmpty { return aliases }
+        // Aliases stay available: they always resolve to the current model.
+        return aliases + entitled.sorted()
     }
 
     private func invoke(brain: String, prompt: String, model: String?, sessionID: String?) throws -> [String: Any] {
