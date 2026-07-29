@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.4 — Model router providers report real state -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Secure Model Router stops saying &ldquo;Unknown&rdquo; about everything</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.4</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Model Router</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Every provider read &ldquo;Unknown&rdquo; &mdash; including the Mock backend that cannot fail, and a local Ollama that was running with nine models installed. The internal status map was declared and read, but nothing ever wrote to it.</p>
+      <ul>
+        <li><strong>Providers are probed rather than assumed.</strong> Ollama is checked for real reachability and reports its installed model count; cloud providers report whether a usable credential exists.</li>
+        <li><strong>Readiness matches what a routed call would actually do</strong>, so the strip cannot show healthy where the call would fail on a missing key. Azure requires both an endpoint and a key, since either one missing fails the request.</li>
+        <li><strong>Keys added through the Connector Marketplace count.</strong> Reading only environment variables reported providers as unconfigured while their routed calls succeeded.</li>
+        <li><strong>Each status explains itself</strong>, so &ldquo;No key&rdquo; names the connector to configure instead of leaving you to guess.</li>
+      </ul>
+      <p><strong>Verification.</strong> Measured against the running stack, not asserted from source. This surfaces a real gap the old display hid: Public, Internal and Confidential currently route to providers with no credential configured.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.3 — Claude login detection and collapsible model lists -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
