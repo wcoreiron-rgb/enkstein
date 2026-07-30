@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name            = "enkstein-cli"
-version         = "0.5.10"
+version         = "0.5.11"
 description     = "Enkstein Zero Trust Ecosystem — Command Line Interface"
 readme          = "README.md"
 requires-python = ">=3.11"

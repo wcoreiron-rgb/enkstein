@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.11 — AI analysis on node assessments -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Every Capability Node assessment can now explain itself</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">v0.5.11</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Security</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Running a node produced verdicts and a score, and stopped there. Reading which of 324 controls failed, working out which failures shared a cause, and deciding what to do first was left entirely to the operator. Not one of the 26 node scans reached a Brain &mdash; AI existed only as a cross-node correlation on a separate page.</p>
+      <ul>
+        <li><strong>Explain this assessment</strong> now sits under the verdicts for every Security Arm. It reads the failing controls, the open findings, the remediations that can execute, and the ones that need a human, and returns a summary, the themes connecting the failures, and ordered remediation steps citing the control IDs they resolve.</li>
+        <li><strong>Controls that were never assessed are reported alongside the failures.</strong> A high pass rate over a third of a profile is not a good posture, and the summary is given the coverage gap so it cannot describe one as the other.</li>
+        <li><strong>The narration cannot change the assessment.</strong> Verdicts and scores stay deterministic, and the model only ever reads the finished result. Two reasons hold that line: a control that moves between pass and fail because a model phrased itself differently makes a compliance posture unauditable, and every finding string arrives from a third-party connector, so it is framed as untrusted data &mdash; a successful injection yields misleading prose rather than a forged pass.</li>
+        <li><strong>A clean node skips the model entirely</strong> rather than paying for a call to say nothing is wrong, and when no Brain is reachable the assessment is reported as complete and unaffected instead of showing an empty panel.</li>
+      </ul>
+      <p><strong>Found while building this.</strong> The summary was reading control rows from a key the evaluation service does not return, and remediation proposals from another. Left as it was, every node would have reported &ldquo;no failing controls&rdquo; no matter how many had failed. Both contracts are now pinned by tests.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.10 — Windows launch fixes -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

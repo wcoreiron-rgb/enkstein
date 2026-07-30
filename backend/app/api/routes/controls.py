@@ -28,6 +28,7 @@ from app.services.control_profiles import coverage_matrix, profile_for, repillar
 from app.services.control_evaluation import evaluate_controls
 from app.services import control_collectors
 from app.services import control_remediation
+from app.services.control_ai_summary import summarize_assessment
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job
 from app.core.swarm.schemas import SwarmJobCreate
 
@@ -38,6 +39,11 @@ class ControlAnalysisRequest(BaseModel):
     classification: str = Field(default="internal", max_length=64)
     requested_by: str = Field(default="operator", max_length=128)
     control_id: str | None = Field(default=None, max_length=128)
+
+
+class AssessmentSummaryRequest(BaseModel):
+    claw: str = Field(max_length=64)
+    classification: str = Field(default="internal", max_length=64)
 
 
 @router.post("/bootstrap")
@@ -331,6 +337,50 @@ async def remediation_proposals(
 ):
     """Failing controls that declare an executable remediation action."""
     return await control_remediation.proposals(db, claw=claw)
+
+
+@router.post("/assessment-summary")
+async def assessment_summary(
+    body: AssessmentSummaryRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Advisory narration of one node's finished assessment.
+
+    The verdicts, score, and remediation proposals are re-read from the
+    deterministic services rather than accepted from the caller, so a client
+    cannot ask the Brain to explain an assessment that never ran.
+    """
+    evaluation = await evaluate_controls(db, claw=body.claw)
+    proposals = await control_remediation.proposals(db, claw=body.claw)
+
+    statement = (
+        select(Finding)
+        .where(Finding.status == "open", Finding.claw == body.claw)
+        .order_by(desc(Finding.risk_score))
+        .limit(25)
+    )
+    result = await db.execute(statement)
+    findings = [
+        {
+            "id": str(item.id),
+            "title": item.title,
+            "severity": str(item.severity),
+            "risk_score": item.risk_score,
+            "control_id": item.control_id,
+            "zt_pillar": item.zt_pillar,
+            "remediation": item.remediation,
+        }
+        for item in result.scalars().all()
+    ]
+
+    return await summarize_assessment(
+        db,
+        claw=body.claw,
+        evaluation=evaluation,
+        proposals=proposals,
+        findings=findings,
+        classification=body.classification,
+    )
 
 
 @router.post("/remediation/execute")

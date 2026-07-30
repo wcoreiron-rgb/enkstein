@@ -2,13 +2,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Shield, RefreshCw, CheckCircle2, XCircle, HelpCircle, Info,
-  Plug, Download, Wrench, AlertTriangle, Loader2,
+  Plug, Download, Wrench, AlertTriangle, Loader2, Sparkles,
 } from 'lucide-react';
 import {
   getControlSummary, getControlCoverage, getControlEvaluation,
   getControlCollectors, getProwlerStatus, getControlRemediationProposals,
   syncProwlerCatalog, syncNistCatalog, attachControlEvaluators,
+  getAssessmentSummary,
 } from '@/lib/api';
+import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 
 const surface = { background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' };
 const elevated = { background: 'var(--rc-bg-elevated)', borderColor: 'var(--rc-border)' };
@@ -46,6 +48,8 @@ export default function ZeroTrustPage() {
   const [prowler, setProwler] = useState<any>(null);
   const [evaluation, setEvaluation] = useState<any>(null);
   const [proposals, setProposals] = useState<any>(null);
+  const [advisory, setAdvisory] = useState<any>(null);
+  const [advisoryBusy, setAdvisoryBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -73,6 +77,9 @@ export default function ZeroTrustPage() {
     setSelected(claw);
     setEvaluation(null);
     setProposals(null);
+    // The narration belongs to the assessment being replaced, so it is cleared
+    // rather than left on screen describing a different node.
+    setAdvisory(null);
     try {
       const [ev, pr] = await Promise.all([
         getControlEvaluation(claw), getControlRemediationProposals(claw),
@@ -80,6 +87,23 @@ export default function ZeroTrustPage() {
       setEvaluation(ev); setProposals(pr);
     } catch (e: any) {
       setError(e?.message ?? 'Could not evaluate this Security Arm.');
+    }
+  }, []);
+
+  const explain = useCallback(async (claw: string) => {
+    setAdvisoryBusy(true);
+    setAdvisory(null);
+    try {
+      setAdvisory(await getAssessmentSummary(claw));
+    } catch (e: any) {
+      // A narration failure must not read as an assessment failure.
+      setAdvisory({
+        available: false,
+        reason: 'error',
+        detail: e?.message ?? 'The summary could not be generated. The verdicts above are unaffected.',
+      });
+    } finally {
+      setAdvisoryBusy(false);
     }
   }, []);
 
@@ -299,6 +323,60 @@ export default function ZeroTrustPage() {
               </ul>
             </div>
           )}
+
+          <div className="border-t px-4 py-3" style={{ borderColor: 'var(--rc-border)' }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={text3}>
+                  AI analysis and remediation plan
+                </p>
+                <p className="mt-0.5 text-xs" style={text2}>
+                  Advisory only. Verdicts and the score above are computed deterministically
+                  and are not changed by this summary.
+                </p>
+              </div>
+              <button
+                onClick={() => explain(selected)}
+                disabled={advisoryBusy || !evaluation}
+                className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors disabled:opacity-50"
+                style={{ ...elevated, color: 'var(--rc-text-1)' }}
+              >
+                {advisoryBusy
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Sparkles className="h-4 w-4 text-indigo-500" />}
+                {advisoryBusy ? 'Analyzing…' : 'Explain this assessment'}
+              </button>
+            </div>
+
+            {advisory && (
+              <div className="mt-3 rounded-lg border p-3" style={{ background: 'var(--rc-panel-hover)', borderColor: 'var(--rc-border)' }}>
+                {advisory.available ? (
+                  <>
+                    <div className="rc-md text-sm" style={text1}>
+                      <SafeMarkdown content={String(advisory.summary ?? '')} />
+                    </div>
+                    <p className="mt-3 border-t pt-2 text-xs" style={{ ...text3, borderColor: 'var(--rc-border)' }}>
+                      {advisory.provider ?? 'brain'}
+                      {advisory.model ? ` · ${advisory.model}` : ''}
+                      {' · read '}
+                      {advisory.evidence_counts?.failing_controls ?? 0} failing controls,{' '}
+                      {advisory.evidence_counts?.findings ?? 0} findings
+                      {advisory.evidence_counts?.not_assessed
+                        ? ` · ${advisory.evidence_counts.not_assessed} controls were never assessed`
+                        : ''}
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex items-start gap-2 text-sm" style={text2}>
+                    {advisory.reason === 'no_failing_controls'
+                      ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                      : <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />}
+                    <span>{advisory.detail ?? 'No summary is available for this assessment.'}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
       )}
 

@@ -1,6 +1,6 @@
 {
-  "name": "marcellus-frontend",
-  "version": "0.5.10",
+  "name": "enkstein-frontend",
+  "version": "0.5.11",
   "private": true,
   "scripts": {
     "dev": "next dev",

@@ -1358,6 +1358,11 @@ export const getControlCollectors = () => apiFetch<any>('/controls/collectors');
 export const getProwlerStatus = () => apiFetch<any>('/controls/prowler/status');
 export const getControlRemediationProposals = (claw?: string) =>
   apiFetch<any>(`/controls/remediation/proposals${claw ? `?claw=${encodeURIComponent(claw)}` : ''}`);
+export const getAssessmentSummary = (claw: string, classification = 'internal') =>
+  apiFetch<any>('/controls/assessment-summary', {
+    method: 'POST',
+    body: JSON.stringify({ claw, classification }),
+  });
 export const syncProwlerCatalog = () =>
   apiFetch<any>('/controls/sync/prowler', { method: 'POST' });
 export const syncNistCatalog = () =>
