@@ -320,6 +320,36 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.6.5 — Native glass release                            -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Native Glass Desktop Release</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">macOS Vibrancy</span>
+          <span class="tag tag-feat">Windows WebView2</span>
+          <span class="tag tag-sec">Theme Isolation</span>
+          <span class="release-date">July 30, 2026 &nbsp;·&nbsp; Enkstein v0.6.5</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Liquid Glass now connects the transparent web document to native desktop composition while dark and light themes remain opaque and accessible.</div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>macOS:</strong> native vibrancy samples the desktop through the WebKit shell and honors Reduce Transparency.</li>
+          <li><strong>Windows:</strong> the desktop host embeds WebView2 and requests Acrylic through DWM on supported Windows 11 systems, with a safe opaque fallback.</li>
+          <li><strong>Theme bridge:</strong> the web layer reports theme changes to each native host; Liquid Glass alone enables native transparency.</li>
+          <li><strong>Startup:</strong> native hosts consume the runtime's dynamic UI URL instead of opening a second browser tab.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.6.4 — Native system glass                              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

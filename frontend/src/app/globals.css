@@ -95,7 +95,10 @@ html.light {
    console. Surfaces remain solid enough for scanning; blur is reserved for
    chrome and the brand mark rather than being applied to every control. */
 html.liquid {
-  --rc-bg-base:     #e4e8ec;
+  /* Translucent rather than a solid tint. Roughly twenty call sites apply
+     --rc-bg-base as an inline background, so an opaque value here made the
+     whole shell paint over the native window vibrancy. */
+  --rc-bg-base:     rgba(228, 232, 236, 0.34);
   --rc-bg-surface:  rgba(255, 255, 255, 0.46);
   --rc-bg-elevated: rgba(255, 255, 255, 0.64);
   --rc-bg-input:    rgba(255, 255, 255, 0.56);
@@ -105,7 +108,7 @@ html.liquid {
   --rc-text-3:      #758292;
   --rc-border:      rgba(71, 85, 105, 0.20);
   --rc-border-2:    rgba(71, 85, 105, 0.34);
-  --rc-chat-canvas: #dfe4e8;
+  --rc-chat-canvas: rgba(223, 228, 232, 0.30);
   --rc-chat-panel: rgba(255, 255, 255, 0.50);
   --rc-panel-header: rgba(255, 255, 255, 0.42);
   --rc-panel-hover: rgba(71, 85, 105, 0.07);
@@ -121,8 +124,22 @@ html.liquid {
   --rc-inline-fg:   #102a43;
 }
 
+/* The document itself must contribute no paint at all, otherwise the native
+   NSVisualEffectView (macOS) or Mica/Acrylic backdrop (Windows) is covered by
+   an opaque web layer and the desktop never shows through. `!important` is
+   required because the app shell sets an inline background on <body>, and an
+   inline declaration otherwise wins over a plain stylesheet rule. */
+html.liquid,
 html.liquid body {
-  background-color: rgba(228, 232, 236, 0.18);
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* `body` animates its background for 0.2s. Interpolating from an opaque theme
+   colour to transparent renders a brief opaque flash over the native backdrop
+   when switching into Liquid Glass, so the transition is dropped here. */
+html.liquid body {
+  transition: color 0.2s;
 }
 
 /* Make the theme visible across the application shell, including pages that

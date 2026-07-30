@@ -1,5 +1,5 @@
 #ifndef Version
-  #define Version "0.6.4"
+  #define Version "0.6.5"
 #endif
 #ifndef StageDir
   #error StageDir is required
@@ -31,6 +31,11 @@ LicenseFile={#StageDir}\runtime\LICENSE
 
 [Files]
 Source: "{#StageDir}\Enkstein.exe"; DestDir: "{app}"; Flags: ignoreversion
+; WebView2 SDK assemblies and native loader. The host embeds WebView2, so it
+; cannot start without these beside the executable.
+Source: "{#StageDir}\Microsoft.Web.WebView2.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\Microsoft.Web.WebView2.WinForms.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]

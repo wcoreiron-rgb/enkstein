@@ -197,7 +197,18 @@ try {
     }
     if ($composeExit -ne 0) { throw "Container startup failed after three Docker readiness retries. See $LogFile." }
 
-    Start-Process "http://localhost:$frontendPort"
+    # The frontend port is chosen at launch, so the console URL is published to
+    # a file for the native host to read. This mirrors the macOS package.
+    $uiUrl = "http://localhost:$frontendPort"
+    $stateDir = Join-Path $env:LOCALAPPDATA "Enkstein"
+    New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+    Set-Content -NoNewline -Path (Join-Path $stateDir "ui-url") -Value $uiUrl
+
+    # When the native WebView2 host started this script it renders the console
+    # itself, so opening a browser as well would surface two copies of the app.
+    if ($env:ENKSTEIN_EMBEDDED -ne "1") {
+        Start-Process $uiUrl
+    }
 }
 catch {
     $_ | Out-File -Append -FilePath $LogFile

@@ -3,6 +3,11 @@ import WebKit
 
 private let defaultURL = URL(string: "http://127.0.0.1:3000/marcellus")!
 
+/// Name of the dedicated theme channel. Kept separate from the workspace
+/// channel so a change to folder-granting cannot silently break vibrancy.
+private let themeMessageHandler = "marcellusTheme"
+private let workspaceMessageHandler = "marcellusWorkspace"
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow!
     private var webView: WKWebView!
@@ -15,11 +20,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var outputBuffer = Data()
     private var updateCheck: URLSessionDataTask?
     private var statusItem: NSStatusItem?
+    /// Last theme reported by the web layer. Retained so the window can be
+    /// re-evaluated when the system accessibility setting changes.
+    private var currentTheme = "dark"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureMenu()
         configureStatusItem()
         configureWindow()
+        observeReduceTransparency()
         startRuntime()
     }
 
@@ -187,38 +196,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         )
         window.title = "Enkstein"
         window.titlebarAppearsTransparent = true
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        // Start opaque. Vibrancy is switched on only once the web layer
+        // reports the Liquid Glass theme, so the splash and the dark/light
+        // themes never render against a see-through window.
+        window.isOpaque = true
+        window.backgroundColor = NSColor.windowBackgroundColor
         window.minSize = NSSize(width: 960, height: 640)
         window.center()
 
         contentContainer = NSView(frame: window.contentView!.bounds)
         contentContainer.autoresizingMask = [.width, .height]
+        // The container must contribute no paint of its own. A layer-backed
+        // view with a default background would sit between the effect view
+        // and the desktop and defeat the whole arrangement.
+        contentContainer.wantsLayer = true
+        contentContainer.layer?.backgroundColor = NSColor.clear.cgColor
 
         glassView = NSVisualEffectView(frame: contentContainer.bounds)
         glassView.autoresizingMask = [.width, .height]
-        glassView.material = .hudWindow
+        // .underWindowBackground samples the desktop behind the window, which
+        // is what makes the wallpaper visible. .hudWindow is the fallback on
+        // older systems where the former is unavailable.
+        glassView.material = NSVisualEffectView.Material.underWindowBackground
         glassView.blendingMode = .behindWindow
-        glassView.state = .active
+        glassView.state = .inactive
         glassView.isHidden = true
         contentContainer.addSubview(glassView)
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
-        configuration.userContentController.add(self, name: "marcellusWorkspace")
+        configuration.userContentController.add(self, name: workspaceMessageHandler)
+        configuration.userContentController.add(self, name: themeMessageHandler)
         configuration.userContentController.addUserScript(WKUserScript(
             source: """
             window.marcellusNativeWorkspace = {
               selectFolder: function() {
-                window.webkit.messageHandlers.marcellusWorkspace.postMessage({ action: 'selectFolder' });
+                window.webkit.messageHandlers.\(workspaceMessageHandler).postMessage({ action: 'selectFolder' });
               }
             };
-            function reportMarcellusTheme() {
-              var theme = document.documentElement.dataset.theme || 'dark';
-              window.webkit.messageHandlers.marcellusWorkspace.postMessage({ action: 'theme', theme: theme });
-            }
-            new MutationObserver(reportMarcellusTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-            window.addEventListener('load', reportMarcellusTheme);
+            (function () {
+              var last = null;
+              function reportMarcellusTheme() {
+                var theme = document.documentElement.dataset.theme || 'dark';
+                if (theme === last) return;
+                last = theme;
+                window.webkit.messageHandlers.\(themeMessageHandler).postMessage({ theme: theme });
+              }
+              window.marcellusReportTheme = reportMarcellusTheme;
+              new MutationObserver(reportMarcellusTheme).observe(
+                document.documentElement,
+                { attributes: true, attributeFilter: ['data-theme', 'class'] }
+              );
+              // The theme is applied by a client effect after hydration, so
+              // document-start alone is too early to observe the final value.
+              document.addEventListener('DOMContentLoaded', reportMarcellusTheme);
+              window.addEventListener('load', reportMarcellusTheme);
+              window.addEventListener('pageshow', reportMarcellusTheme);
+            })();
             """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
@@ -227,7 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
-        webView.setValue(false, forKey: "drawsBackground")
+        setWebViewDrawsBackground(false)
         contentContainer.addSubview(webView)
 
         loadingView = NSView(frame: window.contentView!.bounds)
@@ -293,14 +327,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.name == "marcellusWorkspace",
-              let body = message.body as? [String: Any],
-              let action = body["action"] as? String else { return }
-        if action == "theme" {
-            setNativeGlass(enabled: body["theme"] as? String == "liquid")
+        guard let body = message.body as? [String: Any] else { return }
+
+        if message.name == themeMessageHandler {
+            currentTheme = body["theme"] as? String ?? "dark"
+            applyWindowAppearance()
             return
         }
-        guard action == "selectFolder" else { return }
+
+        guard message.name == workspaceMessageHandler,
+              body["action"] as? String == "selectFolder" else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
@@ -435,13 +471,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.load(URLRequest(url: url))
     }
 
-    private func setNativeGlass(enabled: Bool) {
-        glassView.isHidden = !enabled
-        window.isOpaque = !enabled
-        window.backgroundColor = enabled ? .clear : NSColor.windowBackgroundColor
-        // WKWebView has no public drawsBackground property, but this is the
-        // supported WebKit configuration used by native transparent shells.
-        webView.setValue(!enabled, forKey: "drawsBackground")
+    /// Whether the user has asked the system to avoid transparency. Honoring
+    /// this is not optional: vibrancy reduces contrast, and someone who turned
+    /// it off did so because the effect makes the interface hard to read.
+    private var reduceTransparencyEnabled: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+    }
+
+    private func observeReduceTransparency() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyWindowAppearance()
+        }
+    }
+
+    /// WKWebView exposes no public `drawsBackground`, but the underlying
+    /// property is honored and is the arrangement used by transparent WebKit
+    /// shells. `setValue(_:forKey:)` on a missing key would raise, so the call
+    /// is guarded rather than assumed.
+    private func setWebViewDrawsBackground(_ draws: Bool) {
+        guard webView.responds(to: NSSelectorFromString("setDrawsBackground:"))
+            || webView.value(forKey: "drawsBackground") != nil else { return }
+        webView.setValue(draws, forKey: "drawsBackground")
+    }
+
+    /// Applies native vibrancy for Liquid Glass and restores a conventional
+    /// opaque window for every other theme.
+    private func applyWindowAppearance() {
+        let wantsGlass = currentTheme == "liquid" && !reduceTransparencyEnabled
+
+        glassView.isHidden = !wantsGlass
+        glassView.state = wantsGlass ? .active : .inactive
+        window.isOpaque = !wantsGlass
+        window.backgroundColor = wantsGlass ? .clear : NSColor.windowBackgroundColor
+        window.hasShadow = true
+        setWebViewDrawsBackground(!wantsGlass)
+
+        // The web layer keeps its own translucent surfaces; only the document
+        // itself needs to stop painting, and that is handled in CSS. Match the
+        // titlebar so the window chrome does not read as a separate opaque
+        // strip above a transparent body.
+        window.titlebarAppearsTransparent = true
+        window.appearance = wantsGlass ? NSAppearance(named: .vibrantLight) : nil
     }
 
     private func showFailure(_ message: String) {
