@@ -334,6 +334,30 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.10 — Windows launch fixes -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Windows starts &mdash; ports, owner password, and the images it never pulled</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.10</span>
+          <span class="release-date">July 29, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Installation</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>Windows does not run the shell installer &mdash; it drives Docker Compose directly. Every fix made to the installer had therefore been missing Windows entirely, including the prebuilt images from the previous release.</p>
+      <ul>
+        <li><strong>A port already in use no longer stops the launch.</strong> Ports 3000 and 8000 were claimed unconditionally, so anything else holding either one made startup abort with nothing on screen but &ldquo;Container startup failed&rdquo;. Both platforms now keep the familiar port when it is free and quietly move to the next one when it is not, and the browser opens on the port actually chosen. The two port settings were also absent from the environment file, so they were ignored even when set by hand.</li>
+        <li><strong>Windows generates its own owner password.</strong> It previously kept the placeholder from the example environment file, meaning every Windows installation shared the same known credential. Existing installations still holding the placeholder are given a fresh one.</li>
+        <li><strong>Windows downloads the runtime instead of compiling it</strong>, matching macOS, with the same fallback to building when the download is unavailable.</li>
+        <li><strong>A failed launch opens the log</strong> rather than printing a folder path and leaving you to find it.</li>
+      </ul>
+      <p><strong>Honest limitation.</strong> The port and version helpers were executed and verified, and the launcher parses cleanly, but this was developed without a Windows machine. The installer itself has not been run end to end on Windows.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.9 — prebuilt runtime images -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>
