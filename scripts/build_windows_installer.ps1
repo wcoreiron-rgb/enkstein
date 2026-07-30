@@ -64,9 +64,9 @@ if (-not (Test-Path $WebView2Dir)) {
         -OutFile $WebView2Package
     Expand-Archive -Path $WebView2Package -DestinationPath $WebView2Dir -Force
 }
-$WebView2Core = Join-Path $WebView2Dir "lib\net45\Microsoft.Web.WebView2.Core.dll"
-$WebView2Forms = Join-Path $WebView2Dir "lib\net45\Microsoft.Web.WebView2.WinForms.dll"
-$WebView2Loader = Join-Path $WebView2Dir "runtimes\win-x64\native\WebView2Loader.dll"
+$WebView2Core = Join-Path $WebView2Dir "lib\net462\Microsoft.Web.WebView2.Core.dll"
+$WebView2Forms = Join-Path $WebView2Dir "lib\net462\Microsoft.Web.WebView2.WinForms.dll"
+$WebView2Loader = Join-Path $WebView2Dir "build\native\x64\WebView2Loader.dll"
 foreach ($assembly in @($WebView2Core, $WebView2Forms, $WebView2Loader)) {
     if (-not (Test-Path $assembly)) { throw "WebView2 component missing from the NuGet package: $assembly" }
 }
