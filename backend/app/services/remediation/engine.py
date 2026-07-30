@@ -88,8 +88,16 @@ def _get_action_module(provider: str):
     return mapping.get(provider.lower())
 
 
-async def _get_credentials(provider: str, db: AsyncSession) -> dict:
-    """Retrieve credentials for the given provider via secrets manager."""
+async def _get_credentials(provider: str, db: AsyncSession, tenant_id: str | None = None) -> dict:
+    """Retrieve credentials for the given provider via secrets manager.
+
+    Only connectors owned by ``tenant_id`` are considered, so remediation can
+    never execute against another tenant's provider credentials.
+    """
+    tenant_id = str(tenant_id or "").strip()
+    if not tenant_id:
+        logger.error("Credential lookup for provider %s refused: no tenant context", provider)
+        return {}
     try:
         from app.services import secrets_manager
         from app.models.connector import Connector
@@ -112,15 +120,20 @@ async def _get_credentials(provider: str, db: AsyncSession) -> dict:
         }
         connector_type = _provider_to_connector_type.get(provider.lower(), provider.lower())
         result = await db.execute(
-            select(Connector).where(Connector.connector_type == connector_type)
+            select(Connector).where(
+                Connector.connector_type == connector_type,
+                Connector.tenant_id == tenant_id,
+            )
         )
         connectors = result.scalars().all()
         for connector in connectors:
-            creds = secrets_manager.get_credential(str(connector.id))
+            creds = secrets_manager.get_credential(str(connector.id), tenant_id=tenant_id)
             if creds:
                 return creds if isinstance(creds, dict) else {}
     except Exception as exc:
-        logger.debug("Could not fetch credentials for provider %s: %s", provider, exc)
+        logger.warning(
+            "Could not fetch credentials for provider %s: %s", provider, type(exc).__name__
+        )
     return {}
 
 
@@ -181,7 +194,7 @@ async def _execute_action(action: RemediationAction, db: AsyncSession) -> Remedi
         return action
 
     try:
-        credentials = await _get_credentials(action.provider, db)
+        credentials = await _get_credentials(action.provider, db, action.tenant_id)
         params      = json.loads(action.parameters) if action.parameters else {}
         result      = await module.execute(
             action_type=action.action_type,
@@ -228,12 +241,20 @@ async def execute_remediation(
     workflow_run_id: UUID | None = None,
     playbook_id: str | None = None,
     triggered_by: str = "auto",
+    tenant_id: str | None = None,
 ) -> RemediationAction:
     """
     Create and (if auto-approved) execute a remediation action.
 
     action_spec keys: provider, action_type, target_id, target_type, target_label, parameters
+
+    ``tenant_id`` is required: an unowned action would later resolve
+    credentials and targets with no tenant boundary.
     """
+    tenant_id = str(tenant_id or "").strip()
+    if not tenant_id:
+        raise ValueError("Remediation requires tenant context")
+
     provider    = action_spec.get("provider", "generic")
     action_type = action_spec.get("action_type", "send_slack_alert")
     target_id   = str(action_spec.get("target_id", "unknown"))
@@ -247,6 +268,7 @@ async def execute_remediation(
 
     action = RemediationAction(
         finding_id       = finding_id,
+        tenant_id        = tenant_id,
         workflow_run_id  = workflow_run_id,
         playbook_id      = playbook_id,
         provider         = provider,
@@ -370,7 +392,7 @@ async def rollback_remediation(
         raise ValueError(f"No action module for provider '{action.provider}'")
 
     try:
-        credentials = await _get_credentials(action.provider, db)
+        credentials = await _get_credentials(action.provider, db, action.tenant_id)
         result_rb   = await module.rollback(
             action_type  = action.action_type,
             target_id    = action.target_id,

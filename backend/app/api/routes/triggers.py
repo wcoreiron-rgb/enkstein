@@ -18,11 +18,27 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.trigger import EventTrigger
 from app.schemas.trigger import TriggerCreate, TriggerUpdate, TriggerRead
 from app.services.trigger_engine import _matches_conditions, handle_webhook_trigger
 
 router = APIRouter(prefix="/triggers", tags=["CoreOS — Event Triggers"])
+
+
+async def _scoped_trigger(
+    db: AsyncSession,
+    trigger_id: UUID,
+    user: dict,
+) -> EventTrigger:
+    """Load a trigger the caller owns, else 404."""
+    result = await db.execute(select(EventTrigger).where(EventTrigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    assert_tenant_visible(user, trigger.tenant_id)
+    return trigger
 
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -34,8 +50,12 @@ async def list_triggers(
     category: str | None = None,
     limit: int = 100,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
+    scope = caller_tenant(user)
     stmt = select(EventTrigger).order_by(desc(EventTrigger.created_at)).limit(limit)
+    if scope is not None:
+        stmt = stmt.where(EventTrigger.tenant_id == scope)
     if trigger_type:
         stmt = stmt.where(EventTrigger.trigger_type == trigger_type)
     if is_active is not None:
@@ -47,8 +67,13 @@ async def list_triggers(
 
 
 @router.post("", response_model=TriggerRead, status_code=201)
-async def create_trigger(body: TriggerCreate, db: AsyncSession = Depends(get_db)):
-    trigger = EventTrigger(**body.model_dump())
+async def create_trigger(
+    body: TriggerCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    # Ownership comes from the authenticated caller, not the request body.
+    trigger = EventTrigger(**body.model_dump(), tenant_id=caller_tenant(user))
     db.add(trigger)
     await db.commit()
     await db.refresh(trigger)
@@ -56,12 +81,12 @@ async def create_trigger(body: TriggerCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.get("/{trigger_id}", response_model=TriggerRead)
-async def get_trigger(trigger_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(EventTrigger).where(EventTrigger.id == trigger_id))
-    trigger = result.scalar_one_or_none()
-    if not trigger:
-        raise HTTPException(status_code=404, detail="Trigger not found")
-    return trigger
+async def get_trigger(
+    trigger_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    return await _scoped_trigger(db, trigger_id, user)
 
 
 @router.patch("/{trigger_id}", response_model=TriggerRead)
@@ -69,11 +94,9 @@ async def update_trigger(
     trigger_id: UUID,
     body: TriggerUpdate,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(select(EventTrigger).where(EventTrigger.id == trigger_id))
-    trigger = result.scalar_one_or_none()
-    if not trigger:
-        raise HTTPException(status_code=404, detail="Trigger not found")
+    trigger = await _scoped_trigger(db, trigger_id, user)
 
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(trigger, field, value)
@@ -85,11 +108,12 @@ async def update_trigger(
 
 
 @router.delete("/{trigger_id}", status_code=204)
-async def delete_trigger(trigger_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(EventTrigger).where(EventTrigger.id == trigger_id))
-    trigger = result.scalar_one_or_none()
-    if not trigger:
-        raise HTTPException(status_code=404, detail="Trigger not found")
+async def delete_trigger(
+    trigger_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    trigger = await _scoped_trigger(db, trigger_id, user)
     await db.delete(trigger)
     await db.commit()
 
@@ -101,15 +125,13 @@ async def test_trigger(
     trigger_id: UUID,
     sample_payload: dict = Body(...),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Evaluate trigger conditions against a sample payload without actually firing it.
     Useful for verifying trigger logic before enabling it.
     """
-    result = await db.execute(select(EventTrigger).where(EventTrigger.id == trigger_id))
-    trigger = result.scalar_one_or_none()
-    if not trigger:
-        raise HTTPException(status_code=404, detail="Trigger not found")
+    trigger = await _scoped_trigger(db, trigger_id, user)
 
     import json
     try:
@@ -158,17 +180,22 @@ async def inbound_webhook(
 # ─── Stats endpoint ───────────────────────────────────────────────────────────
 
 @router.get("/stats/summary")
-async def trigger_stats(db: AsyncSession = Depends(get_db)):
+async def trigger_stats(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Summary counts by type and status."""
     from sqlalchemy import func
-    result = await db.execute(
-        select(
-            EventTrigger.trigger_type,
-            EventTrigger.is_active,
-            func.count(EventTrigger.id).label("count"),
-            func.sum(EventTrigger.trigger_count).label("total_fires"),
-        ).group_by(EventTrigger.trigger_type, EventTrigger.is_active)
+    scope = caller_tenant(user)
+    stmt = select(
+        EventTrigger.trigger_type,
+        EventTrigger.is_active,
+        func.count(EventTrigger.id).label("count"),
+        func.sum(EventTrigger.trigger_count).label("total_fires"),
     )
+    if scope is not None:
+        stmt = stmt.where(EventTrigger.tenant_id == scope)
+    result = await db.execute(stmt.group_by(EventTrigger.trigger_type, EventTrigger.is_active))
     rows = result.all()
     return [
         {

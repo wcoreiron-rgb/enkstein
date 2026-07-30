@@ -1,12 +1,14 @@
 """Data Security & DLP API Routes."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.services.finding_pipeline import ingest_findings
 from app.services.connector_check import check_providers, is_connector_configured
@@ -412,13 +414,23 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scan", summary="Run Data Security data security scan and persist findings")
-async def run_scan(db: AsyncSession = Depends(get_db)):
+async def run_scan(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Run a Data Security scan. Falls back to simulation when no real connector is configured."""
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant-bound identity required to run this scan",
+        )
     return await run_claw_scan(
         db,
         claw=CLAW_NAME,
         provider_config=PROVIDER_MAP,
         demo_findings=_FINDINGS,
+        tenant_id=tenant_id,
     )
 
 

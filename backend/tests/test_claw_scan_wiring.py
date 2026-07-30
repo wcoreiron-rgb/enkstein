@@ -71,6 +71,7 @@ async def test_scan_without_connectors_falls_back_to_labelled_demo_data(db_sessi
         claw="accessclaw",
         provider_config=[{"provider": "okta", "connector_type": "okta", "adapter": _Adapter()}],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
     assert result["mode"] == "simulated"
     assert result["providers"]["okta"]["status"] == "not_configured"
@@ -89,6 +90,7 @@ async def test_configured_adapter_output_is_ingested_as_live(db_session, monkeyp
         claw="accessclaw",
         provider_config=[{"provider": "okta", "connector_type": "okta", "adapter": adapter}],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
     assert adapter.called_with == {"token": "x"}
     assert result["mode"] == "live"
@@ -107,6 +109,7 @@ async def test_failing_connector_keeps_demonstration_data(db_session, monkeypatc
         claw="accessclaw",
         provider_config=[{"provider": "okta", "connector_type": "okta", "adapter": adapter}],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
     assert result["mode"] == "simulated"
     assert result["providers"]["okta"]["status"] == "error"
@@ -128,13 +131,14 @@ async def test_configured_provider_without_adapter_is_reported_honestly(
         claw="appclaw",
         provider_config=[{"provider": "unsupported", "connector_type": "unsupported_test_provider"}],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
     assert result["mode"] == "simulated"
     assert result["providers"]["unsupported"]["status"] == "no_adapter"
     assert "no live adapter is available yet" in result["message"]
 
 
-async def _fake_credentials(db, connector_type):
+async def _fake_credentials(db, connector_type, *, tenant_id):
     return {"token": "x"}
 
 
@@ -180,6 +184,7 @@ async def test_provider_failure_is_not_reported_as_a_successful_scan(
             {"provider": "crowdstrike", "connector_type": "crowdstrike", "adapter": adapter}
         ],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
 
     assert adapter.masked_path_used is False, (
@@ -211,6 +216,7 @@ async def test_authenticated_path_output_is_used_when_the_provider_succeeds(
             {"provider": "crowdstrike", "connector_type": "crowdstrike", "adapter": adapter}
         ],
         demo_findings=DEMO,
+        tenant_id="tenant-test",
     )
 
     assert adapter.masked_path_used is False

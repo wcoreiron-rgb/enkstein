@@ -35,6 +35,7 @@ class SwarmJob(Base):
     __tablename__ = "swarm_jobs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     profile: Mapped[str] = mapped_column(String(64), default="FAST_TRIAGE")
     status: Mapped[SwarmJobStatus] = mapped_column(SAEnum(SwarmJobStatus), default=SwarmJobStatus.PENDING)

@@ -3,7 +3,9 @@ Enkstein — Governed Execution Channels models
 Shell broker, browser sandbox, credential broker, and production gate.
 """
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, JSON, Float
+from sqlalchemy import (
+    Column, String, Integer, Boolean, Text, DateTime, JSON, Float, UniqueConstraint,
+)
 from app.database import Base
 
 
@@ -15,6 +17,7 @@ class ExecRequest(Base):
     __tablename__ = "exec_requests"
 
     id              = Column(String, primary_key=True)
+    tenant_id       = Column(String, nullable=True, index=True)
     channel         = Column(String, nullable=False, index=True)  # shell|browser|credential|production
     requested_by    = Column(String, nullable=False, index=True)
     agent_id        = Column(String, default="", index=True)
@@ -63,9 +66,15 @@ class CredentialBrokerEntry(Base):
     Values are fetched from the secrets manager at injection time.
     """
     __tablename__ = "credential_broker"
+    # Credential names are unique per tenant, not globally: two tenants may each
+    # register their own "crowdstrike_api_key" without colliding.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "name", name="uq_credential_broker_tenant_name"),
+    )
 
     id              = Column(String, primary_key=True)
-    name            = Column(String, nullable=False, unique=True, index=True)
+    tenant_id       = Column(String, nullable=True, index=True)
+    name            = Column(String, nullable=False, index=True)
     description     = Column(Text, default="")
     secret_path     = Column(String, nullable=False)   # e.g. secrets/crowdstrike/api_key
     secret_type     = Column(String, default="api_key")  # api_key|password|token|certificate|ssh_key
@@ -89,6 +98,7 @@ class ProductionGate(Base):
     __tablename__ = "production_gates"
 
     id              = Column(String, primary_key=True)
+    tenant_id       = Column(String, nullable=True, index=True)
     title           = Column(String, nullable=False)
     description     = Column(Text, default="")
     requested_by    = Column(String, nullable=False, index=True)

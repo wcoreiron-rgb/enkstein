@@ -31,13 +31,13 @@ def _payload(**overrides):
 
 
 def test_untagged_adapter_is_not_presented_as_live():
-    finding = _build_finding("cloudclaw", _payload())
+    finding = _build_finding("cloudclaw", _payload(), tenant_id="tenant-test")
     assert finding.data_origin == "unknown"
     assert finding.source_connector is None
 
 
 def test_unrecognised_origin_falls_back_to_unknown():
-    finding = _build_finding("cloudclaw", _payload(data_origin="verified"))
+    finding = _build_finding("cloudclaw", _payload(data_origin="verified"), tenant_id="tenant-test")
     assert finding.data_origin == "unknown"
 
 
@@ -46,7 +46,7 @@ def test_simulated_provider_output_is_labelled_simulated():
     assert tagged[0]["data_origin"] == provenance.SIMULATED
     assert "source_connector" not in tagged[0]
 
-    finding = _build_finding("cloudclaw", _payload(**tagged[0]))
+    finding = _build_finding("cloudclaw", _payload(**tagged[0]), tenant_id="tenant-test")
     assert finding.data_origin == "simulated"
 
 
@@ -57,7 +57,7 @@ def test_live_provider_output_names_its_connector():
     assert tagged[0]["data_origin"] == provenance.LIVE
     assert tagged[0]["source_connector"] == "aws_security_hub"
 
-    finding = _build_finding("cloudclaw", _payload(**tagged[0]))
+    finding = _build_finding("cloudclaw", _payload(**tagged[0]), tenant_id="tenant-test")
     assert finding.data_origin == "live"
     assert finding.source_connector == "aws_security_hub"
 
@@ -68,7 +68,7 @@ def test_live_tag_defaults_connector_to_provider_name():
 
 
 def test_origin_transition_to_live_is_recorded():
-    existing = _build_finding("cloudclaw", _payload(data_origin="simulated"))
+    existing = _build_finding("cloudclaw", _payload(data_origin="simulated"), tenant_id="tenant-test")
     changes = _update_finding(
         existing,
         _payload(data_origin="live", source_connector="aws_security_hub"),
@@ -80,7 +80,7 @@ def test_origin_transition_to_live_is_recorded():
 
 def test_untagged_rescan_does_not_downgrade_a_live_finding():
     existing = _build_finding(
-        "cloudclaw", _payload(data_origin="live", source_connector="aws_security_hub")
+        "cloudclaw", _payload(data_origin="live", source_connector="aws_security_hub"), tenant_id="tenant-test"
     )
     changes = _update_finding(existing, _payload())
     assert "data_origin_changed" not in changes
@@ -89,7 +89,7 @@ def test_untagged_rescan_does_not_downgrade_a_live_finding():
 
 def test_source_connector_is_truncated_to_column_width():
     finding = _build_finding(
-        "cloudclaw", _payload(data_origin="live", source_connector="x" * 200)
+        "cloudclaw", _payload(data_origin="live", source_connector="x" * 200), tenant_id="tenant-test"
     )
     assert len(finding.source_connector) == 64
 

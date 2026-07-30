@@ -141,6 +141,7 @@ async def remediate_control(
         db,
         finding_id=finding.id,
         triggered_by=triggered_by,
+        tenant_id=finding.tenant_id,
     )
     status = action.status.value if hasattr(action.status, "value") else str(action.status)
     return {

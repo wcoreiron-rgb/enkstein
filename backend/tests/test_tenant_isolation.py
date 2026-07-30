@@ -221,12 +221,12 @@ class TestTenantIsolation:
         )
 
     @pytest.mark.asyncio
-    async def test_finding_api_returns_all_findings_gap_documented(self, client, db_session):
+    async def test_finding_api_only_returns_callers_tenant(self, client, db_session):
         """
-        Confirms via the HTTP API that GET /api/v1/findings returns findings
-        from all tenants indiscriminately. This is a documented gap, not xfail,
-        because we want CI to keep tracking the count — if this ever returns 0
-        it means something changed and the test needs updating.
+        GET /api/v1/findings must return only the caller's tenant.
+
+        This previously documented a leak; findings now carry tenant_id and the
+        route filters on the caller's claim, so neither foreign row is visible.
         """
         finding_a = _make_finding(TENANT_A, title="http-finding-a")
         finding_b = _make_finding(TENANT_B, title="http-finding-b")
@@ -237,10 +237,9 @@ class TestTenantIsolation:
         assert resp.status_code == 200
         titles = [f["title"] for f in resp.json()]
 
-        # Both tenants' findings are returned — gap is real and visible.
-        assert any(TENANT_A in t for t in titles), "Tenant-A finding present (expected)"
-        assert any(TENANT_B in t for t in titles), "Tenant-B finding present (expected)"
-        # If scoping were added, one of the two asserts above would fail — that is the goal.
+        # The test caller belongs to neither tenant, so it sees neither row.
+        assert "http-finding-a" not in titles, "Tenant-A finding leaked to another tenant"
+        assert "http-finding-b" not in titles, "Tenant-B finding leaked to another tenant"
 
     # ------------------------------------------------------------------
     # 3. Memory boundary
@@ -422,16 +421,6 @@ class TestTenantIsolation:
             secrets_manager.delete_credential(connector_id_a)
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(
-        reason=(
-            "GAP: secrets_manager.get_credential(connector_id) has no tenant parameter. "
-            "If tenant-B somehow learns tenant-A's connector UUID (e.g. via an "
-            "unenforced list endpoint), they can retrieve tenant-A's credentials "
-            "directly — there is no tenant ownership check inside get_credential. "
-            "Fix: add a tenant_id parameter and store/verify it alongside the credential."
-        ),
-        strict=False,
-    )
     async def test_credential_store_rejects_cross_tenant_access(self, db_session):
         """
         If tenant-B knows tenant-A's connector UUID, get_credential returns the
@@ -444,20 +433,15 @@ class TestTenantIsolation:
         await db_session.commit()
 
         connector_id_a = str(conn_a.id)
-        secrets_manager.store_credential(connector_id_a, {"api_key": "secret-for-a-only"})
+        secrets_manager.store_credential(
+            connector_id_a, {"api_key": "secret-for-a-only"}, tenant_id=TENANT_A
+        )
 
         try:
-            # Tenant-B "knows" the UUID (e.g. leaked via list endpoint)
-            # and calls get_credential directly — no tenant check occurs.
-            creds = secrets_manager.get_credential(connector_id_a)
-
-            # This assertion PASSES in the current implementation (demonstrating the gap).
-            # For xfail: we assert isolation SHOULD prevent this, which it doesn't.
-            assert creds is None, (
-                "Cross-tenant credential access succeeded — no tenant ownership check in secrets_manager"
-            )
+            with pytest.raises(secrets_manager.CrossTenantCredentialAccess):
+                secrets_manager.get_credential(connector_id_a, tenant_id=TENANT_B)
         finally:
-            secrets_manager.delete_credential(connector_id_a)
+            secrets_manager.delete_credential(connector_id_a, tenant_id=TENANT_A)
 
     # ------------------------------------------------------------------
     # 6. Audit log boundary

@@ -2,12 +2,14 @@
 from datetime import datetime
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.finding import Finding
 
 router = APIRouter(prefix="/devclaw", tags=["Developer Security"])
@@ -398,13 +400,16 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scan", summary="Run Developer Security scan and persist findings")
-async def run_scan(db: AsyncSession = Depends(get_db)):
+async def run_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """Run a Developer Security scan against the configured GitHub connector.
 
     Without a connector this returns labelled demonstration findings so the
     module is explorable, unless the production data policy forbids it.
     """
     from app.services.finding_pipeline import ingest_findings
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-bound identity required for developer scans")
     from app.services.connector_check import is_connector_configured
     from app.core.config import settings
 
@@ -463,7 +468,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
                 "findings_created": 0, "findings_updated": 0, "critical": 0, "high": 0,
                 "message": "No findings from GitHub (all clean or no alerts enabled)"}
 
-    summary = await ingest_findings(db, CLAW_NAME, pipeline_findings)
+    summary = await ingest_findings(db, CLAW_NAME, pipeline_findings, tenant_id=tenant_id)
     return {
         "status": "completed",
         "mode": "live" if github_configured else "simulated",

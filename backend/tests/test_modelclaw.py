@@ -59,7 +59,8 @@ async def test_modelclaw_denies_disallowed_classification(client):
 
 
 @pytest.mark.asyncio
-async def test_modelclaw_tenant_scoped_profiles_and_calls(client):
+async def test_modelclaw_tenant_scoped_profiles_and_calls(client, unscoped_admin):
+    """Cross-tenant administration needs an admin identity with no tenant claim."""
     created = await client.post(
         f"{BASE}/profiles",
         json={

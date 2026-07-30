@@ -33,6 +33,7 @@ async def test_control_center_summary_counts_recent_channel_messages(client, db_
     db_session.add(
         ChannelMessage(
             id="control-center-channel-message-1",
+            tenant_id="global",
             channel_type="slack",
             channel_id="C123",
             sender_id="U123",
@@ -48,3 +49,28 @@ async def test_control_center_summary_counts_recent_channel_messages(client, db_
     body = res.json()
     assert body["channel_messages_24h"] == 1
     assert body["channel_replies_sent_24h"] == 1
+
+
+@pytest.mark.asyncio
+async def test_control_center_summary_excludes_other_tenant_channel_messages(
+    client, db_session
+):
+    """A message owned elsewhere must not inflate this tenant's counters."""
+    db_session.add(
+        ChannelMessage(
+            id="control-center-channel-message-2",
+            tenant_id="tenant-intruder",
+            channel_type="slack",
+            channel_id="C999",
+            sender_id="U999",
+            message_text="intruder traffic",
+            policy_decision="blocked",
+            response_sent=True,
+        )
+    )
+    await db_session.commit()
+
+    body = (await client.get("/api/v1/dashboard/control-center-summary")).json()
+    assert body["channel_messages_24h"] == 0
+    assert body["channel_blocked_24h"] == 0
+    assert body["channel_replies_sent_24h"] == 0

@@ -58,6 +58,9 @@ class Workflow(Base):
     # Ownership
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Owning tenant. Nullable only for legacy rows; those cannot drive
+    # tenant-scoped remediation steps.
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     # Stats
     run_count: Mapped[int] = mapped_column(Integer, default=0)

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.remediation import RemediationAction, RemediationStatus, RemediationPlaybook
 from app.services.remediation.engine import (
     approve_remediation,
@@ -153,6 +154,24 @@ def _playbook_to_dict(pb: RemediationPlaybook) -> dict:
 
 # ─── Action endpoints ─────────────────────────────────────────────────────────
 
+async def _scoped_action(
+    db: AsyncSession,
+    action_id: UUID,
+    current_user: dict,
+) -> RemediationAction:
+    """Load an action the caller is allowed to see, else 404.
+
+    Cross-tenant lookups return 404 rather than 403 so action IDs from another
+    tenant cannot be confirmed by probing.
+    """
+    result = await db.execute(select(RemediationAction).where(RemediationAction.id == action_id))
+    action = result.scalar_one_or_none()
+    if action is None:
+        raise HTTPException(status_code=404, detail="Remediation action not found")
+    assert_tenant_visible(current_user, action.tenant_id)
+    return action
+
+
 @router.get("/actions")
 async def list_actions(
     status: str | None = Query(None, description="Filter by status"),
@@ -161,9 +180,13 @@ async def list_actions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """List all remediation actions with optional filters."""
+    scope = caller_tenant(current_user)
     query = select(RemediationAction)
+    if scope is not None:
+        query = query.where(RemediationAction.tenant_id == scope)
     if status:
         try:
             query = query.where(RemediationAction.status == RemediationStatus(status))
@@ -180,6 +203,8 @@ async def list_actions(
 
     # Total count
     count_q = select(func.count(RemediationAction.id))
+    if scope is not None:
+        count_q = count_q.where(RemediationAction.tenant_id == scope)
     if status:
         count_q = count_q.where(RemediationAction.status == RemediationStatus(status))
     if provider:
@@ -196,12 +221,13 @@ async def list_actions(
 
 
 @router.get("/actions/{action_id}")
-async def get_action(action_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_action(
+    action_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """Get a single remediation action by ID."""
-    result = await db.execute(select(RemediationAction).where(RemediationAction.id == action_id))
-    action = result.scalar_one_or_none()
-    if action is None:
-        raise HTTPException(status_code=404, detail="Remediation action not found")
+    action = await _scoped_action(db, action_id, current_user)
     return _action_to_dict(action)
 
 
@@ -218,8 +244,7 @@ async def approve_action(
     approver = current_user.get("sub", "unknown")
 
     # Load action to check Trust Fabric ring-policy decision before approving
-    pre_result = await db.execute(select(RemediationAction).where(RemediationAction.id == action_id))
-    pre_action = pre_result.scalar_one_or_none()
+    pre_action = await _scoped_action(db, action_id, current_user)
     if pre_action is not None:
         try:
             tf_decision = await enforce(
@@ -279,6 +304,7 @@ async def reject_action(
     """Reject a pending remediation action."""
     # Rejecter identity always from JWT
     rejecter = current_user.get("sub", "unknown")
+    await _scoped_action(db, action_id, current_user)
     try:
         action = await reject_remediation(action_id, rejecter, body.reason, db)
         return _action_to_dict(action)
@@ -293,8 +319,10 @@ async def reject_action(
 async def rollback_action(
     action_id: UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """Roll back a completed remediation action."""
+    await _scoped_action(db, action_id, current_user)
     try:
         action = await rollback_remediation(action_id, db)
         return _action_to_dict(action)
@@ -347,10 +375,15 @@ async def toggle_playbook(playbook_id: str, db: AsyncSession = Depends(get_db)):
 # ─── Manual trigger endpoint ──────────────────────────────────────────────────
 
 @router.post("/trigger")
-async def manual_trigger(body: TriggerRequest, db: AsyncSession = Depends(get_db)):
+async def manual_trigger(
+    body: TriggerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Manually trigger a playbook against a finding, or execute a single action_spec.
     """
+    scope = caller_tenant(current_user)
     actions_created: list[dict] = []
 
     if body.finding_id and body.playbook_id:
@@ -362,6 +395,12 @@ async def manual_trigger(body: TriggerRequest, db: AsyncSession = Depends(get_db
         finding = finding_result.scalar_one_or_none()
         if finding is None:
             raise HTTPException(status_code=404, detail="Finding not found")
+        assert_tenant_visible(current_user, finding.tenant_id)
+        if not finding.tenant_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Finding has no owning tenant and cannot be remediated",
+            )
 
         # Load playbook
         try:
@@ -396,15 +435,22 @@ async def manual_trigger(body: TriggerRequest, db: AsyncSession = Depends(get_db
                 finding_id=finding.id,
                 playbook_id=str(playbook.id),
                 triggered_by=body.triggered_by,
+                tenant_id=finding.tenant_id,
             )
             actions_created.append(_action_to_dict(action))
 
     elif body.action_spec:
         _validate_action_spec_shape(body.action_spec)
+        if scope is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Tenant-bound identity required to trigger remediation",
+            )
         action = await execute_remediation(
             action_spec=body.action_spec,
             db=db,
             triggered_by=body.triggered_by,
+            tenant_id=scope,
         )
         actions_created.append(_action_to_dict(action))
     else:
@@ -419,25 +465,32 @@ async def manual_trigger(body: TriggerRequest, db: AsyncSession = Depends(get_db
 # ─── Stats endpoint ───────────────────────────────────────────────────────────
 
 @router.get("/stats")
-async def get_stats(db: AsyncSession = Depends(get_db)):
+async def get_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """Summary statistics for the remediation dashboard."""
+    scope = caller_tenant(current_user)
     now   = datetime.now(timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
+    def _scoped(stmt):
+        return stmt if scope is None else stmt.where(RemediationAction.tenant_id == scope)
+
     async def _count(status: RemediationStatus) -> int:
         r = await db.execute(
-            select(func.count(RemediationAction.id)).where(RemediationAction.status == status)
+            _scoped(select(func.count(RemediationAction.id)).where(RemediationAction.status == status))
         )
         return r.scalar_one() or 0
 
     async def _count_today(status: RemediationStatus) -> int:
         r = await db.execute(
-            select(func.count(RemediationAction.id)).where(
+            _scoped(select(func.count(RemediationAction.id)).where(
                 and_(
                     RemediationAction.status == status,
                     RemediationAction.completed_at >= today,
                 )
-            )
+            ))
         )
         return r.scalar_one() or 0
 
@@ -449,7 +502,7 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     timed_out = await _count(RemediationStatus.TIMED_OUT)
 
     # Total all-time
-    total_r   = await db.execute(select(func.count(RemediationAction.id)))
+    total_r   = await db.execute(_scoped(select(func.count(RemediationAction.id))))
     total     = total_r.scalar_one() or 0
 
     # Active playbooks

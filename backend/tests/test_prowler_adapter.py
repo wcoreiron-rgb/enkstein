@@ -100,6 +100,7 @@ async def test_prowler_finding_materializes_control(db_session):
         db_session,
         "cloudclaw",
         rows,
+        tenant_id="tenant-test",
         run_policy_eval=False,
         run_alerts=False,
     )

@@ -630,16 +630,58 @@ async def test_remediation_approve_fails_closed_when_trust_fabric_unavailable(cl
     assert detail.get("policy_name") == "trust_fabric_unavailable"
 
 
+async def _create_owned_action(client) -> str:
+    """Create a remediation action owned by the test caller's tenant.
+
+    Action routes now resolve ownership before delegating, so sanitization
+    behaviour has to be exercised against a record the caller can see.
+    """
+    trig = await client.post(
+        "/api/v1/remediation/trigger",
+        json={
+            "action_spec": {
+                "provider": "generic",
+                "action_type": "disable_user",
+                "target_id": "user-1",
+                "target_type": "identity",
+                "target_label": "user-1",
+                "parameters": {},
+            },
+            "triggered_by": "manual",
+        },
+    )
+    assert trig.status_code == 200, trig.text
+    actions = trig.json().get("actions") or []
+    assert actions
+    return actions[0]["id"]
+
+
 @pytest.mark.asyncio
 async def test_remediation_approve_value_error_is_sanitized(client, monkeypatch):
     import app.api.routes.remediation as remediation_routes
 
+    action_id = await _create_owned_action(client)
+
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("sensitive-internal-state")
 
+    class _AllowedOutcome:
+        value = "allowed"
+
+    class _AllowedDecision:
+        allowed = True
+        outcome = _AllowedOutcome()
+        policy_name = "test_allow"
+        reason = "allowed for sanitization test"
+
+    async def _allow(*args, **kwargs):
+        return _AllowedDecision()
+
+    # Isolate the sanitization behaviour from ring-policy gating.
+    monkeypatch.setattr(remediation_routes, "enforce", _allow)
     monkeypatch.setattr(remediation_routes, "approve_remediation", _raise_value_error)
     resp = await client.post(
-        "/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/approve",
+        f"/api/v1/remediation/actions/{action_id}/approve",
         json={"approved_by": "admin"},
     )
     assert resp.status_code == 400, resp.text
@@ -650,12 +692,14 @@ async def test_remediation_approve_value_error_is_sanitized(client, monkeypatch)
 async def test_remediation_reject_value_error_is_sanitized(client, monkeypatch):
     import app.api.routes.remediation as remediation_routes
 
+    action_id = await _create_owned_action(client)
+
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("sensitive-internal-state")
 
     monkeypatch.setattr(remediation_routes, "reject_remediation", _raise_value_error)
     resp = await client.post(
-        "/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/reject",
+        f"/api/v1/remediation/actions/{action_id}/reject",
         json={"rejected_by": "admin", "reason": "test"},
     )
     assert resp.status_code == 400, resp.text
@@ -666,13 +710,54 @@ async def test_remediation_reject_value_error_is_sanitized(client, monkeypatch):
 async def test_remediation_rollback_value_error_is_sanitized(client, monkeypatch):
     import app.api.routes.remediation as remediation_routes
 
+    action_id = await _create_owned_action(client)
+
     async def _raise_value_error(*args, **kwargs):
         raise ValueError("sensitive-internal-state")
 
     monkeypatch.setattr(remediation_routes, "rollback_remediation", _raise_value_error)
-    resp = await client.post("/api/v1/remediation/actions/00000000-0000-0000-0000-000000000001/rollback")
+    resp = await client.post(f"/api/v1/remediation/actions/{action_id}/rollback")
     assert resp.status_code == 400, resp.text
     assert resp.json().get("detail") == "Invalid remediation rollback request"
+
+
+@pytest.mark.asyncio
+async def test_remediation_action_from_another_tenant_is_not_found(client, db_session):
+    """A cross-tenant action must be undiscoverable, not merely unauthorized."""
+    from datetime import datetime, timezone
+
+    from app.models.remediation import RemediationAction, RemediationStatus
+
+    foreign = RemediationAction(
+        tenant_id="tenant-somebody-else",
+        provider="generic",
+        action_type="disable_user",
+        target_type="identity",
+        target_id="user-foreign",
+        target_label="user-foreign",
+        parameters="{}",
+        risk_level="high",
+        requires_approval=True,
+        triggered_by="manual",
+        status=RemediationStatus.PENDING_APPROVAL,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db_session.add(foreign)
+    await db_session.commit()
+
+    detail = await client.get(f"/api/v1/remediation/actions/{foreign.id}")
+    assert detail.status_code == 404, detail.text
+
+    approve = await client.post(
+        f"/api/v1/remediation/actions/{foreign.id}/approve",
+        json={"approved_by": "admin"},
+    )
+    assert approve.status_code == 404, approve.text
+
+    listing = await client.get("/api/v1/remediation/actions")
+    assert listing.status_code == 200
+    assert all(a["id"] != str(foreign.id) for a in listing.json()["actions"])
 
 
 @pytest.mark.asyncio

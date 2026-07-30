@@ -34,6 +34,10 @@ class EventTrigger(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Owning tenant. Nullable only for legacy rows created before tenant
+    # scoping; those cannot fire scans or swarms.
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
     # What kind of event activates this trigger
     # finding_created | finding_escalated | event_created | webhook_inbound
     trigger_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

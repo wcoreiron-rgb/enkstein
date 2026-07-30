@@ -20,6 +20,10 @@ _SENSITIVE_KEYS = (
 _ADMIN_ROLES = {"admin", "security_admin", "super_admin"}
 _OPERATOR_ROLES = _ADMIN_ROLES | {"operator", "security_operator"}
 
+# Public alias: platform-side tenancy helpers (app.core.tenancy) apply the same
+# admin-role semantics and should not reach into a private name to do it.
+ADMIN_ROLES = _ADMIN_ROLES
+
 
 def resolve_tenant(user: dict[str, Any], requested_tenant: str) -> str:
     if not _TENANT_PATTERN.fullmatch(requested_tenant):

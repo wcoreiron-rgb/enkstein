@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.fabric.providers.agt import get_agt_adapter
 from app.models.connector import Connector, ConnectorRisk, ConnectorStatus
 from app.models.event import Event
@@ -278,7 +280,11 @@ async def run_trust_fabric_probe(
 
 
 @router.post("/containment-probe", summary="Run non-destructive containment smoke probe")
-async def run_containment_probe(db: AsyncSession = Depends(get_db)):
+async def run_containment_probe(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    probe_tenant = caller_tenant(user)
     probe_id = uuid.uuid4().hex[:12]
     module = Module(
         name=f"trust-probe-module-{probe_id}",
@@ -294,6 +300,7 @@ async def run_containment_probe(db: AsyncSession = Depends(get_db)):
     )
     connector = Connector(
         name=f"Trust Probe Connector {probe_id}",
+        tenant_id=probe_tenant,
         connector_type="trust_probe",
         description="Temporary connector created for Trust Fabric containment probe.",
         status=ConnectorStatus.APPROVED,
@@ -312,18 +319,21 @@ async def run_containment_probe(db: AsyncSession = Depends(get_db)):
             module.name,
             "Trust Fabric containment probe",
             "trust-fabric-probe",
+            tenant_id=probe_tenant,
         )
         identity_ok = await suspend_identity(
             db,
             identity.id,
             "Trust Fabric containment probe",
             "trust-fabric-probe",
+            tenant_id=probe_tenant,
         )
         connector_ok = await block_connector(
             db,
             connector.id,
             "Trust Fabric containment probe",
             "trust-fabric-probe",
+            tenant_id=probe_tenant,
         )
 
         await db.refresh(module)

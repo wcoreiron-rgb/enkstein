@@ -90,14 +90,21 @@ async def upsert_asset_memory(
     risk_score: float | None = None,
     risk_level: str | None = None,
     risk_event: str | None = None,
+    tenant_id: str | None = None,
     **kwargs,
 ) -> AssetMemory:
     """Create or update an asset's memory entry."""
-    result = await db.execute(select(AssetMemory).where(AssetMemory.asset_id == asset_id))
+    if not tenant_id:
+        raise ValueError("Asset memory updates require tenant context")
+    query = select(AssetMemory).where(AssetMemory.asset_id == asset_id)
+    if tenant_id is not None:
+        query = query.where(AssetMemory.tenant_id == tenant_id)
+    result = await db.execute(query)
     asset = result.scalar_one_or_none()
 
     if asset is None:
         asset = AssetMemory(
+            tenant_id=tenant_id,
             asset_id=asset_id,
             asset_type=asset_type,
             display_name=display_name,
@@ -141,24 +148,38 @@ async def upsert_asset_memory(
 
 # ─── Tenant memory helpers ────────────────────────────────────────────────────
 
-async def get_or_create_tenant_memory(db: AsyncSession) -> TenantMemory:
-    mem = await db.get(TenantMemory, 1)
+async def get_or_create_tenant_memory(db: AsyncSession, tenant_id: str) -> TenantMemory:
+    """Return this tenant's memory row, creating it on first use.
+
+    Previously this was a single global row keyed on ``id=1``, so every tenant
+    shared one posture summary.
+    """
+    tenant_id = str(tenant_id or "").strip()
+    if not tenant_id:
+        raise ValueError("Tenant memory requires tenant context")
+
+    result = await db.execute(select(TenantMemory).where(TenantMemory.tenant_id == tenant_id))
+    mem = result.scalar_one_or_none()
     if mem is None:
-        mem = TenantMemory(id=1)
+        mem = TenantMemory(tenant_id=tenant_id)
         db.add(mem)
         await db.commit()
+        await db.refresh(mem)
     return mem
 
 
-async def refresh_tenant_memory(db: AsyncSession) -> TenantMemory:
-    """Recalculate tenant memory from current DB state."""
+async def refresh_tenant_memory(db: AsyncSession, tenant_id: str) -> TenantMemory:
+    """Recalculate this tenant's memory from its own rows only."""
     from app.models.finding import Finding
 
-    mem = await get_or_create_tenant_memory(db)
+    mem = await get_or_create_tenant_memory(db, tenant_id)
 
     # Finding counts
     open_q = await db.execute(
-        select(func.count()).where(Finding.status.in_(["open", "in_progress"]))
+        select(func.count()).where(
+            Finding.status.in_(["open", "in_progress"]),
+            Finding.tenant_id == tenant_id,
+        )
     )
     mem.open_finding_count = open_q.scalar_one() or 0
 
@@ -166,13 +187,17 @@ async def refresh_tenant_memory(db: AsyncSession) -> TenantMemory:
         select(func.count()).where(
             Finding.status.in_(["open", "in_progress"]),
             Finding.severity == "critical",
+            Finding.tenant_id == tenant_id,
         )
     )
     mem.critical_finding_count = crit_q.scalar_one() or 0
 
     # Incident counts
     inc_q = await db.execute(
-        select(func.count()).where(IncidentMemory.status.in_(["open", "investigating", "contained"]))
+        select(func.count()).where(
+            IncidentMemory.status.in_(["open", "investigating", "contained"]),
+            IncidentMemory.tenant_id == tenant_id,
+        )
     )
     mem.active_incident_count = inc_q.scalar_one() or 0
 
@@ -198,9 +223,11 @@ async def refresh_tenant_memory(db: AsyncSession) -> TenantMemory:
 
 # ─── Risk trend snapshots ─────────────────────────────────────────────────────
 
-async def capture_risk_snapshot(db: AsyncSession, granularity: str = "hourly") -> RiskTrendSnapshot:
-    """Capture current platform state as a trend snapshot."""
-    mem = await get_or_create_tenant_memory(db)
+async def capture_risk_snapshot(
+    db: AsyncSession, tenant_id: str, granularity: str = "hourly"
+) -> RiskTrendSnapshot:
+    """Capture this tenant's current state as a trend snapshot."""
+    mem = await get_or_create_tenant_memory(db, tenant_id)
     from app.models.finding import Finding
 
     # Per-severity counts
@@ -209,11 +236,13 @@ async def capture_risk_snapshot(db: AsyncSession, granularity: str = "hourly") -
             select(func.count()).where(
                 Finding.status.in_(["open", "in_progress"]),
                 Finding.severity == sev,
+                Finding.tenant_id == tenant_id,
             )
         )
 
     snap = RiskTrendSnapshot(
         snapshot_at=datetime.utcnow(),
+        tenant_id=tenant_id,
         granularity=granularity,
         overall_risk_score=mem.overall_risk_score,
         open_findings=mem.open_finding_count,
@@ -227,16 +256,18 @@ async def capture_risk_snapshot(db: AsyncSession, granularity: str = "hourly") -
 
 async def get_risk_trend(
     db: AsyncSession,
+    tenant_id: str,
     granularity: str = "daily",
     days: int = 30,
 ) -> list[dict]:
-    """Return trend snapshots for charting."""
+    """Return this tenant's trend snapshots for charting."""
     since = datetime.utcnow() - timedelta(days=days)
     result = await db.execute(
         select(RiskTrendSnapshot)
         .where(
             RiskTrendSnapshot.granularity == granularity,
             RiskTrendSnapshot.snapshot_at >= since,
+            RiskTrendSnapshot.tenant_id == tenant_id,
         )
         .order_by(RiskTrendSnapshot.snapshot_at)
     )

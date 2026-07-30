@@ -29,6 +29,7 @@ async def test_connectors_list_redacts_owner_identifier(client, db_session):
         Connector(
             id=uuid.uuid4(),
             name="tenant-proof-connector",
+            tenant_id="global",
             connector_type="aws_iam",
             owner_id=uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             status=ConnectorStatus.PENDING,

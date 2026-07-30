@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, update
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.agent import Schedule, AgentRun, Agent, RunStatus, ScheduleFrequency
 from app.schemas.agent import (
     ScheduleCreate, ScheduleUpdate, ScheduleRead,
@@ -20,6 +22,14 @@ from app.core.swarm.profiles import apply_swarm_profile_defaults
 from app.models.swarm import SwarmJobStatus
 
 router = APIRouter(prefix="/schedules", tags=["Schedules"])
+
+
+async def _scoped_schedule(schedule_id: uuid.UUID, db: AsyncSession, user: dict) -> Schedule:
+    schedule = await db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    assert_tenant_visible(user, schedule.tenant_id)
+    return schedule
 
 
 def _next_run_for(freq: ScheduleFrequency) -> Optional[datetime]:
@@ -44,25 +54,30 @@ async def list_schedules(
     agent_id: Optional[uuid.UUID] = Query(None),
     status: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     q = select(Schedule)
     if agent_id:
         q = q.where(Schedule.agent_id == agent_id)
     if status:
         q = q.where(Schedule.status == status)
+    scope = caller_tenant(user)
+    if scope is not None:
+        q = q.where(Schedule.tenant_id == scope)
     q = q.order_by(Schedule.next_run_at.asc().nullslast())
     result = await db.execute(q)
     return result.scalars().all()
 
 
 @router.post("", response_model=ScheduleRead, status_code=201)
-async def create_schedule(body: ScheduleCreate, db: AsyncSession = Depends(get_db)):
+async def create_schedule(body: ScheduleCreate, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     result = await db.execute(select(Agent).where(Agent.id == body.agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
     sched = Schedule(**body.model_dump())
+    sched.tenant_id = caller_tenant(user)
     sched.next_run_at = _next_run_for(body.frequency)
     db.add(sched)
     await db.commit()
@@ -71,12 +86,8 @@ async def create_schedule(body: ScheduleCreate, db: AsyncSession = Depends(get_d
 
 
 @router.get("/{schedule_id}", response_model=ScheduleRead)
-async def get_schedule(schedule_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
-    sched = result.scalar_one_or_none()
-    if not sched:
-        raise HTTPException(status_code=404, detail="Schedule not found")
-    return sched
+async def get_schedule(schedule_id: uuid.UUID, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    return await _scoped_schedule(schedule_id, db, user)
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleRead)
@@ -84,11 +95,9 @@ async def update_schedule(
     schedule_id: uuid.UUID,
     body: ScheduleUpdate,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
-    sched = result.scalar_one_or_none()
-    if not sched:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    sched = await _scoped_schedule(schedule_id, db, user)
 
     updates = body.model_dump(exclude_unset=True)
     for k, v in updates.items():
@@ -103,11 +112,8 @@ async def update_schedule(
 
 
 @router.delete("/{schedule_id}", status_code=204)
-async def delete_schedule(schedule_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
-    sched = result.scalar_one_or_none()
-    if not sched:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+async def delete_schedule(schedule_id: uuid.UUID, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    sched = await _scoped_schedule(schedule_id, db, user)
     # Preserve historical run records while allowing schedule deletion.
     await db.execute(
         update(AgentRun)
@@ -125,11 +131,9 @@ async def trigger_schedule(
     schedule_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
-    sched = result.scalar_one_or_none()
-    if not sched:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    sched = await _scoped_schedule(schedule_id, db, user)
     if sched.status == "disabled":
         raise HTTPException(status_code=400, detail="Schedule is disabled")
 
@@ -168,15 +172,13 @@ async def trigger_schedule(
 async def trigger_schedule_swarm(
     schedule_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Manual schedule trigger for SWARM_JOB actions.
     Reads swarm config from schedule.notes JSON.
     """
-    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
-    sched = result.scalar_one_or_none()
-    if not sched:
-        raise HTTPException(status_code=404, detail="Schedule not found")
+    sched = await _scoped_schedule(schedule_id, db, user)
     if sched.status == "disabled":
         raise HTTPException(status_code=400, detail="Schedule is disabled")
 
@@ -203,7 +205,9 @@ async def trigger_schedule_swarm(
         parallelism=int(action.get("parallelism", 3)),
         model_profile=action.get("model_profile"),
     )
-    job = await create_swarm_job(db, payload)
+    if not sched.tenant_id:
+        raise HTTPException(status_code=409, detail="Legacy schedule must be re-owned before running a Swarm")
+    job = await create_swarm_job(db, payload, tenant_id=sched.tenant_id)
     requires_approval = bool(action.get("requires_approval_for_actions", False))
     if requires_approval:
         job.status = SwarmJobStatus.REQUIRES_APPROVAL
@@ -225,7 +229,9 @@ async def schedule_runs(
     schedule_id: uuid.UUID,
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
+    await _scoped_schedule(schedule_id, db, user)
     q = (
         select(AgentRun)
         .where(AgentRun.schedule_id == schedule_id)

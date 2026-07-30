@@ -165,6 +165,7 @@ async def enforce(
 
     # 6. Persist event
     event = Event(
+        tenant_id=str(request.context.get("tenant_id") or "") or None,
         timestamp=request.timestamp,
         source_module=request.module,
         actor_id=request.actor_id,
@@ -200,6 +201,7 @@ async def enforce(
         ip_address=ip_address,
         detail_json=json.dumps({"risk_score": risk_score, "anomalies": anomalies, "ring": ring_meta}),
         compliance_relevant=risk_score >= 25,
+        tenant_id=str(request.context.get("tenant_id") or "") or None,
     )
 
     await db.commit()

@@ -14,6 +14,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.control import Control
 from app.models.finding import Finding
 from app.core.zero_trust import PILLAR_LABELS
@@ -222,9 +224,13 @@ async def investigate_controls_with_swarm(
     body: ControlAnalysisRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Create a governed cross-Arm investigation for a control or its findings."""
-    statement = select(Finding.claw).where(Finding.status == "open")
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-bound identity required for control investigations")
+    statement = select(Finding.claw).where(Finding.status == "open", Finding.tenant_id == tenant_id)
     if body.control_id:
         statement = statement.where(Finding.control_id == body.control_id)
     result = await db.execute(statement)
@@ -244,6 +250,7 @@ async def investigate_controls_with_swarm(
             parallelism=min(8, max(1, len(participants))),
             model_profile="swarm_judge_profile",
         ),
+        tenant_id=tenant_id,
     )
     background_tasks.add_task(run_swarm_job, job.id)
     return {"job_id": str(job.id), "participants": participants[:8], "status": "queued"}

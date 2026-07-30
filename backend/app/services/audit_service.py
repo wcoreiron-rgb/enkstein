@@ -25,10 +25,12 @@ async def log_action(
     detail_json: Optional[str] = None,
     compliance_relevant: bool = False,
     frameworks: Optional[list[str]] = None,
+    tenant_id: Optional[str] = None,
 ) -> AuditLog:
     """Create a permanent audit log entry."""
     entry = AuditLog(
         timestamp=datetime.utcnow(),
+        tenant_id=tenant_id,
         actor=actor,
         actor_type=actor_type,
         action=action,

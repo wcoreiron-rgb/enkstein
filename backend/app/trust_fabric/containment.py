@@ -12,7 +12,13 @@ from app.models.identity import Identity, IdentityStatus
 from app.services.audit_service import log_action
 
 
-async def isolate_module(db: AsyncSession, module_name: str, reason: str, triggered_by: str) -> bool:
+async def isolate_module(
+    db: AsyncSession,
+    module_name: str,
+    reason: str,
+    triggered_by: str,
+    tenant_id: str | None = None,
+) -> bool:
     """Set a module to QUARANTINED status and audit the action."""
     stmt = select(Module).where(Module.name == module_name)
     result = await db.execute(stmt)
@@ -33,12 +39,19 @@ async def isolate_module(db: AsyncSession, module_name: str, reason: str, trigge
         reason=reason,
         module="trust_fabric",
         compliance_relevant=True,
+        tenant_id=tenant_id,
     )
     await db.commit()
     return True
 
 
-async def suspend_identity(db: AsyncSession, identity_id: UUID, reason: str, triggered_by: str) -> bool:
+async def suspend_identity(
+    db: AsyncSession,
+    identity_id: UUID,
+    reason: str,
+    triggered_by: str,
+    tenant_id: str | None = None,
+) -> bool:
     """Suspend an identity to prevent further actions."""
     stmt = select(Identity).where(Identity.id == identity_id)
     result = await db.execute(stmt)
@@ -59,12 +72,19 @@ async def suspend_identity(db: AsyncSession, identity_id: UUID, reason: str, tri
         reason=reason,
         module="trust_fabric",
         compliance_relevant=True,
+        tenant_id=tenant_id,
     )
     await db.commit()
     return True
 
 
-async def block_connector(db: AsyncSession, connector_id: UUID, reason: str, triggered_by: str) -> bool:
+async def block_connector(
+    db: AsyncSession,
+    connector_id: UUID,
+    reason: str,
+    triggered_by: str,
+    tenant_id: str | None = None,
+) -> bool:
     """Block a connector from being used."""
     stmt = select(Connector).where(Connector.id == connector_id)
     result = await db.execute(stmt)
@@ -85,6 +105,9 @@ async def block_connector(db: AsyncSession, connector_id: UUID, reason: str, tri
         reason=reason,
         module="trust_fabric",
         compliance_relevant=True,
+        # Containment inherits the connector's own tenant when the caller
+        # did not name one, so the record is never globally scoped.
+        tenant_id=tenant_id or connector.tenant_id,
     )
     await db.commit()
     return True

@@ -9,6 +9,7 @@ These helpers keep Memory Cortex integration conservative:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Any
@@ -21,6 +22,8 @@ from app.core.marcellus.crypto import decrypt_json
 from app.models.marcellus import CortexMissionObservation
 from app.models.memory import IncidentMemory, TenantMemory
 from app.models.swarm import SwarmJob
+
+logger = logging.getLogger("memory_runtime")
 
 _SECRET_RE = re.compile(
     r"(?i)(api[_-]?key|password|secret|token|private[_-]?key)\s*[:=]\s*[\w.\-]{8,}"
@@ -139,6 +142,9 @@ async def propose_swarm_memory_update(
     judged: dict[str, Any],
     aggregate: dict[str, Any],
 ) -> dict[str, Any]:
+    if not job.tenant_id:
+        logger.error("Refusing global memory proposal for unowned swarm job %s", job.id)
+        return {"status": "blocked", "reason": "missing_swarm_tenant"}
     severity = str(judged.get("overall_severity") or "low").lower()
     if severity not in {"high", "critical"}:
         return {"status": "skipped", "reason": "severity_below_memory_threshold"}
@@ -165,6 +171,7 @@ async def propose_swarm_memory_update(
                 affected_assets.append(str(title)[:120])
 
     incident = IncidentMemory(
+        tenant_id=job.tenant_id,
         title=f"Swarm review proposed: {job.name}"[:255],
         description=_redact(summary, 1200),
         severity=severity,

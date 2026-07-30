@@ -133,7 +133,43 @@ def _save_store(store: dict, *, allow_empty: bool = False):
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def store_credential(connector_id: str, fields: dict[str, str]) -> str:
+# Reserved top-level key holding connector_id -> tenant_id bindings. Real
+# entries are keyed by connector UUID, so this name can never collide with one.
+_TENANT_INDEX_KEY = "__tenants__"
+
+
+class CrossTenantCredentialAccess(RuntimeError):
+    """Raised when a caller asks for a credential owned by another tenant."""
+
+
+def _tenant_index(store: dict) -> dict[str, str]:
+    index = store.get(_TENANT_INDEX_KEY)
+    return index if isinstance(index, dict) else {}
+
+
+def _check_tenant(store: dict, connector_id: str, tenant_id: Optional[str]) -> None:
+    """Enforce the recorded tenant binding for ``connector_id``.
+
+    ``tenant_id=None`` means an unscoped/admin caller and is always permitted,
+    matching the platform-wide tenancy rule. A credential with no recorded
+    binding predates tenant scoping and stays readable, so upgrading does not
+    strand an operator's existing sign-ins.
+    """
+    if tenant_id is None:
+        return
+    owner = _tenant_index(store).get(connector_id)
+    if owner is not None and owner != tenant_id:
+        raise CrossTenantCredentialAccess(
+            f"Credential {connector_id} is not owned by tenant {tenant_id}"
+        )
+
+
+def store_credential(
+    connector_id: str,
+    fields: dict[str, str],
+    *,
+    tenant_id: Optional[str] = None,
+) -> str:
     """
     Encrypt and store credential fields for a connector.
     Returns a masked hint (e.g. "sk-...abc") for display.
@@ -146,7 +182,12 @@ def store_credential(connector_id: str, fields: dict[str, str]) -> str:
             encrypted[key] = f.encrypt(value.encode()).decode()
 
     store = _load_store()
+    _check_tenant(store, connector_id, tenant_id)
     store[connector_id] = encrypted
+    if tenant_id is not None:
+        index = dict(_tenant_index(store))
+        index[connector_id] = tenant_id
+        store[_TENANT_INDEX_KEY] = index
     _save_store(store)
 
     # Return a masked hint from the first non-empty value
@@ -158,9 +199,18 @@ def store_credential(connector_id: str, fields: dict[str, str]) -> str:
     return ""
 
 
-def get_credential(connector_id: str) -> Optional[dict[str, str]]:
-    """Decrypt and return credential fields for a connector."""
+def get_credential(
+    connector_id: str,
+    *,
+    tenant_id: Optional[str] = None,
+) -> Optional[dict[str, str]]:
+    """Decrypt and return credential fields for a connector.
+
+    Pass ``tenant_id`` to confine the read to one tenant; omitting it keeps the
+    unscoped behaviour used by internal/admin callers.
+    """
     store = _load_store()
+    _check_tenant(store, connector_id, tenant_id)
     entry = store.get(connector_id)
     if not entry:
         return None
@@ -177,18 +227,28 @@ def get_credential(connector_id: str) -> Optional[dict[str, str]]:
 
 def is_configured(connector_id: str) -> bool:
     """Check if credentials exist for this connector."""
+    if connector_id == _TENANT_INDEX_KEY:
+        return False
     store = _load_store()
     return connector_id in store and bool(store[connector_id])
 
 
-def delete_credential(connector_id: str):
+def delete_credential(connector_id: str, *, tenant_id: Optional[str] = None):
     """Remove stored credentials for a connector."""
     store = _load_store()
+    _check_tenant(store, connector_id, tenant_id)
     store.pop(connector_id, None)
+    index = _tenant_index(store)
+    if connector_id in index:
+        remaining = {key: value for key, value in index.items() if key != connector_id}
+        if remaining:
+            store[_TENANT_INDEX_KEY] = remaining
+        else:
+            store.pop(_TENANT_INDEX_KEY, None)
     # An explicit delete may legitimately empty the store.
     _save_store(store, allow_empty=True)
 
 
 def list_configured() -> list[str]:
     """Return list of connector IDs that have stored credentials."""
-    return list(_load_store().keys())
+    return [key for key in _load_store().keys() if key != _TENANT_INDEX_KEY]

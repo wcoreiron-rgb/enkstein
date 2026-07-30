@@ -335,6 +335,7 @@ async def test_swarm_task_output_marks_loaded_memory_context(client, db_session)
 async def test_swarm_high_risk_judgement_proposes_incident_memory(db_session):
     job = SwarmJob(
         name="High Risk Memory Proposal",
+        tenant_id="tenant-memory",
         profile="INCIDENT_RESPONSE",
         status=SwarmJobStatus.RUNNING,
         requested_by="memory-test",
@@ -363,5 +364,6 @@ async def test_swarm_high_risk_judgement_proposes_incident_memory(db_session):
     incidents = await db_session.execute(select(IncidentMemory))
     rows = incidents.scalars().all()
     assert len(rows) == 1
+    assert rows[0].tenant_id == "tenant-memory"
     assert rows[0].source_claw == "swarmclaw"
     assert rows[0].severity == "critical"

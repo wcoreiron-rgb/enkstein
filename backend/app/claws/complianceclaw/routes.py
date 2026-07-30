@@ -9,6 +9,8 @@ from sqlalchemy import desc, select
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.audit import AuditLog
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
@@ -458,15 +460,25 @@ async def export_evidence_bundle(
 
 
 @router.post("/scan", summary="Run Compliance Assurance scan and persist findings")
-async def run_scan(db: AsyncSession = Depends(get_db)):
+async def run_scan(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Run a Compliance Assurance scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
     default_provider = PROVIDER_MAP[0]["provider"] if PROVIDER_MAP else "simulation"
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant-bound identity required to run this scan",
+        )
     return await run_claw_scan(
         db,
         claw=CLAW_NAME,
         provider_config=PROVIDER_MAP,
         demo_findings=_FINDINGS,
+        tenant_id=tenant_id,
     )
 
 

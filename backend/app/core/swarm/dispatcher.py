@@ -42,7 +42,8 @@ from app.claws.userclaw.routes import UserTaskRequest, run_user_task
 from app.claws.insiderclaw.routes import InsiderTaskRequest, run_insider_task
 from app.claws.vendorclaw.routes import VendorTaskRequest, run_vendor_task
 from app.fabric.providers.agt import get_agt_adapter
-from app.models.swarm import SwarmTask, SwarmTaskStatus
+from app.core.tenancy import NO_TENANT_SENTINEL
+from app.models.swarm import SwarmJob, SwarmTask, SwarmTaskStatus
 from app.models.marcellus import CortexConversation, CortexConversationMessage, CortexMission
 from app.core.marcellus.crypto import decrypt_json
 from app.services.memory_runtime import build_swarm_memory_context
@@ -198,6 +199,7 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         task_type=task.task_type,
         model_profile=task.model_profile,
         task_input=task_input,
+        tenant_id=await _task_tenant(db, task),
     )
     if real_output is not None:
         output = _focus_output_on_selected_finding(real_output, selected_finding, task.claw)
@@ -351,6 +353,13 @@ async def _hydrate_mission_context(db: AsyncSession, task_input: dict[str, Any])
     }
 
 
+async def _task_tenant(db: AsyncSession, task: SwarmTask) -> str:
+    """Return the owning tenant of a task's swarm job, or "" when unowned."""
+    result = await db.execute(select(SwarmJob).where(SwarmJob.id == task.swarm_job_id))
+    job = result.scalar_one_or_none()
+    return str(getattr(job, "tenant_id", "") or "") if job else ""
+
+
 async def _execute_real_task_if_supported(
     db: AsyncSession,
     claw: str,
@@ -359,6 +368,7 @@ async def _execute_real_task_if_supported(
     task_type: str,
     model_profile: str | None,
     task_input: dict[str, Any],
+    tenant_id: str | None = None,
 ) -> dict[str, Any] | None:
     payload = {
         "swarm_job_id": swarm_job_id,
@@ -368,11 +378,20 @@ async def _execute_real_task_if_supported(
         "model_profile": model_profile,
         "allowed_actions": ["read", "analyze", "recommend"],
     }
+    # Task handlers resolve tenant through the same dependency as HTTP callers;
+    # the swarm supplies the owning job's tenant rather than a request claim.
+    # An unowned job gets a sentinel that matches no tenant, so a legacy job
+    # degrades to "no data" rather than reading across tenants.
+    principal = {
+        "tenant_id": tenant_id or NO_TENANT_SENTINEL,
+        "role": "system",
+        "sub": "swarm_dispatcher",
+    }
 
     if claw == "identityclaw":
         output = await run_identity_task(IdentityTaskRequest(**payload), db)
     elif claw == "cloudclaw":
-        output = await run_cloud_task(CloudTaskRequest(**payload), db)
+        output = await run_cloud_task(CloudTaskRequest(**payload), db, principal)
     elif claw == "threatclaw":
         output = await run_threat_task(ThreatTaskRequest(**payload), db)
     elif claw == "arcclaw":
@@ -384,7 +403,7 @@ async def _execute_real_task_if_supported(
     elif claw == "devclaw":
         output = await run_dev_task(DevTaskRequest(**payload), db)
     elif claw == "endpointclaw":
-        output = await run_endpoint_task(EndpointTaskRequest(**payload), db)
+        output = await run_endpoint_task(EndpointTaskRequest(**payload), db, principal)
     elif claw == "appclaw":
         output = await run_app_task(AppTaskRequest(**payload), db)
     elif claw == "logclaw":

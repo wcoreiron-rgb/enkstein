@@ -79,11 +79,12 @@ def _normalize_origin(raw: Any) -> str:
     return value if value in _VALID_ORIGINS else "unknown"
 
 
-def _build_finding(claw: str, data: dict[str, Any]) -> Finding:
+def _build_finding(claw: str, data: dict[str, Any], *, tenant_id: str) -> Finding:
     """Construct a Finding ORM object from raw adapter dict."""
     severity = _sev_from_str(data.get("severity", "medium"))
     now = datetime.utcnow()
     return Finding(
+        tenant_id=tenant_id,
         claw=claw,
         provider=data.get("provider", "unknown"),
         title=str(data.get("title", "Untitled Finding"))[:512],
@@ -354,6 +355,9 @@ async def ingest_findings(
     db: AsyncSession,
     claw: str,
     findings: list[dict[str, Any]],
+    *,
+    tenant_id: str | None,
+    system_owned: bool = False,
     run_policy_eval: bool = True,
     run_alerts: bool = True,
 ) -> dict[str, Any]:
@@ -370,6 +374,14 @@ async def ingest_findings(
     Returns:
         Summary dict: {created, updated, skipped, critical, high, errors}
     """
+    # Ownership is an execution-context property, never a provider payload
+    # field.  Refusing to ingest without it prevents a connector/scan mistake
+    # from creating globally readable security data.
+    if not tenant_id:
+        if not system_owned:
+            raise ValueError("Finding ingestion requires tenant context")
+        tenant_id = "__system__"
+
     summary = {
         "claw": claw,
         "created": 0,
@@ -393,11 +405,14 @@ async def ingest_findings(
             finding_obj: Finding
 
             if external_id:
-                # Look up by (claw, external_id)
+                # Dedupe only inside the same tenant. Providers commonly reuse
+                # identifiers across customer accounts, so a global lookup can
+                # overwrite a different tenant's evidence.
                 result = await db.execute(
                     select(Finding)
                     .where(Finding.claw == claw)
                     .where(Finding.external_id == external_id)
+                    .where(Finding.tenant_id == tenant_id)
                 )
                 existing = result.scalar_one_or_none()
 
@@ -411,7 +426,7 @@ async def ingest_findings(
                         summary["skipped"] += 1
                         continue   # No meaningful changes — skip policy/alert
                 else:
-                    finding_obj = _build_finding(claw, raw)
+                    finding_obj = _build_finding(claw, raw, tenant_id=tenant_id)
                     db.add(finding_obj)
                     await db.flush()   # Get ID assigned
                     await _emit_new_finding_event(db, finding_obj)
@@ -419,7 +434,7 @@ async def ingest_findings(
                     is_new = True
             else:
                 # No external_id: always create (e.g., log anomalies, ephemeral findings)
-                finding_obj = _build_finding(claw, raw)
+                finding_obj = _build_finding(claw, raw, tenant_id=tenant_id)
                 db.add(finding_obj)
                 await db.flush()
                 await _emit_new_finding_event(db, finding_obj)

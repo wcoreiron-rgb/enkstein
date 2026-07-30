@@ -24,6 +24,7 @@ class IncidentMemory(Base):
     __tablename__ = "incident_memory"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     # Identity
     title: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -81,9 +82,10 @@ class AssetMemory(Base):
     __tablename__ = "asset_memory"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     # Identity
-    asset_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    asset_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     asset_type: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     # endpoint | identity | cloud_resource | network | application | data_store
 
@@ -117,12 +119,15 @@ class AssetMemory(Base):
 
 class TenantMemory(Base):
     """
-    Platform-wide threat context — a single-row (id=1) rolling memory of
-    the current security posture, active threats, and key context for AI agents.
+    Per-tenant rolling memory of the current security posture, active threats,
+    and key context for AI agents. One row per tenant, enforced by the unique
+    ``tenant_id``; the legacy ``NULL`` row is the pre-scoping remnant.
     """
     __tablename__ = "tenant_memory"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    # No default: the historical ``default=1`` allowed only one row platform-wide.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True, index=True)
 
     # Current posture summary
     overall_risk_level: Mapped[str] = mapped_column(String(32), default="low")
@@ -161,6 +166,7 @@ class RiskTrendSnapshot(Base):
     __tablename__ = "risk_trend_snapshots"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
     snapshot_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     granularity: Mapped[str] = mapped_column(String(16), nullable=False, default="hourly")

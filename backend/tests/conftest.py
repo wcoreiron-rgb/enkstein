@@ -122,6 +122,9 @@ async def client(db_session, db_session_sync):
             "sub": "test-user",
             "email": "redacted_user",
             "role": "admin",
+            # Production issues tenant-bound tokens; tests mirror that so
+            # ownership-stamping paths are exercised rather than bypassed.
+            "tenant_id": "global",
         }
     except ImportError:
         pass
@@ -131,3 +134,27 @@ async def client(db_session, db_session_sync):
         yield ac
 
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unscoped_admin():
+    """Authenticate as an admin with no tenant claim.
+
+    A few administrative flows legitimately span tenants (for example managing
+    ModelClaw profiles for several tenants). Those callers are admins whose
+    token carries no tenant claim; everything else stays tenant-bound.
+    """
+    from app.core.deps import get_current_user
+
+    previous = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": "test-admin",
+        "sub": "test-admin",
+        "email": "redacted_user",
+        "role": "admin",
+    }
+    yield
+    if previous is not None:
+        app.dependency_overrides[get_current_user] = previous
+    else:
+        app.dependency_overrides.pop(get_current_user, None)

@@ -386,6 +386,7 @@ async def check_and_trigger(
                     finding_id=finding.id,
                     playbook_id=str(playbook.id),
                     triggered_by="playbook",
+                    tenant_id=finding.tenant_id,
                 )
                 triggered_actions.append(action)
             except Exception as exc:

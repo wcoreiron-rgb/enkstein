@@ -9,12 +9,7 @@ if ($Secret.Length -lt 32) { throw "Invalid Brain Bridge secret." }
 
 function Test-PrivatePeer([System.Net.IPEndPoint]$Peer) {
     $address = $Peer.Address
-    if ([System.Net.IPAddress]::IsLoopback($address)) { return $true }
-    if ($address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) { return $false }
-    $bytes = $address.GetAddressBytes()
-    return $bytes[0] -eq 10 -or
-        ($bytes[0] -eq 192 -and $bytes[1] -eq 168) -or
-        ($bytes[0] -eq 172 -and $bytes[1] -ge 16 -and $bytes[1] -le 31)
+    return [System.Net.IPAddress]::IsLoopback($address)
 }
 
 function Test-FixedTime([string]$Left, [string]$Right) {
@@ -185,7 +180,7 @@ function Read-Request($Stream) {
     return @{ Method = $parts[0]; Path = $parts[1]; Headers = $headers; Body = [System.Text.Encoding]::UTF8.GetString($bodyBytes) }
 }
 
-$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $Port)
+$listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $Port)
 $listener.Start()
 while ($true) {
     $client = $listener.AcceptTcpClient()

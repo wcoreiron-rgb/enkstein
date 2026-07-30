@@ -86,17 +86,19 @@ async def fetch_via_adapter(adapter: Any, credentials: dict) -> list[dict[str, A
 
 
 async def resolve_credentials(
-    db: AsyncSession, connector_type: str | list[str]
+    db: AsyncSession, connector_type: str | list[str], *, tenant_id: str
 ) -> Optional[dict]:
     """Return decrypted credentials for the first configured connector, if any."""
     types = connector_type if isinstance(connector_type, list) else [connector_type]
     for ct in types:
         try:
             result = await db.execute(
-                select(Connector).where(Connector.connector_type == ct)
+                select(Connector)
+                .where(Connector.connector_type == ct)
+                .where(Connector.tenant_id == tenant_id)
             )
             for connector in result.scalars().all():
-                creds = secrets_manager.get_credential(str(connector.id))
+                creds = secrets_manager.get_credential(str(connector.id), tenant_id=tenant_id)
                 if creds:
                     return creds
         except Exception:
@@ -141,6 +143,7 @@ async def run_claw_scan(
     claw: str,
     provider_config: list[dict[str, Any]],
     demo_findings: list[dict[str, Any]],
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Execute a Claw scan across its configured providers.
@@ -150,6 +153,19 @@ async def run_claw_scan(
     connector-aware but not yet adapter-backed, which is reported honestly
     rather than silently returning nothing.
     """
+    if not tenant_id:
+        logger.warning("Blocked %s scan because no tenant context was supplied", claw)
+        return {
+            "status": "blocked",
+            "mode": "blocked",
+            "findings_created": 0,
+            "findings_updated": 0,
+            "critical": 0,
+            "high": 0,
+            "providers": {},
+            "message": "Scan requires an authenticated tenant context.",
+        }
+
     live_findings: list[dict[str, Any]] = []
     provider_results: dict[str, Any] = {}
     configured_without_adapter: list[str] = []
@@ -159,7 +175,7 @@ async def run_claw_scan(
         if not connector_type:
             continue
         provider_name = cfg.get("provider") or claw
-        creds = await resolve_credentials(db, connector_type)
+        creds = await resolve_credentials(db, connector_type, tenant_id=tenant_id)
         if not creds:
             provider_results[provider_name] = {"status": "not_configured"}
             continue
@@ -196,7 +212,7 @@ async def run_claw_scan(
         }
 
     if live_findings:
-        summary = await ingest_findings(db, claw, live_findings)
+        summary = await ingest_findings(db, claw, live_findings, tenant_id=tenant_id)
         mode = "live"
     elif settings.REQUIRE_LIVE_DATA:
         # Production data policy: nothing authenticated returned anything, and
@@ -209,7 +225,7 @@ async def run_claw_scan(
         # ingested — clearly labelled — because an empty module reads as a
         # broken product, whereas labelled demo data explains itself.
         prepared = _prepare(demo_findings, claw=claw, provider=None, origin="simulated")
-        summary = await ingest_findings(db, claw, prepared)
+        summary = await ingest_findings(db, claw, prepared, tenant_id=tenant_id)
         mode = "simulated"
 
     response: dict[str, Any] = {

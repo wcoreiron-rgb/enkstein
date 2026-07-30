@@ -13,6 +13,8 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job, run_swarm_job_in_session
 from app.core.swarm.schemas import SwarmActionResponse, SwarmJobCreate, SwarmJobRead, SwarmTaskRead
 from app.models.swarm import SwarmJob, SwarmJobStatus, SwarmTask, SwarmTaskStatus
@@ -29,6 +31,19 @@ _TERMINAL_JOB_STATUSES = {
 
 def _sse(event_type: str, payload: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
+
+
+async def _scoped_job(job_id: str, db: AsyncSession, user: dict) -> SwarmJob:
+    try:
+        job_uuid = UUID(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Swarm job not found") from exc
+    result = await db.execute(select(SwarmJob).where(SwarmJob.id == job_uuid))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Swarm job not found")
+    assert_tenant_visible(user, job.tenant_id)
+    return job
 
 
 def _task_status_events(
@@ -78,6 +93,7 @@ async def create_suspicious_identity_preset(
     body: dict | None = None,
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Sprint 6 preset: Suspicious Identity Investigation Swarm.
@@ -114,7 +130,7 @@ async def create_suspicious_identity_preset(
         parallelism=6,
         model_profile=payload.get("model_profile") or "swarm_judge_profile",
     )
-    job = await create_swarm_job(db, swarm_payload)
+    job = await create_swarm_job(db, swarm_payload, tenant_id=caller_tenant(user))
     if payload.get("requires_approval_for_actions", True):
         job.status = SwarmJobStatus.REQUIRES_APPROVAL
         job.final_summary = "Awaiting approval before suspicious identity swarm execution"
@@ -133,6 +149,7 @@ async def create_microsoft_identity_incident_preset(
     body: dict | None = None,
     background_tasks: BackgroundTasks = None,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Microsoft security demo preset: identity-led incident investigation.
@@ -175,7 +192,7 @@ async def create_microsoft_identity_incident_preset(
         parallelism=7,
         model_profile=payload.get("model_profile") or "swarm_judge_profile",
     )
-    job = await create_swarm_job(db, swarm_payload)
+    job = await create_swarm_job(db, swarm_payload, tenant_id=caller_tenant(user))
     if payload.get("requires_approval_for_actions", True):
         job.status = SwarmJobStatus.REQUIRES_APPROVAL
         job.final_summary = "Awaiting approval before Microsoft identity incident swarm execution"
@@ -194,8 +211,9 @@ async def create_job(
     payload: SwarmJobCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    job = await create_swarm_job(db, payload)
+    job = await create_swarm_job(db, payload, tenant_id=caller_tenant(user))
     # Tests use an isolated in-memory DB session. Running inline avoids spawning
     # a separate session that cannot see test tables.
     if os.getenv("PYTEST_CURRENT_TEST"):
@@ -210,28 +228,29 @@ async def list_jobs(
     status: Optional[SwarmJobStatus] = Query(None),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     q = select(SwarmJob).order_by(desc(SwarmJob.created_at)).limit(limit)
     if status:
         q = q.where(SwarmJob.status == status)
+    scope = caller_tenant(user)
+    if scope is not None:
+        q = q.where(SwarmJob.tenant_id == scope)
     result = await db.execute(q)
     return result.scalars().all()
 
 
 @router.get("/{job_id}", response_model=SwarmJobRead)
-async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SwarmJob).where(SwarmJob.id == UUID(job_id)))
-    job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Swarm job not found")
-    return job
+async def get_job(job_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    return await _scoped_job(job_id, db, user)
 
 
 @router.get("/{job_id}/tasks", response_model=list[SwarmTaskRead])
-async def get_job_tasks(job_id: str, db: AsyncSession = Depends(get_db)):
+async def get_job_tasks(job_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    job = await _scoped_job(job_id, db, user)
     result = await db.execute(
         select(SwarmTask)
-        .where(SwarmTask.swarm_job_id == UUID(job_id))
+        .where(SwarmTask.swarm_job_id == job.id)
         .order_by(SwarmTask.created_at.asc())
     )
     return result.scalars().all()
@@ -243,8 +262,12 @@ async def stream_job_events(
     timeout_seconds: int = Query(default=30, ge=2, le=600),
     poll_interval_ms: int = Query(default=500, ge=200, le=5000),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     job_uuid = UUID(job_id)
+    # Authorize before starting a long-lived stream; every subsequent poll is
+    # constrained by this immutable job id.
+    await _scoped_job(job_id, db, user)
 
     async def event_gen():
         start = time.monotonic()
@@ -319,11 +342,8 @@ async def stream_job_events(
 
 
 @router.post("/{job_id}/cancel", response_model=SwarmActionResponse)
-async def cancel_job(job_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SwarmJob).where(SwarmJob.id == UUID(job_id)))
-    job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Swarm job not found")
+async def cancel_job(job_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    job = await _scoped_job(job_id, db, user)
     if job.status in {SwarmJobStatus.COMPLETED, SwarmJobStatus.FAILED, SwarmJobStatus.CANCELLED}:
         return SwarmActionResponse(job_id=job.id, status=job.status, message="Job already finalized")
 
@@ -337,11 +357,8 @@ async def cancel_job(job_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{job_id}/approve", response_model=SwarmActionResponse)
-async def approve_job(job_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SwarmJob).where(SwarmJob.id == UUID(job_id)))
-    job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Swarm job not found")
+async def approve_job(job_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    job = await _scoped_job(job_id, db, user)
     if job.status != SwarmJobStatus.REQUIRES_APPROVAL:
         return SwarmActionResponse(job_id=job.id, status=job.status, message="No approval required")
     # Pre-execution approval gate: run the job now.

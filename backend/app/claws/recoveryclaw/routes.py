@@ -1,12 +1,14 @@
 """Business Continuity & Disaster Recovery API Routes."""
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.finding import Finding
 from app.services.connector_check import is_connector_configured
 from app.services.claw_scan import has_live_adapter, run_claw_scan
@@ -358,14 +360,24 @@ async def get_runbooks():
 
 
 @router.post("/scan", summary="Run Recovery Readiness scan and persist findings")
-async def run_scan(db: AsyncSession = Depends(get_db)):
+async def run_scan(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Run a Recovery Readiness scan. Persists via the finding pipeline for dedup, policy eval, and alerting."""
     from app.services.finding_pipeline import ingest_findings
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant-bound identity required to run this scan",
+        )
     return await run_claw_scan(
         db,
         claw=CLAW_NAME,
         provider_config=PROVIDER_MAP,
         demo_findings=_FINDINGS,
+        tenant_id=tenant_id,
     )
 
 

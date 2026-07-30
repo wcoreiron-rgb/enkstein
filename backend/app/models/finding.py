@@ -40,6 +40,10 @@ class Finding(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
+    # Tenancy. Nullable because rows written before tenant scoping existed
+    # carry no owner; those legacy rows are visible only to unscoped admins.
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
     # Which Claw and which data source
     claw: Mapped[str] = mapped_column(String(64), nullable=False)           # "cloudclaw", "exposureclaw", etc.
     provider: Mapped[str] = mapped_column(String(64), nullable=False)       # "aws", "azure", "gcp", "nvd", "cisa", etc.

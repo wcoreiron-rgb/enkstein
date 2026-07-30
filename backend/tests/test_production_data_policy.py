@@ -52,7 +52,7 @@ async def test_a_free_form_condition_does_not_silently_continue():
 async def test_production_mode_returns_nothing_rather_than_demonstration_data(db_session, monkeypatch):
     monkeypatch.setattr(settings, "REQUIRE_LIVE_DATA", True)
     result = await run_claw_scan(
-        db_session, claw="cloudclaw", provider_config=[], demo_findings=DEMO,
+        db_session, claw="cloudclaw", provider_config=[], demo_findings=DEMO, tenant_id="tenant-test",
     )
     assert result["mode"] == "empty"
     assert result["findings_created"] == 0
@@ -63,7 +63,7 @@ async def test_production_mode_returns_nothing_rather_than_demonstration_data(db
 async def test_demonstration_data_is_labelled_when_the_policy_is_off(db_session, monkeypatch):
     monkeypatch.setattr(settings, "REQUIRE_LIVE_DATA", False)
     result = await run_claw_scan(
-        db_session, claw="cloudclaw", provider_config=[], demo_findings=DEMO,
+        db_session, claw="cloudclaw", provider_config=[], demo_findings=DEMO, tenant_id="tenant-test",
     )
     # Still available for evaluation, but it must never claim to be live.
     assert result["mode"] == "simulated"

@@ -64,6 +64,9 @@ class Agent(Base):
     __tablename__ = "agents"
 
     id:              Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Owning tenant. Nullable for built-in/seeded agents that belong to no
+    # single tenant; remote agents are always owned.
+    tenant_id:       Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     name:            Mapped[str]       = mapped_column(String(255), nullable=False)
     description:     Mapped[str]       = mapped_column(Text, nullable=True)
     claw:            Mapped[str]       = mapped_column(String(64), nullable=False)   # e.g. "identityclaw"
@@ -114,6 +117,7 @@ class Schedule(Base):
     __tablename__ = "schedules"
 
     id:           Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id:    Mapped[str | None]      = mapped_column(String(128), nullable=True, index=True)
     name:         Mapped[str]             = mapped_column(String(255), nullable=False)
     agent_id:     Mapped[uuid.UUID]       = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False)
     connector_id: Mapped[uuid.UUID|None]  = mapped_column(UUID(as_uuid=True), ForeignKey("connectors.id"), nullable=True)
@@ -139,6 +143,7 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id:           Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id:    Mapped[str | None]     = mapped_column(String(128), nullable=True, index=True)
     agent_id:     Mapped[uuid.UUID]      = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False)
     schedule_id:  Mapped[uuid.UUID|None] = mapped_column(UUID(as_uuid=True), ForeignKey("schedules.id"), nullable=True)
 

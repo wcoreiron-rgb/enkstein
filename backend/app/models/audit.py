@@ -17,6 +17,10 @@ class AuditLog(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
 
+    # Tenancy. Nullable because rows written before tenant scoping existed
+    # carry no owner; those legacy rows are visible only to unscoped admins.
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+
     # Who
     actor: Mapped[str] = mapped_column(String(255), nullable=False)
     actor_type: Mapped[str] = mapped_column(String(64), nullable=False)

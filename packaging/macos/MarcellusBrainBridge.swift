@@ -135,6 +135,7 @@ private final class BrowserSessionBroker {
 
     private let condition = NSCondition()
     private var pairingCodes: [String: Date] = [:]
+    private var failedPairingAttempts: [String: [Date]] = [:]
     private var tasks: [String: BrowserTaskRecord] = [:]
     private var queue: [String] = []
     private var sessionSequences: [String: Int] = [:]
@@ -171,10 +172,21 @@ private final class BrowserSessionBroker {
         return code
     }
 
-    func exchange(code: String) -> String? {
+    func exchange(code: String, peer: String) -> String? {
         condition.lock()
         defer { condition.unlock() }
-        guard let expiry = pairingCodes.removeValue(forKey: code), expiry > Date() else { return nil }
+        let now = Date()
+        failedPairingAttempts = failedPairingAttempts.mapValues { attempts in
+            attempts.filter { now.timeIntervalSince($0) < 60 }
+        }
+        if (failedPairingAttempts[peer] ?? []).count >= 5 {
+            return nil
+        }
+        guard let expiry = pairingCodes.removeValue(forKey: code), expiry > now else {
+            failedPairingAttempts[peer, default: []].append(now)
+            return nil
+        }
+        failedPairingAttempts.removeValue(forKey: peer)
         token = Self.newToken()
         persistToken()
         return token
@@ -638,6 +650,12 @@ private final class BrainBridge {
     func start() throws {
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
+        // The bridge carries local subscription requests and workspace data.
+        // Bind it to loopback; RFC1918 peers must never be able to reach it.
+        parameters.requiredLocalEndpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host("127.0.0.1"),
+            port: config.port
+        )
         let listener = try NWListener(using: parameters, on: config.port)
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
@@ -716,7 +734,7 @@ private final class BrainBridge {
         if request.method == "POST", request.path == "/v1/browser/exchange" {
             guard let payload = try? JSONSerialization.jsonObject(with: request.body) as? [String: Any],
                   let code = payload["code"] as? String,
-                  let token = browserBroker.exchange(code: code) else {
+                  let token = browserBroker.exchange(code: code, peer: "\(connection.endpoint)") else {
                 send(connection, status: 401, body: ["detail": "Pairing code is invalid or expired"])
                 return
             }
@@ -1744,11 +1762,7 @@ private final class BrainBridge {
     private func isLocalPeer(_ endpoint: NWEndpoint) -> Bool {
         guard case .hostPort(let host, _) = endpoint else { return false }
         let value = "\(host)".lowercased()
-        if value == "127.0.0.1" || value == "::1" || value.hasPrefix("10.") || value.hasPrefix("192.168.") {
-            return true
-        }
-        let octets = value.split(separator: ".").compactMap { Int($0) }
-        return octets.count == 4 && octets[0] == 172 && (16...31).contains(octets[1])
+        return value == "127.0.0.1" || value == "::1"
     }
 
     private func constantTimeEquals(_ left: String, _ right: String) -> Bool {

@@ -5,6 +5,8 @@ from sqlalchemy import select, func, desc
 from pydantic import BaseModel
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.identity import Identity
 from app.models.module import Module, ModuleStatus
 from app.models.connector import Connector, ConnectorStatus
@@ -52,21 +54,25 @@ class ControlCenterSummary(BaseModel):
 
 
 @router.get("", response_model=DashboardStats, summary="Platform-wide dashboard stats")
-async def get_dashboard(db: AsyncSession = Depends(get_db)):
+async def get_dashboard(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     from datetime import datetime, timedelta
 
     since_24h = datetime.utcnow() - timedelta(hours=24)
+    tenant_id = caller_tenant(user)
 
     total_modules = (await db.execute(select(func.count(Module.id)))).scalar() or 0
     active_modules = (await db.execute(select(func.count(Module.id)).where(Module.status == ModuleStatus.ACTIVE))).scalar() or 0
     total_identities = (await db.execute(select(func.count(Identity.id)))).scalar() or 0
-    total_connectors = (await db.execute(select(func.count(Connector.id)))).scalar() or 0
-    pending_connectors = (await db.execute(select(func.count(Connector.id)).where(Connector.status == ConnectorStatus.PENDING))).scalar() or 0
+    connector_scope = [Connector.tenant_id == tenant_id] if tenant_id else []
+    event_scope = [Event.tenant_id == tenant_id] if tenant_id else []
+    total_connectors = (await db.execute(select(func.count(Connector.id)).where(*connector_scope))).scalar() or 0
+    pending_connectors = (await db.execute(select(func.count(Connector.id)).where(Connector.status == ConnectorStatus.PENDING, *connector_scope))).scalar() or 0
 
     high_risk = (
         await db.execute(
             select(func.count(Event.id))
             .where(Event.severity.in_([EventSeverity.HIGH, EventSeverity.CRITICAL]))
+            .where(*event_scope)
         )
     ).scalar() or 0
 
@@ -75,6 +81,7 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
             select(func.count(Event.id))
             .where(Event.outcome == EventOutcome.BLOCKED)
             .where(Event.timestamp >= since_24h)
+            .where(*event_scope)
         )
     ).scalar() or 0
 
@@ -82,11 +89,11 @@ async def get_dashboard(db: AsyncSession = Depends(get_db)):
         await db.execute(select(func.count(PrivilegedAction.id)).where(PrivilegedAction.status == "pending"))
     ).scalar() or 0
 
-    avg_risk = (await db.execute(select(func.avg(Event.risk_score)))).scalar() or 0.0
+    avg_risk = (await db.execute(select(func.avg(Event.risk_score)).where(*event_scope))).scalar() or 0.0
 
     # Recent 5 events
     recent_q = await db.execute(
-        select(Event).order_by(desc(Event.timestamp)).limit(5)
+        select(Event).where(*event_scope).order_by(desc(Event.timestamp)).limit(5)
     )
     recent_events = [
         {
@@ -143,8 +150,17 @@ async def run_supply_chain_scan():
 
 
 @router.get("/control-center-summary", response_model=ControlCenterSummary, summary="Control Center unified summary")
-async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
+async def get_control_center_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     from datetime import datetime, timedelta
+
+    scope = caller_tenant(user)
+
+    def _scoped(stmt, column):
+        """Restrict a count to the caller's tenant when it is tenant-bound."""
+        return stmt if scope is None else stmt.where(column == scope)
 
     # Several operational tables still use timezone-naive UTC columns. Keep the
     # summary cutoff naive as well so Postgres does not reject mixed comparisons.
@@ -152,7 +168,7 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
 
     pending_commands = (
         await db.execute(
-            select(func.count(Event.id))
+            _scoped(select(func.count(Event.id)), Event.tenant_id)
             .where(Event.source_module == "commandclaw")
             .where(Event.outcome == EventOutcome.REQUIRES_APPROVAL)
             .where(Event.timestamp >= since_24h)
@@ -161,57 +177,66 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
 
     running_swarms = (
         await db.execute(
-            select(func.count(SwarmJob.id)).where(
+            _scoped(select(func.count(SwarmJob.id)), SwarmJob.tenant_id).where(
                 SwarmJob.status.in_([SwarmJobStatus.PENDING, SwarmJobStatus.RUNNING])
             )
         )
     ).scalar() or 0
     blocked_swarms = (
         await db.execute(
-            select(func.count(SwarmJob.id)).where(
+            _scoped(select(func.count(SwarmJob.id)), SwarmJob.tenant_id).where(
                 SwarmJob.status.in_([SwarmJobStatus.BLOCKED, SwarmJobStatus.FAILED, SwarmJobStatus.CANCELLED])
             )
         )
     ).scalar() or 0
 
     remote_agents_total = (
-        await db.execute(select(func.count(Agent.id)).where(Agent.claw == "remoteagent"))
+        await db.execute(
+            _scoped(select(func.count(Agent.id)), Agent.tenant_id).where(Agent.claw == "remoteagent")
+        )
     ).scalar() or 0
     remote_agents_online = (
         await db.execute(
-            select(func.count(Agent.id))
+            _scoped(select(func.count(Agent.id)), Agent.tenant_id)
             .where(Agent.claw == "remoteagent")
             .where(Agent.status == AgentStatus.ACTIVE)
         )
     ).scalar() or 0
 
-    schedules_total = (await db.execute(select(func.count(Schedule.id)))).scalar() or 0
+    schedules_total = (
+        await db.execute(_scoped(select(func.count(Schedule.id)), Schedule.tenant_id))
+    ).scalar() or 0
     schedules_active = (
-        await db.execute(select(func.count(Schedule.id)).where(Schedule.status == ScheduleStatus.ACTIVE))
+        await db.execute(
+            _scoped(select(func.count(Schedule.id)), Schedule.tenant_id).where(
+                Schedule.status == ScheduleStatus.ACTIVE
+            )
+        )
     ).scalar() or 0
 
     channel_messages_24h = (
         await db.execute(
-            select(func.count(ChannelMessage.id)).where(ChannelMessage.created_at >= since_24h)
+            _scoped(select(func.count(ChannelMessage.id)), ChannelMessage.tenant_id)
+            .where(ChannelMessage.created_at >= since_24h)
         )
     ).scalar() or 0
     channel_blocked_24h = (
         await db.execute(
-            select(func.count(ChannelMessage.id))
+            _scoped(select(func.count(ChannelMessage.id)), ChannelMessage.tenant_id)
             .where(ChannelMessage.created_at >= since_24h)
             .where(ChannelMessage.policy_decision == "blocked")
         )
     ).scalar() or 0
     channel_replies_sent_24h = (
         await db.execute(
-            select(func.count(ChannelMessage.id))
+            _scoped(select(func.count(ChannelMessage.id)), ChannelMessage.tenant_id)
             .where(ChannelMessage.created_at >= since_24h)
             .where(ChannelMessage.response_sent == True)
         )
     ).scalar() or 0
     channel_replies_pending_24h = (
         await db.execute(
-            select(func.count(ChannelMessage.id))
+            _scoped(select(func.count(ChannelMessage.id)), ChannelMessage.tenant_id)
             .where(ChannelMessage.created_at >= since_24h)
             .where(ChannelMessage.channel_type.in_(["slack", "teams"]))
             .where(ChannelMessage.response_sent == False)
@@ -219,11 +244,14 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
     ).scalar() or 0
 
     execution_pending_approval = (
-        await db.execute(select(func.count(ExecRequest.id)).where(ExecRequest.status == "pending"))
+        await db.execute(
+            _scoped(select(func.count(ExecRequest.id)), ExecRequest.tenant_id)
+            .where(ExecRequest.status == "pending")
+        )
     ).scalar() or 0
     execution_blocked_24h = (
         await db.execute(
-            select(func.count(ExecRequest.id))
+            _scoped(select(func.count(ExecRequest.id)), ExecRequest.tenant_id)
             .where(ExecRequest.created_at >= since_24h)
             .where(ExecRequest.status == "blocked")
         )
@@ -231,7 +259,7 @@ async def get_control_center_summary(db: AsyncSession = Depends(get_db)):
 
     blocked_actions_24h = (
         await db.execute(
-            select(func.count(Event.id))
+            _scoped(select(func.count(Event.id)), Event.tenant_id)
             .where(Event.outcome == EventOutcome.BLOCKED)
             .where(Event.timestamp >= since_24h)
         )

@@ -41,6 +41,9 @@ class Connector(Base):
     requested_scopes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Ownership
+    # String tenant scope, matching the platform-wide tenant claim. Distinct
+    # from owner_id, which is a per-user UUID and never carried tenancy.
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     owner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     module_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("modules.id"), nullable=True

@@ -334,6 +334,31 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.12 — channel gateway and execution channels get an owner -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">The routes that run commands and hand out credentials now know whose they are</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.12</span>
+          <span class="release-date">July 30, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Tenant Isolation</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The Channel Gateway and the Execution Channels were the last two record sets with no owner. They are also the highest-consequence pair in the product: one runs shell commands, drives browsers, brokers credentials and gates production, and the other is the unauthenticated ingress that feeds it. Any authenticated caller could read another tenant&rsquo;s inbound messages, approve their pending execution, or list their credential broker entries.</p>
+      <ul>
+        <li><strong>Execution requests, production gates and broker entries are scoped end to end</strong> &mdash; list, detail, approve, reject, execute, rollback, rotate and statistics. A foreign record answers 404 rather than 403, so an identifier cannot be used to probe what exists in another tenant, and an already-approved foreign request still refuses to run.</li>
+        <li><strong>Channel messages, identities and configs are scoped too.</strong> A channel config holds a webhook URL and a signing secret, so it was a credential surface listed to everyone. Outbound replies are now matched to a config in the message&rsquo;s own tenant, which means one tenant&rsquo;s response can no longer be delivered through another tenant&rsquo;s webhook.</li>
+        <li><strong>Ingress cannot name its own tenant.</strong> Slack, Teams, webhook, email and CLI arrive unauthenticated, so ownership is taken from the channel config an operator registered rather than from the payload. A message on an unregistered channel stays unowned and visible only to an administrator, instead of defaulting into a tenant. A <code>tenant_id</code> supplied in an identity upsert no longer adopts or elevates an existing mapping.</li>
+        <li><strong>Two global uniqueness constraints were themselves the leak.</strong> A channel id and a credential name were unique across the whole install, so the first tenant to register a name locked every other tenant out of it and the insert conflict revealed the name existed somewhere else. Both are now per-tenant.</li>
+        <li><strong>Control Center counters stop mixing tenants.</strong> Channel volume, blocked traffic, pending replies and pending execution approvals were counted across the entire install.</li>
+      </ul>
+      <p><strong>Verification.</strong> Twelve new adversarial checks assert the foreign-record behaviour directly, including that an approved request of another tenant is still not executed. Migration <code>0011</code> was run on PostgreSQL 16 through a full upgrade &rarr; downgrade &rarr; upgrade cycle against a schema clone, resolving the existing constraint by inspection because its generated name differs between deployments. 1,303 backend tests pass.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.11 — AI analysis on node assessments -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

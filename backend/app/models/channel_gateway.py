@@ -3,7 +3,9 @@ Enkstein — Messaging Channel Gateway models
 Tracks inbound messages, identity checks, policy decisions, and dispatched executions.
 """
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Boolean, Text, DateTime, JSON
+from sqlalchemy import (
+    Column, String, Integer, Boolean, Text, DateTime, JSON, UniqueConstraint,
+)
 from app.database import Base
 
 
@@ -12,6 +14,7 @@ class ChannelMessage(Base):
     __tablename__ = "channel_messages"
 
     id               = Column(String, primary_key=True)
+    tenant_id        = Column(String, nullable=True, index=True)
     channel_type     = Column(String, nullable=False)   # teams|slack
     channel_id       = Column(String, nullable=False, index=True)
     channel_name     = Column(String, default="")
@@ -47,6 +50,7 @@ class ChannelIdentity(Base):
     __tablename__ = "channel_identities"
 
     id               = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id        = Column(String, nullable=True, index=True)
     channel_type     = Column(String, nullable=False)
     platform_user_id = Column(String, nullable=False, index=True)
     platform_email   = Column(String, default="", index=True)
@@ -64,10 +68,16 @@ class ChannelIdentity(Base):
 class ChannelConfig(Base):
     """Configuration for a connected messaging channel."""
     __tablename__ = "channel_configs"
+    # A channel identifier is unique within a tenant. Global uniqueness would
+    # let one tenant claim a channel id and lock every other tenant out of it.
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "channel_id", name="uq_channel_configs_tenant_channel"),
+    )
 
     id               = Column(String, primary_key=True)
+    tenant_id        = Column(String, nullable=True, index=True)
     channel_type     = Column(String, nullable=False)   # teams|slack
-    channel_id       = Column(String, nullable=False, unique=True, index=True)
+    channel_id       = Column(String, nullable=False, index=True)
     channel_name     = Column(String, default="")
     webhook_url      = Column(String, default="")
     bot_token        = Column(String, default="")

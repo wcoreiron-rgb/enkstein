@@ -315,6 +315,7 @@ async def launch_mission(
             parallelism=mission.parallelism,
             model_profile=mission.model_profile,
         ),
+        tenant_id=mission.tenant_id,
     )
     now = _now()
     mission.latest_job_id = job.id

@@ -121,7 +121,10 @@ async def _fetch_real_findings(credentials: dict) -> list[dict]:
     # Search for notable events from the last 24 hours
     search = "search index=notable earliest=-24h | fields src_ip, dest, severity, description, rule_name | head 50"
 
-    async with httpx.AsyncClient(timeout=TIMEOUT, verify=False) as client:
+    # Never disable certificate validation for a credentialed management API.
+    # Deployments using a private CA must install that CA into the host trust
+    # store instead of weakening verification for every Splunk connection.
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         # Create search job
         create_resp = await client.post(
             f"{base_url}/services/search/jobs",

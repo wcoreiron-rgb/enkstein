@@ -43,9 +43,30 @@ from app.api.routes.remote_control import (
     reject_pending_command,
 )
 from app.services.channel_processor import dispatch_alert, process_message
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant, assert_tenant_visible
 
 router = APIRouter(prefix="/channel-gateway", tags=["channel-gateway"])
 logger = logging.getLogger(__name__)
+
+
+def _resolve_channel_tenant(db: Session, channel_type: str, channel_id: str) -> str | None:
+    """Owning tenant for an inbound channel message.
+
+    Ingress webhooks are unauthenticated, so ownership is taken from the
+    channel config an operator registered rather than from the payload. An
+    unregistered channel stays unowned and is visible only to unscoped
+    administrators, which is safer than trusting a caller-supplied tenant.
+    """
+    config = (
+        db.query(ChannelConfig)
+        .filter(
+            ChannelConfig.channel_type == channel_type,
+            ChannelConfig.channel_id == channel_id,
+        )
+        .first()
+    )
+    return config.tenant_id if config else None
 
 
 @asynccontextmanager
@@ -139,9 +160,15 @@ def _get_channel_identity(
     return _identity_out(ci) if ci else None
 
 
-def _persist_message(db: Session, result: dict, channel_name: str = "") -> ChannelMessage:
+def _persist_message(
+    db: Session,
+    result: dict,
+    channel_name: str = "",
+    tenant_id: str | None = None,
+) -> ChannelMessage:
     msg = ChannelMessage(
         id               = result["id"],
+        tenant_id        = tenant_id,
         channel_type     = result["channel_type"],
         channel_id       = result["channel_id"],
         channel_name     = channel_name,
@@ -277,15 +304,18 @@ async def _send_channel_response(db: Session, msg: ChannelMessage, result: dict)
     if not msg.response_text:
         return {"status": "skipped", "reason": "empty_response"}
 
-    config = (
+    config_q = (
         db.query(ChannelConfig)
         .filter(
             ChannelConfig.channel_type == msg.channel_type,
             ChannelConfig.channel_id == msg.channel_id,
             ChannelConfig.is_enabled == True,
         )
-        .first()
     )
+    # Never deliver a tenant's response through another tenant's webhook.
+    if msg.tenant_id is not None:
+        config_q = config_q.filter(ChannelConfig.tenant_id == msg.tenant_id)
+    config = config_q.first()
     if not config or not config.webhook_url:
         delivery = {"status": "skipped", "reason": "missing_webhook_url"}
         msg.raw_payload = {**(msg.raw_payload or {}), "outbound_delivery": delivery}
@@ -345,6 +375,7 @@ async def _ingest_normalized_message(
     message_ts: str = "",
     thread_ts: str = "",
     raw_payload: dict | None = None,
+    tenant_id: str | None = None,
 ) -> dict:
     ci = _get_channel_identity(db, channel_type, sender_id, sender_email)
     result = process_message(
@@ -362,7 +393,9 @@ async def _ingest_normalized_message(
     result["raw_payload"] = raw_payload or {}
     command_result = await _execute_channel_command(result, ci)
     _apply_command_outcome(result, command_result)
-    msg = _persist_message(db, result, channel_name)
+    if tenant_id is None:
+        tenant_id = _resolve_channel_tenant(db, channel_type, channel_id)
+    msg = _persist_message(db, result, channel_name, tenant_id)
     outbound_delivery = await _send_channel_response(db, msg, result)
     return {
         **_msg_out(msg),
@@ -754,7 +787,14 @@ async def cli_command(body: dict, db: Session = Depends(get_db)):
         result["raw_payload"] = {"provider": "cli", "tenant_id": tenant_id}
         command_result = await _execute_channel_command(result, channel_identity)
         _apply_command_outcome(result, command_result)
-        msg = _persist_message(db, result, body.get("terminal_name", body["terminal_id"]))
+        # Ownership comes from the registered channel config, never from the
+        # caller-supplied tenant_id in the CLI body.
+        msg = _persist_message(
+            db,
+            result,
+            body.get("terminal_name", body["terminal_id"]),
+            _resolve_channel_tenant(db, "cli", body["terminal_id"]),
+        )
         outbound_delivery = await _send_channel_response(db, msg, result)
         return {
             **_msg_out(msg),
@@ -849,8 +889,12 @@ def list_messages(
     limit:  int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     q = db.query(ChannelMessage)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(ChannelMessage.tenant_id == tenant_id)
     if channel_type:
         q = q.filter(ChannelMessage.channel_type == channel_type)
     if policy_decision:
@@ -865,10 +909,15 @@ def list_messages(
 
 
 @router.get("/messages/{message_id}")
-def get_message(message_id: str, db: Session = Depends(get_db)):
+def get_message(
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     m = db.query(ChannelMessage).filter(ChannelMessage.id == message_id).first()
     if not m:
         raise HTTPException(404, "Message not found")
+    assert_tenant_visible(current_user, m.tenant_id)
     return _msg_out(m)
 
 
@@ -878,34 +927,51 @@ def get_message(message_id: str, db: Session = Depends(get_db)):
 def list_identities(
     channel_type: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     q = db.query(ChannelIdentity)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(ChannelIdentity.tenant_id == tenant_id)
     if channel_type:
         q = q.filter(ChannelIdentity.channel_type == channel_type)
     return [_identity_out(ci) for ci in q.all()]
 
 
 @router.post("/identities")
-def upsert_identity(body: dict, db: Session = Depends(get_db)):
+def upsert_identity(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     required = ("channel_type", "platform_user_id")
     for f in required:
         if f not in body:
             raise HTTPException(400, f"Missing field: {f}")
-    existing = (
+    tenant_id = caller_tenant(current_user)
+    # Ownership is taken from the authenticated identity; a tenant_id in the
+    # body would let a caller adopt or overwrite another tenant's mapping.
+    fields = {
+        k: v
+        for k, v in body.items()
+        if hasattr(ChannelIdentity, k) and k not in ("id", "tenant_id")
+    }
+    q = (
         db.query(ChannelIdentity)
         .filter(
             ChannelIdentity.channel_type == body["channel_type"],
             ChannelIdentity.platform_user_id == body["platform_user_id"],
         )
-        .first()
     )
+    if tenant_id is not None:
+        q = q.filter(ChannelIdentity.tenant_id == tenant_id)
+    existing = q.first()
     if existing:
-        for k, v in body.items():
-            if hasattr(existing, k):
-                setattr(existing, k, v)
+        for k, v in fields.items():
+            setattr(existing, k, v)
         existing.last_seen = datetime.utcnow()
     else:
-        existing = ChannelIdentity(**{k: v for k, v in body.items() if hasattr(ChannelIdentity, k)})
+        existing = ChannelIdentity(**fields, tenant_id=tenant_id)
         db.add(existing)
     db.commit()
     db.refresh(existing)
@@ -915,8 +981,15 @@ def upsert_identity(body: dict, db: Session = Depends(get_db)):
 # ─── Channel configs ─────────────────────────────────────────────────────────
 
 @router.get("/configs")
-def list_configs(db: Session = Depends(get_db)):
-    configs = db.query(ChannelConfig).all()
+def list_configs(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    q = db.query(ChannelConfig)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(ChannelConfig.tenant_id == tenant_id)
+    configs = q.all()
     return [
         {
             "id": c.id, "channel_type": c.channel_type, "channel_id": c.channel_id,
@@ -929,18 +1002,29 @@ def list_configs(db: Session = Depends(get_db)):
 
 
 @router.post("/configs")
-def create_config(body: dict, db: Session = Depends(get_db)):
+def create_config(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     required = ("channel_type", "channel_id")
     for f in required:
         if f not in body:
             raise HTTPException(400, f"Missing field: {f}")
-    existing = db.query(ChannelConfig).filter(
-        ChannelConfig.channel_id == body["channel_id"]
-    ).first()
+    tenant_id = caller_tenant(current_user)
+    existing = (
+        db.query(ChannelConfig)
+        .filter(
+            ChannelConfig.channel_id == body["channel_id"],
+            ChannelConfig.tenant_id == tenant_id,
+        )
+        .first()
+    )
     if existing:
         raise HTTPException(409, "Channel already configured")
     config = ChannelConfig(
         id           = str(uuid.uuid4()),
+        tenant_id    = tenant_id,
         channel_type = body["channel_type"],
         channel_id   = body["channel_id"],
         channel_name = body.get("channel_name", body["channel_id"]),
@@ -958,12 +1042,18 @@ def create_config(body: dict, db: Session = Depends(get_db)):
 
 
 @router.patch("/configs/{config_id}")
-def update_config(config_id: str, body: dict, db: Session = Depends(get_db)):
+def update_config(
+    config_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     config = db.query(ChannelConfig).filter(ChannelConfig.id == config_id).first()
     if not config:
         raise HTTPException(404, "Config not found")
+    assert_tenant_visible(current_user, config.tenant_id)
     for k, v in body.items():
-        if hasattr(config, k) and k not in ("id", "created_at"):
+        if hasattr(config, k) and k not in ("id", "tenant_id", "created_at"):
             setattr(config, k, v)
     db.commit()
     return {"id": config.id, "message": "Config updated"}
@@ -972,18 +1062,29 @@ def update_config(config_id: str, body: dict, db: Session = Depends(get_db)):
 # ─── Stats ───────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
-def gateway_stats(db: Session = Depends(get_db)):
-    total    = db.query(ChannelMessage).count()
-    allowed  = db.query(ChannelMessage).filter(ChannelMessage.policy_decision == "allowed").count()
-    blocked  = db.query(ChannelMessage).filter(ChannelMessage.policy_decision == "blocked").count()
-    pending  = db.query(ChannelMessage).filter(ChannelMessage.policy_decision == "requires_approval").count()
-    verified = db.query(ChannelMessage).filter(ChannelMessage.identity_verified == True).count()
-    slack_msgs = db.query(ChannelMessage).filter(ChannelMessage.channel_type == "slack").count()
-    teams_msgs = db.query(ChannelMessage).filter(ChannelMessage.channel_type == "teams").count()
-    dispatched = db.query(ChannelMessage).filter(ChannelMessage.execution_status == "dispatched").count()
-    identities = db.query(ChannelIdentity).count()
-    trusted    = db.query(ChannelIdentity).filter(ChannelIdentity.is_trusted == True).count()
-    channels   = db.query(ChannelConfig).count()
+def gateway_stats(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = caller_tenant(current_user)
+
+    def _q(model):
+        q = db.query(model)
+        if tenant_id is not None:
+            q = q.filter(model.tenant_id == tenant_id)
+        return q
+
+    total    = _q(ChannelMessage).count()
+    allowed  = _q(ChannelMessage).filter(ChannelMessage.policy_decision == "allowed").count()
+    blocked  = _q(ChannelMessage).filter(ChannelMessage.policy_decision == "blocked").count()
+    pending  = _q(ChannelMessage).filter(ChannelMessage.policy_decision == "requires_approval").count()
+    verified = _q(ChannelMessage).filter(ChannelMessage.identity_verified == True).count()
+    slack_msgs = _q(ChannelMessage).filter(ChannelMessage.channel_type == "slack").count()
+    teams_msgs = _q(ChannelMessage).filter(ChannelMessage.channel_type == "teams").count()
+    dispatched = _q(ChannelMessage).filter(ChannelMessage.execution_status == "dispatched").count()
+    identities = _q(ChannelIdentity).count()
+    trusted    = _q(ChannelIdentity).filter(ChannelIdentity.is_trusted == True).count()
+    channels   = _q(ChannelConfig).count()
     return {
         "total_messages":   total,
         "allowed":          allowed,

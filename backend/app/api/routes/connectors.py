@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.connector import Connector, ConnectorStatus
 from app.schemas.connector import ConnectorCreate, ConnectorRead, ConnectorUpdate
 from app.services import secrets_manager
@@ -26,11 +28,39 @@ router = APIRouter(prefix="/connectors", tags=["CoreOS — Connectors"])
 _STRICT_CREDENTIAL_CONNECTORS = {"openai", "anthropic", "nvidia", "nvidia_nim", "gemini"}
 
 
+async def load_scoped_connector(connector_id: str, db: AsyncSession, user: dict) -> Connector:
+    """Load one connector, or 404 if it is outside the caller's tenant.
+
+    Every per-connector route funnels through this so a connector UUID
+    learned elsewhere cannot be replayed against another tenant's record --
+    which was the pivot from an unfiltered list to that tenant's credentials.
+    """
+    try:
+        parsed_id = UUID(connector_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid connector id")
+    result = await db.execute(select(Connector).where(Connector.id == parsed_id))
+    connector = result.scalar_one_or_none()
+    if not connector:
+        raise HTTPException(status_code=404, detail="Connector not found")
+    assert_tenant_visible(user, connector.tenant_id)
+    return connector
+
+
 # ── List / Get / Create / Update ──────────────────────────────────────────────
 
 @router.get("", response_model=list[ConnectorRead])
-async def list_connectors(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Connector))
+async def list_connectors(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    stmt = select(Connector)
+    # The unfiltered list handed every caller the connector UUIDs needed to
+    # reach another tenant's credential store.
+    scope = caller_tenant(user)
+    if scope is not None:
+        stmt = stmt.where(Connector.tenant_id == scope)
+    result = await db.execute(stmt)
     connectors = result.scalars().all()
     # Annotate each with is_configured (from secrets store, not DB)
     configured = set(secrets_manager.list_configured())
@@ -40,8 +70,14 @@ async def list_connectors(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=ConnectorRead, status_code=201)
-async def register_connector(payload: ConnectorCreate, db: AsyncSession = Depends(get_db)):
+async def register_connector(
+    payload: ConnectorCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     connector = Connector(**payload.model_dump())
+    # Ownership comes from the caller's identity, never the request body.
+    connector.tenant_id = caller_tenant(user)
     db.add(connector)
     await db.commit()
     await db.refresh(connector)
@@ -49,13 +85,20 @@ async def register_connector(payload: ConnectorCreate, db: AsyncSession = Depend
 
 
 @router.get("/health-summary", summary="Health status for all connectors (no live test)")
-async def get_health_summary(db: AsyncSession = Depends(get_db)):
+async def get_health_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """
     Returns a health overview for all connectors based on DB state.
     Does NOT call external APIs — uses trust_score, status, and is_configured
     to derive a health status without making outbound connections.
     """
-    result = await db.execute(select(Connector))
+    stmt = select(Connector)
+    scope = caller_tenant(user)
+    if scope is not None:
+        stmt = stmt.where(Connector.tenant_id == scope)
+    result = await db.execute(stmt)
     connectors = result.scalars().all()
 
     def _health(c: Connector) -> str:
@@ -94,21 +137,24 @@ async def get_health_summary(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{connector_id}", response_model=ConnectorRead)
-async def get_connector(connector_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+async def get_connector(
+    connector_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    connector = await load_scoped_connector(connector_id, db, user)
     connector.__dict__["is_configured"] = secrets_manager.is_configured(connector_id)
     return connector
 
 
 @router.patch("/{connector_id}", response_model=ConnectorRead)
-async def update_connector(connector_id: str, payload: ConnectorUpdate, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+async def update_connector(
+    connector_id: str,
+    payload: ConnectorUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    connector = await load_scoped_connector(connector_id, db, user)
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(connector, field, value)
     await db.commit()
@@ -141,6 +187,7 @@ async def configure_connector(
     payload: ConfigureRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Store encrypted credentials for a connector.
@@ -151,10 +198,7 @@ async def configure_connector(
       4. Update connector status to 'pending' (admin approves to activate)
     """
     # 1. Load connector
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+    connector = await load_scoped_connector(connector_id, db, user)
 
     # 2. Trust Fabric enforcement
     request = ActionRequest(
@@ -211,7 +255,9 @@ async def configure_connector(
             )
 
     # 4. Encrypt and store credentials
-    hint = secrets_manager.store_credential(connector_id, payload.credentials)
+    hint = secrets_manager.store_credential(
+        connector_id, payload.credentials, tenant_id=connector.tenant_id
+    )
 
     # 5. Mark connector as pending (credentials saved, awaiting approval)
     if connector.status == ConnectorStatus.BLOCKED:
@@ -246,9 +292,13 @@ async def configure_connector(
                         connector.connector_type,
                         connector_id,
                         actor=payload.actor_id or "portal-user",
+                        tenant_id=connector.tenant_id,
                     )
             except Exception as exc:
-                logger.error("Background auto-scan failed for %s: %s", connector.connector_type, exc)
+                logger.error(
+                    "Background auto-scan failed for %s: %s",
+                    connector.connector_type, type(exc).__name__, exc_info=True,
+                )
 
         background_tasks.add_task(_run_auto_scan)
         logger.info(
@@ -284,17 +334,15 @@ class TestResponse(BaseModel):
 async def test_connector_connection(
     connector_id: str,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Test live connectivity for a connector using stored credentials.
     Always read-only — no writes or side effects.
     """
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+    connector = await load_scoped_connector(connector_id, db, user)
 
-    creds = secrets_manager.get_credential(connector_id)
+    creds = secrets_manager.get_credential(connector_id, tenant_id=connector.tenant_id)
     if not creds:
         return TestResponse(
             connector_id=connector_id,
@@ -329,9 +377,14 @@ async def test_connector_connection(
             async def _run_post_test_scan():
                 try:
                     async with AsyncSessionLocal() as scan_db:
-                        await trigger_scans_for_connector(scan_db, connector.connector_type, connector_id)
+                        await trigger_scans_for_connector(
+                            scan_db,
+                            connector.connector_type,
+                            connector_id,
+                            tenant_id=connector.tenant_id,
+                        )
                 except Exception as exc:
-                    logger.error("Post-test auto-scan failed: %s", exc)
+                    logger.error("Post-test auto-scan failed: %s", type(exc).__name__, exc_info=True)
 
             asyncio.create_task(_run_post_test_scan())
 
@@ -362,12 +415,9 @@ class DevicePollRequest(BaseModel):
     actor_name:  Optional[str] = "Portal User"
 
 
-async def _load_device_connector(connector_id: str, db: AsyncSession):
+async def _load_device_connector(connector_id: str, db: AsyncSession, user: dict):
     """Resolve a connector and the device-code provider that can sign it in."""
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+    connector = await load_scoped_connector(connector_id, db, user)
     provider = device_code_auth.provider_for_connector(connector.connector_type)
     if provider is None or not provider.client_id:
         raise HTTPException(
@@ -412,12 +462,13 @@ async def start_device_code(
     connector_id: str,
     payload: DeviceStartRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Begin interactive sign-in for a connector that supports the OAuth device
     grant. Returns a code and URL for the operator to approve in a browser.
     """
-    connector, provider = await _load_device_connector(connector_id, db)
+    connector, provider = await _load_device_connector(connector_id, db, user)
     await _enforce_device_signin(db, connector, payload.actor_id, payload.actor_name)
     try:
         started = await device_code_auth.start_device_authorization(
@@ -438,13 +489,14 @@ async def poll_device_code(
     connector_id: str,
     payload: DevicePollRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Check whether the operator has approved the sign-in. On approval the tokens
     are encrypted and stored, and the connector moves to pending approval — the
     same state a manually configured connector reaches.
     """
-    connector, provider = await _load_device_connector(connector_id, db)
+    connector, provider = await _load_device_connector(connector_id, db, user)
     await _enforce_device_signin(db, connector, payload.actor_id, payload.actor_name)
     try:
         result = await device_code_auth.poll_device_token(
@@ -461,7 +513,9 @@ async def poll_device_code(
     if result["status"] == "pending":
         return {"status": "pending", "slow_down": result.get("slow_down", False)}
 
-    hint = secrets_manager.store_credential(connector_id, result["credentials"])
+    hint = secrets_manager.store_credential(
+        connector_id, result["credentials"], tenant_id=connector.tenant_id
+    )
     connector.status = ConnectorStatus.PENDING
     await db.commit()
     await db.refresh(connector)
@@ -505,12 +559,9 @@ class BrowserAuthCompleteRequest(BaseModel):
     actor_name: Optional[str] = "Portal User"
 
 
-async def _load_browser_connector(connector_id: str, db: AsyncSession):
+async def _load_browser_connector(connector_id: str, db: AsyncSession, user: dict):
     """Resolve a connector and the browser sign-in provider serving it."""
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+    connector = await load_scoped_connector(connector_id, db, user)
     provider = browser_auth.provider_for_connector(connector.connector_type)
     if provider is None:
         raise HTTPException(
@@ -528,13 +579,14 @@ async def start_browser_auth(
     connector_id: str,
     payload: BrowserAuthStartRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Begin browser sign-in. Returns the provider's own consent URL for the
     operator to open; the provider redirects a single-use code back to a
     loopback address only this machine can receive.
     """
-    connector, provider = await _load_browser_connector(connector_id, db)
+    connector, provider = await _load_browser_connector(connector_id, db, user)
     # Sign-in stores credentials, so it passes the same policy gate as manual
     # configuration rather than routing around it.
     await _enforce_device_signin(db, connector, payload.actor_id, payload.actor_name)
@@ -556,13 +608,14 @@ async def complete_browser_auth(
     connector_id: str,
     payload: BrowserAuthCompleteRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """
     Exchange the returned authorization code for tokens. On success the tokens
     are encrypted and stored and the connector moves to pending approval — the
     same state a manually configured connector reaches.
     """
-    connector, provider = await _load_browser_connector(connector_id, db)
+    connector, provider = await _load_browser_connector(connector_id, db, user)
     await _enforce_device_signin(db, connector, payload.actor_id, payload.actor_name)
 
     code = (payload.code or "").strip()
@@ -595,7 +648,9 @@ async def complete_browser_auth(
             status_code=502, detail="Could not complete sign-in with the provider."
         )
 
-    hint = secrets_manager.store_credential(connector_id, result["credentials"])
+    hint = secrets_manager.store_credential(
+        connector_id, result["credentials"], tenant_id=connector.tenant_id
+    )
     connector.status = ConnectorStatus.PENDING
     await db.commit()
     await db.refresh(connector)
@@ -617,12 +672,14 @@ async def complete_browser_auth(
 
 
 @router.delete("/{connector_id}/credentials", status_code=204)
-async def clear_credentials(connector_id: str, db: AsyncSession = Depends(get_db)):
+async def clear_credentials(
+    connector_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Remove stored credentials for a connector (does not delete the connector record)."""
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Connector not found")
-    secrets_manager.delete_credential(connector_id)
+    connector = await load_scoped_connector(connector_id, db, user)
+    secrets_manager.delete_credential(connector_id, tenant_id=connector.tenant_id)
 
 
 # ── Credential field definitions (frontend uses these to render the form) ─────
@@ -950,12 +1007,13 @@ CREDENTIAL_FIELDS: dict[str, list[dict]] = {
 
 
 @router.get("/{connector_id}/fields")
-async def get_credential_fields(connector_id: str, db: AsyncSession = Depends(get_db)):
+async def get_credential_fields(
+    connector_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Return the credential fields needed for this connector type."""
-    result = await db.execute(select(Connector).where(Connector.id == UUID(connector_id)))
-    connector = result.scalar_one_or_none()
-    if not connector:
-        raise HTTPException(status_code=404, detail="Connector not found")
+    connector = await load_scoped_connector(connector_id, db, user)
 
     fields = CREDENTIAL_FIELDS.get(connector.connector_type, [
         {"name": "api_key", "label": "API Key / Token", "type": "secret", "hint": ""}

@@ -42,12 +42,44 @@ from app.services.exec_policy import evaluate_exec_request
 from app.services.ring_policy import classify_ring, evaluate_ring
 from app.services import secrets_manager
 from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant, assert_tenant_visible
 from app.trust_fabric import ActionRequest, enforce
 
 router = APIRouter(prefix="/exec", tags=["exec-channels"])
 
 PRODUCTION_APPROVALS_REQUIRED = 2
 REQUEST_TTL_MINUTES = 60
+
+
+def _scoped_request(db: Session, req_id: str, user: dict) -> ExecRequest:
+    """Load an execution request the caller is allowed to see, else 404."""
+    r = db.query(ExecRequest).filter(ExecRequest.id == req_id).first()
+    if not r:
+        raise HTTPException(404, "Request not found")
+    assert_tenant_visible(user, r.tenant_id)
+    return r
+
+
+def _scoped_gate(db: Session, gate_id: str, user: dict) -> ProductionGate:
+    """Load a production gate the caller is allowed to see, else 404."""
+    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
+    if not g:
+        raise HTTPException(404, "Production gate not found")
+    assert_tenant_visible(user, g.tenant_id)
+    return g
+
+
+def _scoped_credential(db: Session, cred_id: str, user: dict) -> CredentialBrokerEntry:
+    """Load a broker entry the caller is allowed to see, else 404."""
+    cred = (
+        db.query(CredentialBrokerEntry)
+        .filter(CredentialBrokerEntry.id == cred_id)
+        .first()
+    )
+    if not cred:
+        raise HTTPException(404, "Credential not found")
+    assert_tenant_visible(user, cred.tenant_id)
+    return cred
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
@@ -138,6 +170,7 @@ def _create_exec_request(
     db: Session,
     channel: str,
     body: dict,
+    tenant_id: str | None,
 ) -> dict:
     command     = body.get("command", body.get("url", body.get("secret_name", "")))
     environment = body.get("environment", "dev")
@@ -240,6 +273,7 @@ def _create_exec_request(
 
     req = ExecRequest(
         id              = str(uuid.uuid4()),
+        tenant_id       = tenant_id,
         channel         = channel,
         requested_by    = body.get("requested_by", "unknown"),
         agent_id        = body.get("agent_id", ""),
@@ -268,7 +302,11 @@ def _create_exec_request(
 # ─── shell channel ───────────────────────────────────────────────────────────
 
 @router.post("/shell")
-def submit_shell(body: dict, db: Session = Depends(get_db)):
+def submit_shell(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Submit a shell command for governed execution.
     Required: command, requested_by, environment
@@ -278,13 +316,17 @@ def submit_shell(body: dict, db: Session = Depends(get_db)):
         raise HTTPException(400, "Missing field: command")
     if "requested_by" not in body:
         raise HTTPException(400, "Missing field: requested_by")
-    return _create_exec_request(db, "shell", body)
+    return _create_exec_request(db, "shell", body, caller_tenant(current_user))
 
 
 # ─── browser channel ─────────────────────────────────────────────────────────
 
 @router.post("/browser")
-def submit_browser(body: dict, db: Session = Depends(get_db)):
+def submit_browser(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Submit a browser automation task for governed execution.
     Required: url (command field), requested_by, environment
@@ -295,13 +337,17 @@ def submit_browser(body: dict, db: Session = Depends(get_db)):
     if "requested_by" not in body:
         raise HTTPException(400, "Missing field: requested_by")
     body.setdefault("command", body.get("url", ""))
-    return _create_exec_request(db, "browser", body)
+    return _create_exec_request(db, "browser", body, caller_tenant(current_user))
 
 
 # ─── credential channel ───────────────────────────────────────────────────────
 
 @router.post("/credential")
-def request_credential(body: dict, db: Session = Depends(get_db)):
+def request_credential(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Request a credential for secure injection into an agent run.
     Required: credential_name, requested_by, agent_id
@@ -312,11 +358,16 @@ def request_credential(body: dict, db: Session = Depends(get_db)):
     if "requested_by" not in body:
         raise HTTPException(400, "Missing field: requested_by")
 
+    tenant_id = caller_tenant(current_user)
+
     # Look up credential entry
-    cred = db.query(CredentialBrokerEntry).filter(
+    cred_q = db.query(CredentialBrokerEntry).filter(
         CredentialBrokerEntry.name == body["credential_name"],
         CredentialBrokerEntry.is_active == True,
-    ).first()
+    )
+    if tenant_id is not None:
+        cred_q = cred_q.filter(CredentialBrokerEntry.tenant_id == tenant_id)
+    cred = cred_q.first()
 
     if not cred:
         raise HTTPException(404, f"Credential '{body['credential_name']}' not found in broker registry")
@@ -335,7 +386,7 @@ def request_credential(body: dict, db: Session = Depends(get_db)):
 
     body["command"] = f"credential:{cred.secret_path}"
     body.setdefault("requires_approval_override", cred.requires_approval)
-    result = _create_exec_request(db, "credential", body)
+    result = _create_exec_request(db, "credential", body, tenant_id)
 
     # Bump use count
     cred.use_count = (cred.use_count or 0) + 1
@@ -355,7 +406,11 @@ def request_credential(body: dict, db: Session = Depends(get_db)):
 # ─── production channel ───────────────────────────────────────────────────────
 
 @router.post("/production")
-def submit_production(body: dict, db: Session = Depends(get_db)):
+def submit_production(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Submit a production execution request (auto-creates a ProductionGate).
     Required: title, requested_by, change_type, target_system
@@ -368,6 +423,7 @@ def submit_production(body: dict, db: Session = Depends(get_db)):
 
     gate = ProductionGate(
         id              = str(uuid.uuid4()),
+        tenant_id       = caller_tenant(current_user),
         title           = body["title"],
         description     = body.get("description", ""),
         requested_by    = body["requested_by"],
@@ -401,8 +457,12 @@ def list_requests(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     q = db.query(ExecRequest)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(ExecRequest.tenant_id == tenant_id)
     if channel:     q = q.filter(ExecRequest.channel == channel)
     if status:      q = q.filter(ExecRequest.status == status)
     if risk_level:  q = q.filter(ExecRequest.risk_level == risk_level)
@@ -413,11 +473,12 @@ def list_requests(
 
 
 @router.get("/requests/{req_id}")
-def get_request(req_id: str, db: Session = Depends(get_db)):
-    r = db.query(ExecRequest).filter(ExecRequest.id == req_id).first()
-    if not r:
-        raise HTTPException(404, "Request not found")
-    return _req_out(r)
+def get_request(
+    req_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return _req_out(_scoped_request(db, req_id, current_user))
 
 
 @router.post("/requests/{req_id}/approve")
@@ -427,9 +488,7 @@ def approve_request(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    r = db.query(ExecRequest).filter(ExecRequest.id == req_id).first()
-    if not r:
-        raise HTTPException(404, "Request not found")
+    r = _scoped_request(db, req_id, current_user)
     if r.status not in ("pending_approval",):
         raise HTTPException(400, f"Cannot approve request in status '{r.status}'")
 
@@ -468,24 +527,29 @@ def approve_request(
 
 
 @router.post("/requests/{req_id}/reject")
-def reject_request(req_id: str, body: dict, db: Session = Depends(get_db)):
-    r = db.query(ExecRequest).filter(ExecRequest.id == req_id).first()
-    if not r:
-        raise HTTPException(404, "Request not found")
+def reject_request(
+    req_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    r = _scoped_request(db, req_id, current_user)
     r.status = "blocked"
     db.commit()
     return {"message": "Request rejected", "status": "blocked"}
 
 
 @router.post("/requests/{req_id}/execute")
-def execute_request(req_id: str, db: Session = Depends(get_db)):
+def execute_request(
+    req_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Execute an approved request. In production this wires to a sandboxed runner.
     In this implementation we return a simulated execution result.
     """
-    r = db.query(ExecRequest).filter(ExecRequest.id == req_id).first()
-    if not r:
-        raise HTTPException(404, "Request not found")
+    r = _scoped_request(db, req_id, current_user)
     if r.status != "approved":
         raise HTTPException(400, f"Request must be approved before execution (status: {r.status})")
 
@@ -560,8 +624,12 @@ def execute_request(req_id: str, db: Session = Depends(get_db)):
 def list_production_gates(
     status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     q = db.query(ProductionGate)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(ProductionGate.tenant_id == tenant_id)
     if status:
         q = q.filter(ProductionGate.status == status)
     gates = q.order_by(ProductionGate.created_at.desc()).limit(100).all()
@@ -569,11 +637,12 @@ def list_production_gates(
 
 
 @router.get("/production-gates/{gate_id}")
-def get_production_gate(gate_id: str, db: Session = Depends(get_db)):
-    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
-    if not g:
-        raise HTTPException(404, "Gate not found")
-    return _gate_out(g)
+def get_production_gate(
+    gate_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    return _gate_out(_scoped_gate(db, gate_id, current_user))
 
 
 @router.post("/production-gates/{gate_id}/approve")
@@ -583,9 +652,7 @@ def approve_production_gate(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
-    if not g:
-        raise HTTPException(404, "Gate not found")
+    g = _scoped_gate(db, gate_id, current_user)
     if g.status != "pending_approval":
         raise HTTPException(400, f"Gate is not pending approval (status: {g.status})")
 
@@ -623,9 +690,7 @@ def reject_production_gate(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
-    if not g:
-        raise HTTPException(404, "Gate not found")
+    g = _scoped_gate(db, gate_id, current_user)
     g.status           = "rejected"
     g.rejected_by      = current_user.get("sub", "unknown")
     g.rejection_reason = body.get("reason", "")
@@ -634,10 +699,12 @@ def reject_production_gate(
 
 
 @router.post("/production-gates/{gate_id}/execute")
-def execute_production_gate(gate_id: str, db: Session = Depends(get_db)):
-    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
-    if not g:
-        raise HTTPException(404, "Gate not found")
+def execute_production_gate(
+    gate_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    g = _scoped_gate(db, gate_id, current_user)
     if g.status != "approved":
         raise HTTPException(400, f"Gate is not approved (status: {g.status})")
 
@@ -701,10 +768,12 @@ def execute_production_gate(gate_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/production-gates/{gate_id}/rollback")
-def rollback_production_gate(gate_id: str, db: Session = Depends(get_db)):
-    g = db.query(ProductionGate).filter(ProductionGate.id == gate_id).first()
-    if not g:
-        raise HTTPException(404, "Gate not found")
+def rollback_production_gate(
+    gate_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    g = _scoped_gate(db, gate_id, current_user)
     if g.status not in ("completed", "executing"):
         raise HTTPException(400, "Can only roll back completed or executing gates")
     g.status        = "rolled_back"
@@ -717,24 +786,42 @@ def rollback_production_gate(gate_id: str, db: Session = Depends(get_db)):
 # ─── credential broker ───────────────────────────────────────────────────────
 
 @router.get("/credentials")
-def list_credentials(db: Session = Depends(get_db)):
-    creds = db.query(CredentialBrokerEntry).all()
+def list_credentials(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    q = db.query(CredentialBrokerEntry)
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(CredentialBrokerEntry.tenant_id == tenant_id)
+    creds = q.all()
     return [_cred_out(c) for c in creds]
 
 
 @router.post("/credentials")
-def register_credential(body: dict, db: Session = Depends(get_db)):
+def register_credential(
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     required = ("name", "secret_path")
     for f in required:
         if f not in body:
             raise HTTPException(400, f"Missing field: {f}")
-    existing = db.query(CredentialBrokerEntry).filter(
-        CredentialBrokerEntry.name == body["name"]
-    ).first()
+    tenant_id = caller_tenant(current_user)
+    existing = (
+        db.query(CredentialBrokerEntry)
+        .filter(
+            CredentialBrokerEntry.name == body["name"],
+            CredentialBrokerEntry.tenant_id == tenant_id,
+        )
+        .first()
+    )
     if existing:
         raise HTTPException(409, "Credential name already registered")
     cred = CredentialBrokerEntry(
         id          = str(uuid.uuid4()),
+        tenant_id   = tenant_id,
         name        = body["name"],
         description = body.get("description", ""),
         secret_path = body["secret_path"],
@@ -753,48 +840,65 @@ def register_credential(body: dict, db: Session = Depends(get_db)):
 
 
 @router.patch("/credentials/{cred_id}")
-def update_credential(cred_id: str, body: dict, db: Session = Depends(get_db)):
-    cred = db.query(CredentialBrokerEntry).filter(CredentialBrokerEntry.id == cred_id).first()
-    if not cred:
-        raise HTTPException(404, "Credential not found")
+def update_credential(
+    cred_id: str,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cred = _scoped_credential(db, cred_id, current_user)
     for k, v in body.items():
-        if hasattr(cred, k) and k not in ("id", "use_count", "last_used_at", "created_at"):
+        if hasattr(cred, k) and k not in (
+            "id", "tenant_id", "use_count", "last_used_at", "created_at",
+        ):
             setattr(cred, k, v)
     db.commit()
     return _cred_out(cred)
 
 
 @router.delete("/credentials/{cred_id}")
-def delete_credential(cred_id: str, db: Session = Depends(get_db)):
-    cred = db.query(CredentialBrokerEntry).filter(CredentialBrokerEntry.id == cred_id).first()
-    if not cred:
-        raise HTTPException(404, "Credential not found")
+def delete_credential(
+    cred_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    cred = _scoped_credential(db, cred_id, current_user)
     db.delete(cred)
     db.commit()
     return {"message": "Credential removed from broker"}
 
 
 @router.get("/credentials/due-for-rotation")
-def credentials_due_for_rotation(db: Session = Depends(get_db)):
+def credentials_due_for_rotation(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     List all credentials whose next_rotation_at (rotation_due) is in the past.
     These should be rotated immediately.
     """
     now = datetime.utcnow()
-    due = (
+    q = (
         db.query(CredentialBrokerEntry)
         .filter(
             CredentialBrokerEntry.is_active == True,
             CredentialBrokerEntry.rotation_due != None,
             CredentialBrokerEntry.rotation_due <= now,
         )
-        .all()
     )
+    tenant_id = caller_tenant(current_user)
+    if tenant_id is not None:
+        q = q.filter(CredentialBrokerEntry.tenant_id == tenant_id)
+    due = q.all()
     return {"count": len(due), "credentials": [_cred_out(c) for c in due]}
 
 
 @router.post("/credentials/{cred_id}/rotate")
-def rotate_credential(cred_id: str, db: Session = Depends(get_db)):
+def rotate_credential(
+    cred_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Rotate a credential:
       1. Look up the CredentialBrokerEntry by ID.
@@ -804,9 +908,7 @@ def rotate_credential(cred_id: str, db: Session = Depends(get_db)):
       5. Log an audit event.
       6. Return confirmation with next_rotation_at.
     """
-    cred = db.query(CredentialBrokerEntry).filter(CredentialBrokerEntry.id == cred_id).first()
-    if not cred:
-        raise HTTPException(404, "Credential not found")
+    cred = _scoped_credential(db, cred_id, current_user)
     if not cred.is_active:
         raise HTTPException(400, "Cannot rotate an inactive credential")
 
@@ -874,21 +976,32 @@ def rotate_credential(cred_id: str, db: Session = Depends(get_db)):
 # ─── stats ───────────────────────────────────────────────────────────────────
 
 @router.get("/stats")
-def exec_stats(db: Session = Depends(get_db)):
-    total     = db.query(ExecRequest).count()
-    allowed   = db.query(ExecRequest).filter(ExecRequest.policy_decision == "allowed").count()
-    blocked   = db.query(ExecRequest).filter(ExecRequest.policy_decision == "blocked").count()
-    pending   = db.query(ExecRequest).filter(ExecRequest.status == "pending_approval").count()
-    completed = db.query(ExecRequest).filter(ExecRequest.status == "completed").count()
-    prod_gates       = db.query(ProductionGate).count()
-    prod_pending     = db.query(ProductionGate).filter(ProductionGate.status == "pending_approval").count()
-    prod_approved    = db.query(ProductionGate).filter(ProductionGate.status == "approved").count()
-    prod_completed   = db.query(ProductionGate).filter(ProductionGate.status == "completed").count()
-    creds_total      = db.query(CredentialBrokerEntry).count()
-    creds_active     = db.query(CredentialBrokerEntry).filter(CredentialBrokerEntry.is_active == True).count()
+def exec_stats(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = caller_tenant(current_user)
+
+    def _q(model):
+        q = db.query(model)
+        if tenant_id is not None:
+            q = q.filter(model.tenant_id == tenant_id)
+        return q
+
+    total     = _q(ExecRequest).count()
+    allowed   = _q(ExecRequest).filter(ExecRequest.policy_decision == "allowed").count()
+    blocked   = _q(ExecRequest).filter(ExecRequest.policy_decision == "blocked").count()
+    pending   = _q(ExecRequest).filter(ExecRequest.status == "pending_approval").count()
+    completed = _q(ExecRequest).filter(ExecRequest.status == "completed").count()
+    prod_gates       = _q(ProductionGate).count()
+    prod_pending     = _q(ProductionGate).filter(ProductionGate.status == "pending_approval").count()
+    prod_approved    = _q(ProductionGate).filter(ProductionGate.status == "approved").count()
+    prod_completed   = _q(ProductionGate).filter(ProductionGate.status == "completed").count()
+    creds_total      = _q(CredentialBrokerEntry).count()
+    creds_active     = _q(CredentialBrokerEntry).filter(CredentialBrokerEntry.is_active == True).count()
     channel_breakdown = {}
     for ch in ("shell", "browser", "credential", "production"):
-        channel_breakdown[ch] = db.query(ExecRequest).filter(ExecRequest.channel == ch).count()
+        channel_breakdown[ch] = _q(ExecRequest).filter(ExecRequest.channel == ch).count()
     return {
         "total_requests":       total,
         "allowed":              allowed,

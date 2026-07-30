@@ -80,7 +80,7 @@ async def test_gateway_passes_opaque_conversation_affinity_to_browser_brain(clie
         json={
             "mode": "chat",
             "source": "chatgpt_browser",
-            "tenant_id": "tenant-a",
+            "tenant_id": "global",
             "context": {"conversation_id": "conversation-123"},
             "messages": [{"role": "user", "content": "Continue this discussion"}],
         },

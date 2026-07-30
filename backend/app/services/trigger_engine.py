@@ -136,6 +136,7 @@ async def _fire_trigger(
     trigger: EventTrigger,
     context: dict,
     triggered_by: str,
+    tenant_id: str | None = None,
 ) -> None:
     """Execute the trigger's configured action."""
     now = datetime.now(timezone.utc)
@@ -143,6 +144,7 @@ async def _fire_trigger(
     trigger.trigger_count = (trigger.trigger_count or 0) + 1
 
     action = trigger.action_type
+    tenant_id = str(tenant_id or "").strip()
 
     if action == "fire_workflow" and trigger.workflow_id:
         try:
@@ -157,15 +159,18 @@ async def _fire_trigger(
                 trigger.name, trigger.workflow_id, run.id, run.status,
             )
         except Exception as exc:
-            logger.error("Trigger '%s' workflow fire failed: %s", trigger.name, exc)
+            logger.error("Trigger '%s' workflow fire failed: %s", trigger.name, type(exc).__name__, exc_info=True)
 
     elif action == "fire_scan" and trigger.target_claw:
+        if not tenant_id:
+            logger.error("Trigger '%s' scan blocked: no owning tenant in context", trigger.name)
+            return
         try:
             from app.services.auto_scanner import _run_claw_scan
-            result = await _run_claw_scan(db, trigger.target_claw)
+            result = await _run_claw_scan(db, trigger.target_claw, tenant_id=tenant_id)
             logger.info("Trigger '%s' fired scan for %s → %s", trigger.name, trigger.target_claw, result)
         except Exception as exc:
-            logger.error("Trigger '%s' scan fire failed: %s", trigger.name, exc)
+            logger.error("Trigger '%s' scan fire failed: %s", trigger.name, type(exc).__name__, exc_info=True)
 
     elif action == "fire_alert":
         try:
@@ -204,7 +209,12 @@ async def _fire_trigger(
                 parallelism=int(cfg.get("parallelism", 3)),
                 model_profile=cfg.get("model_profile"),
             )
-            job = await create_swarm_job(db, payload)
+            # Triggers fired from a finding inherit its tenant; unowned
+            # legacy findings cannot create a globally scoped Swarm.
+            if not tenant_id:
+                logger.error("Trigger '%s' swarm blocked: no owning tenant in context", trigger.name)
+                return
+            job = await create_swarm_job(db, payload, tenant_id=tenant_id)
             requires_approval = bool(cfg.get("requires_approval_for_actions", False))
             if requires_approval:
                 job.status = SwarmJobStatus.REQUIRES_APPROVAL
@@ -215,7 +225,7 @@ async def _fire_trigger(
                 await run_swarm_job_in_session(db, job.id)
                 logger.info("Trigger '%s' started swarm job %s", trigger.name, job.id)
         except Exception as exc:
-            logger.error("Trigger '%s' swarm fire failed: %s", trigger.name, exc)
+            logger.error("Trigger '%s' swarm fire failed: %s", trigger.name, type(exc).__name__, exc_info=True)
 
     else:
         logger.warning("Trigger '%s' has unknown action_type '%s'", trigger.name, action)
@@ -288,7 +298,10 @@ async def evaluate_finding_triggers(
                 "Trigger '%s' (type=%s) matched finding '%s' (claw=%s sev=%s)",
                 trigger.name, event_type, finding.title[:80], finding.claw, finding_dict["severity"],
             )
-            await _fire_trigger(db, trigger, finding_dict, f"finding:{finding.id}")
+            await _fire_trigger(
+                db, trigger, finding_dict, f"finding:{finding.id}",
+                tenant_id=finding.tenant_id,
+            )
             fired += 1
 
     return fired
@@ -346,7 +359,10 @@ async def evaluate_event_triggers(
                 "Trigger '%s' matched event action='%s' module='%s'",
                 trigger.name, event.action, event.source_module,
             )
-            await _fire_trigger(db, trigger, event_dict, f"event:{event.id}")
+            await _fire_trigger(
+                db, trigger, event_dict, f"event:{event.id}",
+                tenant_id=getattr(event, "tenant_id", None),
+            )
             fired += 1
 
     return fired
@@ -381,7 +397,9 @@ async def handle_webhook_trigger(
 
     matched = _matches_conditions(payload, trigger.conditions_json)
     if matched:
-        await _fire_trigger(db, trigger, payload, "webhook")
+        # Webhook payloads are untrusted, so ownership comes from the stored
+        # trigger rather than anything in the request body.
+        await _fire_trigger(db, trigger, payload, "webhook", tenant_id=trigger.tenant_id)
         await db.commit()
         return {
             "status": "fired",

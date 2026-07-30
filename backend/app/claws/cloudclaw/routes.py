@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.models.connector import Connector
 from app.schemas.finding import FindingRead
@@ -69,7 +71,7 @@ class CloudTaskRequest(BaseModel):
 
 # ─── Helper: look up connector + credentials ─────────────────────────────────
 
-async def _get_provider_credentials(db: AsyncSession, connector_type: str | list[str]) -> Optional[dict]:
+async def _get_provider_credentials(db: AsyncSession, connector_type: str | list[str], *, tenant_id: str) -> Optional[dict]:
     """
     Check if a connector of the given type exists and has stored credentials.
     Returns the decrypted credential dict, or None if not configured.
@@ -77,11 +79,11 @@ async def _get_provider_credentials(db: AsyncSession, connector_type: str | list
     connector_types = connector_type if isinstance(connector_type, list) else [connector_type]
     for ct in connector_types:
         result = await db.execute(
-            select(Connector).where(Connector.connector_type == ct)
+            select(Connector).where(Connector.connector_type == ct, Connector.tenant_id == tenant_id)
         )
         connectors = result.scalars().all()
         for connector in connectors:
-            creds = get_credential(str(connector.id))
+            creds = get_credential(str(connector.id), tenant_id=tenant_id)
             if creds:
                 return creds
     return None
@@ -181,13 +183,24 @@ async def get_cloudclaw_findings(
 
 
 @router.get("/providers")
-async def get_configured_providers(db: AsyncSession = Depends(get_db)):
+async def get_configured_providers(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """
     Return which cloud providers are configured (have a registered connector + stored credentials).
     """
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        return [
+            {"provider": cfg["provider"], "label": cfg["label"], "configured": False}
+            for cfg in PROVIDER_CONFIG
+        ]
     output = []
     for cfg in PROVIDER_CONFIG:
-        creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]))
+        creds = await _get_provider_credentials(
+            db, cfg.get("connector_types", cfg["connector_type"]), tenant_id=tenant_id
+        )
         output.append({
             "provider": cfg["provider"],
             "label": cfg["label"],
@@ -197,7 +210,7 @@ async def get_configured_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scan")
-async def trigger_scan(db: AsyncSession = Depends(get_db)):
+async def trigger_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Trigger a cloud security scan across all configured providers.
     Uses the finding pipeline for deduplication, policy evaluation, and alert routing.
@@ -206,6 +219,9 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
     from app.services.claw_scan import fetch_via_adapter
     from app.core.config import settings
 
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-bound identity required for cloud scans")
     provider_results = {}
     errors = []
     total_created = 0
@@ -214,7 +230,7 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
 
     for cfg in PROVIDER_CONFIG:
         provider_name = cfg["provider"]
-        creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]))
+        creds = await _get_provider_credentials(db, cfg.get("connector_types", cfg["connector_type"]), tenant_id=tenant_id)
 
         if not creds and settings.REQUIRE_LIVE_DATA:
             # Production data policy: do not manufacture an estate this tenant
@@ -241,7 +257,7 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
                 if creds and not f.get("source_connector"):
                     f["source_connector"] = cfg["connector_type"] if isinstance(cfg.get("connector_type"), str) else provider_name
 
-            summary = await ingest_findings(db, CLAW_NAME, raw_findings)
+            summary = await ingest_findings(db, CLAW_NAME, raw_findings, tenant_id=tenant_id)
 
             if creds:
                 any_live = True
@@ -281,22 +297,29 @@ async def trigger_scan(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/task", summary="Execute focused Cloud Security swarm task")
-async def run_cloud_task(payload: CloudTaskRequest, db: AsyncSession = Depends(get_db)):
+async def run_cloud_task(
+    payload: CloudTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     started = datetime.utcnow()
+    tenant_id = caller_tenant(user)
     stmt = (
         select(Finding)
         .where(Finding.claw == CLAW_NAME)
         .order_by(desc(Finding.risk_score), desc(Finding.created_at))
         .limit(5)
     )
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
     result = await db.execute(stmt)
     findings = result.scalars().all()
     live_rows = []
     live_risks = []
     connector_configured = False
-    if not findings:
+    if not findings and tenant_id:
         for cfg in PROVIDER_CONFIG:
-            creds = await _get_provider_credentials(db, cfg["connector_type"])
+            creds = await _get_provider_credentials(db, cfg["connector_type"], tenant_id=tenant_id)
             if not creds:
                 continue
             connector_configured = True

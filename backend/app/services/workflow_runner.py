@@ -571,6 +571,9 @@ async def execute_workflow(
         "workflow_id":   str(workflow_id),
         "workflow_name": workflow.name,
         "triggered_by":  triggered_by,
+        # Remediation steps take ownership from the workflow, never from
+        # step config, so a step cannot act on another tenant.
+        "tenant_id":     workflow.tenant_id,
     }
 
     for i, step in enumerate(steps):
@@ -683,6 +686,12 @@ async def _exec_remediate(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
         config.get("target_id")
         or ctx.get(config.get("target_from", ""), "unknown")
     )
+    tenant_id = str(ctx.get("tenant_id") or "").strip()
+    if not tenant_id:
+        return {
+            "status": "blocked",
+            "error": "Workflow has no owning tenant; remediation step refused",
+        }
     try:
         result = await execute_remediation(
             action_spec={
@@ -695,6 +704,7 @@ async def _exec_remediate(step: Dict, db: AsyncSession, ctx: Dict) -> Dict:
             },
             db=db,
             triggered_by="workflow",
+            tenant_id=tenant_id,
         )
         return {
             "status":    result.status.value if hasattr(result.status, "value") else str(result.status),

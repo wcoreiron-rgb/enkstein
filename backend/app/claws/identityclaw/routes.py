@@ -9,6 +9,8 @@ from uuid import UUID
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.identity import Identity, IdentityType, IdentityStatus
 from app.schemas.identity import IdentityCreate, IdentityRead, IdentityUpdate
 from app.claws.identityclaw.models import IdentityRiskEvent, PrivilegedAction, IdentityRiskLevel
@@ -139,7 +141,11 @@ async def list_identities(
 
 
 @router.post("/identities", response_model=IdentityRead, summary="Register identity")
-async def register_identity(payload: IdentityCreate, db: AsyncSession = Depends(get_db)):
+async def register_identity(
+    payload: IdentityCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     identity = Identity(**payload.model_dump())
     db.add(identity)
     await log_action(
@@ -147,6 +153,7 @@ async def register_identity(payload: IdentityCreate, db: AsyncSession = Depends(
         action="register_identity", outcome="allowed",
         resource_type="identity", resource_name=payload.name,
         module="identityclaw",
+        tenant_id=caller_tenant(user),
     )
     await db.commit()
     await db.refresh(identity)
@@ -345,13 +352,14 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
 
 
 @router.post("/scan", summary="Run an Identity Security connector scan")
-async def run_identity_scan(db: AsyncSession = Depends(get_db)):
+async def run_identity_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """Run configured directory providers through the shared live-scan path."""
     return await run_claw_scan(
         db,
         claw="identityclaw",
         provider_config=IDENTITY_PROVIDER_CONFIG,
         demo_findings=_SCAN_DEMO_FINDINGS,
+        tenant_id=caller_tenant(user),
     )
 
 

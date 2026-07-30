@@ -10,6 +10,8 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.memory import IncidentMemory, AssetMemory, TenantMemory, RiskTrendSnapshot
 from app.services.memory_service import (
     append_incident_timeline,
@@ -24,6 +26,18 @@ from app.services.memory_service import (
 
 logger = logging.getLogger("regentclaw.memory_api")
 router = APIRouter(prefix="/memory", tags=["Memory"])
+
+
+async def _scoped_incident(incident_id: str, db: AsyncSession, user: dict) -> IncidentMemory:
+    from uuid import UUID
+    try:
+        incident = await db.get(IncidentMemory, UUID(incident_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Incident not found") from exc
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    assert_tenant_visible(user, incident.tenant_id)
+    return incident
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -85,8 +99,9 @@ class AssetUpsert(BaseModel):
 # ─── Incidents ────────────────────────────────────────────────────────────────
 
 @router.post("/incidents", summary="Create an incident")
-async def create_incident(body: IncidentCreate, db: AsyncSession = Depends(get_db)):
+async def create_incident(body: IncidentCreate, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     incident = IncidentMemory(
+        tenant_id=caller_tenant(user),
         title=body.title,
         description=body.description,
         severity=body.severity,
@@ -119,31 +134,29 @@ async def list_incidents(
     severity: str | None = Query(None),
     limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     q = select(IncidentMemory).order_by(desc(IncidentMemory.opened_at)).limit(limit)
     if status:
         q = q.where(IncidentMemory.status == status)
     if severity:
         q = q.where(IncidentMemory.severity == severity)
+    scope = caller_tenant(user)
+    if scope is not None:
+        q = q.where(IncidentMemory.tenant_id == scope)
     result = await db.execute(q)
     return [_incident_out(i) for i in result.scalars().all()]
 
 
 @router.get("/incidents/{incident_id}", summary="Get incident detail")
-async def get_incident(incident_id: str, db: AsyncSession = Depends(get_db)):
-    from uuid import UUID
-    incident = await db.get(IncidentMemory, UUID(incident_id))
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+async def get_incident(incident_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    incident = await _scoped_incident(incident_id, db, user)
     return _incident_out(incident, full=True)
 
 
 @router.patch("/incidents/{incident_id}", summary="Update incident")
-async def update_incident(incident_id: str, body: IncidentUpdate, db: AsyncSession = Depends(get_db)):
-    from uuid import UUID
-    incident = await db.get(IncidentMemory, UUID(incident_id))
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+async def update_incident(incident_id: str, body: IncidentUpdate, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    incident = await _scoped_incident(incident_id, db, user)
     updates = {k: v for k, v in body.dict().items() if v is not None}
     for k, v in updates.items():
         setattr(incident, k, v)
@@ -154,9 +167,10 @@ async def update_incident(incident_id: str, body: IncidentUpdate, db: AsyncSessi
 
 @router.post("/incidents/{incident_id}/timeline", summary="Append timeline entry")
 async def add_timeline_entry(
-    incident_id: str, body: TimelineEntryCreate, db: AsyncSession = Depends(get_db)
+    incident_id: str, body: TimelineEntryCreate, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
 ):
     try:
+        await _scoped_incident(incident_id, db, user)
         entry = await append_incident_timeline(
             db, incident_id,
             actor=body.actor,
@@ -171,9 +185,10 @@ async def add_timeline_entry(
 
 @router.post("/incidents/{incident_id}/close", summary="Close an incident")
 async def close_incident_endpoint(
-    incident_id: str, body: IncidentCloseRequest, db: AsyncSession = Depends(get_db)
+    incident_id: str, body: IncidentCloseRequest, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
 ):
     try:
+        await _scoped_incident(incident_id, db, user)
         incident = await close_incident(db, incident_id, body.root_cause, body.closed_by)
         return _incident_out(incident, full=True)
     except ValueError:
@@ -190,6 +205,7 @@ def _is_memory_proposal(incident: IncidentMemory) -> bool:
 async def list_memory_proposals(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     stmt = (
         select(IncidentMemory)
@@ -198,6 +214,9 @@ async def list_memory_proposals(
         .order_by(desc(IncidentMemory.opened_at))
         .limit(limit)
     )
+    scope = caller_tenant(user)
+    if scope is not None:
+        stmt = stmt.where(IncidentMemory.tenant_id == scope)
     result = await db.execute(stmt)
     return [_incident_out(i, full=True) for i in result.scalars().all()]
 
@@ -207,12 +226,11 @@ async def approve_memory_proposal(
     incident_id: str,
     body: MemoryReviewRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     from uuid import UUID
 
-    incident = await db.get(IncidentMemory, UUID(incident_id))
-    if not incident:
-        raise HTTPException(status_code=404, detail="Memory proposal not found")
+    incident = await _scoped_incident(incident_id, db, user)
     if not _is_memory_proposal(incident):
         raise HTTPException(status_code=400, detail="Incident is not a Memory Cortex proposal")
     if incident.status != "investigating":
@@ -238,12 +256,11 @@ async def reject_memory_proposal(
     incident_id: str,
     body: MemoryReviewRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     from uuid import UUID
 
-    incident = await db.get(IncidentMemory, UUID(incident_id))
-    if not incident:
-        raise HTTPException(status_code=404, detail="Memory proposal not found")
+    incident = await _scoped_incident(incident_id, db, user)
     if not _is_memory_proposal(incident):
         raise HTTPException(status_code=400, detail="Incident is not a Memory Cortex proposal")
     if incident.status != "investigating":
@@ -271,12 +288,11 @@ async def rollback_memory_incident(
     incident_id: str,
     body: MemoryReviewRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     from uuid import UUID
 
-    incident = await db.get(IncidentMemory, UUID(incident_id))
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    incident = await _scoped_incident(incident_id, db, user)
     previous_status = incident.status
     incident.status = "false_positive"
     incident.false_positive = True
@@ -298,13 +314,17 @@ async def rollback_memory_incident(
 # ─── Asset Memory ─────────────────────────────────────────────────────────────
 
 @router.get("/assets", summary="List tracked assets by risk score")
-async def list_assets(limit: int = Query(50, le=200), db: AsyncSession = Depends(get_db)):
-    assets = await get_top_risky_assets(db, limit=limit)
+async def list_assets(limit: int = Query(50, le=200), db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    scope = caller_tenant(user)
+    query = select(AssetMemory).order_by(desc(AssetMemory.risk_score)).limit(limit)
+    if scope is not None:
+        query = query.where(AssetMemory.tenant_id == scope)
+    assets = (await db.execute(query)).scalars().all()
     return [_asset_out(a) for a in assets]
 
 
 @router.post("/assets", summary="Create or update an asset memory entry")
-async def upsert_asset(body: AssetUpsert, db: AsyncSession = Depends(get_db)):
+async def upsert_asset(body: AssetUpsert, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     asset = await upsert_asset_memory(
         db,
         asset_id=body.asset_id,
@@ -315,13 +335,18 @@ async def upsert_asset(body: AssetUpsert, db: AsyncSession = Depends(get_db)):
         risk_level=body.risk_level,
         risk_event=body.risk_event,
         tags=body.tags,
+        tenant_id=caller_tenant(user),
     )
     return _asset_out(asset, full=True)
 
 
 @router.get("/assets/{asset_id}", summary="Get an asset's memory and risk history")
-async def get_asset(asset_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AssetMemory).where(AssetMemory.asset_id == asset_id))
+async def get_asset(asset_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
+    query = select(AssetMemory).where(AssetMemory.asset_id == asset_id)
+    scope = caller_tenant(user)
+    if scope is not None:
+        query = query.where(AssetMemory.tenant_id == scope)
+    result = await db.execute(query)
     asset = result.scalar_one_or_none()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -330,21 +355,46 @@ async def get_asset(asset_id: str, db: AsyncSession = Depends(get_db)):
 
 # ─── Tenant Memory ────────────────────────────────────────────────────────────
 
+def _memory_scope(user: dict) -> str:
+    """Tenant whose memory the caller may read or write.
+
+    Tenant memory is inherently per-tenant, so an unscoped admin has to name a
+    tenant through a tenant-bound identity rather than reading a shared row.
+    """
+    scope = caller_tenant(user)
+    if not scope:
+        raise HTTPException(
+            status_code=403,
+            detail="Tenant-bound identity required for tenant memory",
+        )
+    return scope
+
+
 @router.get("/tenant", summary="Get platform-wide threat context")
-async def get_tenant_memory(db: AsyncSession = Depends(get_db)):
-    mem = await get_or_create_tenant_memory(db)
+async def get_tenant_memory(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    mem = await get_or_create_tenant_memory(db, _memory_scope(user))
     return _tenant_out(mem)
 
 
 @router.post("/tenant/refresh", summary="Refresh tenant memory from current DB state")
-async def refresh_tenant(db: AsyncSession = Depends(get_db)):
-    mem = await refresh_tenant_memory(db)
+async def refresh_tenant(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    mem = await refresh_tenant_memory(db, _memory_scope(user))
     return _tenant_out(mem)
 
 
 @router.patch("/tenant/notes", summary="Append analyst notes to tenant memory")
-async def update_tenant_notes(notes: str, db: AsyncSession = Depends(get_db)):
-    mem = await get_or_create_tenant_memory(db)
+async def update_tenant_notes(
+    notes: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    mem = await get_or_create_tenant_memory(db, _memory_scope(user))
     existing = mem.analyst_notes or ""
     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     mem.analyst_notes = existing + f"\n\n[{now_str}] {notes}".strip()
@@ -360,8 +410,9 @@ async def get_trends(
     granularity: str = Query("daily", pattern="^(hourly|daily|weekly)$"),
     days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    data = await get_risk_trend(db, granularity=granularity, days=days)
+    data = await get_risk_trend(db, _memory_scope(user), granularity=granularity, days=days)
     return {"granularity": granularity, "days": days, "count": len(data), "data": data}
 
 
@@ -369,8 +420,9 @@ async def get_trends(
 async def manual_snapshot(
     granularity: str = "daily",
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    snap = await capture_risk_snapshot(db, granularity=granularity)
+    snap = await capture_risk_snapshot(db, _memory_scope(user), granularity=granularity)
     return {
         "id": str(snap.id),
         "snapshot_at": snap.snapshot_at.isoformat(),
@@ -382,13 +434,23 @@ async def manual_snapshot(
 # ─── Summary endpoint ─────────────────────────────────────────────────────────
 
 @router.get("/summary", summary="Memory layer health summary")
-async def memory_summary(db: AsyncSession = Depends(get_db)):
+async def memory_summary(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     from sqlalchemy import func
-    mem = await get_or_create_tenant_memory(db)
+    scope = _memory_scope(user)
+    mem = await get_or_create_tenant_memory(db, scope)
 
-    inc_q = await db.execute(select(func.count()).select_from(IncidentMemory))
-    asset_q = await db.execute(select(func.count()).select_from(AssetMemory))
-    snap_q = await db.execute(select(func.count()).select_from(RiskTrendSnapshot))
+    inc_q = await db.execute(
+        select(func.count()).select_from(IncidentMemory).where(IncidentMemory.tenant_id == scope)
+    )
+    asset_q = await db.execute(
+        select(func.count()).select_from(AssetMemory).where(AssetMemory.tenant_id == scope)
+    )
+    snap_q = await db.execute(
+        select(func.count()).select_from(RiskTrendSnapshot).where(RiskTrendSnapshot.tenant_id == scope)
+    )
 
     return {
         "tenant_risk_level": mem.overall_risk_level,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Awaitable, Callable
 from uuid import UUID
@@ -19,9 +20,16 @@ from app.models.swarm import SwarmJob, SwarmJobStatus, SwarmTask, SwarmTaskStatu
 from app.services.memory_runtime import propose_swarm_memory_update
 
 
-async def create_swarm_job(db: AsyncSession, payload: SwarmJobCreate) -> SwarmJob:
+logger = logging.getLogger("swarm_orchestrator")
+
+async def create_swarm_job(
+    db: AsyncSession, payload: SwarmJobCreate, *, tenant_id: str
+) -> SwarmJob:
+    if not tenant_id:
+        raise ValueError("Swarm jobs require tenant context")
     participants = select_participants(payload)
     job = SwarmJob(
+        tenant_id=tenant_id,
         name=payload.name,
         profile=payload.profile,
         status=SwarmJobStatus.PENDING,
@@ -107,8 +115,11 @@ async def run_swarm_job_in_session(db: AsyncSession, job_id: UUID) -> None:
         job.completed_at = datetime.utcnow()
         await db.commit()
     except Exception as exc:
+        # The message is surfaced through the job API, so keep internal
+        # detail in the log rather than the response.
+        logger.error("Swarm job %s failed: %s", job.id, type(exc).__name__, exc_info=True)
         job.status = SwarmJobStatus.FAILED
-        job.error_message = str(exc)
+        job.error_message = "Swarm execution failed"
         job.completed_at = datetime.utcnow()
         await db.commit()
 
@@ -192,7 +203,8 @@ async def run_swarm_job(job_id: UUID) -> None:
             job.completed_at = datetime.utcnow()
             await db.commit()
         except Exception as exc:
+            logger.error("Swarm job %s failed: %s", job.id, type(exc).__name__, exc_info=True)
             job.status = SwarmJobStatus.FAILED
-            job.error_message = str(exc)
+            job.error_message = "Swarm execution failed"
             job.completed_at = datetime.utcnow()
             await db.commit()

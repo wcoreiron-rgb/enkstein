@@ -10,6 +10,7 @@ from app.services.connector_tester import TestResult as ConnectorTestResult
 async def _connector(db_session, connector_type: str = "gemini") -> Connector:
     connector = Connector(
         name="Hosted Brain",
+        tenant_id="global",
         connector_type=connector_type,
         status=ConnectorStatus.PENDING,
         risk_level=ConnectorRisk.MEDIUM,
@@ -56,9 +57,10 @@ async def test_hosted_brain_verified_key_can_be_stored(client, db_session, monke
     async def verified(**_):
         return ConnectorTestResult(True, "Provider accepted the key", verification_level="credential")
 
-    def store(connector_id, credentials):
+    def store(connector_id, credentials, *, tenant_id=None):
         stored["connector_id"] = connector_id
         stored["credentials"] = credentials
+        stored["tenant_id"] = tenant_id
         return "key-...test"
 
     monkeypatch.setattr(connector_routes, "test_connector", verified)

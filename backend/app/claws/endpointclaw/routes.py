@@ -3,12 +3,14 @@ from datetime import datetime
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from pydantic import BaseModel, Field
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import caller_tenant
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.models.connector import Connector
 from app.services.secrets_manager import get_credential
@@ -38,12 +40,12 @@ class EndpointTaskRequest(BaseModel):
     allowed_actions: list[str] = Field(default_factory=lambda: ["read", "analyze", "recommend"])
 
 
-async def _get_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
-    result = await db.execute(select(Connector).where(Connector.connector_type == connector_type))
+async def _get_credentials(db: AsyncSession, connector_type: str, *, tenant_id: str) -> Optional[dict]:
+    result = await db.execute(select(Connector).where(Connector.connector_type == connector_type, Connector.tenant_id == tenant_id))
     conn = result.scalar_one_or_none()
     if not conn:
         return None
-    return get_credential(str(conn.id))
+    return get_credential(str(conn.id), tenant_id=tenant_id)
 
 
 @router.get("/stats", summary="Endpoint Security summary statistics")
@@ -113,7 +115,7 @@ async def get_findings(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scan", summary="Scan all configured endpoint security providers")
-async def run_scan(db: AsyncSession = Depends(get_db)):
+async def run_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)):
     """
     Scan all configured endpoint security providers (CrowdStrike, Defender, SentinelOne).
     Uses the finding pipeline for deduplication, policy evaluation, and alert routing.
@@ -122,6 +124,9 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
     from app.services.claw_scan import fetch_via_adapter
     from app.core.config import settings
 
+    tenant_id = caller_tenant(user)
+    if not tenant_id:
+        raise HTTPException(status_code=403, detail="Tenant-bound identity required for endpoint scans")
     provider_results = {}
     errors = []
     total_created = 0
@@ -130,7 +135,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
 
     for cfg in PROVIDER_CONFIG:
         provider_name = cfg["provider"]
-        creds = await _get_credentials(db, cfg["connector_type"])
+        creds = await _get_credentials(db, cfg["connector_type"], tenant_id=tenant_id)
 
         if not creds and settings.REQUIRE_LIVE_DATA:
             # Production data policy: report the gap instead of filling it
@@ -154,7 +159,7 @@ async def run_scan(db: AsyncSession = Depends(get_db)):
                 if creds and not f.get("source_connector"):
                     f["source_connector"] = cfg["connector_type"]
 
-            summary = await ingest_findings(db, CLAW_NAME, raw_findings)
+            summary = await ingest_findings(db, CLAW_NAME, raw_findings, tenant_id=tenant_id)
             if creds:
                 any_live = True
             provider_results[provider_name] = {
@@ -196,22 +201,29 @@ async def get_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/task", summary="Execute focused Endpoint Security swarm task")
-async def run_endpoint_task(payload: EndpointTaskRequest, db: AsyncSession = Depends(get_db)):
+async def run_endpoint_task(
+    payload: EndpointTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     started = datetime.utcnow()
+    tenant_id = caller_tenant(user)
     stmt = (
         select(Finding)
         .where(Finding.claw == CLAW_NAME)
         .order_by(desc(Finding.risk_score), desc(Finding.created_at))
         .limit(5)
     )
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
     result = await db.execute(stmt)
     findings = result.scalars().all()
     live_rows = []
     live_risks = []
     connector_configured = False
-    if not findings:
+    if not findings and tenant_id:
         for cfg in PROVIDER_CONFIG:
-            creds = await _get_credentials(db, cfg["connector_type"])
+            creds = await _get_credentials(db, cfg["connector_type"], tenant_id=tenant_id)
             if not creds:
                 continue
             connector_configured = True

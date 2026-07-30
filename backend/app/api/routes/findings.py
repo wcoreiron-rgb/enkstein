@@ -9,6 +9,8 @@ from uuid import UUID
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.core.tenancy import assert_tenant_visible, caller_tenant
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.schemas.finding import FindingCreate, FindingRead, FindingUpdate
 
@@ -58,9 +60,16 @@ async def list_findings(
     limit: int = Query(100, le=500),
     offset: int = Query(0),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """List all findings with optional filters."""
     stmt = select(Finding)
+
+    # Tenant-bound callers see only their own findings; unscoped admins keep
+    # full visibility.
+    scope = caller_tenant(user)
+    if scope is not None:
+        stmt = stmt.where(Finding.tenant_id == scope)
 
     if claw:
         stmt = stmt.where(Finding.claw == claw)
@@ -88,13 +97,21 @@ async def list_findings(
 
 
 @router.get("/stats")
-async def get_findings_stats(db: AsyncSession = Depends(get_db)):
+async def get_findings_stats(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """
     Aggregate finding counts grouped by claw and severity.
     Returns: {by_claw: {cloudclaw: {critical: 5, high: 12, ...}}, totals: {...}, open_count: N, critical_count: N}
     """
+    # Aggregates leak cross-tenant volume just as surely as the rows do, so
+    # every count below is scoped with the same predicate as the list route.
+    scope = caller_tenant(user)
+    tenant_filter = [Finding.tenant_id == scope] if scope is not None else []
+
     # Query all findings grouped by claw + severity
-    stmt = select(Finding.claw, Finding.severity, func.count(Finding.id)).group_by(
+    stmt = select(Finding.claw, Finding.severity, func.count(Finding.id)).where(*tenant_filter).group_by(
         Finding.claw, Finding.severity
     )
     result = await db.execute(stmt)
@@ -111,20 +128,20 @@ async def get_findings_stats(db: AsyncSession = Depends(get_db)):
 
     # Open count
     open_result = await db.execute(
-        select(func.count(Finding.id)).where(Finding.status == FindingStatus.OPEN)
+        select(func.count(Finding.id)).where(Finding.status == FindingStatus.OPEN, *tenant_filter)
     )
     open_count = open_result.scalar() or 0
 
     # Critical count
     critical_result = await db.execute(
-        select(func.count(Finding.id)).where(Finding.severity == FindingSeverity.CRITICAL)
+        select(func.count(Finding.id)).where(Finding.severity == FindingSeverity.CRITICAL, *tenant_filter)
     )
     critical_count = critical_result.scalar() or 0
 
     # Data-origin breakdown so operators can separate their own estate from
     # the demonstration data that unconfigured Claws still produce.
     origin_result = await db.execute(
-        select(Finding.data_origin, func.count(Finding.id)).group_by(Finding.data_origin)
+        select(Finding.data_origin, func.count(Finding.id)).where(*tenant_filter).group_by(Finding.data_origin)
     )
     by_origin: dict = {origin: 0 for origin in VALID_DATA_ORIGINS}
     for origin, count in origin_result.all():
@@ -140,9 +157,16 @@ async def get_findings_stats(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("", response_model=FindingRead, status_code=201)
-async def create_finding(payload: FindingCreate, db: AsyncSession = Depends(get_db)):
+async def create_finding(
+    payload: FindingCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Create a new finding. Used by provider adapters."""
     finding = Finding(**payload.model_dump())
+    # Stamp ownership from the caller's identity, never from the request body,
+    # so a client cannot write a finding into another tenant.
+    finding.tenant_id = caller_tenant(user)
     db.add(finding)
     await db.commit()
     await db.refresh(finding)
@@ -154,6 +178,7 @@ async def update_finding(
     finding_id: str,
     payload: FindingUpdate,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Update finding status or remediation_effort."""
     try:
@@ -165,6 +190,7 @@ async def update_finding(
     finding = result.scalar_one_or_none()
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
+    assert_tenant_visible(user, finding.tenant_id)
 
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(finding, field, value)
