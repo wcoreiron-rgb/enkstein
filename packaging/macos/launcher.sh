@@ -100,6 +100,22 @@ ensure_env_value() {
   fi
 }
 
+find_free_port() {
+  # Keep the familiar port when it is genuinely free so documented URLs keep
+  # working; step aside only when something already holds it.
+  local preferred="$1"
+  local candidate="$preferred"
+  local limit=$((preferred + 20))
+  while [ "$candidate" -le "$limit" ]; do
+    if ! /usr/bin/nc -z 127.0.0.1 "$candidate" >/dev/null 2>&1; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+  done
+  printf '%s' "$preferred"
+}
+
 # Returns the PID currently bound to BRIDGE_PORT in LISTEN state, or nothing.
 bridge_port_owner() {
   /usr/sbin/lsof -nP -iTCP:"$BRIDGE_PORT" -sTCP:LISTEN -t 2>/dev/null | head -1
@@ -220,6 +236,11 @@ fi
   cd "$RUNTIME_DIR"
   notify_status "Starting governed services. The first launch may take a few minutes..."
   ./install.sh --no-start
+  # Choose ports before starting. Binding 3000 or 8000 unconditionally fails
+  # when anything else already holds them, and Compose reports only that the
+  # container could not start.
+  ensure_env_value FRONTEND_PORT "$(find_free_port 3000)"
+  ensure_env_value BACKEND_PORT "$(find_free_port 8000)"
   start_brain_bridge
   ./install.sh
 } >>"$LOG_FILE" 2>&1 || {

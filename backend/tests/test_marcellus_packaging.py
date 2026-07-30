@@ -245,6 +245,55 @@ def test_images_exclude_local_development_state() -> None:
     assert "node_modules/" in frontend
 
 
+def test_windows_launcher_matches_the_unix_install_path() -> None:
+    """Windows does not run install.sh, so parity has to be asserted here.
+
+    The Windows launcher drives Compose directly. Every fix made to install.sh
+    therefore misses Windows entirely unless it is mirrored, which is how
+    Windows ended up still compiling images after the pull path shipped.
+    """
+    launcher = _read("packaging/windows/Start-Marcellus.ps1")
+
+    # Prebuilt images, with the same build fallback and override as install.sh.
+    assert "pull" in launcher
+    assert "up -d --no-build" in launcher
+    assert "up -d --build" in launcher
+    assert "ENKSTEIN_FORCE_BUILD" in launcher
+
+    # Compose requires ADMIN_PASSWORD; the placeholder must not survive.
+    assert 'Set-EnvValue "ADMIN_PASSWORD"' in launcher
+    assert "ADMIN_PASSWORD=CHANGE_ME" in launcher  # the migration check
+
+    # The image tag is derived from APP_VERSION.
+    assert 'Set-EnvValue "APP_VERSION"' in launcher
+
+
+def test_launchers_do_not_fail_on_an_occupied_port() -> None:
+    """Binding 3000/8000 unconditionally fails if anything else holds them.
+
+    Reproduced locally: Compose aborts with 'port is already allocated' and the
+    launcher surfaces only 'Container startup failed'.
+    """
+    windows = _read("packaging/windows/Start-Marcellus.ps1")
+    mac = _read("packaging/macos/launcher.sh")
+    env_example = _read(".env.example")
+
+    assert "Get-FreePort" in windows
+    assert "find_free_port" in mac
+    # Compose only honours these if they exist in the environment file.
+    assert "FRONTEND_PORT=" in env_example
+    assert "BACKEND_PORT=" in env_example
+    # The browser must open the port actually chosen.
+    assert "http://localhost:$frontendPort" in windows
+
+
+def test_windows_failure_shows_the_log_rather_than_a_path() -> None:
+    """A failed launch should open the log, not name a folder to go find."""
+    launcher = _read("packaging/windows/Start-Marcellus.ps1")
+    assert "notepad.exe" in launcher
+
+
+
 
 
 
