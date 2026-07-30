@@ -697,7 +697,7 @@ export default function Sidebar() {
             style={{ color: 'var(--rc-text-2)' }}
           >
             {isLiquid
-              ? <Sparkles className="w-4 h-4 text-cyan-300" />
+              ? <Sparkles className="w-4 h-4 text-slate-500" />
               : isLight
                 ? <Moon className="w-4 h-4 text-indigo-400" />
                 : <Sun className="w-4 h-4 text-yellow-400" />}
@@ -710,16 +710,16 @@ export default function Sidebar() {
               style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-2)' }}
             >
               {isLiquid
-                ? <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                ? <Sparkles className="w-3.5 h-3.5 text-slate-500" />
                 : isLight
                   ? <Moon className="w-3.5 h-3.5 text-indigo-400" />
                   : <Sun className="w-3.5 h-3.5 text-yellow-400" />}
               <span className="flex-1 text-left">
-                {isLiquid ? 'Switch to Dark' : isLight ? 'Switch to Liquid Glass' : 'Switch to Light'}
+                {isLiquid ? 'Liquid Glass · Switch to Dark' : isLight ? 'Light · Switch to Liquid Glass' : 'Dark · Switch to Light'}
               </span>
               <div
                 className="relative w-8 h-4 rounded-full transition-colors duration-200"
-                style={{ background: isLiquid ? '#0891b2' : isLight ? 'var(--regent-600)' : '#374151' }}
+                style={{ background: isLiquid ? '#64748b' : isLight ? 'var(--regent-600)' : '#374151' }}
               >
                 <div
                   className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200"

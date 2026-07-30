@@ -95,19 +95,19 @@ html.light {
    console. Surfaces remain solid enough for scanning; blur is reserved for
    chrome and the brand mark rather than being applied to every control. */
 html.liquid {
-  --rc-bg-base:     #edf0f3;
-  --rc-bg-surface:  rgba(255, 255, 255, 0.58);
-  --rc-bg-elevated: rgba(255, 255, 255, 0.76);
-  --rc-bg-input:    rgba(255, 255, 255, 0.68);
-  --rc-bg:          rgba(255, 255, 255, 0.68);
+  --rc-bg-base:     #e4e8ec;
+  --rc-bg-surface:  rgba(255, 255, 255, 0.46);
+  --rc-bg-elevated: rgba(255, 255, 255, 0.64);
+  --rc-bg-input:    rgba(255, 255, 255, 0.56);
+  --rc-bg:          rgba(255, 255, 255, 0.56);
   --rc-text-1:      #18212b;
   --rc-text-2:      #4b5968;
   --rc-text-3:      #758292;
   --rc-border:      rgba(71, 85, 105, 0.20);
   --rc-border-2:    rgba(71, 85, 105, 0.34);
-  --rc-chat-canvas: #e8ebee;
-  --rc-chat-panel: rgba(255, 255, 255, 0.62);
-  --rc-panel-header: rgba(255, 255, 255, 0.52);
+  --rc-chat-canvas: #dfe4e8;
+  --rc-chat-panel: rgba(255, 255, 255, 0.50);
+  --rc-panel-header: rgba(255, 255, 255, 0.42);
   --rc-panel-hover: rgba(71, 85, 105, 0.07);
   --rc-accent:      #dc2626;
   --rc-brand:       #64748b;
@@ -122,11 +122,7 @@ html.liquid {
 }
 
 html.liquid body {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(255,255,255,.88), transparent 34rem),
-    radial-gradient(circle at 92% 100%, rgba(203,213,225,.45), transparent 30rem),
-    var(--rc-bg-base);
-  background-attachment: fixed;
+  background-color: var(--rc-bg-base);
 }
 
 /* Make the theme visible across the application shell, including pages that
@@ -184,10 +180,10 @@ html.liquid .border-l {
   border-color: var(--rc-border) !important;
 }
 
-html.liquid .bg-gray-950 { background-color: rgba(237,240,243,.78) !important; }
-html.liquid .bg-gray-900 { background-color: rgba(255,255,255,.58) !important; }
-html.liquid .bg-gray-800 { background-color: rgba(255,255,255,.66) !important; }
-html.liquid .bg-white { background-color: rgba(255,255,255,.62) !important; }
+html.liquid .bg-gray-950 { background-color: rgba(228,232,236,.82) !important; }
+html.liquid .bg-gray-900 { background-color: rgba(255,255,255,.46) !important; }
+html.liquid .bg-gray-800 { background-color: rgba(255,255,255,.56) !important; }
+html.liquid .bg-white { background-color: rgba(255,255,255,.50) !important; }
 html.liquid .text-white { color: var(--rc-text-1) !important; }
 html.liquid .text-gray-100,
 html.liquid .text-gray-200,
