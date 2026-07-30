@@ -86,6 +86,17 @@ export default function NodeAiAdvisory({ claw }: Props) {
           <span>{result.detail ?? 'AI analysis is unavailable. The assessment remains unchanged.'}</span>
         </div>
       ) : null}
+      {result?.engine && (result.engine.source || result.engine.provider || result.engine.model) ? (
+        <p className="mt-3 border-t pt-2 text-xs" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}>
+          Engine: {result.engine.source ?? 'governed fallback'}
+          {result.engine.provider ? ` · ${result.engine.provider}` : ''}
+          {result.engine.model ? ` · ${result.engine.model}` : ''}
+        </p>
+      ) : result?.engine_plan ? (
+        <p className="mt-3 border-t pt-2 text-xs" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}>
+          Engine plan: {result.engine_plan.map((item: any) => item.source).join(' → ')}
+        </p>
+      ) : null}
     </section>
   );
 }

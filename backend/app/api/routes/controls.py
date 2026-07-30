@@ -5,6 +5,7 @@ from collections import Counter
 
 import hashlib
 import json
+import logging
 import uuid
 from datetime import datetime
 
@@ -30,11 +31,12 @@ from app.services.control_profiles import coverage_matrix, profile_for, repillar
 from app.services.control_evaluation import evaluate_controls
 from app.services import control_collectors
 from app.services import control_remediation
-from app.services.control_ai_summary import summarize_assessment
+from app.services.control_ai_summary import SUMMARY_SOURCES, summarize_assessment
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job
 from app.core.swarm.schemas import SwarmJobCreate
 
 router = APIRouter(prefix="/controls", tags=["CoreOS — Controls"])
+logger = logging.getLogger("controls.routes")
 
 
 class ControlAnalysisRequest(BaseModel):
@@ -357,37 +359,71 @@ async def assessment_summary(
     deterministic services rather than accepted from the caller, so a client
     cannot ask the Brain to explain an assessment that never ran.
     """
-    evaluation = await evaluate_controls(db, claw=body.claw)
-    proposals = await control_remediation.proposals(db, claw=body.claw)
-
-    statement = (
-        select(Finding)
-        .where(Finding.status == "open", Finding.claw == body.claw)
-        .order_by(desc(Finding.risk_score))
-        .limit(25)
-    )
-    result = await db.execute(statement)
-    findings = [
+    engine_plan = [
         {
-            "id": str(item.id),
-            "title": item.title,
-            "severity": str(item.severity),
-            "risk_score": item.risk_score,
-            "control_id": item.control_id,
-            "zt_pillar": item.zt_pillar,
-            "remediation": item.remediation,
+            "source": source,
+            "role": "primary synthesis" if index == 0 else "local fallback",
         }
-        for item in result.scalars().all()
+        for index, source in enumerate(SUMMARY_SOURCES)
     ]
+    try:
+        evaluation = await evaluate_controls(db, claw=body.claw)
+        proposals = await control_remediation.proposals(db, claw=body.claw)
 
-    return await summarize_assessment(
-        db,
-        claw=body.claw,
-        evaluation=evaluation,
-        proposals=proposals,
-        findings=findings,
-        classification=body.classification,
-    )
+        statement = (
+            select(Finding)
+            .where(Finding.status == "open", Finding.claw == body.claw)
+            .order_by(desc(Finding.risk_score))
+            .limit(25)
+        )
+        result = await db.execute(statement)
+        findings = [
+            {
+                "id": str(item.id),
+                "title": item.title,
+                "severity": str(item.severity),
+                "risk_score": item.risk_score,
+                "control_id": item.control_id,
+                "zt_pillar": item.zt_pillar,
+                "remediation": item.remediation,
+            }
+            for item in result.scalars().all()
+        ]
+
+        response = await summarize_assessment(
+            db,
+            claw=body.claw,
+            evaluation=evaluation,
+            proposals=proposals,
+            findings=findings,
+            classification=body.classification,
+        )
+        attempts = response.get("attempts") or []
+        selected_source = response.get("source") or (attempts[-1].get("source") if attempts else None)
+        response["engine_plan"] = engine_plan
+        response["engine"] = {
+            "source": selected_source,
+            "provider": response.get("provider"),
+            "model": response.get("model"),
+        }
+        return response
+    except Exception as exc:  # noqa: BLE001
+        # AI narration is optional. A collector/database/profile problem must
+        # never turn a completed security page into a 500 response or imply
+        # that its deterministic verdicts are unavailable.
+        logger.exception("assessment advisory failed for claw=%s", body.claw)
+        return {
+            "node": body.claw,
+            "available": False,
+            "reason": "assessment_advisory_error",
+            "detail": (
+                "AI analysis could not read this node's completed assessment. "
+                "The deterministic controls, findings, and scores are unchanged."
+            ),
+            "engine_plan": engine_plan,
+            "error_type": type(exc).__name__,
+            "advisory": True,
+        }
 
 
 @router.post("/remediation/execute")
