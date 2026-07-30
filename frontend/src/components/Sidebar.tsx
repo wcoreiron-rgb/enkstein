@@ -589,6 +589,7 @@ export default function Sidebar() {
   const { theme, toggle } = useTheme();
   const isLight   = theme === 'light';
   const isLiquid  = theme === 'liquid';
+  const sidebarLogo = isLiquid ? '/favicon-liquid.png' : '/favicon.png';
   const [collapsed, setCollapsed] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
@@ -636,7 +637,7 @@ export default function Sidebar() {
           /* Collapsed — just the icon centred */
           <button onClick={() => setCollapsed(false)} className="mx-auto" title="Expand sidebar">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/favicon-liquid.png" alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
+            <img src={sidebarLogo} alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
           </button>
         ) : (
           /* Expanded — logo centred on top, text below, collapse button top-right */
@@ -653,7 +654,7 @@ export default function Sidebar() {
             </div>
             <div className="flex flex-col items-center gap-2 pb-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="enkstein-app-icon" src="/favicon-liquid.png" alt="Enkstein" width={104} height={104} style={{ display: 'block' }} />
+              <img className="enkstein-app-icon" src={sidebarLogo} alt="Enkstein" width={104} height={104} style={{ display: 'block' }} />
               <div className="text-center">
                 <h1 className="font-bold text-sm leading-tight" style={{ color: 'var(--rc-text-1)' }}>
                   Enkstein
