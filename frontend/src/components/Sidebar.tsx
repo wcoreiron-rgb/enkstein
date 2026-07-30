@@ -588,6 +588,7 @@ export default function Sidebar() {
   const router = useRouter();
   const { theme, toggle } = useTheme();
   const isLight   = theme === 'light';
+  const isLiquid  = theme === 'liquid';
   const [collapsed, setCollapsed] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
@@ -652,7 +653,7 @@ export default function Sidebar() {
             </div>
             <div className="flex flex-col items-center gap-2 pb-1">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/favicon.png" alt="Enkstein" width={104} height={104} style={{ display: 'block' }} />
+              <img className="enkstein-app-icon" src="/favicon-liquid.png" alt="Enkstein" width={104} height={104} style={{ display: 'block' }} />
               <div className="text-center">
                 <h1 className="font-bold text-sm leading-tight" style={{ color: 'var(--rc-text-1)' }}>
                   Enkstein
@@ -690,13 +691,15 @@ export default function Sidebar() {
           /* Collapsed footer — just theme icon */
           <button
             onClick={toggle}
-            title={isLight ? 'Switch to Dark' : 'Switch to Light'}
+            title={isLiquid ? 'Switch to Dark' : isLight ? 'Switch to Liquid Glass' : 'Switch to Light'}
             className="flex items-center justify-center w-10 h-10 mx-auto rounded-lg hover:bg-[var(--rc-bg-elevated)] transition-colors"
             style={{ color: 'var(--rc-text-2)' }}
           >
-            {isLight
-              ? <Moon className="w-4 h-4 text-indigo-400" />
-              : <Sun className="w-4 h-4 text-yellow-400" />}
+            {isLiquid
+              ? <Sparkles className="w-4 h-4 text-cyan-300" />
+              : isLight
+                ? <Moon className="w-4 h-4 text-indigo-400" />
+                : <Sun className="w-4 h-4 text-yellow-400" />}
           </button>
         ) : (
           <>
@@ -705,17 +708,21 @@ export default function Sidebar() {
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-all duration-150 hover:opacity-80"
               style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-2)' }}
             >
-              {isLight
-                ? <Moon className="w-3.5 h-3.5 text-indigo-400" />
-                : <Sun className="w-3.5 h-3.5 text-yellow-400" />}
-              <span className="flex-1 text-left">{isLight ? 'Switch to Dark' : 'Switch to Light'}</span>
+              {isLiquid
+                ? <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                : isLight
+                  ? <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                  : <Sun className="w-3.5 h-3.5 text-yellow-400" />}
+              <span className="flex-1 text-left">
+                {isLiquid ? 'Switch to Dark' : isLight ? 'Switch to Liquid Glass' : 'Switch to Light'}
+              </span>
               <div
                 className="relative w-8 h-4 rounded-full transition-colors duration-200"
-                style={{ background: isLight ? 'var(--regent-600)' : '#374151' }}
+                style={{ background: isLiquid ? '#0891b2' : isLight ? 'var(--regent-600)' : '#374151' }}
               >
                 <div
                   className="absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-200"
-                  style={{ left: isLight ? '17px' : '2px' }}
+                  style={{ left: isLiquid ? '23px' : isLight ? '17px' : '2px' }}
                 />
               </div>
             </button>

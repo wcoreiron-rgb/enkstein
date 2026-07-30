@@ -90,6 +90,77 @@ html.light {
   --rc-inline-fg:   #0f172a;
 }
 
+/* ── Liquid Glass theme ─────────────────────────────────────────────────────
+   A translucent, cool-glass treatment that stays readable for a security
+   console. Surfaces remain solid enough for scanning; blur is reserved for
+   chrome and the brand mark rather than being applied to every control. */
+html.liquid {
+  --rc-bg-base:     #f5f7f8;
+  --rc-bg-surface:  rgba(255, 255, 255, 0.68);
+  --rc-bg-elevated: rgba(255, 255, 255, 0.82);
+  --rc-bg-input:    rgba(255, 255, 255, 0.78);
+  --rc-bg:          rgba(255, 255, 255, 0.78);
+  --rc-text-1:      #102a43;
+  --rc-text-2:      #486581;
+  --rc-text-3:      #829ab1;
+  --rc-border:      rgba(72, 101, 129, 0.22);
+  --rc-border-2:    rgba(72, 101, 129, 0.36);
+  --rc-chat-canvas: #eaf6f8;
+  --rc-chat-panel: rgba(255, 255, 255, 0.72);
+  --rc-panel-header: rgba(255, 255, 255, 0.58);
+  --rc-panel-hover: rgba(14, 116, 144, 0.08);
+  --rc-accent:      #dc2626;
+  --rc-brand:       #64748b;
+  --rc-brand-soft:  rgba(100, 116, 139, 0.10);
+  --rc-accent-violet: #64748b;
+  --rc-code-bg:     rgba(248, 249, 250, 0.96);
+  --rc-code-head:   rgba(241, 243, 245, 0.94);
+  --rc-code-fg:     #102a43;
+  --rc-code-border: rgba(72, 101, 129, 0.22);
+  --rc-inline-bg:   rgba(100, 116, 139, 0.08);
+  --rc-inline-fg:   #102a43;
+}
+
+html.liquid body {
+  background-color: var(--rc-bg-base);
+}
+
+html.liquid .border,
+html.liquid .border-t,
+html.liquid .border-r,
+html.liquid .border-b,
+html.liquid .border-l {
+  border-color: var(--rc-border) !important;
+}
+
+html.liquid .bg-gray-950 { background-color: rgba(231,243,247,.82) !important; }
+html.liquid .bg-gray-900 { background-color: rgba(255,255,255,.68) !important; }
+html.liquid .bg-gray-800 { background-color: rgba(255,255,255,.72) !important; }
+html.liquid .text-white { color: var(--rc-text-1) !important; }
+html.liquid .text-gray-100,
+html.liquid .text-gray-200,
+html.liquid .text-gray-300 { color: var(--rc-text-1) !important; }
+html.liquid .text-gray-400,
+html.liquid .text-gray-500 { color: var(--rc-text-2) !important; }
+
+html.liquid .enkstein-app-icon {
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,.78);
+  border-radius: 24px;
+  background: rgba(255,255,255,.48);
+  box-shadow: 0 12px 28px rgba(100,116,139,.12), inset 0 1px 0 rgba(255,255,255,.95);
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+
+html.liquid .rc-glass-surface {
+  background: rgba(255,255,255,.52);
+  border-color: rgba(255,255,255,.72);
+  box-shadow: 0 8px 24px rgba(100,116,139,.06), inset 0 1px 0 rgba(255,255,255,.86);
+  backdrop-filter: blur(14px) saturate(125%);
+  -webkit-backdrop-filter: blur(14px) saturate(125%);
+}
+
 body {
   background: var(--rc-bg-base);
   color: var(--rc-text-1);

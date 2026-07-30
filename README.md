@@ -10,18 +10,18 @@
 <p align="center">Distributed, organism-inspired security automation with Zero Trust enforcement across every Cortex, Heart, Arm, Node, and action.</p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.12-macos.pkg">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.1-macos.pkg">
     <img src="https://img.shields.io/badge/Download%20for-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
   </a>
   &nbsp;
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.5.12-windows-x64-setup.exe">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.1-windows-x64-setup.exe">
     <img src="https://img.shields.io/badge/Download%20for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
   </a>
 </p>
 
 <p align="center">
   <sub>
-    <b>v0.5.12</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    <b>v0.6.1</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -60,7 +60,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.5.12` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.6.1` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -117,7 +117,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.5.12` keeps a paired Browser Companion marked ready while it is
+Version `0.6.1` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -132,6 +132,18 @@ Qwen file author. The author receives its own output budget and can recover
 complete file entries even if its final JSON fence is cut off. Trust Fabric then
 governs proposal or Auto-apply writes into the operator-selected project root.
 A planning response is never represented as local execution.
+
+Security Arm pages also include an **AI analysis and remediation plan** after
+the deterministic assessment. It summarizes failing controls and findings,
+groups likely root causes, and orders advisory remediation steps with control
+IDs and evidence counts. The panel can report a clean assessment or an
+unavailable Brain honestly; it cannot change a verdict, score, or remediation
+gate. The same advisory surface is available from Zero Trust control coverage.
+
+The console has three persisted themes: **Dark**, **Light**, and **Liquid
+Glass**. Liquid Glass uses neutral clear-glass surfaces and slate accents, and
+ships with a matching clear-glass Enkstein icon for the portal and Browser
+Companion.
 
 Browser Brain handoffs are capped to a compact, continuity-preserving context
 instead of replaying an entire conversation into a provider message editor.
@@ -597,7 +609,7 @@ Enkstein ships in three installable forms beyond the web platform. All three tal
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.5.12-py3-none-any.whl
+pip install ./enkstein_mcp-0.6.1-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -624,7 +636,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install ./enkstein_cli-0.5.12-py3-none-any.whl
+pip install ./enkstein_cli-0.6.1-py3-none-any.whl
 export REGENTCLAW_API_URL=http://localhost:8000
 regentclaw status dashboard
 regentclaw connectors test okta
@@ -637,7 +649,7 @@ regentclaw evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.5.12-py3-none-any.whl
+pip install ./enkstein_core-0.6.1-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

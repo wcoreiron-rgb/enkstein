@@ -8,6 +8,7 @@ import {
   Network, Layers3, Route, Sparkles,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import NodeAiAdvisory from '@/components/NodeAiAdvisory';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1130,6 +1131,7 @@ export default function TerraClawPage() {
 
   return (
     <div className="space-y-6">
+      <NodeAiAdvisory claw="terraclaw" />
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>

@@ -10,7 +10,7 @@ agents, CI pipelines, or pre-commit hooks.
 ## Install
 
 ```bash
-pip install ./enkstein_core-0.5.12-py3-none-any.whl
+pip install ./enkstein_core-0.6.1-py3-none-any.whl
 ```
 
 Only dependency: `cryptography`.

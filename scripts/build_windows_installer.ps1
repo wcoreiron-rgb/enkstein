@@ -53,7 +53,7 @@ if (-not (Get-Command magick -ErrorAction SilentlyContinue)) {
     throw "ImageMagick is required to generate the Windows application icon."
 }
 $Icon = Join-Path $Stage "Enkstein.ico"
-& magick (Join-Path $Root "frontend\public\logo.png") -define icon:auto-resize=256,128,64,48,32,16 $Icon
+& magick (Join-Path $Root "frontend\public\favicon-liquid.png") -define icon:auto-resize=256,128,64,48,32,16 $Icon
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Icon)) { throw "Windows icon generation failed." }
 
 & $Compiler /nologo /target:winexe /platform:anycpu /reference:System.Windows.Forms.dll /win32icon:"$Icon" /out:"$Stage\Enkstein.exe" "$Root\packaging\windows\MarcellusLauncher.cs"

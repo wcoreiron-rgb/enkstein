@@ -5,6 +5,7 @@ import StatCard from '@/components/StatCard';
 import RiskBadge from '@/components/RiskBadge';
 import { apiFetch, getIdentityStats, getIdentities, getOrphaned, getApprovals } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
+import NodeAiAdvisory from '@/components/NodeAiAdvisory';
 
 const SEV_COLOR: Record<string, string> = {
   critical: 'text-red-400',
@@ -76,6 +77,7 @@ export default function IdentityClawPage() {
 
   return (
     <div className="space-y-8">
+      <NodeAiAdvisory claw="identityclaw" />
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white flex items-center gap-3">

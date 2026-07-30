@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Bot, RefreshCw, Plug, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { ProviderPill } from '@/components/ProviderPill';
+import NodeAiAdvisory from '@/components/NodeAiAdvisory';
 
 const SEVERITY_STYLE = {
   critical: { color: 'text-red-400',    bg: 'bg-red-900/20',    border: 'border-red-800',    dot: 'bg-red-500'    },
@@ -65,6 +66,7 @@ export default function AutomationClawPage() {
 
   return (
     <div className="space-y-6">
+      <NodeAiAdvisory claw="automationclaw" />
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3" style={{ color: 'var(--rc-text-1)' }}>
