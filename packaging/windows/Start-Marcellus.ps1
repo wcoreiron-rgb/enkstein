@@ -83,11 +83,43 @@ function Start-BrainBridge {
     [System.IO.File]::WriteAllText($BridgePidFile, [string]$process.Id)
 }
 
+function Test-DockerEngine {
+    & docker info *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Wait-ForDockerEngine {
+    $dockerDesktopCandidates = @(
+        (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\Docker Desktop.exe")
+    )
+
+    if (Test-DockerEngine) { return $true }
+
+    foreach ($candidate in $dockerDesktopCandidates) {
+        if (Test-Path $candidate) {
+            Start-Process $candidate
+            break
+        }
+    }
+
+    # Docker Desktop can report a running process before its Linux engine has
+    # created the named pipe. Compose must not run during that interval.
+    for ($attempt = 0; $attempt -lt 90; $attempt++) {
+        Start-Sleep -Seconds 2
+        if (Test-DockerEngine) { return $true }
+    }
+    return $false
+}
+
 try {
-    $dockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
     $dockerCli = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin"
+    $dockerCliUser = Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\resources\bin"
     if (Test-Path $dockerCli) {
         $env:PATH = "$dockerCli;$env:PATH"
+    }
+    elseif (Test-Path $dockerCliUser) {
+        $env:PATH = "$dockerCliUser;$env:PATH"
     }
 
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
@@ -96,23 +128,8 @@ try {
         exit 1
     }
 
-    & docker info *> $null
-    if ($LASTEXITCODE -ne 0) {
-        if (Test-Path $dockerDesktop) {
-            Start-Process $dockerDesktop
-        }
-        $ready = $false
-        for ($attempt = 0; $attempt -lt 60; $attempt++) {
-            Start-Sleep -Seconds 2
-            & docker info *> $null
-            if ($LASTEXITCODE -eq 0) {
-                $ready = $true
-                break
-            }
-        }
-        if (-not $ready) {
-            throw "Docker Desktop did not become ready within two minutes."
-        }
+    if (-not (Wait-ForDockerEngine)) {
+        throw "Docker Desktop was found, but its Linux engine did not become ready within three minutes. Start Docker Desktop, wait for 'Engine running', then launch Enkstein again."
     }
 
     if (-not (Test-Path $EnvFile)) {
@@ -143,6 +160,9 @@ try {
     Start-BrainBridge
 
     "[$([DateTime]::UtcNow.ToString('o'))] Starting Enkstein" | Out-File -Append -FilePath $LogFile
+    if (-not (Wait-ForDockerEngine)) {
+        throw "Docker Desktop stopped before Compose could start. Start Docker Desktop and launch Enkstein again."
+    }
     & docker compose --env-file $EnvFile -f $ComposeFile config --quiet *>> $LogFile
     if ($LASTEXITCODE -ne 0) { throw "Docker Compose validation failed. See $LogFile." }
 
@@ -158,14 +178,24 @@ try {
         $usedPublishedImages = ($pull.ExitCode -eq 0)
     }
 
-    if ($usedPublishedImages) {
-        & docker compose --env-file $EnvFile -f $ComposeFile up -d --no-build *>> $LogFile
+    $composeExit = 1
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        if (-not (Wait-ForDockerEngine)) {
+            throw "Docker Desktop stopped while Enkstein was starting. Start Docker Desktop and launch Enkstein again."
+        }
+        if ($usedPublishedImages) {
+            & docker compose --env-file $EnvFile -f $ComposeFile up -d --no-build *>> $LogFile
+        }
+        else {
+            "Published images unavailable; building locally." | Out-File -Append -FilePath $LogFile
+            & docker compose --env-file $EnvFile -f $ComposeFile up -d --build *>> $LogFile
+        }
+        $composeExit = $LASTEXITCODE
+        if ($composeExit -eq 0) { break }
+        "Compose attempt $($attempt + 1) failed with exit code $composeExit; waiting for Docker and retrying." | Out-File -Append -FilePath $LogFile
+        Start-Sleep -Seconds 3
     }
-    else {
-        "Published images unavailable; building locally." | Out-File -Append -FilePath $LogFile
-        & docker compose --env-file $EnvFile -f $ComposeFile up -d --build *>> $LogFile
-    }
-    if ($LASTEXITCODE -ne 0) { throw "Container startup failed. See $LogFile." }
+    if ($composeExit -ne 0) { throw "Container startup failed after three Docker readiness retries. See $LogFile." }
 
     Start-Process "http://localhost:$frontendPort"
 }

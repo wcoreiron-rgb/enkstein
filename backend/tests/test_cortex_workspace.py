@@ -785,8 +785,9 @@ async def test_cortex_security_handoff_is_redacted_and_approval_gated(client, db
     assert turn.status_code == 200
     captured = {}
 
-    async def fake_create_swarm(db, payload):
+    async def fake_create_swarm(db, payload, *, tenant_id=None):
         captured["payload"] = payload
+        captured["tenant_id"] = tenant_id
         job = SwarmJob(
             name=payload.name,
             profile=payload.profile,
@@ -1082,6 +1083,9 @@ async def test_agent_file_change_requires_review_before_native_write(client, mon
     assert proposal["operation"] == "update"
     assert proposal["current_content"] == "ENABLED = False"
     assert proposal["proposed_content"] == "ENABLED = True"
+    # The reviewer sees only what changes, not the whole file.
+    assert "-ENABLED = False" in proposal["diff"]
+    assert "+ENABLED = True" in proposal["diff"]
 
     applied = await client.post(
         f"{BASE}/change-proposals/{proposal['id']}/review",
@@ -2919,3 +2923,30 @@ async def test_ai_turn_endpoint_is_rate_limited(client, monkeypatch):
     assert statuses[:3] == [200, 200, 200]
     assert statuses[3] == 429
     assert statuses[4] == 429
+
+
+def test_unified_diff_covers_create_delete_and_noop():
+    """A reviewer needs a diff for real edits, and none when nothing changed."""
+    update = workspace._unified_diff("a.txt", "one\ntwo", "one\nTWO", operation="update")
+    assert "-two" in update and "+TWO" in update
+
+    created = workspace._unified_diff("a.txt", None, "fresh", operation="create")
+    assert created.startswith("--- /dev/null")
+
+    deleted = workspace._unified_diff("a.txt", "gone", None, operation="delete")
+    assert "+++ /dev/null" in deleted
+
+    assert workspace._unified_diff("a.txt", "same", "same", operation="update") is None
+
+
+def test_unified_diff_is_bounded():
+    """A huge generated file must not produce an unbounded review payload."""
+    diff = workspace._unified_diff(
+        "big.txt",
+        "\n".join(str(index) for index in range(5000)),
+        "replaced",
+        operation="update",
+    )
+    lines = diff.splitlines()
+    assert len(lines) == workspace._MAX_DIFF_LINES + 1
+    assert "diff truncated" in lines[-1]

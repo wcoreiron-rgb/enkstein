@@ -362,3 +362,13 @@ html.light .text-indigo-400      { color: #4338ca !important; }
 .rc-code-body code { background: transparent !important; color: inherit !important; padding: 0 !important; font: inherit; white-space: pre; }
 .rc-code-body:focus-visible { outline: 2px solid #ef4444; outline-offset: -2px; }
 .rc-code-body-compact { max-height: 14rem; overflow: auto; }
+
+/* Unified-diff line coloring for governed change review. Defaults target the
+   dark code surface; .light overrides restore contrast on the light theme. */
+.rc-diff-line { display: block; width: 100%; }
+.rc-diff-add { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+.rc-diff-remove { background: rgba(248, 113, 113, 0.14); color: #fca5a5; }
+.rc-diff-hunk, .rc-diff-meta { color: var(--rc-text-3); }
+.rc-diff-context { color: var(--rc-code-fg); }
+.light .rc-diff-add { background: rgba(22, 163, 74, 0.12); color: #15803d; }
+.light .rc-diff-remove { background: rgba(220, 38, 38, 0.10); color: #b91c1c; }

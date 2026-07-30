@@ -95,6 +95,7 @@ import {
 } from '@/lib/api';
 import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
+import DiffView from '@/components/markdown/DiffView';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
 import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
 import {
@@ -1737,27 +1738,13 @@ export default function AIWorkspace({
               </div>
               <div className="space-y-1.5">
                 {proposals.map((proposal) => (
-                  <details key={proposal.id} className="rounded-md border p-2" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-base)' }}>
-                    <summary className="cursor-pointer list-none">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-300" style={{ background: 'rgba(245,158,11,.14)' }}>{proposal.operation}</span>
-                        <span className="min-w-0 flex-1 truncate text-[11px]" title={proposal.path} style={{ color: 'var(--rc-text-2)' }}>{proposal.path}</span>
-                      </div>
-                    </summary>
-                    <div className="mt-2">
-                      <CodeBlock
-                        language={proposal.path.split('.').pop() || 'text'}
-                        value={(proposal.operation === 'delete' ? proposal.current_content : proposal.proposed_content) || ''}
-                        compact={!wideReviewPanel}
-                      />
-                    </div>
-                    <div className="mt-2 flex justify-end gap-1.5">
-                      <button type="button" onClick={() => void reviewProposal(proposal, 'reject')} disabled={reviewingProposal === proposal.id}
-                        className="flex h-7 items-center gap-1 rounded border px-2 text-[10px] disabled:opacity-50" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}><X className="h-3 w-3" />Reject</button>
-                      <button type="button" onClick={() => void reviewProposal(proposal, 'approve')} disabled={reviewingProposal === proposal.id}
-                        className="flex h-7 items-center gap-1 rounded bg-green-600 px-2 text-[10px] text-white disabled:opacity-50"><Check className="h-3 w-3" />Apply</button>
-                    </div>
-                  </details>
+                  <ChangeProposalRow
+                    key={proposal.id}
+                    proposal={proposal}
+                    compact={!wideReviewPanel}
+                    reviewing={reviewingProposal === proposal.id}
+                    onReview={reviewProposal}
+                  />
                 ))}
               </div>
             </div>
@@ -2164,6 +2151,60 @@ function FileTreeView({
         );
       })}
     </>
+  );
+}
+
+/** One pending governed file change in the review rail. Defaults to the
+ * unified diff the backend computed so a reviewer sees only what changes,
+ * and falls back to full content when there is no diff (a create, a delete,
+ * or a locally rendered Office binary). */
+function ChangeProposalRow({
+  proposal,
+  compact,
+  reviewing,
+  onReview,
+}: {
+  proposal: CortexChangeProposal;
+  compact: boolean;
+  reviewing: boolean;
+  onReview: (proposal: CortexChangeProposal, decision: 'approve' | 'reject') => void | Promise<void>;
+}) {
+  const [showFull, setShowFull] = useState(false);
+  const fullContent = (proposal.operation === 'delete' ? proposal.current_content : proposal.proposed_content) || '';
+  const hasDiff = Boolean(proposal.diff);
+
+  return (
+    <details className="rounded-md border p-2" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-base)' }}>
+      <summary className="cursor-pointer list-none">
+        <div className="flex items-center gap-2">
+          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:text-amber-300" style={{ background: 'rgba(245,158,11,.14)' }}>{proposal.operation}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px]" title={proposal.path} style={{ color: 'var(--rc-text-2)' }}>{proposal.path}</span>
+        </div>
+      </summary>
+      {hasDiff && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowFull((current) => !current)}
+            className="rounded border px-1.5 py-0.5 text-[10px]"
+            style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}
+          >
+            {showFull ? 'Show diff' : 'Show full file'}
+          </button>
+        </div>
+      )}
+      <div className="mt-2">
+        {hasDiff && !showFull
+          ? <DiffView diff={proposal.diff as string} compact={compact} />
+          : <CodeBlock language={proposal.path.split('.').pop() || 'text'} value={fullContent} compact={compact} />}
+      </div>
+      <div className="mt-2 flex justify-end gap-1.5">
+        <button type="button" onClick={() => void onReview(proposal, 'reject')} disabled={reviewing}
+          className="flex h-7 items-center gap-1 rounded border px-2 text-[10px] disabled:opacity-50" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}><X className="h-3 w-3" />Reject</button>
+        <button type="button" onClick={() => void onReview(proposal, 'approve')} disabled={reviewing}
+          className="flex h-7 items-center gap-1 rounded bg-green-600 px-2 text-[10px] text-white disabled:opacity-50"><Check className="h-3 w-3" />Apply</button>
+      </div>
+    </details>
   );
 }
 

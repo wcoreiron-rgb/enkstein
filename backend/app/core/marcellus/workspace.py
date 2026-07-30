@@ -661,22 +661,71 @@ def _extract_change_requests(text: str) -> tuple[str, list[dict[str, Any]]]:
     return cleaned or "Prepared governed file changes for review.", changes
 
 
+# A generated file can be large, and the review payload is sent to the browser
+# on every proposal poll, so the rendered diff is bounded rather than unbounded.
+_MAX_DIFF_LINES = 2_000
+
+
+def _unified_diff(
+    path: str,
+    current_content: str | None,
+    proposed_content: str | None,
+    *,
+    operation: str,
+) -> str | None:
+    """Unified diff for a pending change, so a reviewer sees before/after.
+
+    Returns ``None`` when there is nothing meaningful to compare (identical
+    content, or a binary/office change whose text is not the reviewable
+    artifact), leaving the caller to fall back to full-content review.
+    """
+    before = (current_content or "") if operation != "create" else ""
+    after = (proposed_content or "") if operation != "delete" else ""
+    if before == after:
+        return None
+    rendered = list(
+        difflib.unified_diff(
+            before.splitlines(),
+            after.splitlines(),
+            fromfile=f"a/{path}" if operation != "create" else "/dev/null",
+            tofile=f"b/{path}" if operation != "delete" else "/dev/null",
+            lineterm="",
+            n=3,
+        )
+    )
+    if not rendered:
+        return None
+    if len(rendered) > _MAX_DIFF_LINES:
+        omitted = len(rendered) - _MAX_DIFF_LINES
+        rendered = rendered[:_MAX_DIFF_LINES]
+        rendered.append(f"... diff truncated, {omitted} more line(s). Open the file to review in full.")
+    return "\n".join(rendered)
+
+
 def _proposal_read(proposal: CortexArtifact, current: CortexArtifact | None = None) -> CortexChangeProposalRead:
     envelope = decrypt_json(proposal.content_ciphertext, proposal.content_digest)
     current_content = None
     if current is not None:
         current_content = decrypt_json(current.content_ciphertext, current.content_digest)["content"]
+    operation = envelope["operation"]
+    proposed_content = envelope.get("content") if operation != "delete" else None
     return CortexChangeProposalRead(
         id=proposal.id,
         project_id=proposal.project_id,
         conversation_id=proposal.conversation_id,
-        operation=envelope["operation"],
+        operation=operation,
         path=envelope["path"],
         status=proposal.status,
-        proposed_content=envelope.get("content") if envelope["operation"] != "delete" else None,
+        proposed_content=proposed_content,
         current_content=current_content,
         base_digest=envelope.get("base_digest"),
         previous_path=envelope.get("previous_path"),
+        diff=_unified_diff(
+            envelope["path"],
+            current_content,
+            proposed_content,
+            operation=operation,
+        ),
         created_by=proposal.created_by,
         created_at=proposal.created_at,
     )
@@ -2616,6 +2665,7 @@ async def create_security_investigation(
             parallelism=min(8, len(participants)),
             model_profile="swarm_judge_profile",
         ),
+        tenant_id=tenant_id,
     )
     if payload.requires_approval:
         job.status = SwarmJobStatus.REQUIRES_APPROVAL

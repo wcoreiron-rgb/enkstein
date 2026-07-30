@@ -1,12 +1,12 @@
-# Marcellus Agent Operating Guide
+# Enkstein Agent Operating Guide
 
 ## Repository Boundary
-- This is the independent Marcellus architecture repository at `/Users/wcoreiron/Desktop/Marcellus`.
+- This is the independent Enkstein architecture repository at `/Users/wcoreiron/Desktop/Marcellus`.
 - The sibling `/Users/wcoreiron/Desktop/RegentClaw` repository is a stable source and must not be modified from this project.
 - Legacy RegentClaw names and routes remain compatibility contracts until a versioned migration explicitly replaces them.
 
 ## Project Purpose
-Marcellus is an octopus-inspired distributed security action engine built from the RegentClaw compatibility baseline. It organizes governed capabilities into a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration workflows.
+Enkstein is an octopus-inspired distributed security action engine built from the RegentClaw compatibility baseline. It organizes governed capabilities into a Cortex, Three Hearts, Security Arms, Capability Nodes, Skills, Connectors, Reflexes, a peer Plexus, and Regeneration workflows.
 
 ## Stack
 - Backend: FastAPI, SQLAlchemy async, PostgreSQL, Redis

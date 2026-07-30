@@ -842,6 +842,9 @@ export type CortexChangeProposal = {
   proposed_content?: string;
   current_content?: string;
   base_digest?: string;
+  previous_path?: string;
+  /** Unified diff of the pending write, when before/after text differ. */
+  diff?: string;
   created_by: string;
   created_at: string;
 };

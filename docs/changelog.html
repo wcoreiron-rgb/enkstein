@@ -359,6 +359,29 @@
     </div>
   </div>
 
+  <!-- Enkstein v0.5.12 — release assets and Windows startup reliability -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Installers now match the published release and Windows waits for Docker properly</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">v0.5.12</span>
+          <span class="release-date">July 30, 2026 &nbsp;&middot;&nbsp; Enkstein &nbsp;&middot;&nbsp; Installation</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <p>The repository had newer commits than the latest downloadable release, and the macOS download button pointed to an asset that was not attached. This release aligns the application version, Git tag, release assets, and download links at v0.5.12.</p>
+      <ul>
+        <li><strong>Windows startup waits for the actual Docker Linux engine.</strong> It now detects both system-wide and per-user Docker Desktop installations, waits for the named pipe to become usable, validates the engine again immediately before Compose, and retries container startup when Docker is still settling.</li>
+        <li><strong>Installer links point to this release.</strong> macOS and Windows buttons, the native installer documentation, the browser companion version, and package metadata all use v0.5.12.</li>
+        <li><strong>Failure messages are actionable.</strong> If Docker Desktop cannot become ready, Enkstein reports that directly and opens the launcher log instead of surfacing an opaque Compose pipe error.</li>
+      </ul>
+      <p><strong>Requirement.</strong> Docker Desktop remains required for this installer path. Enkstein starts it when installed, but Windows must still have Docker Desktop installed and allowed to run.</p>
+    </div>
+  </div>
+
   <!-- Enkstein v0.5.11 — AI analysis on node assessments -->
   <div class="release">
     <div class="release-dot" style="background: var(--green);"></div>

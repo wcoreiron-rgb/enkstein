@@ -22,6 +22,7 @@ import {
   createCortexProject,
   getCortexConversations,
   getCortexProjects,
+  searchCortexConversations,
 } from '@/lib/api';
 import { persistWorkspaceMode, WorkspaceMode } from '@/lib/workspace-mode';
 import { workspaceModeBasePath, workspaceModeFromPath } from '@/lib/workspace-routes';
@@ -211,6 +212,11 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
   const [projectId, setProjectId] = useState('');
   const [filter, setFilter] = useState('');
   const [loading, setLoading] = useState(true);
+  // Content matches come from the encrypted-message search endpoint, which the
+  // local title filter cannot see. Kept separate so titles still filter
+  // instantly while the network result fills in behind it.
+  const [contentMatches, setContentMatches] = useState<Map<string, { conversation: CortexConversation; excerpt?: string }>>(new Map());
+  const [searching, setSearching] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [nativeWorkspaceName, setNativeWorkspaceName] = useState('');
@@ -298,9 +304,53 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
     window.marcellusNativeWorkspace.selectFolder();
   };
 
-  const visibleConversations = conversations.filter((conversation) =>
-    conversation.title.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  // Message-content search runs against the server because history is
+  // encrypted at rest and never fully present on the client. Debounced so
+  // typing does not issue a request per keystroke.
+  useEffect(() => {
+    const query = filter.trim();
+    if (query.length < 2) {
+      setContentMatches(new Map());
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const results = await searchCortexConversations(query);
+        if (cancelled) return;
+        const matches = new Map<string, { conversation: CortexConversation; excerpt?: string }>();
+        for (const result of results) {
+          // The endpoint is workspace-wide; this blade only ever renders one mode.
+          if (result.conversation.mode !== mode) continue;
+          if (!result.excerpt) continue;
+          matches.set(result.conversation.id, { conversation: result.conversation, excerpt: result.excerpt });
+        }
+        setContentMatches(matches);
+      } catch {
+        if (!cancelled) setContentMatches(new Map());
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [filter, mode]);
+
+  const query = filter.trim().toLowerCase();
+  const titleMatches = conversations.filter((conversation) => conversation.title.toLowerCase().includes(query));
+  const titleMatchIds = new Set(titleMatches.map((conversation) => conversation.id));
+  const visibleConversations = query
+    ? [
+        ...titleMatches,
+        ...Array.from(contentMatches.values())
+          .filter((match) => !titleMatchIds.has(match.conversation.id))
+          .map((match) => match.conversation),
+      ]
+    : titleMatches;
 
   if (collapsed) {
     return (
@@ -390,7 +440,7 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
         </Link>
         <div className="flex items-center gap-2 rounded-md border px-2 transition-colors focus-within:border-[var(--rc-border-2)]"
           style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />}
+          {loading || searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />}
           <input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={mode === 'chat' ? 'Search chats' : 'Search conversations'}
             className="h-8 min-w-0 flex-1 bg-transparent text-xs outline-none" style={{ color: 'var(--rc-text-1)' }} />
         </div>
@@ -408,7 +458,9 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
             <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'open-conversation', id: conversation.id })}
               className="min-w-0 flex-1 px-2.5 py-2 text-left">
               <p className="truncate text-xs font-medium" style={{ color: 'var(--rc-text-1)' }}>{conversation.title}</p>
-              <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: 'var(--rc-text-3)' }}>{conversation.message_count} messages</p>
+              {contentMatches.get(conversation.id)?.excerpt
+                ? <p className="mt-0.5 line-clamp-2 text-[10px] leading-4" style={{ color: 'var(--rc-text-3)' }}>{contentMatches.get(conversation.id)?.excerpt}</p>
+                : <p className="mt-0.5 text-[10px] tabular-nums" style={{ color: 'var(--rc-text-3)' }}>{conversation.message_count} messages</p>}
             </button>
             <button type="button" onClick={() => dispatchWorkspaceAction({ type: 'request-rename-conversation', id: conversation.id })}
               aria-label={`Rename ${conversation.title}`} title="Rename conversation"
@@ -428,9 +480,9 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
             </button>
           </div>
         ))}
-        {!loading && visibleConversations.length === 0 && (
+        {!loading && !searching && visibleConversations.length === 0 && (
           <p className="px-2 py-4 text-xs leading-5" style={{ color: 'var(--rc-text-3)' }}>
-            {'No conversations yet.'}
+            {query ? `No conversations match “${filter.trim()}”.` : 'No conversations yet.'}
           </p>
         )}
       </div>
