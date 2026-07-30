@@ -6,6 +6,8 @@ private let defaultURL = URL(string: "http://127.0.0.1:3000/marcellus")!
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     private var window: NSWindow!
     private var webView: WKWebView!
+    private var contentContainer: NSView!
+    private var glassView: NSVisualEffectView!
     private var loadingView: NSView!
     private var statusLabel: NSTextField!
     private var spinner: NSProgressIndicator!
@@ -185,8 +187,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         )
         window.title = "Enkstein"
         window.titlebarAppearsTransparent = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.minSize = NSSize(width: 960, height: 640)
         window.center()
+
+        contentContainer = NSView(frame: window.contentView!.bounds)
+        contentContainer.autoresizingMask = [.width, .height]
+
+        glassView = NSVisualEffectView(frame: contentContainer.bounds)
+        glassView.autoresizingMask = [.width, .height]
+        glassView.material = .hudWindow
+        glassView.blendingMode = .behindWindow
+        glassView.state = .active
+        glassView.isHidden = true
+        contentContainer.addSubview(glassView)
 
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
@@ -198,6 +213,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 window.webkit.messageHandlers.marcellusWorkspace.postMessage({ action: 'selectFolder' });
               }
             };
+            function reportMarcellusTheme() {
+              var theme = document.documentElement.dataset.theme || 'dark';
+              window.webkit.messageHandlers.marcellusWorkspace.postMessage({ action: 'theme', theme: theme });
+            }
+            new MutationObserver(reportMarcellusTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+            window.addEventListener('load', reportMarcellusTheme);
             """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: true
@@ -206,6 +227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
+        webView.setValue(false, forKey: "drawsBackground")
+        contentContainer.addSubview(webView)
 
         loadingView = NSView(frame: window.contentView!.bounds)
         loadingView.autoresizingMask = [.width, .height]
@@ -272,7 +295,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.name == "marcellusWorkspace",
               let body = message.body as? [String: Any],
-              body["action"] as? String == "selectFolder" else { return }
+              let action = body["action"] as? String else { return }
+        if action == "theme" {
+            setNativeGlass(enabled: body["theme"] as? String == "liquid")
+            return
+        }
+        guard action == "selectFolder" else { return }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
@@ -402,9 +430,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private func showDesktop(_ url: URL) {
         spinner.stopAnimation(nil)
-        window.contentView = webView
-        webView.frame = window.contentView!.bounds
+        window.contentView = contentContainer
+        webView.frame = contentContainer.bounds
         webView.load(URLRequest(url: url))
+    }
+
+    private func setNativeGlass(enabled: Bool) {
+        glassView.isHidden = !enabled
+        window.isOpaque = !enabled
+        window.backgroundColor = enabled ? .clear : NSColor.windowBackgroundColor
+        // WKWebView has no public drawsBackground property, but this is the
+        // supported WebKit configuration used by native transparent shells.
+        webView.setValue(!enabled, forKey: "drawsBackground")
     }
 
     private func showFailure(_ message: String) {

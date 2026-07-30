@@ -320,6 +320,35 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.6.4 — Native system glass                              -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Native System Glass Window</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Native Shell</span>
+          <span class="tag tag-feat">Liquid Glass</span>
+          <span class="tag tag-sec">Theme Isolation</span>
+          <span class="release-date">July 30, 2026 &nbsp;·&nbsp; Enkstein v0.6.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Liquid Glass now reaches the macOS window itself through native vibrancy instead of stopping at a CSS imitation.</div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>macOS vibrancy:</strong> the transparent WebKit shell uses an <code>NSVisualEffectView</code> behind the app content so the system desktop material can show through.</li>
+          <li><strong>Theme bridge:</strong> the web UI reports its active theme to the native shell; vibrancy is enabled only for Liquid Glass.</li>
+          <li><strong>Fallback safety:</strong> dark and light modes restore an opaque window, and browser sessions retain the CSS glass fallback.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.6.3 — Liquid Glass clarity                            -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

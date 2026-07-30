@@ -122,7 +122,7 @@ html.liquid {
 }
 
 html.liquid body {
-  background-color: var(--rc-bg-base);
+  background-color: rgba(228, 232, 236, 0.18);
 }
 
 /* Make the theme visible across the application shell, including pages that
