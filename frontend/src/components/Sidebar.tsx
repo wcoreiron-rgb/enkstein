@@ -636,7 +636,7 @@ export default function Sidebar() {
           /* Collapsed — just the icon centred */
           <button onClick={() => setCollapsed(false)} className="mx-auto" title="Expand sidebar">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/favicon.png" alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
+            <img src="/favicon-liquid.png" alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
           </button>
         ) : (
           /* Expanded — logo centred on top, text below, collapse button top-right */
