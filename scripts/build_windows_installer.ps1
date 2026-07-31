@@ -80,8 +80,23 @@ if (-not (Get-Command magick -ErrorAction SilentlyContinue)) {
     throw "ImageMagick is required to generate the Windows application icon."
 }
 $Icon = Join-Path $Stage "Enkstein.ico"
-& magick (Join-Path $Root "frontend\public\favicon-liquid.png") -define icon:auto-resize=256,128,64,48,32,16 $Icon
+# Built from the transparent octopus mark, NOT favicon-liquid.png. The liquid
+# asset is a glass tile with an opaque white plate baked in; using it produced a
+# white square behind the logo on dark taskbars and applied a glass effect to
+# the icon itself. The shell composites this icon over user-chosen backgrounds,
+# so the source must carry real alpha.
+$IconSource = Join-Path $Root "frontend\public\favicon.png"
+if (-not (Test-Path $IconSource)) { throw "Icon source missing: $IconSource" }
+& magick $IconSource -background none -define icon:auto-resize=256,128,64,48,32,16 $Icon
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Icon)) { throw "Windows icon generation failed." }
+
+# Guard the regression rather than trusting the source path: a fully opaque
+# 256x256 frame means the white plate came back and the build must fail loudly.
+$IconAlphaProbe = & magick "$Icon[0]" -alpha extract -format "%[fx:mean]" info:
+if ($LASTEXITCODE -ne 0) { throw "Windows icon verification failed." }
+if ([double]$IconAlphaProbe -ge 0.995) {
+    throw "Windows icon has no transparency; it would render as a white box on dark surfaces."
+}
 
 # x64 rather than anycpu: WebView2Loader.dll is architecture-specific, and a
 # 32-bit process would fail to load the 64-bit native loader shipped above.

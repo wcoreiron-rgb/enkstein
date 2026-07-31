@@ -62,7 +62,10 @@
 
 /* ── Light theme variables ───────────────────────────────────────────────── */
 html.light {
-  --rc-bg-base:     #f1f5f9;
+  /* Near-white rather than slate-100: the previous value read as a cool blue-grey
+     wash next to the macOS app, and the native Windows host now paints the same
+     #f8fafc behind WebView2 so there is no seam on first paint. */
+  --rc-bg-base:     #f8fafc;
   --rc-bg-surface:  #ffffff;
   --rc-bg-elevated: #f1f5f9;
   --rc-bg-input:    #f8fafc;
@@ -95,22 +98,31 @@ html.light {
    console. Surfaces remain solid enough for scanning; blur is reserved for
    chrome and the brand mark rather than being applied to every control. */
 html.liquid {
+  /* Surface opacity multiplier driven by the Liquid Glass level.
+     Higher alpha = more opaque panels = less desktop showing through.
+     Clamped to an accessible band: even "clear" keeps panels at ~0.34 alpha so
+     text on top stays readable over an arbitrary wallpaper, and "subtle" stops
+     short of fully opaque so the theme is still visibly glass. */
+  --rc-glass-a1: 0.34;  /* app canvas */
+  --rc-glass-a2: 0.46;  /* panels/surfaces */
+  --rc-glass-a3: 0.64;  /* elevated/dialogs */
+  --rc-glass-a4: 0.56;  /* inputs */
   /* Translucent rather than a solid tint. Roughly twenty call sites apply
      --rc-bg-base as an inline background, so an opaque value here made the
      whole shell paint over the native window vibrancy. */
-  --rc-bg-base:     rgba(228, 232, 236, 0.34);
-  --rc-bg-surface:  rgba(255, 255, 255, 0.46);
-  --rc-bg-elevated: rgba(255, 255, 255, 0.64);
-  --rc-bg-input:    rgba(255, 255, 255, 0.56);
-  --rc-bg:          rgba(255, 255, 255, 0.56);
+  --rc-bg-base:     rgba(228, 232, 236, var(--rc-glass-a1));
+  --rc-bg-surface:  rgba(255, 255, 255, var(--rc-glass-a2));
+  --rc-bg-elevated: rgba(255, 255, 255, var(--rc-glass-a3));
+  --rc-bg-input:    rgba(255, 255, 255, var(--rc-glass-a4));
+  --rc-bg:          rgba(255, 255, 255, var(--rc-glass-a4));
   --rc-text-1:      #18212b;
   --rc-text-2:      #4b5968;
   --rc-text-3:      #758292;
   --rc-border:      rgba(71, 85, 105, 0.20);
   --rc-border-2:    rgba(71, 85, 105, 0.34);
-  --rc-chat-canvas: rgba(223, 228, 232, 0.30);
-  --rc-chat-panel: rgba(255, 255, 255, 0.50);
-  --rc-panel-header: rgba(255, 255, 255, 0.42);
+  --rc-chat-canvas: rgba(223, 228, 232, calc(var(--rc-glass-a1) - 0.04));
+  --rc-chat-panel: rgba(255, 255, 255, calc(var(--rc-glass-a2) + 0.04));
+  --rc-panel-header: rgba(255, 255, 255, calc(var(--rc-glass-a2) - 0.04));
   --rc-panel-hover: rgba(71, 85, 105, 0.07);
   --rc-accent:      #dc2626;
   --rc-brand:       #64748b;
@@ -133,6 +145,57 @@ html.liquid,
 html.liquid body {
   background: transparent !important;
   background-color: transparent !important;
+}
+
+/* ── Liquid Glass levels ─────────────────────────────────────────────────────
+   Three named steps instead of a free slider: the native hosts compose discrete
+   materials (DWM backdrop types, NSVisualEffectView materials), so arbitrary
+   alpha would not map onto anything real. Every value stays inside a band that
+   keeps foreground text legible over an unknown wallpaper. */
+html.liquid[data-glass='subtle'] {
+  --rc-glass-a1: 0.62;
+  --rc-glass-a2: 0.74;
+  --rc-glass-a3: 0.86;
+  --rc-glass-a4: 0.80;
+}
+
+html.liquid[data-glass='clear'] {
+  --rc-glass-a1: 0.20;
+  --rc-glass-a2: 0.34;
+  --rc-glass-a3: 0.52;
+  --rc-glass-a4: 0.44;
+}
+
+/* Accessibility and capability fallback. If the OS is set to reduce
+   transparency the theme collapses to an opaque neutral surface rather than
+   fighting the user's preference. The same rule covers a host where the DWM
+   backdrop was rejected: it sets data-glass="off" so there is no case where a
+   translucent web layer floats over an opaque native window. */
+@media (prefers-reduced-transparency: reduce) {
+  html.liquid {
+    --rc-glass-a1: 1;
+    --rc-glass-a2: 1;
+    --rc-glass-a3: 1;
+    --rc-glass-a4: 1;
+  }
+  html.liquid,
+  html.liquid body {
+    background: #f8fafc !important;
+    background-color: #f8fafc !important;
+  }
+}
+
+html.liquid[data-glass='off'] {
+  --rc-glass-a1: 1;
+  --rc-glass-a2: 1;
+  --rc-glass-a3: 1;
+  --rc-glass-a4: 1;
+}
+
+html.liquid[data-glass='off'],
+html.liquid[data-glass='off'] body {
+  background: #f8fafc !important;
+  background-color: #f8fafc !important;
 }
 
 /* `body` animates its background for 0.2s. Interpolating from an opaque theme

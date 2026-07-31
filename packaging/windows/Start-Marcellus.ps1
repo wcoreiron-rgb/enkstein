@@ -3,11 +3,11 @@ $ErrorActionPreference = "Stop"
 $RuntimeDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $EnvFile = Join-Path $RuntimeDir ".env"
 $ComposeFile = Join-Path $RuntimeDir "compose.yaml"
-$LogDir = Join-Path $env:LOCALAPPDATA "Marcellus\logs"
+$LogDir = Join-Path $env:LOCALAPPDATA "Enkstein\logs"
 $LogFile = Join-Path $LogDir "launcher.log"
 $BridgeScript = Join-Path $RuntimeDir "BrainBridge.ps1"
-$BridgeSecretFile = Join-Path $env:LOCALAPPDATA "Marcellus\brain-bridge.secret"
-$BridgePidFile = Join-Path $env:LOCALAPPDATA "Marcellus\brain-bridge.pid"
+$BridgeSecretFile = Join-Path $env:LOCALAPPDATA "Enkstein\brain-bridge.secret"
+$BridgePidFile = Join-Path $env:LOCALAPPDATA "Enkstein\brain-bridge.pid"
 $BridgePort = 47831
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 

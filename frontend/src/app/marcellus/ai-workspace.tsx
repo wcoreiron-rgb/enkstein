@@ -45,6 +45,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Square,
+  Terminal,
   Trash2,
   Wrench,
   X,
@@ -78,6 +79,7 @@ import {
   getCortexConversations,
   getCortexProjects,
   getCortexNativeWorkspace,
+  getCoworkExecutors,
   getModelClawProfiles,
   ingestCortexArtifacts,
   moveCortexConversation,
@@ -93,10 +95,16 @@ import {
   syncCortexNativeWorkspace,
   updateCortexArtifact,
 } from '@/lib/api';
+import type { CoworkExecutorStatus } from '@/lib/api';
 import SafeMarkdown from '@/components/markdown/SafeMarkdown';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import DiffView from '@/components/markdown/DiffView';
 import { persistRuntimeGroup, readStoredRuntimeGroup, RuntimeGroup } from '@/lib/runtime-group';
+import {
+  ExecutorPreference,
+  persistExecutorPreference,
+  readStoredExecutorPreference,
+} from '@/lib/executor-preference';
 import { persistCustomSwarm, readStoredCustomSwarm } from '@/lib/custom-swarm';
 import {
   clampPanelWidth,
@@ -140,6 +148,16 @@ type ExecutionStep = {
   detail?: string;
   status: ExecutionStepStatus;
 };
+
+// Executor choices offered to the operator. "Auto" prefers the local runtime and
+// falls back to Codex; an explicit choice is never silently rerouted to the other
+// executor, so an unavailable explicit choice yields an honest "unavailable"
+// verification rather than a quiet substitution.
+const EXECUTOR_CHOICES: ReadonlyArray<{ value: ExecutorPreference; label: string }> = [
+  { value: 'auto', label: 'Executor: Auto' },
+  { value: 'enkstein_local', label: 'Executor: Enkstein Local Runtime' },
+  { value: 'codex_app_server', label: 'Executor: Codex App Server' },
+];
 
 type TurnFailureKind = 'failed' | 'timeout' | 'interrupted';
 type TurnFailure = { content: string; kind: TurnFailureKind; detail: string };
@@ -304,6 +322,12 @@ export default function AIWorkspace({
   const [runtimeGroup, setRuntimeGroup] = useState<RuntimeGroup>('hybrid');
 
   useEffect(() => { setRuntimeGroup(readStoredRuntimeGroup()); }, []);
+  // Executor selection is independent of the Brain: whichever Brain answers,
+  // commands/tests run through the executor resolved here (or not at all, which
+  // is reported honestly rather than as a pass).
+  const [executorPreference, setExecutorPreference] = useState<ExecutorPreference>('auto');
+  const [executorStatus, setExecutorStatus] = useState<CoworkExecutorStatus | null>(null);
+  useEffect(() => { setExecutorPreference(readStoredExecutorPreference()); }, []);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [panelMaximized, setPanelMaximized] = useState(false);
   const [resizingPanel, setResizingPanel] = useState(false);
@@ -346,6 +370,15 @@ export default function AIWorkspace({
     setRuntimeGroup(group);
     persistRuntimeGroup(group);
   };
+  const selectExecutorPreference = (preference: ExecutorPreference) => {
+    setExecutorPreference(preference);
+    persistExecutorPreference(preference);
+  };
+  // Shown as its own field so the operator never has to infer which Brain
+  // answered from which executor ran, or vice versa.
+  const brainLabel = source === 'custom_swarm'
+    ? `Custom swarm (${customSwarmSources.length} Brain${customSwarmSources.length === 1 ? '' : 's'})`
+    : sourceOptions.find((item) => item.value === source)?.label || source;
   const [busy, setBusy] = useState(false);
   const [agentMode, setAgentMode] = useState(mode === 'cowork');
   const [structureMode, setStructureMode] = useState<'auto' | 'smart' | 'fast'>('auto');
@@ -439,6 +472,31 @@ export default function AIWorkspace({
     }
     setProposals(await getCortexChangeProposals(activeProjectId));
   }, [mode, activeProjectId]);
+
+  // Real executor availability, re-resolved whenever the project binding or the
+  // operator's executor preference changes. Cowork-only: Chat never runs
+  // commands, so it has no executor to report.
+  useEffect(() => {
+    if (mode !== 'cowork') {
+      setExecutorStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const status = await getCoworkExecutors({
+          projectId: activeProjectId || undefined,
+          preference: executorPreference,
+        });
+        if (!cancelled) setExecutorStatus(status);
+      } catch {
+        // Never block the workspace on executor discovery; the panel simply
+        // reports the executor as unknown until the next successful probe.
+        if (!cancelled) setExecutorStatus(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode, activeProjectId, executorPreference]);
 
   // Single owner of `artifacts`/`selectedArtifacts`: whenever the effectively
   // active project changes (switching conversations, switching the sidebar
@@ -1448,6 +1506,21 @@ export default function AIWorkspace({
                 <Bot className="h-3.5 w-3.5" style={{ color: "var(--rc-brand)" }} />{customSwarmSources.length} Brain{customSwarmSources.length === 1 ? '' : 's'}
               </button>
             )}
+            {mode === 'cowork' && (
+              <select value={executorPreference} onChange={(event) => selectExecutorPreference(event.target.value as ExecutorPreference)} aria-label="Executor"
+                title="Which runtime executes commands, tests, and verification in the approved project folder. Independent of the answering Brain."
+                className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
+                {EXECUTOR_CHOICES.map((choice) => {
+                  const availability = executorStatus?.executors.find((item) => item.executor === choice.value);
+                  const unavailable = choice.value !== 'auto' && availability ? !availability.available : false;
+                  return (
+                    <option key={choice.value} value={choice.value}>
+                      {choice.label}{unavailable ? ' — unavailable' : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
             {(sourceOptions.find((item) => item.value === source)?.models.length || 0) > 0 && (
               <select value={model} onChange={(event) => setModel(event.target.value)} aria-label="Brain model"
                 className="h-8 max-w-52 rounded-md border px-2 text-xs outline-none"
@@ -1557,6 +1630,13 @@ export default function AIWorkspace({
               {busy && (
                 <article className="space-y-3">
                   <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}><Loader2 className="h-4 w-4 animate-spin" />Cortex is working</div>
+                  {mode === 'cowork' && (
+                    <RuntimeAssignment
+                      brainLabel={brainLabel}
+                      executorStatus={executorStatus}
+                      preference={executorPreference}
+                    />
+                  )}
                   {activity.length > 0 && <ExecutionTimeline steps={activity} />}
                   {streamText && <SafeMarkdown content={streamText} />}
                   {codexApprovals.map((approval) => (
@@ -1977,6 +2057,57 @@ const EXECUTION_STEP_ICON: Record<ExecutionStepKind, typeof BrainCircuit> = {
   brain: BrainCircuit,
   file: File,
 };
+
+/** Brain and Executor reported as two independent fields.
+ *
+ * The Brain plans and authors; the Executor runs commands, tests, and
+ * verification in the approved project root. Any Brain composes with any
+ * Executor, so neither is inferred from the other. When no executor is
+ * connected the panel says so plainly -- an unavailable executor is never
+ * presented as a passing verification, and Codex is never described as
+ * required. */
+function RuntimeAssignment({
+  brainLabel,
+  executorStatus,
+  preference,
+}: {
+  brainLabel: string;
+  executorStatus: CoworkExecutorStatus | null;
+  preference: ExecutorPreference;
+}) {
+  const explicit = preference !== 'auto';
+  const chosen = executorStatus?.executors.find((item) => item.executor === preference);
+  // An explicit choice is honoured even when unavailable, so the operator sees
+  // why verification will not run rather than a silent reroute to the other one.
+  const unavailableReason = explicit && chosen && !chosen.available
+    ? chosen.reason
+    : !executorStatus?.any_available
+      ? executorStatus?.executors.find((item) => item.reason)?.reason || ''
+      : '';
+  const executorLabel = !executorStatus
+    ? 'resolving…'
+    : explicit
+      ? `${chosen?.label || preference}${chosen && !chosen.available ? ' — unavailable' : ''}`
+      : executorStatus.any_available
+        ? executorStatus.selected_label
+        : 'unavailable';
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-2.5 py-1.5 text-[11px]"
+      style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-3)' }}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <BrainCircuit className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Brain: <span style={{ color: 'var(--rc-text-2)' }}>{brainLabel}</span>
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <Terminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        Executor: <span style={{ color: 'var(--rc-text-2)' }}>{executorLabel}</span>
+      </span>
+      {unavailableReason && <span className="basis-full">{unavailableReason}</span>}
+    </div>
+  );
+}
 
 /** Two-layer live execution timeline shown while a turn is in flight.
  *

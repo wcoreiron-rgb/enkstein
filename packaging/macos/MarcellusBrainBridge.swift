@@ -1030,6 +1030,28 @@ private final class BrainBridge {
                     case "/v1/workspace/trash":
                         guard let path = payload["path"] as? String else { throw BridgeError.invalidRequest }
                         body = try self.trashWorkspace(token: token, path: path)
+                    case "/v1/workspace/exec":
+                        // Narrowly scoped command execution for the Enkstein
+                        // Local Executor. This is deliberately NOT a shell: the
+                        // program must be on the broker's own allowlist and
+                        // arguments arrive as a pre-split argv, so there is no
+                        // string for a caller to inject metacharacters into.
+                        guard let program = payload["program"] as? String else { throw BridgeError.invalidRequest }
+                        let arguments = (payload["arguments"] as? [String]) ?? []
+                        let timeout = (payload["timeout_seconds"] as? NSNumber)?.doubleValue ?? 300
+                        let executionId = (payload["execution_id"] as? String) ?? UUID().uuidString
+                        body = try self.execWorkspace(
+                            token: token,
+                            program: program,
+                            arguments: arguments,
+                            timeoutSeconds: timeout,
+                            executionId: executionId
+                        )
+                    case "/v1/workspace/exec/cancel":
+                        guard let executionId = payload["execution_id"] as? String else {
+                            throw BridgeError.invalidRequest
+                        }
+                        body = self.cancelExecution(executionId: executionId)
                     default:
                         self.send(connection, status: 404, body: ["detail": "Not found"])
                         return
@@ -1199,6 +1221,228 @@ private final class BrainBridge {
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.moveItem(at: source, to: destination)
         return ["success": true, "path": path, "recoverable": true]
+    }
+
+    /// Programs the Local Executor may run inside an approved project root.
+    ///
+    /// The allowlist lives here, in the broker, rather than only in the
+    /// backend: the broker is the security boundary, so it must not depend on
+    /// its caller having validated anything. Interpreters that trivially
+    /// re-enable arbitrary execution (`sh`, `bash`, `zsh`, `env`, `eval`) are
+    /// absent by design.
+    private static let executableAllowlist: Set<String> = [
+        "npm", "npx", "pnpm", "yarn", "node",
+        "pytest", "python3", "ruff",
+        "go", "cargo", "make", "tsc", "eslint",
+    ]
+
+    /// Tracks live local executions so cancel() can terminate the whole tree.
+    private static let executionLock = NSLock()
+    private static var liveExecutions: [String: Int32] = [:]
+
+    /// Terminate a running local execution and every process it spawned.
+    ///
+    /// Killing only the direct child is not enough: `npm test` spawns a shell
+    /// of its own, which spawns the real test runner. Because the process is
+    /// started in its own process group, a negative-PID signal reaches the
+    /// entire tree, so nothing is left orphaned and holding the project root.
+    private func cancelExecution(executionId: String) -> [String: Any] {
+        Self.executionLock.lock()
+        let group = Self.liveExecutions[executionId]
+        Self.executionLock.unlock()
+        guard let group else {
+            return ["cancelled": false, "detail": "No such execution is running."]
+        }
+        kill(-group, SIGTERM)
+        // Escalate for anything that ignores SIGTERM.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+            kill(-group, SIGKILL)
+        }
+        return ["cancelled": true, "execution_id": executionId]
+    }
+
+    /// Run one allowlisted program with the project root as its cwd.
+    ///
+    /// Guarantees:
+    /// * no shell interpretation -- argv is passed through and never re-parsed;
+    /// * the working directory is the resolved, symlink-free approved root;
+    /// * the environment is an explicit minimal allowlist. The user's real
+    ///   environment is never inherited, so credential-bearing variables
+    ///   (AWS_*, GITHUB_TOKEN, npm auth, and so on) simply are not present;
+    /// * the process runs in its own process group so the whole tree can be
+    ///   killed on timeout or cancellation;
+    /// * on macOS the process is additionally wrapped in a seatbelt sandbox
+    ///   that denies network access and confines writes to the project root;
+    /// * output is bounded.
+    private func execWorkspace(
+        token: String,
+        program: String,
+        arguments: [String],
+        timeoutSeconds: TimeInterval,
+        executionId: String
+    ) throws -> [String: Any] {
+        let root = try workspaceRoot(token: token)
+        guard Self.executableAllowlist.contains(program) else { throw BridgeError.invalidRequest }
+        guard arguments.count <= 24 else { throw BridgeError.invalidRequest }
+        for argument in arguments {
+            guard argument.utf8.count <= 200, !argument.contains("\0") else { throw BridgeError.invalidRequest }
+        }
+        guard let executable = findExecutable(program) else {
+            return ["success": false, "available": false, "detail": "Program is not installed on this host."]
+        }
+        let bounded = min(max(timeoutSeconds, 5), 900)
+
+        let process = Process()
+        // A dedicated cache/tmp inside the project keeps toolchains from
+        // reaching into the user's real caches (which can hold registry auth).
+        let scratch = root.appendingPathComponent(".marcellus-exec", isDirectory: true)
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+
+        // Explicit minimal environment. Nothing is inherited from the broker's
+        // own environment, so no credential can leak into the child.
+        let environment: [String: String] = [
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            "HOME": scratch.path,
+            "TMPDIR": scratch.path,
+            "LANG": "en_US.UTF-8",
+            "CI": "1",
+            "NO_COLOR": "1",
+            // Keep package managers from consulting user-level auth/config.
+            "NPM_CONFIG_USERCONFIG": scratch.appendingPathComponent(".npmrc").path,
+            "NPM_CONFIG_CACHE": scratch.appendingPathComponent("npm-cache").path,
+            "PIP_CONFIG_FILE": scratch.appendingPathComponent("pip.conf").path,
+        ]
+
+        // Seatbelt profile: deny by default, then re-allow only what a toolchain
+        // genuinely needs.
+        //
+        // Reads are an explicit allowlist rather than a blanket `file-read*`.
+        // A blanket read allowance let an approved command read ~/.ssh, browser
+        // cookie stores, Keychain exports, unrelated Desktop documents, and other
+        // tenants' project roots -- everything outside the approved root is now
+        // denied. Path *metadata* stays readable because resolving any path
+        // requires stat() on its ancestors; that leaks existence, not content.
+        //
+        // `root` is resolved with realpath(3), not `resolvingSymlinksInPath()`.
+        // Foundation's helper normalizes /private/tmp *down* to /tmp (and
+        // /private/var to /var), which is the opposite of what the kernel
+        // enforces: seatbelt matches against the fully resolved physical path.
+        // Using the Foundation helper produced a profile whose write rule never
+        // matched the real path, so every write inside the approved root was
+        // denied. realpath(3) resolves in the direction the sandbox actually
+        // checks. It also collapses any symlinked ancestor, so a project path
+        // that tunnels out through a link cannot widen the allowed subpath.
+        let resolvedRoot: String = {
+            guard let raw = realpath(root.path, nil) else { return root.path }
+            defer { free(raw) }
+            return String(cString: raw)
+        }()
+        // `uv_cwd` (Node) and Python's path resolution stat the project root's
+        // immediate parent, so that one directory entry is readable. It is a
+        // `literal`, not a `subpath`: sibling projects and other tenants' roots
+        // under the same parent stay denied.
+        let rootParent = URL(fileURLWithPath: resolvedRoot).deletingLastPathComponent().path
+        let profile = """
+        (version 1)
+        (deny default)
+        (allow process-exec process-fork sysctl-read mach-lookup)
+        (allow file-read-metadata)
+        (allow file-read* (literal "/"))
+        (allow file-read* (subpath "/usr") (subpath "/bin") (subpath "/sbin"))
+        (allow file-read* (subpath "/System") (subpath "/Library"))
+        (allow file-read* (subpath "/opt/homebrew") (subpath "/opt/local"))
+        (allow file-read* (subpath "/Applications"))
+        (allow file-read* (subpath "/private/var/db") (subpath "/private/var/select"))
+        (allow file-read* (subpath "/private/etc"))
+        (allow file-read* (subpath "/dev"))
+        (allow file-read* (literal "\(rootParent)"))
+        (allow file-read* (subpath "\(resolvedRoot)"))
+        (deny network*)
+        (allow file-write* (subpath "\(resolvedRoot)"))
+        (allow file-write-data (literal "/dev/null") (literal "/dev/dtracehelper"))
+        """
+        let sandboxAvailable = FileManager.default.isExecutableFile(atPath: "/usr/bin/sandbox-exec")
+        if sandboxAvailable {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/sandbox-exec")
+            process.arguments = ["-p", profile, executable] + arguments
+        } else {
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+        }
+        process.currentDirectoryURL = root
+        process.environment = environment
+        process.standardInput = FileHandle.nullDevice
+
+        let captureURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("marcellus-exec-\(UUID().uuidString).log")
+        FileManager.default.createFile(atPath: captureURL.path, contents: nil)
+        guard let capture = try? FileHandle(forWritingTo: captureURL) else {
+            throw BridgeError.invocationFailed("Could not prepare command output.")
+        }
+        defer {
+            try? capture.close()
+            try? FileManager.default.removeItem(at: captureURL)
+        }
+        process.standardOutput = capture
+        process.standardError = capture
+
+        let started = Date()
+        try process.run()
+        // setpgid on the child makes the child its own group leader. Doing it
+        // from the parent immediately after launch races with exec but is
+        // idempotent and harmless if the child already did it.
+        let childPid = process.processIdentifier
+        setpgid(childPid, childPid)
+        Self.executionLock.lock()
+        Self.liveExecutions[executionId] = childPid
+        Self.executionLock.unlock()
+        defer {
+            Self.executionLock.lock()
+            Self.liveExecutions.removeValue(forKey: executionId)
+            Self.executionLock.unlock()
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in semaphore.signal() }
+        var timedOut = false
+        if semaphore.wait(timeout: .now() + bounded) == .timedOut {
+            timedOut = true
+            // Signal the whole group, not just the direct child.
+            kill(-childPid, SIGTERM)
+            if semaphore.wait(timeout: .now() + 5) == .timedOut {
+                kill(-childPid, SIGKILL)
+                _ = semaphore.wait(timeout: .now() + 5)
+            }
+        }
+        try? capture.synchronize()
+        let data = (try? Data(contentsOf: captureURL)) ?? Data()
+        var output = String(data: data, encoding: .utf8) ?? ""
+        let limit = 20_000
+        var truncated = false
+        if output.utf8.count > limit {
+            output = String(output.suffix(limit))
+            truncated = true
+        }
+        let cancelled = process.terminationReason == .uncaughtSignal && !timedOut
+        return [
+            "success": !timedOut && !cancelled && process.terminationStatus == 0,
+            "available": true,
+            "execution_id": executionId,
+            "timed_out": timedOut,
+            "cancelled": cancelled,
+            "sandboxed": sandboxAvailable,
+            // "sandbox" only when seatbelt actually wrapped the process. If
+            // /usr/bin/sandbox-exec is missing we still run, but the weaker
+            // posture is reported rather than silently implied.
+            "isolation": sandboxAvailable ? "sandbox" : "containment",
+            "isolation_detail": sandboxAvailable
+                ? "Seatbelt profile: network denied; reads and writes confined to the approved project root."
+                : "sandbox-exec is unavailable on this host; only argv-only execution, cleared environment, process-group termination, and a root-pinned working directory apply.",
+            "exit_code": Int(process.terminationStatus),
+            "output": output,
+            "truncated": truncated,
+            "duration_ms": Int(Date().timeIntervalSince(started) * 1000),
+        ]
     }
 
     private func status() -> [[String: Any]] {

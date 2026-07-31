@@ -15,7 +15,7 @@ import {
   Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder, Pencil, Compass,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { useTheme } from '@/components/ThemeProvider';
+import { GLASS_LEVELS, useTheme } from '@/components/ThemeProvider';
 import {
   CortexConversation,
   CortexProject,
@@ -586,7 +586,7 @@ function SidebarGroup({
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, glassLevel, setGlassLevel } = useTheme();
   const isLight   = theme === 'light';
   const isLiquid  = theme === 'liquid';
   const sidebarLogo = isLiquid ? '/favicon-liquid.png' : '/favicon.png';
@@ -727,6 +727,37 @@ export default function Sidebar() {
                 />
               </div>
             </button>
+            {/* Only meaningful under Liquid Glass, so it stays out of the way in
+                the opaque themes rather than showing a disabled control. */}
+            {isLiquid && (
+              <div
+                role="radiogroup"
+                aria-label="Liquid Glass transparency"
+                className="flex items-center gap-1 rounded-lg p-1"
+                style={{ background: 'var(--rc-bg-elevated)' }}
+              >
+                {GLASS_LEVELS.map((level) => {
+                  const active = glassLevel === level;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setGlassLevel(level)}
+                      title={`Liquid Glass: ${level}`}
+                      className="flex-1 rounded-md px-2 py-1 text-[11px] capitalize transition-colors"
+                      style={{
+                        background: active ? 'var(--rc-bg-surface)' : 'transparent',
+                        color: active ? 'var(--rc-text-1)' : 'var(--rc-text-3)',
+                      }}
+                    >
+                      {level}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-xs px-1" style={{ color: 'var(--rc-text-3)' }}>
               {runtimeVersion ? `v${runtimeVersion}` : 'version unavailable'} · {NAV_GROUPS.reduce((s, g) => s + g.items.length, 0)} modules
             </p>

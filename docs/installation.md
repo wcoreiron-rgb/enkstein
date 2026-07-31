@@ -12,8 +12,9 @@ Both installers create a clickable Enkstein launcher. The launcher starts
 Docker Desktop when needed, initializes unique secrets, and starts the
 platform. On macOS, a universal native application displays startup progress,
 waits for backend/frontend health, and embeds Enkstein in its own desktop
-window. Docker Desktop remains required because Enkstein includes multiple
-services and persistent PostgreSQL/Redis data.
+window. On Windows, WebView2 provides the native window, but Docker Desktop
+remains required because Enkstein includes multiple services and persistent
+PostgreSQL/Redis data. Neither installer is a standalone Docker-free runtime.
 
 The macOS package is signed and notarized by Apple. Tagged public Windows
 installers require Authenticode signing.

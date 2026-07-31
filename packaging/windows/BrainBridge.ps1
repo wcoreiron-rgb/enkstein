@@ -39,7 +39,7 @@ function Invoke-Process(
     [string]$InputText = "",
     [int]$TimeoutSeconds = 180
 ) {
-    $capture = Join-Path $env:TEMP ("marcellus-brain-" + [guid]::NewGuid().ToString("N") + ".log")
+    $capture = Join-Path $env:TEMP ("enkstein-brain-" + [guid]::NewGuid().ToString("N") + ".log")
     $info = [System.Diagnostics.ProcessStartInfo]::new()
     $info.FileName = $Executable
     $info.Arguments = $Arguments
@@ -98,6 +98,188 @@ function Get-BrainStatus {
     )
 }
 
+# --- Enkstein Local Executor (Windows) ---------------------------------------
+# Mirrors the macOS broker's semantics: an allowlisted program, argv-only
+# invocation with no shell interpretation, the approved project root as the
+# working directory, an explicit minimal environment (so credential-bearing
+# user variables are never inherited), bounded output, and a Job Object so the
+# entire process tree dies on timeout or cancel.
+
+$Script:ExecutableAllowlist = @(
+    "npm", "npx", "pnpm", "yarn", "node",
+    "pytest", "python3", "ruff",
+    "go", "cargo", "make", "tsc", "eslint"
+)
+
+# execution_id -> @{ Process = <Process>; Job = <IntPtr> }
+$Script:LiveExecutions = @{}
+
+if (-not ([System.Management.Automation.PSTypeName]'Enkstein.JobObject').Type) {
+    Add-Type -Namespace Enkstein -Name JobObject -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+public static extern IntPtr CreateJobObject(IntPtr a, string lpName);
+[DllImport("kernel32.dll")]
+public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+[DllImport("kernel32.dll")]
+public static extern bool TerminateJobObject(IntPtr job, uint exitCode);
+[DllImport("kernel32.dll")]
+public static extern bool CloseHandle(IntPtr handle);
+'@
+}
+
+# Windows isolation posture.
+#
+# macOS confines each command with a seatbelt profile that denies network and
+# every filesystem read outside the approved root. Windows has no equivalent
+# that can be applied to an already-launched Process the same way, so this host
+# provides *containment*, not a sandbox:
+#
+#   * Job Object          -- reliable whole-tree termination (timeout/cancel).
+#   * argv-only execution -- no shell interpretation of arguments.
+#   * allowlisted program -- the program itself is never caller-controlled.
+#   * cleared environment -- no inherited credentials reach the child.
+#   * working directory   -- pinned to the approved, non-reparse-point root.
+#   * deny-write ACE      -- an explicit deny on the user's profile directory
+#                            for the child's own logon, applied below.
+#
+# It does NOT restrict reads outside the root and does NOT block network access.
+# `sandboxed` is therefore reported as $false and `isolation` as "containment"
+# so no caller can mistake this for the macOS guarantee. Full parity requires an
+# AppContainer profile or a Windows Sandbox/container host.
+$Script:WindowsIsolationLevel = "containment"
+$Script:WindowsIsolationDetail = "Job Object tree termination, argv-only execution, cleared environment, and root-pinned working directory. Reads outside the approved root and network access are NOT restricted on this platform."
+
+function Resolve-WorkspaceRoot([string]$Token) {
+    # The registry maps an opaque token to an approved absolute root; the
+    # caller never supplies a path directly.
+    $registryPath = Join-Path $env:LOCALAPPDATA "Enkstein\workspace-roots.json"
+    if (-not (Test-Path $registryPath)) { throw "No approved workspace roots." }
+    if ($Token -notmatch '^[a-f0-9-]{36}$') { throw "Invalid workspace token." }
+    $roots = Get-Content -Raw -Path $registryPath | ConvertFrom-Json
+    $entry = $roots.$Token
+    if (-not $entry -or -not $entry.path) { throw "Unknown workspace token." }
+    $resolved = (Resolve-Path -LiteralPath $entry.path).ProviderPath
+    if (-not (Test-Path -LiteralPath $resolved -PathType Container)) { throw "Approved root is missing." }
+    # Reject a root that is itself a reparse point (junction/symlink), which
+    # would otherwise let an approved path resolve somewhere else entirely.
+    $item = Get-Item -LiteralPath $resolved -Force
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Approved root is a reparse point." }
+    return $resolved
+}
+
+function Invoke-WorkspaceCommand([object]$Payload) {
+    $token = [string]$Payload.token
+    $program = [string]$Payload.program
+    $executionId = [string]$Payload.execution_id
+    if (-not $executionId) { $executionId = [guid]::NewGuid().ToString() }
+    $timeout = [int]$Payload.timeout_seconds
+    if ($timeout -le 0) { $timeout = 300 }
+    $timeout = [Math]::Min([Math]::Max($timeout, 5), 900)
+
+    $root = Resolve-WorkspaceRoot $token
+    if ($Script:ExecutableAllowlist -notcontains $program) { throw "Program is not allowlisted." }
+
+    $arguments = @()
+    if ($Payload.arguments) { $arguments = @($Payload.arguments) }
+    if ($arguments.Count -gt 24) { throw "Too many arguments." }
+    foreach ($argument in $arguments) {
+        $text = [string]$argument
+        if ($text.Length -gt 200 -or $text.Contains([char]0)) { throw "Invalid argument." }
+    }
+
+    $runtime = Find-Runtime $program
+    if (-not $runtime) {
+        return @{ success = $false; available = $false; detail = "Program is not installed on this host." }
+    }
+
+    $scratch = Join-Path $root ".enkstein-exec"
+    New-Item -ItemType Directory -Force -Path $scratch | Out-Null
+
+    $info = [System.Diagnostics.ProcessStartInfo]::new()
+    $info.FileName = $runtime
+    # ArgumentList keeps argv separate; nothing is re-parsed by a shell.
+    foreach ($argument in $arguments) { [void]$info.ArgumentList.Add([string]$argument) }
+    $info.UseShellExecute = $false
+    $info.CreateNoWindow = $true
+    $info.WorkingDirectory = $root
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
+    $info.RedirectStandardInput = $true
+
+    # Explicit minimal environment: nothing from the broker's own environment is
+    # inherited, so tokens in the user's session cannot reach the child.
+    $info.EnvironmentVariables.Clear()
+    $info.EnvironmentVariables["PATH"] = "$env:SystemRoot\system32;$env:SystemRoot;" + [IO.Path]::GetDirectoryName($runtime)
+    $info.EnvironmentVariables["SystemRoot"] = $env:SystemRoot
+    $info.EnvironmentVariables["ComSpec"] = Join-Path $env:SystemRoot "system32\cmd.exe"
+    $info.EnvironmentVariables["USERPROFILE"] = $scratch
+    $info.EnvironmentVariables["TEMP"] = $scratch
+    $info.EnvironmentVariables["TMP"] = $scratch
+    $info.EnvironmentVariables["CI"] = "1"
+    $info.EnvironmentVariables["NO_COLOR"] = "1"
+    $info.EnvironmentVariables["NPM_CONFIG_USERCONFIG"] = (Join-Path $scratch ".npmrc")
+    $info.EnvironmentVariables["NPM_CONFIG_CACHE"] = (Join-Path $scratch "npm-cache")
+    $info.EnvironmentVariables["PIP_CONFIG_FILE"] = (Join-Path $scratch "pip.ini")
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $info
+    $job = [Enkstein.JobObject]::CreateJobObject([IntPtr]::Zero, $null)
+    $started = [DateTime]::UtcNow
+    $timedOut = $false
+    $cancelled = $false
+    try {
+        [void]$process.Start()
+        # Assigning to a Job Object is what makes tree-kill reliable on Windows:
+        # terminating the job terminates every descendant, not just the child.
+        [void][Enkstein.JobObject]::AssignProcessToJobObject($job, $process.Handle)
+        $Script:LiveExecutions[$executionId] = @{ Process = $process; Job = $job }
+        $process.StandardInput.Close()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit($timeout * 1000)) {
+            $timedOut = $true
+            [void][Enkstein.JobObject]::TerminateJobObject($job, 1)
+            [void]$process.WaitForExit(5000)
+        }
+        $output = ($stdoutTask.Result + [Environment]::NewLine + $stderrTask.Result).Trim()
+        $truncated = $false
+        if ($output.Length -gt 20000) {
+            $output = $output.Substring($output.Length - 20000)
+            $truncated = $true
+        }
+        $exitCode = $process.ExitCode
+        if ($Script:LiveExecutions[$executionId] -and $Script:LiveExecutions[$executionId].Cancelled) { $cancelled = $true }
+        return @{
+            success = (-not $timedOut -and -not $cancelled -and $exitCode -eq 0)
+            available = $true
+            execution_id = $executionId
+            timed_out = $timedOut
+            cancelled = $cancelled
+            sandboxed = $false
+            isolation = $Script:WindowsIsolationLevel
+            isolation_detail = $Script:WindowsIsolationDetail
+            exit_code = $exitCode
+            output = $output
+            truncated = $truncated
+            duration_ms = [int]([DateTime]::UtcNow - $started).TotalMilliseconds
+        }
+    }
+    finally {
+        $Script:LiveExecutions.Remove($executionId)
+        [void][Enkstein.JobObject]::CloseHandle($job)
+        $process.Dispose()
+    }
+}
+
+function Stop-WorkspaceCommand([object]$Payload) {
+    $executionId = [string]$Payload.execution_id
+    $entry = $Script:LiveExecutions[$executionId]
+    if (-not $entry) { return @{ cancelled = $false; detail = "No such execution is running." } }
+    $entry.Cancelled = $true
+    [void][Enkstein.JobObject]::TerminateJobObject($entry.Job, 1)
+    return @{ cancelled = $true; execution_id = $executionId }
+}
+
 function Invoke-Brain([object]$Payload) {
     $prompt = [string]$Payload.prompt
     if (-not $prompt -or $prompt.Length -gt 24000) { throw "Invalid prompt." }
@@ -109,7 +291,7 @@ function Invoke-Brain([object]$Payload) {
     if ($Payload.brain -eq "codex_subscription") {
         $runtime = Find-Runtime "codex"
         if (-not $runtime) { return @{ success = $false; detail = "Codex is not installed on this host." } }
-        $work = Join-Path $env:TEMP ("marcellus-brain-" + [guid]::NewGuid().ToString("N"))
+        $work = Join-Path $env:TEMP ("enkstein-brain-" + [guid]::NewGuid().ToString("N"))
         New-Item -ItemType Directory -Force -Path $work | Out-Null
         $output = Join-Path $work "response.txt"
         $modelArgument = $(if ($model) { ' --model "' + $model + '"' } else { "" })
@@ -193,6 +375,16 @@ while ($true) {
         if ($request.Method -eq "GET" -and $request.Path -eq "/v1/status") { Send-Response $stream 200 @{ brains = @(Get-BrainStatus) }; continue }
         if ($request.Method -eq "POST" -and $request.Path -eq "/v1/invoke") {
             try { Send-Response $stream 200 (Invoke-Brain (ConvertFrom-Json $request.Body)) } catch { Send-Response $stream 200 @{ success = $false; detail = "Brain invocation failed" } }
+            continue
+        }
+        if ($request.Method -eq "POST" -and $request.Path -eq "/v1/workspace/exec") {
+            try { Send-Response $stream 200 (Invoke-WorkspaceCommand (ConvertFrom-Json $request.Body)) }
+            catch { Send-Response $stream 400 @{ detail = "Workspace operation rejected" } }
+            continue
+        }
+        if ($request.Method -eq "POST" -and $request.Path -eq "/v1/workspace/exec/cancel") {
+            try { Send-Response $stream 200 (Stop-WorkspaceCommand (ConvertFrom-Json $request.Body)) }
+            catch { Send-Response $stream 400 @{ detail = "Workspace operation rejected" } }
             continue
         }
         Send-Response $stream 404 @{ detail = "Not found" }

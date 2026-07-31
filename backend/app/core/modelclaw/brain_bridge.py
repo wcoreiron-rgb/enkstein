@@ -502,10 +502,20 @@ async def _invoke_browser_blocking(
 
 async def invoke_native_workspace(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     """Invoke a folder-scoped native workspace operation through the authenticated host bridge."""
-    if operation not in {"list", "write", "trash", "pick", "rename", "move"}:
+    # "exec" is the narrowly scoped command operation used by the Enkstein Local
+    # Executor: the broker accepts an allowlisted program plus a pre-split argv
+    # and never a shell string, and runs it with the approved root as its cwd.
+    if operation not in {"list", "write", "trash", "pick", "rename", "move", "exec", "exec_cancel"}:
         raise ValueError("Unsupported native workspace operation")
     if not bridge_configured():
         raise RuntimeError("Native workspace bridge is not configured")
+    # A command legitimately runs far longer than a file write, so the exec
+    # operation gets its own generous ceiling instead of the default timeout.
+    if operation == "exec":
+        budget = float(payload.get("timeout_seconds") or 300) + 30.0
+        return await _bridge_request("POST", "/v1/workspace/exec", payload, timeout_seconds=budget)
+    if operation == "exec_cancel":
+        return await _bridge_request("POST", "/v1/workspace/exec/cancel", payload, timeout_seconds=30.0)
     return await _bridge_request("POST", f"/v1/workspace/{operation}", payload)
 
 

@@ -39,8 +39,27 @@ Source: "{#StageDir}\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\Enkstein"; Filename: "{app}\Enkstein.exe"
-Name: "{autodesktop}\Enkstein"; Filename: "{app}\Enkstein.exe"; Tasks: desktopicon
+; AppUserModelID must match AppIdentity.AppUserModelId in the launcher, otherwise
+; a pinned shortcut and the running window are treated as two different apps and
+; the taskbar shows a duplicate button.
+Name: "{autoprograms}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.exe"; AppUserModelID: "Enkstein.Desktop"
+Name: "{autodesktop}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.exe"; AppUserModelID: "Enkstein.Desktop"; Tasks: desktopicon
+
+[InstallDelete]
+; Remove shortcuts from the pre-rename builds. Without this an upgrade leaves a
+; dead legacy tile beside the new "Enkstein" one, which is the duplicate
+; shortcut the acceptance criteria call out.
+Type: files; Name: "{autoprograms}\Marcellus.lnk"
+Type: files; Name: "{autodesktop}\Marcellus.lnk"
+Type: filesandordirs; Name: "{autoprograms}\Marcellus"
+Type: files; Name: "{autoprograms}\RegentClaw.lnk"
+Type: files; Name: "{autodesktop}\RegentClaw.lnk"
+Type: filesandordirs; Name: "{autoprograms}\RegentClaw"
+
+[UninstallDelete]
+; The WebView2 user-data folder is created at runtime, so the uninstaller does
+; not know about it and would otherwise leave it behind.
+Type: filesandordirs; Name: "{localappdata}\Enkstein\WebView2"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"

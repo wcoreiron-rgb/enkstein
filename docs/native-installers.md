@@ -151,8 +151,21 @@ notary service, staples the ticket, and validates Gatekeeper acceptance.
 
 The Windows installer is built with Inno Setup and installs per-user under
 `%LOCALAPPDATA%\Programs\Enkstein`. It creates Start Menu and optional desktop
-shortcuts, launches Enkstein after setup, starts Docker Desktop when needed,
-creates installation secrets, starts the Compose stack, and opens the browser.
+shortcuts with the stable `Enkstein.Desktop` AppUserModelID, launches the native
+WebView2 Enkstein window after setup, starts Docker Desktop when needed,
+creates installation secrets, and starts the Compose stack.
+
+This is a native desktop shell around the Enkstein runtime, not a standalone
+runtime bundle. Docker Desktop with its Linux engine is still required on
+Windows; the installer does not silently provide PostgreSQL, Redis, or the
+backend/frontend containers. The launcher shows an actionable Enkstein error
+and exits when Docker is unavailable. Removing that dependency requires a
+separate native-runtime distribution and is not claimed by this installer.
+
+The normal app icon is generated from the transparent
+`frontend/public/favicon.png`. The glass tile is reserved for explicit Liquid
+Glass presentation and is never used for the executable, installer, shortcuts,
+or taskbar identity.
 
 Windows code signing is required by the tagged public-release workflow. Configure:
 
@@ -185,6 +198,13 @@ local command is:
 ```powershell
 .\scripts\build_windows_installer.ps1 -Version 0.2.0
 ```
+
+Release gate: the Windows launcher and installer are not considered verified
+from a macOS checkout. Before publishing, build the C# WebView2 host on a real
+Windows machine, install the generated package, and test Start Menu launch,
+desktop/taskbar identity, uninstall/reinstall cleanup, opaque light/dark modes,
+Liquid Glass subtle/balanced/clear, and the transparency-disabled fallback.
+Until that host test passes, do not call the Windows package production-ready.
 
 ## Publishing a release
 

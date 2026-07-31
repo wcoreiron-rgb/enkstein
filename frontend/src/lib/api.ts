@@ -1377,3 +1377,35 @@ export const remediateControl = (control_id: string, requested_by = 'operator') 
     method: 'POST',
     body: JSON.stringify({ control_id, requested_by }),
   });
+
+// --- Cowork governed executors -------------------------------------------------
+// A Brain plans and authors; an Executor runs commands and tests in the approved
+// project root. They are independent, so the UI reports them as separate fields
+// rather than inferring an executor from whichever Brain answered.
+
+export type CoworkExecutor = {
+  executor: string;
+  label: string;
+  available: boolean;
+  reason: string;
+};
+
+export type CoworkExecutorStatus = {
+  executors: CoworkExecutor[];
+  selected: string;
+  selected_label: string;
+  any_available: boolean;
+};
+
+export const getCoworkExecutors = (params: {
+  tenantId?: string;
+  projectId?: string;
+  preference?: string;
+} = {}) => {
+  const query = new URLSearchParams();
+  if (params.tenantId) query.set('tenant_id', params.tenantId);
+  if (params.projectId) query.set('project_id', params.projectId);
+  if (params.preference) query.set('preference', params.preference);
+  const suffix = query.toString();
+  return apiFetch<CoworkExecutorStatus>(`/marcellus/cowork/executors${suffix ? `?${suffix}` : ''}`);
+};

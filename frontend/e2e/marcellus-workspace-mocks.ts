@@ -142,6 +142,23 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
   await page.route('**/api/v1/marcellus/missions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.6.5' }) }));
 
+  // Cowork resolves its Executor separately from the answering Brain. Default the
+  // harness to a healthy local runtime so specs that don't care about executors
+  // are unaffected; specs that do care re-route this path with their own payload.
+  await page.route('**/api/v1/marcellus/cowork/executors*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      executors: [
+        { executor: 'enkstein_local', label: 'Enkstein Local Runtime', available: true, reason: '' },
+        { executor: 'codex_app_server', label: 'Codex App Server', available: false, reason: 'Codex is not connected.' },
+      ],
+      selected: 'enkstein_local',
+      selected_label: 'Enkstein Local Runtime',
+      any_available: true,
+    }),
+  }));
+
   await page.route('**/api/v1/marcellus/workspace/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());

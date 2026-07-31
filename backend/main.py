@@ -45,6 +45,11 @@ from app.models.marcellus import (  # noqa: F401
     CortexMissionObservation,
     CortexOvernightBrief,
     CortexProject,
+    CoworkBrowserTask,
+    CoworkExecution,
+    CoworkJob,
+    CoworkJobEvent,
+    CoworkJobStep,
     NodeCheckpoint,
     PlexusMessage,
     ReflexDefinition,
@@ -111,6 +116,7 @@ from app.core.modelclaw.routes import router as modelclaw_router
 from app.core.marcellus.routes import router as marcellus_router
 from app.core.marcellus.runtime_routes import router as marcellus_runtime_router
 from app.core.marcellus.workspace_routes import router as marcellus_workspace_router
+from app.core.marcellus.cowork_routes import router as marcellus_cowork_router
 from app.core.marcellus.mission_routes import router as marcellus_mission_router
 
 
@@ -145,11 +151,28 @@ async def lifespan(app: FastAPI):
     )
     logger.info("Mission scheduler started")
 
+    # Durable Cowork jobs outlive the process that started them. Any job left
+    # mid-flight by a crash, restart, or redeploy is re-adopted here rather than
+    # stranded in a non-terminal state.
+    try:
+        from app.core.marcellus.cowork_jobs import recover_orphaned_jobs
+
+        recovered = await recover_orphaned_jobs(AsyncSessionLocal)
+        if recovered:
+            logger.info("Resumed %s interrupted Cowork job(s)", recovered)
+    except Exception:
+        logger.exception("Cowork job recovery failed at startup")
+
     yield
 
     # Shutdown — cancel the scheduler
     scheduler_task.cancel()
     mission_task.cancel()
+    # Durable Cowork jobs are safe to interrupt: their state lives in the
+    # database, so an interrupted run is resumable rather than lost.
+    from app.core.marcellus.cowork_jobs import shutdown as cowork_shutdown
+
+    await cowork_shutdown()
     try:
         await asyncio.gather(scheduler_task, mission_task)
     except asyncio.CancelledError:
@@ -256,6 +279,7 @@ app.include_router(modelclaw_router, prefix=PREFIX)
 app.include_router(marcellus_router, prefix=PREFIX)
 app.include_router(marcellus_runtime_router, prefix=PREFIX)
 app.include_router(marcellus_workspace_router, prefix=PREFIX)
+app.include_router(marcellus_cowork_router, prefix=PREFIX)
 app.include_router(marcellus_mission_router, prefix=PREFIX)
 
 
