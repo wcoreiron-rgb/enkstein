@@ -162,10 +162,11 @@ backend/frontend containers. The launcher shows an actionable Enkstein error
 and exits when Docker is unavailable. Removing that dependency requires a
 separate native-runtime distribution and is not claimed by this installer.
 
-The normal app icon is generated from the transparent
-`frontend/public/favicon.png`. The glass tile is reserved for explicit Liquid
-Glass presentation and is never used for the executable, installer, shortcuts,
-or taskbar identity.
+The canonical app icon is `frontend/public/enkstein-icon.png`: a red/orange
+octopus centered on a white rounded-square tile, with transparent pixels outside
+the rounded corners. The same artwork is used for the executable, installer,
+shortcuts, and taskbar identity. `favicon-liquid.png` is reserved for explicit
+Liquid Glass presentation and is never used for the app icon.
 
 Windows code signing is required by the tagged public-release workflow. Configure:
 

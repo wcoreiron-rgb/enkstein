@@ -589,7 +589,7 @@ export default function Sidebar() {
   const { theme, toggle, glassLevel, setGlassLevel } = useTheme();
   const isLight   = theme === 'light';
   const isLiquid  = theme === 'liquid';
-  const sidebarLogo = isLiquid ? '/favicon-liquid.png' : '/favicon.png';
+  const sidebarLogo = isLiquid ? '/favicon-liquid.png' : '/enkstein-icon.png';
   const [collapsed, setCollapsed] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');

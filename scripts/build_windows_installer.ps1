@@ -80,12 +80,11 @@ if (-not (Get-Command magick -ErrorAction SilentlyContinue)) {
     throw "ImageMagick is required to generate the Windows application icon."
 }
 $Icon = Join-Path $Stage "Enkstein.ico"
-# Built from the transparent octopus mark, NOT favicon-liquid.png. The liquid
-# asset is a glass tile with an opaque white plate baked in; using it produced a
-# white square behind the logo on dark taskbars and applied a glass effect to
-# the icon itself. The shell composites this icon over user-chosen backgrounds,
-# so the source must carry real alpha.
-$IconSource = Join-Path $Root "frontend\public\favicon.png"
+# The canonical app artwork is a red/orange octopus on a white rounded-square
+# tile with transparent pixels outside the rounded corners. It is shared by the
+# executable, installer, Start Menu, Desktop, and taskbar identity. The liquid
+# tile is a presentation asset and must never become the application icon.
+$IconSource = Join-Path $Root "frontend\public\enkstein-icon.png"
 if (-not (Test-Path $IconSource)) { throw "Icon source missing: $IconSource" }
 & magick $IconSource -background none -define icon:auto-resize=256,128,64,48,32,16 $Icon
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Icon)) { throw "Windows icon generation failed." }

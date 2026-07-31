@@ -18,10 +18,10 @@ export const metadata: Metadata = {
   description: 'Distributed Zero Trust security architecture with Cortex, Hearts, Arms, and Capability Nodes',
   icons: {
     icon: [
-      { url: '/favicon.png', type: 'image/png', sizes: '512x512' },
+      { url: '/enkstein-icon.png', type: 'image/png', sizes: '1024x1024' },
     ],
-    shortcut: '/favicon.png',
-    apple: '/favicon.png',
+    shortcut: '/enkstein-icon.png',
+    apple: '/enkstein-icon.png',
   },
 };
 
@@ -29,12 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        <link rel="icon"             type="image/png" sizes="512x512" href="/favicon.png" />
-        <link rel="icon"             type="image/png" sizes="192x192" href="/favicon.png" />
-        <link rel="icon"             type="image/png" sizes="64x64"   href="/favicon.png" />
-        <link rel="icon"             type="image/png" sizes="32x32"   href="/favicon.png" />
-        <link rel="shortcut icon"    type="image/png"                 href="/favicon.png" />
-        <link rel="apple-touch-icon" sizes="180x180"                  href="/favicon.png" />
+        <link rel="icon"             type="image/png" sizes="1024x1024" href="/enkstein-icon.png" />
+        <link rel="icon"             type="image/png" sizes="192x192"  href="/enkstein-icon.png" />
+        <link rel="icon"             type="image/png" sizes="64x64"    href="/enkstein-icon.png" />
+        <link rel="icon"             type="image/png" sizes="32x32"    href="/enkstein-icon.png" />
+        <link rel="shortcut icon"    type="image/png"                  href="/enkstein-icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180"                   href="/enkstein-icon.png" />
       </head>
       <body className="min-h-screen" style={{ background: 'var(--rc-bg-base)', color: 'var(--rc-text-1)' }}>
         <ThemeProvider>

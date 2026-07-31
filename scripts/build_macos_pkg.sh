@@ -68,7 +68,7 @@ chmod +x "$RESOURCES_DIR/EnksteinBrainBridge"
 
 ICONSET="$WORK_DIR/Enkstein.iconset"
 mkdir -p "$ICONSET"
-ICON_SOURCE="$ROOT_DIR/frontend/public/favicon-liquid.png"
+ICON_SOURCE="$ROOT_DIR/frontend/public/enkstein-icon.png"
 for size in 16 32 128 256 512; do
   sips -z "$size" "$size" "$ICON_SOURCE" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
   retina=$((size * 2))

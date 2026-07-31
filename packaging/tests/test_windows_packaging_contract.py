@@ -37,7 +37,7 @@ def test_installer_creates_only_enkstein_shortcuts_and_removes_legacy_names():
 
 def test_build_uses_transparent_standard_logo_not_glass_tile():
     source = read(ROOT / "scripts" / "build_windows_installer.ps1")
-    assert 'frontend\\public\\favicon.png' in source
+    assert 'frontend\\public\\enkstein-icon.png' in source
     assert 'frontend\\public\\favicon-liquid.png' not in source
     assert "alpha" in source
 
@@ -45,7 +45,17 @@ def test_build_uses_transparent_standard_logo_not_glass_tile():
 def test_web_favicon_is_not_the_opaque_liquid_tile():
     source = read(ROOT / "frontend" / "src" / "app" / "layout.tsx")
     assert "/favicon-liquid.png" not in source
-    assert "/favicon.png" in source
+    assert "/enkstein-icon.png" in source
+
+
+def test_canonical_icon_has_transparent_corners_and_white_tile():
+    from PIL import Image
+
+    icon = Image.open(ROOT / "frontend" / "public" / "enkstein-icon.png").convert("RGBA")
+    assert icon.size == (1024, 1024)
+    assert icon.getpixel((0, 0))[3] == 0
+    assert icon.getpixel((512, 32))[:3] == (255, 255, 255)
+    assert icon.getpixel((512, 512))[0] > 200
 
 
 def test_windows_launcher_does_not_open_a_browser_in_embedded_mode():
@@ -73,4 +83,3 @@ def test_liquid_glass_is_explicit_and_has_three_levels():
     assert "TransparencyEffectsEnabled" in host
     assert "prefers-reduced-transparency" in css
     assert "data-glass" in host
-
