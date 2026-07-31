@@ -31,6 +31,7 @@ LicenseFile={#StageDir}\runtime\LICENSE
 
 [Files]
 Source: "{#StageDir}\Enkstein.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#StageDir}\Enkstein.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; WebView2 SDK assemblies and native loader. The host embeds WebView2, so it
 ; cannot start without these beside the executable.
 Source: "{#StageDir}\Microsoft.Web.WebView2.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
@@ -42,8 +43,8 @@ Source: "{#StageDir}\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion 
 ; AppUserModelID must match AppIdentity.AppUserModelId in the launcher, otherwise
 ; a pinned shortcut and the running window are treated as two different apps and
 ; the taskbar shows a duplicate button.
-Name: "{autoprograms}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.exe"; AppUserModelID: "Enkstein.Desktop"
-Name: "{autodesktop}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.exe"; AppUserModelID: "Enkstein.Desktop"; Tasks: desktopicon
+Name: "{autoprograms}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.ico"; AppUserModelID: "Enkstein.Desktop"
+Name: "{autodesktop}\Enkstein"; Filename: "{app}\Enkstein.exe"; IconFilename: "{app}\Enkstein.ico"; AppUserModelID: "Enkstein.Desktop"; Tasks: desktopicon
 
 [InstallDelete]
 ; Remove shortcuts from the pre-rename builds. Without this an upgrade leaves a

@@ -22,6 +22,7 @@ def test_windows_launcher_has_stable_identity_and_native_webview_host():
     assert 'AppUserModelId = "Enkstein.Desktop"' in source
     assert "SetCurrentProcessExplicitAppUserModelID" in source
     assert "WebView2" in source
+    assert 'Enkstein.ico' in source
     assert 'Text = AppIdentity.ProductName' in source
     assert 'DefaultUrl = "http://localhost:3000"' in source
 
@@ -31,6 +32,7 @@ def test_installer_creates_only_enkstein_shortcuts_and_removes_legacy_names():
     assert 'Name: "{autoprograms}\\Enkstein"' in source
     assert 'Name: "{autodesktop}\\Enkstein"' in source
     assert 'AppUserModelID: "Enkstein.Desktop"' in source
+    assert 'IconFilename: "{app}\\Enkstein.ico"' in source
     assert 'Name: "{autoprograms}\\Marcellus.lnk"' in source
     assert 'Name: "{autoprograms}\\RegentClaw.lnk"' in source
 
@@ -62,7 +64,7 @@ def test_every_windows_surface_uses_the_same_icon():
     assert '/win32icon:"$Icon"' in build
     for shortcut in ("{autoprograms}\\Enkstein", "{autodesktop}\\Enkstein"):
         assert f'Name: "{shortcut}"' in installer
-    assert installer.count('IconFilename: "{app}\\Enkstein.exe"') == 2
+    assert installer.count('IconFilename: "{app}\\Enkstein.ico"') == 2
 
 
 def test_web_favicon_is_not_the_opaque_liquid_tile():

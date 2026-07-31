@@ -173,7 +173,11 @@ internal sealed class EnksteinWindow : Form
 
         try
         {
-            string icon = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Enkstein.exe");
+            // Use the canonical ICO directly so the native window preserves
+            // the rounded alpha corners instead of relying on executable icon
+            // extraction, which can flatten the artwork on some Windows builds.
+            string icon = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Enkstein.ico");
+            if (!File.Exists(icon)) icon = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Enkstein.exe");
             if (File.Exists(icon)) Icon = Icon.ExtractAssociatedIcon(icon);
         }
         catch (Exception)
