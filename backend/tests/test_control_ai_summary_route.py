@@ -80,6 +80,11 @@ async def test_failing_node_returns_advisory_narration(client, monkeypatch):
     assert body["advisory"] is True
     assert body["provider"] == "ollama"
     assert "## Remediation steps" in body["summary"]
+    assert body["engine"]["source"] == "profile:swarm_judge_profile"
+    assert [item["source"] for item in body["engine_plan"]] == [
+        "profile:swarm_judge_profile",
+        "profile:ollama_local_fallback",
+    ]
     assert body["evidence_counts"] == {
         "failing_controls": 1,
         "findings": 0,

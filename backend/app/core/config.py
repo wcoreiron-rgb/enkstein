@@ -30,9 +30,17 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://regentclaw:regentclaw@db:5432/regentclaw"
     DATABASE_URL_SYNC: str = "postgresql://regentclaw:regentclaw@db:5432/regentclaw"
+    # Compose writes these conventional variables into the shared .env file.
+    # The application uses DATABASE_URL above, but accepting the values here
+    # keeps local pytest/imports compatible with the packaged runtime instead
+    # of rejecting a valid Compose environment as unknown settings.
+    POSTGRES_USER: str | None = None
+    POSTGRES_PASSWORD: str | None = None
+    POSTGRES_DB: str | None = None
 
     # Redis
     REDIS_URL: str = "redis://redis:6379/0"
+    REDIS_PASSWORD: str | None = None
 
     # Security
     SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
@@ -47,6 +55,8 @@ class Settings(BaseSettings):
     EMAIL_AUTH_SMTP_USERNAME: str = ""
     EMAIL_AUTH_SMTP_PASSWORD: str = ""
     EMAIL_AUTH_FROM: str = ""
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = ""
 
     # Native host Brain Bridge. The bridge owns vendor subscription sessions;
     # containers receive only a short-lived invocation surface and never tokens.
