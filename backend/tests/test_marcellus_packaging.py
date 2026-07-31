@@ -57,7 +57,7 @@ def test_native_launchers_use_isolated_runtime_paths() -> None:
     assert "applicationShouldTerminateAfterLastWindowClosed" in mac_app
     assert "false" in mac_app
     assert "NSWorkspace.shared.open(url)" in mac_app
-    assert '"Marcellus\\logs"' in windows_launcher
+    assert '"Enkstein\\logs"' in windows_launcher
     assert "RegentClaw" not in mac_launcher
     assert "RegentClaw" not in windows_launcher
 

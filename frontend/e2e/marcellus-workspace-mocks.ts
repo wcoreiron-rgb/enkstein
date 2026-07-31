@@ -140,7 +140,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
   await page.route('**/api/v1/arcclaw/agent/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route('**/api/v1/marcellus/architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ARCHITECTURE_STUB) }));
   await page.route('**/api/v1/marcellus/missions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.6.5' }) }));
+  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.6.6' }) }));
 
   // Cowork resolves its Executor separately from the answering Brain. Default the
   // harness to a healthy local runtime so specs that don't care about executors
