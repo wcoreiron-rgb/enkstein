@@ -92,33 +92,36 @@ $Icon = Join-Path $Stage "Enkstein.ico"
 Copy-Item $IconSource $Icon
 
 # Guard the regression rather than trusting the committed file: any opaque
-# outer corner in any frame renders as a white box on a dark desktop, so the
-# build has to fail loudly instead of shipping it.
-Add-Type -AssemblyName System.Drawing
-foreach ($Size in @(16, 24, 32, 48, 64, 128, 256)) {
-    $Frame = New-Object System.Drawing.Icon($Icon, $Size, $Size)
-    $Bitmap = $Frame.ToBitmap()
-    try {
-        if ($Bitmap.Width -ne $Size) {
-            throw "Windows icon is missing the ${Size}x${Size} frame."
-        }
-        $Last = $Size - 1
-        foreach ($Point in @(@(0, 0), @($Last, 0), @(0, $Last), @($Last, $Last))) {
-            $Alpha = $Bitmap.GetPixel($Point[0], $Point[1]).A
-            if ($Alpha -ne 0) {
-                throw "Windows icon ${Size}x${Size} has an opaque corner at $($Point[0]),$($Point[1]) (alpha $Alpha); it would render as a white box on dark surfaces."
-            }
-        }
-        $Inset = [Math]::Max(1, [Math]::Round($Size * 0.1914))
-        $Tile = $Bitmap.GetPixel($Inset, $Inset)
-        if ($Tile.A -ne 255 -or [Math]::Min([Math]::Min($Tile.R, $Tile.G), $Tile.B) -le 170) {
-            throw "Windows icon ${Size}x${Size} is not an opaque white tile just inside the rounded corner."
-        }
+# outer corner in any frame renders as a white box on a dark desktop. The
+# Windows System.Drawing API scales the nearest frame and cannot reliably
+# enumerate a 256px ICO entry, so validate the ICO directory itself here.
+# `test_windows_icon_alpha.py` performs the pixel-level RGBA/corner checks for
+# every decoded frame; this build-time check ensures no frame is omitted.
+$IconBytes = [System.IO.File]::ReadAllBytes($Icon)
+if ($IconBytes.Length -lt 6) { throw "Windows icon is too small to be a valid ICO." }
+$Reserved = [BitConverter]::ToUInt16($IconBytes, 0)
+$Type = [BitConverter]::ToUInt16($IconBytes, 2)
+$Count = [BitConverter]::ToUInt16($IconBytes, 4)
+if ($Reserved -ne 0 -or $Type -ne 1) { throw "Windows icon has an invalid ICO header." }
+$ExpectedSizes = @(16, 24, 32, 48, 64, 128, 256)
+$FoundSizes = @()
+for ($Index = 0; $Index -lt $Count; $Index++) {
+    $Offset = 6 + ($Index * 16)
+    if ($Offset + 16 -gt $IconBytes.Length) { throw "Windows icon directory is truncated." }
+    $WidthByte = $IconBytes[$Offset]
+    $HeightByte = $IconBytes[$Offset + 1]
+    $Width = if ($WidthByte -eq 0) { 256 } else { [int]$WidthByte }
+    $Height = if ($HeightByte -eq 0) { 256 } else { [int]$HeightByte }
+    if ($Width -ne $Height) { throw "Windows icon contains a non-square ${Width}x${Height} frame." }
+    $FoundSizes += $Width
+    $ImageBytes = [BitConverter]::ToUInt32($IconBytes, $Offset + 8)
+    $ImageOffset = [BitConverter]::ToUInt32($IconBytes, $Offset + 12)
+    if ($ImageBytes -eq 0 -or $ImageOffset + $ImageBytes -gt $IconBytes.Length) {
+        throw "Windows icon contains an invalid ${Width}x${Height} frame payload."
     }
-    finally {
-        $Bitmap.Dispose()
-        $Frame.Dispose()
-    }
+}
+foreach ($Size in $ExpectedSizes) {
+    if ($FoundSizes -notcontains $Size) { throw "Windows icon directory is missing the ${Size}x${Size} frame." }
 }
 
 # x64 rather than anycpu: WebView2Loader.dll is architecture-specific, and a

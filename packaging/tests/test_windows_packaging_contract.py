@@ -39,8 +39,11 @@ def test_build_uses_transparent_standard_logo_not_glass_tile():
     source = read(ROOT / "scripts" / "build_windows_installer.ps1")
     assert 'packaging\\windows\\Enkstein.ico' in source
     assert 'frontend\\public\\favicon-liquid.png' not in source
-    # The build must fail on an opaque corner rather than shipping a white box.
-    assert "GetPixel" in source
+    # The build must validate every ICO directory frame rather than relying on
+    # System.Drawing, which cannot reliably enumerate the 256px frame.
+    assert "BitConverter::ToUInt16" in source
+    assert "ExpectedSizes = @(16, 24, 32, 48, 64, 128, 256)" in source
+    assert "missing the ${Size}x${Size} frame" in source
     assert "opaque corner" in source
 
 
