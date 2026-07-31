@@ -76,25 +76,49 @@ Copy-Item $WebView2Core  $Stage
 Copy-Item $WebView2Forms $Stage
 Copy-Item $WebView2Loader $Stage
 
-if (-not (Get-Command magick -ErrorAction SilentlyContinue)) {
-    throw "ImageMagick is required to generate the Windows application icon."
-}
-$Icon = Join-Path $Stage "Enkstein.ico"
 # The canonical app artwork is a red/orange octopus on a white rounded-square
 # tile with transparent pixels outside the rounded corners. It is shared by the
 # executable, installer, Start Menu, Desktop, and taskbar identity. The liquid
 # tile is a presentation asset and must never become the application icon.
-$IconSource = Join-Path $Root "frontend\public\enkstein-icon.png"
-if (-not (Test-Path $IconSource)) { throw "Icon source missing: $IconSource" }
-& magick $IconSource -background none -define icon:auto-resize=256,128,64,48,32,16 $Icon
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path $Icon)) { throw "Windows icon generation failed." }
+#
+# The ICO is generated from frontend\public\enkstein-icon.png by
+# scripts\generate_app_icon.py and committed, so the frames Windows loads are
+# the exact bytes the packaging tests validate.
+$IconSource = Join-Path $Root "packaging\windows\Enkstein.ico"
+if (-not (Test-Path $IconSource)) {
+    throw "Icon missing: $IconSource. Run scripts/generate_app_icon.py."
+}
+$Icon = Join-Path $Stage "Enkstein.ico"
+Copy-Item $IconSource $Icon
 
-# Guard the regression rather than trusting the source path: a fully opaque
-# 256x256 frame means the white plate came back and the build must fail loudly.
-$IconAlphaProbe = & magick "$Icon[0]" -alpha extract -format "%[fx:mean]" info:
-if ($LASTEXITCODE -ne 0) { throw "Windows icon verification failed." }
-if ([double]$IconAlphaProbe -ge 0.995) {
-    throw "Windows icon has no transparency; it would render as a white box on dark surfaces."
+# Guard the regression rather than trusting the committed file: any opaque
+# outer corner in any frame renders as a white box on a dark desktop, so the
+# build has to fail loudly instead of shipping it.
+Add-Type -AssemblyName System.Drawing
+foreach ($Size in @(16, 24, 32, 48, 64, 128, 256)) {
+    $Frame = New-Object System.Drawing.Icon($Icon, $Size, $Size)
+    $Bitmap = $Frame.ToBitmap()
+    try {
+        if ($Bitmap.Width -ne $Size) {
+            throw "Windows icon is missing the ${Size}x${Size} frame."
+        }
+        $Last = $Size - 1
+        foreach ($Point in @(@(0, 0), @($Last, 0), @(0, $Last), @($Last, $Last))) {
+            $Alpha = $Bitmap.GetPixel($Point[0], $Point[1]).A
+            if ($Alpha -ne 0) {
+                throw "Windows icon ${Size}x${Size} has an opaque corner at $($Point[0]),$($Point[1]) (alpha $Alpha); it would render as a white box on dark surfaces."
+            }
+        }
+        $Inset = [Math]::Max(1, [Math]::Round($Size * 0.1914))
+        $Tile = $Bitmap.GetPixel($Inset, $Inset)
+        if ($Tile.A -ne 255 -or [Math]::Min([Math]::Min($Tile.R, $Tile.G), $Tile.B) -le 170) {
+            throw "Windows icon ${Size}x${Size} is not an opaque white tile just inside the rounded corner."
+        }
+    }
+    finally {
+        $Bitmap.Dispose()
+        $Frame.Dispose()
+    }
 }
 
 # x64 rather than anycpu: WebView2Loader.dll is architecture-specific, and a

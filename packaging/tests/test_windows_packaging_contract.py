@@ -37,9 +37,29 @@ def test_installer_creates_only_enkstein_shortcuts_and_removes_legacy_names():
 
 def test_build_uses_transparent_standard_logo_not_glass_tile():
     source = read(ROOT / "scripts" / "build_windows_installer.ps1")
-    assert 'frontend\\public\\enkstein-icon.png' in source
+    assert 'packaging\\windows\\Enkstein.ico' in source
     assert 'frontend\\public\\favicon-liquid.png' not in source
-    assert "alpha" in source
+    # The build must fail on an opaque corner rather than shipping a white box.
+    assert "GetPixel" in source
+    assert "opaque corner" in source
+
+
+def test_generator_reads_the_canonical_artwork_not_the_glass_tile():
+    source = read(ROOT / "scripts" / "generate_app_icon.py")
+    assert "enkstein-icon.png" in source
+    assert "favicon-liquid.png" not in source
+    assert "(16, 24, 32, 48, 64, 128, 256)" in source
+
+
+def test_every_windows_surface_uses_the_same_icon():
+    """Executable, installer, Start Menu, Desktop, and taskbar share one ICO."""
+    installer = read(WINDOWS / "Marcellus.iss")
+    build = read(ROOT / "scripts" / "build_windows_installer.ps1")
+    assert "SetupIconFile={#StageDir}\\Enkstein.ico" in installer
+    assert '/win32icon:"$Icon"' in build
+    for shortcut in ("{autoprograms}\\Enkstein", "{autodesktop}\\Enkstein"):
+        assert f'Name: "{shortcut}"' in installer
+    assert installer.count('IconFilename: "{app}\\Enkstein.exe"') == 2
 
 
 def test_web_favicon_is_not_the_opaque_liquid_tile():

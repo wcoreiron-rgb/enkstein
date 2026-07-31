@@ -168,6 +168,28 @@ the rounded corners. The same artwork is used for the executable, installer,
 shortcuts, and taskbar identity. `favicon-liquid.png` is reserved for explicit
 Liquid Glass presentation and is never used for the app icon.
 
+`packaging/windows/Enkstein.ico` is generated from that artwork by
+`scripts/generate_app_icon.py` and committed, so the frames Windows loads are the
+exact bytes the packaging tests validate. Regenerate it whenever the artwork
+changes:
+
+```bash
+python scripts/generate_app_icon.py
+```
+
+The ICO ships 32-bit RGBA frames at 16, 24, 32, 48, 64, 128, and 256 pixels.
+Windows selects a different frame per surface, so `packaging/tests/test_windows_icon_alpha.py`
+checks every frame individually: all four outer corners must be alpha 0, the tile
+just inside the rounded corner must be opaque white, and the octopus must still
+be present after downscaling. The Windows build repeats the corner and tile
+checks with `System.Drawing` and fails rather than shipping an opaque square.
+
+The ICO canvas is square by format; only the artwork is rounded. If Windows still
+paints a square behind the icon on the Desktop, Start Menu, or taskbar after
+those checks pass, that is Windows shell rendering of the icon surface, not the
+Enkstein artwork. Do not add a square background to compensate: doing so would
+reintroduce the white box on dark taskbars and would fail the alpha checks above.
+
 Windows code signing is required by the tagged public-release workflow. Configure:
 
 | Secret | Value |
