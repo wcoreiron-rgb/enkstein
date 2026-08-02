@@ -16,13 +16,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var loadingView: NSView!
     private var statusLabel: NSTextField!
     private var spinner: NSProgressIndicator!
+    private var retryButton: NSButton!
+    private var openDockerButton: NSButton!
+    private var installDockerButton: NSButton!
+    private var openLogButton: NSButton!
     private var launcher: Process?
     private var outputBuffer = Data()
     private var updateCheck: URLSessionDataTask?
     private var statusItem: NSStatusItem?
     /// Last theme reported by the web layer. Retained so the window can be
     /// re-evaluated when the system accessibility setting changes.
-    private var currentTheme = "dark"
+    // Mirror the web setting before the first page paint so relaunching from a
+    // Liquid Glass session does not begin with an opaque native window and
+    // then visibly switch after hydration.
+    private var currentTheme = UserDefaults.standard.string(forKey: "enkstein.theme") ?? "dark"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureMenu()
@@ -261,7 +268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.autoresizingMask = [.width, .height]
-        setWebViewDrawsBackground(false)
+        // Opaque is the safe startup state. Liquid Glass enables transparent
+        // WebKit only after the theme bridge reports the selected theme.
+        setWebViewDrawsBackground(true)
         contentContainer.addSubview(webView)
 
         loadingView = NSView(frame: window.contentView!.bounds)
@@ -289,7 +298,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         spinner.controlSize = .regular
         spinner.startAnimation(nil)
 
-        let stack = NSStackView(views: [icon, title, statusLabel, spinner])
+        retryButton = NSButton(title: "Retry", target: self, action: #selector(retryStartup(_:)))
+        openDockerButton = NSButton(title: "Open Docker", target: self, action: #selector(openDocker(_:)))
+        installDockerButton = NSButton(title: "Install Docker", target: self, action: #selector(installDocker(_:)))
+        openLogButton = NSButton(title: "Open Startup Log", target: self, action: #selector(openStartupLog(_:)))
+        let actions = NSStackView(views: [retryButton, openDockerButton, installDockerButton, openLogButton])
+        actions.orientation = .horizontal
+        actions.spacing = 8
+        actions.alignment = .centerY
+        actions.translatesAutoresizingMaskIntoConstraints = false
+        actions.isHidden = true
+
+        let stack = NSStackView(views: [icon, title, statusLabel, spinner, actions])
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 14
@@ -300,6 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             icon.widthAnchor.constraint(equalToConstant: 112),
             icon.heightAnchor.constraint(equalToConstant: 112),
             statusLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 520),
+            actions.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
             stack.centerXAnchor.constraint(equalTo: loadingView.centerXAnchor),
             stack.centerYAnchor.constraint(equalTo: loadingView.centerYAnchor)
         ])
@@ -331,6 +352,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
         if message.name == themeMessageHandler {
             currentTheme = body["theme"] as? String ?? "dark"
+            if currentTheme == "light" || currentTheme == "dark" || currentTheme == "liquid" {
+                UserDefaults.standard.set(currentTheme, forKey: "enkstein.theme")
+            } else {
+                currentTheme = "dark"
+            }
             applyWindowAppearance()
             return
         }
@@ -401,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 if completed.terminationStatus == 0 {
                     self?.waitForDesktop()
                 } else {
-                    self?.showFailure("Enkstein could not start. Open Help > Startup Log for details.")
+                    self?.showFailure("Enkstein could not start. Review the startup log and retry.")
                 }
             }
         }
@@ -421,8 +447,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             outputBuffer.removeSubrange(...newline)
             guard let line = String(data: lineData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !line.isEmpty else { continue }
-            statusLabel.stringValue = line.replacingOccurrences(of: "ERROR: ", with: "")
+            if line.hasPrefix("ENKSTEIN_DOCKER_STATE=") {
+                let payload = String(line.dropFirst("ENKSTEIN_DOCKER_STATE=".count))
+                let fields = payload.split(separator: "|", maxSplits: 1).map(String.init)
+                showDockerState(fields.first ?? "unknown", detail: fields.count > 1 ? fields[1] : "Docker Desktop status unavailable.")
+            } else {
+                statusLabel.stringValue = line.replacingOccurrences(of: "ERROR: ", with: "")
+            }
         }
+    }
+
+    private func showDockerState(_ state: String, detail: String) {
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.stringValue = detail
+        let terminal = state == "missing" || state == "timeout"
+        spinner.isHidden = terminal
+        if terminal { spinner.stopAnimation(nil) } else { spinner.startAnimation(nil) }
+        retryButton.isHidden = false
+        openDockerButton.isHidden = state == "missing"
+        installDockerButton.isHidden = state != "missing"
+        openLogButton.isHidden = false
+        retryButton.superview?.isHidden = false
+    }
+
+    @objc private func retryStartup(_ sender: Any?) {
+        launcher?.terminate()
+        retryButton.superview?.isHidden = true
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.stringValue = "Checking Docker Desktop..."
+        spinner.isHidden = false
+        spinner.startAnimation(nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.startRuntime() }
+    }
+
+    @objc private func openDocker(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Docker.app"))
+    }
+
+    @objc private func installDocker(_ sender: Any?) {
+        NSWorkspace.shared.open(URL(string: "https://www.docker.com/products/docker-desktop/")!)
+    }
+
+    @objc private func openStartupLog(_ sender: Any?) {
+        let log = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Logs/Marcellus/launcher.log")
+        NSWorkspace.shared.open(log)
     }
 
     private func waitForDesktop(attempt: Int = 0) {
@@ -468,6 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         spinner.stopAnimation(nil)
         window.contentView = contentContainer
         webView.frame = contentContainer.bounds
+        applyWindowAppearance()
         webView.load(URLRequest(url: url))
     }
 
@@ -520,6 +590,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     private func showFailure(_ message: String) {
         spinner.stopAnimation(nil)
+        spinner.isHidden = true
+        retryButton?.isHidden = false
+        openDockerButton?.isHidden = false
+        installDockerButton?.isHidden = true
+        openLogButton?.isHidden = false
+        retryButton?.superview?.isHidden = false
         statusLabel.textColor = .systemRed
         statusLabel.stringValue = message
     }

@@ -33,6 +33,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon"             type="image/png" sizes="192x192"  href="/enkstein-icon.png" />
         <link rel="icon"             type="image/png" sizes="64x64"    href="/enkstein-icon.png" />
         <link rel="icon"             type="image/png" sizes="32x32"    href="/enkstein-icon.png" />
+        {/* Browser tab chrome follows the OS appearance, so the white-tile mark
+            is swapped for the dark-tile mark when the chrome is dark. Declared
+            after the unconditional icons so supporting browsers prefer it. */}
+        <link rel="icon" type="image/png" href="/enkstein-icon-dark.png" media="(prefers-color-scheme: dark)" />
         <link rel="shortcut icon"    type="image/png"                  href="/enkstein-icon.png" />
         <link rel="apple-touch-icon" sizes="180x180"                   href="/enkstein-icon.png" />
       </head>

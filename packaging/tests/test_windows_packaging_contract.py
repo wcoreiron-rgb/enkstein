@@ -73,6 +73,18 @@ def test_web_favicon_is_not_the_opaque_liquid_tile():
     assert "/enkstein-icon.png" in source
 
 
+def test_all_product_branding_uses_the_canonical_icon():
+    for path in (
+        ROOT / "frontend" / "src" / "components" / "Sidebar.tsx",
+        ROOT / "frontend" / "src" / "components" / "AuthBoundary.tsx",
+        ROOT / "frontend" / "src" / "app" / "login" / "page.tsx",
+    ):
+        source = read(path)
+        assert "/enkstein-icon.png" in source
+        assert "/logo.png" not in source
+        assert "/favicon-liquid.png" not in source
+
+
 def test_canonical_icon_has_transparent_corners_and_white_tile():
     from PIL import Image
 

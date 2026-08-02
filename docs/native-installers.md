@@ -10,6 +10,35 @@ needed, generate installation secrets, and launch the Enkstein containers.
 They do not bundle a hidden VM, database, or credential store outside the
 documented Compose runtime.
 
+Before any Enkstein service starts, the native launcher shows a Docker Desktop
+prerequisite step and checks `docker info`. It distinguishes a healthy engine,
+an installed-but-stopped engine, a missing installation, an unhealthy engine,
+and a bounded startup timeout. Installed Docker Desktop is opened automatically
+and polled until healthy. If Docker is missing, the launcher opens only Docker's
+official installation flow; it does not download an executable from a mirror or
+bypass Docker's installer, administrator approval, licensing, or reboot flow.
+Compose is never invoked before `docker info` succeeds.
+
+#### Reaching the missing-Docker screen for testing
+
+The prerequisite helpers read `ENKSTEIN_DOCKER_COMMAND` and
+`ENKSTEIN_DOCKER_APP`. Pointing both at paths that do not exist reproduces the
+missing-Docker screen -- the Docker required message with Install Docker, Open
+Startup Log, and Retry -- without uninstalling Docker or removing any image,
+volume, or container:
+
+```bash
+ENKSTEIN_DOCKER_COMMAND=/nonexistent/docker \
+ENKSTEIN_DOCKER_APP=/nonexistent/Docker.app \
+ENKSTEIN_DOCKER_INSTALL_ATTEMPTS=0 \
+  open -a Enkstein
+```
+
+`ENKSTEIN_DOCKER_INSTALL_ATTEMPTS=0` (macOS) and
+`ENKSTEIN_DOCKER_INSTALL_TIMEOUT=0` (Windows) hold the terminal missing state
+instead of polling for an install, so the install action stays on screen. No
+backend, runtime staging, or Compose command runs in this state.
+
 ### Native Codex App Server boundary
 
 The macOS Brain Bridge launches the authenticated official
@@ -26,24 +55,29 @@ persisted thread through the official protocol.
 The package installs `/Applications/Enkstein.app`. Completing installation
 launches the app for the signed-in user. On first launch it:
 
-1. Copies the versioned runtime to
+1. Shows **Docker Desktop required** and checks whether the Docker engine is
+   healthy.
+2. Opens Docker Desktop when it is installed but stopped, or opens Docker's
+   official installation page when it is missing. Retry and startup-log controls
+   remain available while the engine becomes ready.
+3. Copies the versioned runtime to
    `~/Library/Application Support/Enkstein/runtime` (the compatibility data
    location retained during the Enkstein rename).
-2. Starts Docker Desktop if it is not already running.
-3. Generates unique application, PostgreSQL, and Redis secrets.
-4. Starts the production Compose stack.
-5. Waits for PostgreSQL, Redis, the backend health endpoint, and the frontend.
-6. Opens the governed UI inside a native WebKit desktop window.
-7. Requires the local owner to create a password, scan an Authenticator QR
+4. Generates unique application, PostgreSQL, and Redis secrets.
+5. Starts the production Compose stack only after Docker is healthy.
+6. Waits for PostgreSQL, Redis, the backend health endpoint, and the frontend.
+7. Opens the governed UI inside a native WebKit desktop window.
+8. Requires the local owner to create a password, scan an Authenticator QR
    code, confirm the first TOTP, and save one-time recovery codes.
-8. Starts the authenticated native Brain Bridge used by Model Cortex for
+9. Starts the authenticated native Brain Bridge used by Model Cortex for
    supported Codex and Claude subscription runtimes.
 
 The app is a universal Intel and Apple Silicon executable. External links open
 in the default browser, while Enkstein routes remain inside the app. The first
-launch can take several minutes because Docker builds the local backend and
-frontend images. The app shows startup status instead of displaying the UI
-before the backend is ready. Startup diagnostics are written to:
+launch can take several minutes because Docker may need to start and the runtime
+may build the local backend and frontend images. The app shows the current
+prerequisite/startup state instead of displaying the UI before the backend is
+ready. Startup diagnostics are written to:
 
 ```text
 ~/Library/Logs/Enkstein/launcher.log
@@ -93,7 +127,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.6.6 verifies Codex with `codex login status` and Claude Code with
+Version 0.6.8 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -104,11 +138,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.6.6
-open dist/Enkstein-0.6.6-macos.pkg
+./scripts/build_macos_pkg.sh 0.6.8
+open dist/Enkstein-0.6.8-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.6.6-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.6.8-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 
@@ -155,12 +189,19 @@ shortcuts with the stable `Enkstein.Desktop` AppUserModelID, launches the native
 WebView2 Enkstein window after setup, starts Docker Desktop when needed,
 creates installation secrets, and starts the Compose stack.
 
+Before Compose is touched, the launcher displays the Docker prerequisite state:
+healthy, installed but stopped, missing, unhealthy, or timed out. It opens an
+installed Docker Desktop automatically and polls `docker info`. For a missing
+installation it opens Docker's official installation flow and keeps checking
+for the engine after the user completes Docker's own installer. The native
+screen exposes Retry, Open Docker, Install Docker, and Open Startup Log actions.
+
 This is a native desktop shell around the Enkstein runtime, not a standalone
 runtime bundle. Docker Desktop with its Linux engine is still required on
 Windows; the installer does not silently provide PostgreSQL, Redis, or the
-backend/frontend containers. The launcher shows an actionable Enkstein error
-and exits when Docker is unavailable. Removing that dependency requires a
-separate native-runtime distribution and is not claimed by this installer.
+backend/frontend containers. The launcher shows the Docker-specific state and
+actionable controls when the engine is unavailable. Removing that dependency requires a
+ separate native-runtime distribution and is not claimed by this installer.
 
 The canonical app icon is `frontend/public/enkstein-icon.png`: a red/orange
 octopus centered on a white rounded-square tile, with transparent pixels outside
@@ -219,7 +260,7 @@ On a Windows development machine with those tools installed, the equivalent
 local command is:
 
 ```powershell
-.\scripts\build_windows_installer.ps1 -Version 0.2.0
+.\scripts\build_windows_installer.ps1 -Version 0.6.8
 ```
 
 Release gate: the Windows launcher and installer are not considered verified

@@ -41,9 +41,40 @@ type NavGroup = {
   items: NavItem[];
 };
 
+/** Persisted disclosure state for the security category's sub-groups.
+ *
+ * The sidebar opens as five top-level categories, so every security sub-group
+ * starts closed. Remembering the expanded set locally means an operator who
+ * lives in one Arm does not have to re-open it on every launch. */
+const NAV_DISCLOSURE_STORAGE_KEY = 'enkstein-nav-open-groups';
+
+/** Which of the five top-level categories is currently expanded. */
+const CATEGORY_STORAGE_KEY = 'enkstein-nav-category';
+
+function readOpenGroups(): string[] {
+  try {
+    const raw = window.localStorage.getItem(NAV_DISCLOSURE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOpenGroups(labels: string[]) {
+  try {
+    window.localStorage.setItem(NAV_DISCLOSURE_STORAGE_KEY, JSON.stringify(labels));
+  } catch {
+    // Private-mode storage failures must not break navigation.
+  }
+}
+
 const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Cortex & Hearts',
+    // The only group that opens with Security: it holds Mission Control and
+    // Control Center, so expanding Security would otherwise reveal nothing
+    // actionable. Every Arm below stays collapsed.
     defaultOpen: true,
     items: [
       { label: 'Mission Control',  href: '/marcellus/security', icon: Compass,        tag: 'Overview' },
@@ -80,14 +111,12 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Capability Studio',
-    defaultOpen: true,
     items: [
       { label: 'Custom Capability', href: '/capabilities/custom', icon: Plug, tag: 'Builder' },
     ],
   },
   {
     label: 'Protection Arm',
-    defaultOpen: true,
     items: [
       { label: 'AI Security',          href: '/capabilities/ai-security',          icon: Zap,      tag: 'AI' },
       { label: 'Cloud Security',       href: '/capabilities/cloud-security',       icon: Cloud,    tag: 'Cloud' },
@@ -102,7 +131,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Detection Arm',
-    defaultOpen: true,
     items: [
       { label: 'Threat Analysis',       href: '/capabilities/threat-analysis',      icon: Target,    tag: 'D&R' },
       { label: 'Security Telemetry',    href: '/capabilities/security-telemetry',   icon: BookOpen,  tag: 'SIEM' },
@@ -113,7 +141,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Response Arm',
-    defaultOpen: true,
     items: [
       { label: 'Security Automation', href: '/capabilities/security-automation', icon: Bot,      tag: 'SOAR' },
       { label: 'Attack Path Analysis', href: '/capabilities/attack-path-analysis', icon: GitMerge, tag: 'Paths' },
@@ -122,7 +149,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Governance Arm',
-    defaultOpen: true,
     items: [
       { label: 'Compliance Assurance', href: '/capabilities/compliance-assurance', icon: ClipboardCheck, tag: 'GRC' },
       { label: 'Privacy Governance',   href: '/capabilities/privacy-governance',   icon: Lock,           tag: 'Privacy' },
@@ -131,7 +157,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Engineering Arm',
-    defaultOpen: true,
     items: [
       { label: 'Terraform Governance', href: '/capabilities/terraform-governance', icon: Container, tag: 'IaC Sec' },
       { label: 'Developer Security',   href: '/capabilities/developer-security', icon: GitBranch, tag: 'DevSecOps' },
@@ -142,49 +167,41 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; icon: React.ElementType }> = [
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-  { id: 'cowork', label: 'Cowork', icon: BriefcaseBusiness },
-  { id: 'security', label: 'Security', icon: ShieldCheck },
+/** Configuration surfaces reached through the Settings category.
+ *
+ * These are existing routes; Settings groups them so the top level stays at
+ * five entries instead of scattering configuration across the security Arms. */
+const SETTINGS_ITEMS: NavItem[] = [
+  { label: 'Connectors',       href: '/connectors',        icon: Plug },
+  { label: 'Connector Health', href: '/connectors/health', icon: Activity },
+  { label: 'Model Cortex',     href: '/model-cortex',      icon: Sparkles },
+  { label: 'Model Router',     href: '/model-router',      icon: Cpu },
+  { label: 'Policies',         href: '/policies',          icon: FileText },
+  { label: 'Schedules',        href: '/schedules',         icon: CalendarClock },
+  { label: 'Skill Packs',      href: '/skill-packs',       icon: Package },
+  { label: 'Audit',            href: '/audit',             icon: ScrollText },
 ];
 
-function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMode; collapsed: boolean; onModeChange: (mode: WorkspaceMode) => void }) {
-  return (
-    <div className={clsx('border-b', collapsed ? 'px-2 py-2' : 'px-3 py-3')} style={{ borderColor: 'var(--rc-border)' }}>
-      {!collapsed && (
-        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--rc-text-3)' }}>
-          Workspace
-        </p>
-      )}
-      <div
-        className={clsx('grid gap-1 rounded-md border p-1', collapsed ? 'grid-cols-1' : 'grid-cols-3')}
-        style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-base)' }}
-      >
-        {WORKSPACE_MODES.map(({ id, label, icon: Icon }) => {
-          const active = mode === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              title={label}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => onModeChange(id)}
-              className={clsx(
-                'flex min-h-10 items-center justify-center rounded transition-colors',
-                collapsed ? 'w-10' : 'min-w-0 flex-col gap-1 px-1 py-1.5',
-                active ? 'bg-regent-600 text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
-              )}
-              style={active ? {} : { color: 'var(--rc-text-2)' }}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="w-full truncate text-center text-[10px] font-medium">{label}</span>}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+/** A top-level sidebar category.
+ *
+ * `mode` is set for the three workspace categories so activating the header
+ * also switches the workspace, preserving the previous switch behaviour while
+ * removing the separate always-expanded module list. */
+type SidebarCategory = {
+  id: 'chat' | 'cowork' | 'security' | 'brains' | 'settings';
+  label: string;
+  icon: React.ElementType;
+  mode?: WorkspaceMode;
+  href?: string;
+};
+
+const SIDEBAR_CATEGORIES: SidebarCategory[] = [
+  { id: 'chat',     label: 'Chat',             icon: MessageSquare,     mode: 'chat' },
+  { id: 'cowork',   label: 'Cowork',           icon: BriefcaseBusiness, mode: 'cowork' },
+  { id: 'security', label: 'Security',         icon: ShieldCheck,       mode: 'security' },
+  { id: 'brains',   label: 'Brain Connections', icon: BrainCircuit,     href: '/marcellus/brains' },
+  { id: 'settings', label: 'Settings',         icon: Settings },
+];
 
 type WorkspaceStateDetail = {
   mode: 'chat' | 'cowork';
@@ -431,13 +448,8 @@ function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collap
       </div>
 
       <div className="p-2">
-        <Link href="/marcellus/brains"
-          className="mb-2 flex h-9 items-center gap-2 rounded-md border px-2 text-xs transition-colors hover:bg-[var(--rc-bg-elevated)]"
-          style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>
-          <BrainCircuit className="h-3.5 w-3.5" style={{ color: 'var(--rc-brand)' }} />
-          <span className="flex-1">Brain Connections</span>
-          <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
+        {/* Brain Connections is a top-level category now, so repeating it
+            inside every Chat/Cowork panel would duplicate the same entry. */}
         <div className="flex items-center gap-2 rounded-md border px-2 transition-colors focus-within:border-[var(--rc-border-2)]"
           style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-input)' }}>
           {loading || searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" style={{ color: 'var(--rc-text-3)' }} />}
@@ -500,7 +512,28 @@ function SidebarGroup({
   const hasActive = group.items.some(
     item => pathname === item.href || pathname.startsWith(item.href + '/'),
   );
+  // Groups start closed so the blade opens as a short list of categories.
+  // The active route still forces its own group open, so deep-linking or a
+  // relaunch onto a nested page never hides the item that is actually
+  // selected.
   const [open, setOpen] = useState(group.defaultOpen || hasActive);
+
+  useEffect(() => {
+    if (readOpenGroups().includes(group.label)) setOpen(true);
+  }, [group.label]);
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  const toggleOpen = () => {
+    setOpen((current) => {
+      const next = !current;
+      const remembered = readOpenGroups().filter((label) => label !== group.label);
+      writeOpenGroups(next ? [...remembered, group.label] : remembered);
+      return next;
+    });
+  };
 
   if (collapsed) {
     // Icon-only mode — no group headers, just icon links with tooltips
@@ -532,9 +565,10 @@ function SidebarGroup({
   return (
     <div>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         className="w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded-md text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-80"
         style={{ color: 'var(--rc-text-3)' }}
+        aria-expanded={open}
       >
         <span className="flex-1 text-left">{group.label}</span>
         {open
@@ -589,10 +623,61 @@ export default function Sidebar() {
   const { theme, toggle, glassLevel, setGlassLevel } = useTheme();
   const isLight   = theme === 'light';
   const isLiquid  = theme === 'liquid';
-  const sidebarLogo = isLiquid ? '/favicon-liquid.png' : '/enkstein-icon.png';
+  // The canonical red/orange mark sits on a white tile, which reads as a bright
+  // box against the dark console. Dark mode uses the inverse treatment -- a
+  // white octopus on a dark tile -- with identical rounded geometry. Liquid
+  // Glass keeps the light mark, whose white tile matches its bright surfaces.
+  const sidebarLogo = theme === 'dark' ? '/enkstein-icon-dark.png' : '/enkstein-icon.png';
   const [collapsed, setCollapsed] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
+  // Only one category is expanded at a time, so the blade stays short. `null`
+  // is the initial state: the app opens showing five category headers and
+  // nothing else.
+  const [openCategory, setOpenCategory] = useState<SidebarCategory['id'] | null>(null);
+
+  useEffect(() => {
+    // Restore the last expanded category so a relaunch returns the operator to
+    // the section they were working in, without expanding everything.
+    try {
+      const saved = window.localStorage.getItem(CATEGORY_STORAGE_KEY);
+      if (saved && SIDEBAR_CATEGORIES.some((category) => category.id === saved)) {
+        setOpenCategory(saved as SidebarCategory['id']);
+      }
+    } catch {
+      // Storage is unavailable in private mode; the default closed state is fine.
+    }
+  }, []);
+
+  // The category owning the current route expands so the selected item stays
+  // visible. Only that one opens: the other four -- including every security
+  // Arm -- remain collapsed, which is what keeps the blade short.
+  useEffect(() => {
+    setOpenCategory((current) => {
+      const owning = SIDEBAR_CATEGORIES.find((category) => category.mode === workspaceMode);
+      if (pathname.startsWith('/marcellus/brains')) return 'brains';
+      if (SETTINGS_ITEMS.some((item) => pathname === item.href)) return 'settings';
+      return owning ? owning.id : current;
+    });
+  }, [pathname, workspaceMode]);
+
+  const openCategoryById = (category: SidebarCategory) => {
+    const next = openCategory === category.id && !category.mode && !category.href ? null : category.id;
+    setOpenCategory(next);
+    try {
+      if (next) window.localStorage.setItem(CATEGORY_STORAGE_KEY, next);
+      else window.localStorage.removeItem(CATEGORY_STORAGE_KEY);
+    } catch {
+      // Non-fatal: navigation still works without a remembered category.
+    }
+    if (category.mode) {
+      persistWorkspaceMode(category.mode);
+      router.push(workspaceModeBasePath(category.mode));
+      setWorkspaceMode(category.mode);
+      return;
+    }
+    if (category.href) router.push(category.href);
+  };
 
   useEffect(() => {
     const next = workspaceModeFromPath(pathname);
@@ -668,22 +753,93 @@ export default function Sidebar() {
         )}
       </div>
 
-      <WorkspaceSwitch mode={workspaceMode} collapsed={collapsed} onModeChange={(mode) => {
-        persistWorkspaceMode(mode);
-        router.push(workspaceModeBasePath(mode));
-        setWorkspaceMode(mode);
-      }} />
-
-      {/* Nav */}
+      {/* Nav — five top-level categories, each collapsed until opened. */}
       <nav
         className="flex-1 overflow-y-auto p-2 space-y-0.5"
         style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--rc-border) transparent' }}
       >
-        {workspaceMode === 'security' ? NAV_GROUPS.map(group => (
-          <SidebarGroup key={group.label} group={group} pathname={pathname} collapsed={collapsed} />
-        )) : (
-          <WorkspaceModeNav key={workspaceMode} mode={workspaceMode} collapsed={collapsed} />
-        )}
+        {SIDEBAR_CATEGORIES.map((category) => {
+          const expanded = openCategory === category.id;
+          const Icon = category.icon;
+          const activeCategory = category.mode
+            ? workspaceMode === category.mode
+            : category.href
+              ? pathname.startsWith(category.href)
+              : SETTINGS_ITEMS.some((item) => pathname === item.href);
+
+          if (collapsed) {
+            return (
+              <button
+                key={category.id}
+                type="button"
+                title={category.label}
+                onClick={() => openCategoryById(category)}
+                className={clsx(
+                  'mx-auto mb-0.5 flex h-10 w-10 items-center justify-center rounded-lg transition-all duration-150',
+                  activeCategory ? 'bg-regent-600 text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
+                )}
+                style={activeCategory ? {} : { color: 'var(--rc-text-2)' }}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+              </button>
+            );
+          }
+
+          return (
+            <div key={category.id} className="mb-1">
+              <button
+                type="button"
+                onClick={() => openCategoryById(category)}
+                aria-expanded={expanded}
+                aria-current={activeCategory ? 'page' : undefined}
+                title={category.label}
+                className={clsx(
+                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150',
+                  activeCategory ? 'bg-regent-600 font-medium text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
+                )}
+                style={activeCategory ? {} : { color: 'var(--rc-text-2)' }}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="flex-1 truncate text-left">{category.label}</span>
+                {expanded
+                  ? <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  : <ChevronRight className="h-3.5 w-3.5 opacity-60" />}
+              </button>
+
+              {expanded && (
+                <div className="mt-1">
+                  {(category.id === 'chat' || category.id === 'cowork') && (
+                    <WorkspaceModeNav key={category.id} mode={category.id} collapsed={false} />
+                  )}
+                  {category.id === 'security' && NAV_GROUPS.map((group) => (
+                    <SidebarGroup key={group.label} group={group} pathname={pathname} collapsed={false} />
+                  ))}
+                  {category.id === 'settings' && (
+                    <div className="space-y-0.5 pl-2">
+                      {SETTINGS_ITEMS.map(({ label, href, icon: ItemIcon }) => {
+                        const active = pathname === href;
+                        return (
+                          <Link
+                            key={href}
+                            href={href}
+                            className={clsx(
+                              'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-150',
+                              active ? 'bg-regent-600 font-medium text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
+                            )}
+                            style={active ? {} : { color: 'var(--rc-text-2)' }}
+                          >
+                            <ItemIcon className="h-3.5 w-3.5 shrink-0" />
+                            <span className="flex-1 truncate text-xs">{label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Footer */}

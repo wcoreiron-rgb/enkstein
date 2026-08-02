@@ -10,18 +10,18 @@
 <p align="center">Distributed, organism-inspired security automation with Zero Trust enforcement across every Cortex, Heart, Arm, Node, and action.</p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.6-macos.pkg">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.8-macos.pkg">
     <img src="https://img.shields.io/badge/Download%20for-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
   </a>
   &nbsp;
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.6-windows-x64-setup.exe">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.6.8-windows-x64-setup.exe">
     <img src="https://img.shields.io/badge/Download%20for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
   </a>
 </p>
 
 <p align="center">
   <sub>
-    <b>v0.6.6</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    <b>v0.6.8</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -31,7 +31,7 @@
 
 <p align="center">
   <b>Required &mdash; <a href="https://www.docker.com/products/docker-desktop/">Docker Desktop</a>.</b><br />
-  <sub>Enkstein runs its own governed services locally. The installer starts Docker for you if it is not already running, then downloads prebuilt images &mdash; roughly a 1&nbsp;GB download on first launch, and near-instant afterwards. If the download is unavailable it builds locally instead, which takes several minutes. Allow 4&nbsp;GB RAM.</sub>
+  <sub>Enkstein runs its governed services locally. Every launch checks Docker Desktop before starting anything, opens it when stopped, and waits for <code>docker info</code> to succeed. If Docker is missing, the official Docker installation flow opens and Enkstein keeps checking until the engine is ready. Allow 4&nbsp;GB RAM.</sub>
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@
 
 ## Enkstein Distributed Runtime
 
-Enkstein `0.6.6` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.6.8` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -117,7 +117,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.6.6` keeps a paired Browser Companion marked ready while it is
+Version `0.6.8` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -609,7 +609,7 @@ Enkstein ships in three installable forms beyond the web platform. All three tal
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.6.6-py3-none-any.whl
+pip install ./enkstein_mcp-0.6.8-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -636,7 +636,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install ./enkstein_cli-0.6.6-py3-none-any.whl
+pip install ./enkstein_cli-0.6.8-py3-none-any.whl
 export REGENTCLAW_API_URL=http://localhost:8000
 regentclaw status dashboard
 regentclaw connectors test okta
@@ -649,7 +649,7 @@ regentclaw evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.6.6-py3-none-any.whl
+pip install ./enkstein_core-0.6.8-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

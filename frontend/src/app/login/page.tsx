@@ -180,7 +180,7 @@ export default function LoginPage() {
       <section className="w-full max-w-sm border border-slate-200 bg-white p-7 shadow-sm" style={{ borderRadius: 8 }}>
         <header className="mb-7 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Enkstein" width={76} height={76} className="mx-auto mb-3" />
+          <img src="/enkstein-icon.png" alt="Enkstein" width={76} height={76} className="mx-auto mb-3" />
           <h1 className="text-xl font-semibold text-slate-950">{title}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {view === 'setup' ? 'Secure this installation before the console opens.'

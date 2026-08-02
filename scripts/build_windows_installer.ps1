@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $false)]
-    [string]$Version = "0.2.0"
+    [string]$Version = "0.6.8"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +33,7 @@ Copy-Item (Join-Path $Root ".env.example") (Join-Path $Runtime ".env.example")
 Copy-Item (Join-Path $Root "README.md") (Join-Path $Runtime "README.md")
 Copy-Item (Join-Path $Root "LICENSE") (Join-Path $Runtime "LICENSE")
 Copy-Item (Join-Path $Root "packaging\windows\Start-Marcellus.ps1") (Join-Path $Runtime "Start-Enkstein.ps1")
+Copy-Item (Join-Path $Root "packaging\windows\DockerPrerequisite.ps1") (Join-Path $Runtime "DockerPrerequisite.ps1")
 Copy-Item (Join-Path $Root "packaging\windows\BrainBridge.ps1") (Join-Path $Runtime "BrainBridge.ps1")
 New-Item -ItemType Directory -Force -Path (Join-Path $Runtime "docs") | Out-Null
 Copy-Item (Join-Path $Root "docs\installation.md") (Join-Path $Runtime "docs\installation.md")

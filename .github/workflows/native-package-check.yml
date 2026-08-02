@@ -9,8 +9,11 @@ on:
       - "scripts/build_release_bundle.sh"
       - "scripts/build_macos_pkg.sh"
       - "scripts/build_windows_installer.ps1"
+      - "packaging/macos/docker-prerequisite.sh"
+      - "packaging/windows/DockerPrerequisite.ps1"
       - "frontend/public/logo.png"
       - "frontend/public/favicon.png"
+      - "frontend/public/enkstein-icon.png"
       - ".github/workflows/native-package-check.yml"
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
@@ -23,8 +26,11 @@ on:
       - "scripts/build_release_bundle.sh"
       - "scripts/build_macos_pkg.sh"
       - "scripts/build_windows_installer.ps1"
+      - "packaging/macos/docker-prerequisite.sh"
+      - "packaging/windows/DockerPrerequisite.ps1"
       - "frontend/public/logo.png"
       - "frontend/public/favicon.png"
+      - "frontend/public/enkstein-icon.png"
       - ".github/workflows/native-package-check.yml"
       - ".github/workflows/release.yml"
       - "cli/pyproject.toml"
@@ -92,7 +98,7 @@ jobs:
 
       - name: Install Inno Setup
         shell: pwsh
-        run: choco install innosetup imagemagick --no-progress -y
+        run: choco install innosetup --no-progress -y
 
       - name: Build installer
         shell: pwsh

@@ -132,6 +132,13 @@ internal sealed class EnksteinWindow : Form
 
     private readonly WebView2 _webView = new WebView2();
     private readonly Label _status = new Label();
+    private readonly FlowLayoutPanel _startupActions = new FlowLayoutPanel();
+    private readonly Button _retry = new Button();
+    private readonly Button _openDocker = new Button();
+    private readonly Button _installDocker = new Button();
+    private readonly Button _openLog = new Button();
+    private Process _runtimeProcess;
+    private bool _runtimeStarting;
     private string _theme = "dark";
     private string _glassLevel = "balanced";
     private bool _backdropActive;
@@ -162,6 +169,23 @@ internal sealed class EnksteinWindow : Form
         _status.Text = "Preparing the governed runtime...";
         Controls.Add(_status);
 
+        _startupActions.Dock = DockStyle.Bottom;
+        _startupActions.Height = 44;
+        _startupActions.FlowDirection = FlowDirection.LeftToRight;
+        _startupActions.WrapContents = false;
+        _startupActions.Padding = new Padding(0, 8, 0, 8);
+        _startupActions.Visible = false;
+        _retry.Text = "Retry";
+        _openDocker.Text = "Open Docker";
+        _installDocker.Text = "Install Docker";
+        _openLog.Text = "Open Startup Log";
+        _retry.Click += delegate { RetryStartup(); };
+        _openDocker.Click += delegate { OpenDocker(); };
+        _installDocker.Click += delegate { OpenDockerInstall(); };
+        _openLog.Click += delegate { OpenStartupLog(); };
+        _startupActions.Controls.AddRange(new Control[] { _retry, _openDocker, _installDocker, _openLog });
+        Controls.Add(_startupActions);
+
         _webView.Dock = DockStyle.Fill;
         // Keep the first WebView2 paint on the same opaque surface as the native
         // window. The page may later switch to transparent for Liquid Glass,
@@ -170,6 +194,7 @@ internal sealed class EnksteinWindow : Form
         _webView.DefaultBackgroundColor = OpaqueSurface;
         _webView.Visible = false;
         Controls.Add(_webView);
+        _startupActions.BringToFront();
 
         try
         {
@@ -195,21 +220,32 @@ internal sealed class EnksteinWindow : Form
         }
         catch (Exception exception)
         {
+            _runtimeStarting = false;
             ShowFailure(exception.Message);
         }
     }
 
     private async Task StartRuntimeAsync()
     {
+        if (_runtimeStarting) return;
+        _runtimeStarting = true;
+        _startupActions.Visible = false;
+        _status.ForeColor = ForeColor;
+        _status.Text = "Checking Docker Desktop...";
         string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
         string launchScript = Path.Combine(appDirectory, "runtime", "Start-Enkstein.ps1");
         if (!File.Exists(launchScript))
         {
             ShowFailure("The Enkstein runtime is missing. Reinstall Enkstein.");
+            _runtimeStarting = false;
             return;
         }
 
-        if (!await EnsureWebView2RuntimeAsync()) return;
+        if (!await EnsureWebView2RuntimeAsync())
+        {
+            _runtimeStarting = false;
+            return;
+        }
 
         ProcessStartInfo start = new ProcessStartInfo
         {
@@ -222,17 +258,86 @@ internal sealed class EnksteinWindow : Form
         // Tells the startup script that a native host is rendering the console,
         // so it does not also open a browser window.
         start.EnvironmentVariables["ENKSTEIN_EMBEDDED"] = "1";
-        Process.Start(start);
+        start.RedirectStandardOutput = true;
+        start.RedirectStandardError = true;
+        _runtimeProcess = Process.Start(start);
+        if (_runtimeProcess != null)
+        {
+            _runtimeProcess.OutputDataReceived += delegate(object sender, DataReceivedEventArgs args) { HandleStartupOutput(args.Data); };
+            _runtimeProcess.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs args) { HandleStartupOutput(args.Data); };
+            _runtimeProcess.BeginOutputReadLine();
+            _runtimeProcess.BeginErrorReadLine();
+        }
 
         _status.Text = "Waiting for the Enkstein desktop...";
         string url = await WaitForDesktopAsync();
         if (url == null)
         {
             ShowFailure("The local Enkstein desktop did not become ready.");
+            _runtimeStarting = false;
             return;
         }
 
         await InitializeWebViewAsync(url);
+        _runtimeStarting = false;
+    }
+
+    private void HandleStartupOutput(string line)
+    {
+        if (String.IsNullOrWhiteSpace(line)) return;
+        Action update = delegate
+        {
+            const string prefix = "ENKSTEIN_DOCKER_STATE=";
+            if (line.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                string payload = line.Substring(prefix.Length);
+                string[] fields = payload.Split(new[] { '|' }, 2);
+                string state = fields[0];
+                string detail = fields.Length > 1 ? fields[1] : "Docker Desktop status unavailable.";
+                _status.Text = detail;
+                _startupActions.Visible = true;
+                _retry.Visible = true;
+                _openDocker.Visible = state != "missing";
+                _installDocker.Visible = state == "missing";
+                _openLog.Visible = true;
+                return;
+            }
+            _status.Text = line.Replace("ERROR: ", String.Empty);
+        };
+        if (IsHandleCreated && InvokeRequired) BeginInvoke(update); else update();
+    }
+
+    private void RetryStartup()
+    {
+        try { if (_runtimeProcess != null && !_runtimeProcess.HasExited) _runtimeProcess.Kill(true); } catch { }
+        _runtimeProcess = null;
+        _startupActions.Visible = false;
+        _ = StartRuntimeAsync();
+    }
+
+    private void OpenDocker()
+    {
+        foreach (string candidate in DockerDesktopCandidates())
+            if (File.Exists(candidate)) { Process.Start(candidate); return; }
+    }
+
+    private void OpenDockerInstall()
+    {
+        Process.Start(new ProcessStartInfo { FileName = "https://www.docker.com/products/docker-desktop/", UseShellExecute = true });
+    }
+
+    private void OpenStartupLog()
+    {
+        string log = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Enkstein", "logs", "launcher.log");
+        if (File.Exists(log)) Process.Start(new ProcessStartInfo { FileName = "notepad.exe", Arguments = "\"" + log + "\"", UseShellExecute = true });
+    }
+
+    private static string[] DockerDesktopCandidates()
+    {
+        return new[] {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Docker", "Docker", "Docker Desktop.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Docker", "Docker", "Docker Desktop.exe")
+        };
     }
 
     /// WebView2 is a separate runtime. Detecting it explicitly gives a real
@@ -348,6 +453,7 @@ internal sealed class EnksteinWindow : Form
         _webView.CoreWebView2.NewWindowRequested += OnNewWindowRequested;
 
         _status.Visible = false;
+        _startupActions.Visible = false;
         _webView.Visible = true;
         _webView.CoreWebView2.Navigate(url + "/login");
     }
@@ -529,6 +635,11 @@ internal sealed class EnksteinWindow : Form
     {
         _webView.Visible = false;
         _status.Visible = true;
+        _startupActions.Visible = true;
+        _retry.Visible = true;
+        _openDocker.Visible = true;
+        _installDocker.Visible = false;
+        _openLog.Visible = true;
         _status.ForeColor = Color.Firebrick;
         _status.Text = message;
     }

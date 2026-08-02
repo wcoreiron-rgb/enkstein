@@ -10,8 +10,39 @@ $BridgeSecretFile = Join-Path $env:LOCALAPPDATA "Enkstein\brain-bridge.secret"
 $BridgePidFile = Join-Path $env:LOCALAPPDATA "Enkstein\brain-bridge.pid"
 $BridgePort = 47831
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$DockerHelper = Join-Path $RuntimeDir "DockerPrerequisite.ps1"
+# Docker Desktop is required before Enkstein services can start. Keep one
+# exclusive handle for the lifetime of this launcher so retries or shortcuts
+# cannot create duplicate Docker/Compose startup processes.
+$StartupLockPath = Join-Path $env:LOCALAPPDATA "Enkstein\startup.lock"
+$StartupLock = $null
+try {
+    $StartupLock = [System.IO.File]::Open(
+        $StartupLockPath,
+        [System.IO.FileMode]::OpenOrCreate,
+        [System.IO.FileAccess]::ReadWrite,
+        [System.IO.FileShare]::None
+    )
+}
+catch {
+    "[$([DateTime]::UtcNow.ToString('o'))] Enkstein startup already in progress." | Out-File -Append -FilePath $LogFile
+    exit 0
+}
+
+if (-not (Test-Path $DockerHelper)) {
+    throw "Docker prerequisite helper is missing. Reinstall Enkstein."
+}
+. $DockerHelper
+
+function Write-DockerState([string]$State, [string]$Detail) {
+    "ENKSTEIN_DOCKER_STATE=$State|$Detail" | Tee-Object -FilePath $LogFile -Append
+}
 
 function Show-Error([string]$Message) {
+    if ($env:ENKSTEIN_EMBEDDED -eq "1") {
+        Write-Error $Message
+        return
+    }
     Add-Type -AssemblyName PresentationFramework
     [System.Windows.MessageBox]::Show(
         "Enkstein could not start. $Message",
@@ -83,35 +114,6 @@ function Start-BrainBridge {
     [System.IO.File]::WriteAllText($BridgePidFile, [string]$process.Id)
 }
 
-function Test-DockerEngine {
-    & docker info *> $null
-    return ($LASTEXITCODE -eq 0)
-}
-
-function Wait-ForDockerEngine {
-    $dockerDesktopCandidates = @(
-        (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\Docker Desktop.exe")
-    )
-
-    if (Test-DockerEngine) { return $true }
-
-    foreach ($candidate in $dockerDesktopCandidates) {
-        if (Test-Path $candidate) {
-            Start-Process $candidate
-            break
-        }
-    }
-
-    # Docker Desktop can report a running process before its Linux engine has
-    # created the named pipe. Compose must not run during that interval.
-    for ($attempt = 0; $attempt -lt 90; $attempt++) {
-        Start-Sleep -Seconds 2
-        if (Test-DockerEngine) { return $true }
-    }
-    return $false
-}
-
 try {
     $dockerCli = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin"
     $dockerCliUser = Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\resources\bin"
@@ -122,14 +124,36 @@ try {
         $env:PATH = "$dockerCliUser;$env:PATH"
     }
 
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Show-Error "Docker Desktop is required. Install it, then start Enkstein again."
-        Start-Process "https://www.docker.com/products/docker-desktop/"
-        exit 1
+    $dockerDesktopCandidates = @(
+        (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Docker\Docker\Docker Desktop.exe")
+    )
+    $dockerProgress = {
+        param($state, $detail)
+        Write-DockerState $state $detail
     }
-
-    if (-not (Wait-ForDockerEngine)) {
-        throw "Docker Desktop was found, but its Linux engine did not become ready within three minutes. Start Docker Desktop, wait for 'Engine running', then launch Enkstein again."
+    $dockerInstall = {
+        Write-DockerState "missing" "Docker Desktop is missing. Opening the official Docker installation page."
+        Start-Process "https://www.docker.com/products/docker-desktop/"
+    }
+    $dockerHealthy = Ensure-DockerDesktop -DockerCommand "docker" `
+        -DockerDesktopCandidates $dockerDesktopCandidates -TimeoutSeconds 180 -PollSeconds 2 `
+        -Progress $dockerProgress -OpenInstall $dockerInstall
+    if (-not $dockerHealthy) {
+        # The user may install Docker from the official flow while this process
+        # remains open. Keep checking so Retry is not required after install.
+        # ENKSTEIN_DOCKER_INSTALL_TIMEOUT=0 keeps the screen on the terminal
+        # missing state instead of polling, which is how the missing-Docker
+        # screen is reached for testing without removing Docker.
+        $installTimeout = if ($env:ENKSTEIN_DOCKER_INSTALL_TIMEOUT) { [int]$env:ENKSTEIN_DOCKER_INSTALL_TIMEOUT } else { 600 }
+        if ($installTimeout -gt 0) {
+            Write-DockerState "installing" "Install Docker Desktop from the official installer, then Enkstein will recheck automatically."
+            $dockerHealthy = Wait-ForDockerEngine -DockerCommand "docker" -TimeoutSeconds $installTimeout -PollSeconds 2 -Progress $dockerProgress
+        }
+    }
+    if (-not $dockerHealthy) {
+        Write-DockerState "missing" "Docker Desktop is required before Enkstein can start."
+        throw "Docker Desktop is unavailable after the startup timeout. Open Docker Desktop, then choose Retry."
     }
 
     if (-not (Test-Path $EnvFile)) {
@@ -160,7 +184,7 @@ try {
     Start-BrainBridge
 
     "[$([DateTime]::UtcNow.ToString('o'))] Starting Enkstein" | Out-File -Append -FilePath $LogFile
-    if (-not (Wait-ForDockerEngine)) {
+    if (-not (Test-DockerEngine -DockerCommand "docker")) {
         throw "Docker Desktop stopped before Compose could start. Start Docker Desktop and launch Enkstein again."
     }
     & docker compose --env-file $EnvFile -f $ComposeFile config --quiet *>> $LogFile
@@ -180,7 +204,7 @@ try {
 
     $composeExit = 1
     for ($attempt = 0; $attempt -lt 3; $attempt++) {
-        if (-not (Wait-ForDockerEngine)) {
+        if (-not (Test-DockerEngine -DockerCommand "docker")) {
             throw "Docker Desktop stopped while Enkstein was starting. Start Docker Desktop and launch Enkstein again."
         }
         if ($usedPublishedImages) {

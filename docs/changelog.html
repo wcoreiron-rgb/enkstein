@@ -320,6 +320,67 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.6.8 — Sidebar clarity and theme-safe branding          -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Focused Workspace Navigation</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">Collapsed Navigation</span>
+          <span class="tag tag-feat">Theme-Safe Branding</span>
+          <span class="tag tag-sec">Docker Recovery Testing</span>
+          <span class="release-date">August 2, 2026 &nbsp;·&nbsp; Enkstein v0.6.8</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The desktop workspace now opens with a focused sidebar, preserves Chat/Cowork project separation, and keeps Enkstein branding consistent across light and dark themes.</div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Navigation:</strong> top-level categories are collapsed by default and expand independently with remembered state.</li>
+          <li><strong>Workspace separation:</strong> Chat and Cowork projects and conversations remain isolated and clearly named.</li>
+          <li><strong>Dark branding:</strong> dark mode uses the white octopus on a dark rounded-square tile, while light mode retains the red/orange mark.</li>
+          <li><strong>Prerequisite testing:</strong> Docker-missing startup can be tested safely without deleting Docker data or containers.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.6.7 — Docker Desktop prerequisite gate                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--orange);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Docker Desktop Launch Gate</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Prerequisite Check</span>
+          <span class="tag tag-feat">Native Startup</span>
+          <span class="tag tag-feat">Actionable Recovery</span>
+          <span class="release-date">August 1, 2026 &nbsp;·&nbsp; Enkstein v0.6.7</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein now verifies Docker Desktop before any governed service starts, with platform-native recovery controls for stopped, missing, unhealthy, and timed-out engines.</div>
+      <div class="change-section">
+        <div class="change-section-title">What's New</div>
+        <ul class="change-list">
+          <li><strong>Detection:</strong> macOS and Windows distinguish healthy, installed-but-stopped, missing, unhealthy, and unavailable Docker states.</li>
+          <li><strong>Startup:</strong> installed Docker Desktop opens automatically and <code>docker info</code> is polled with bounded progress before Compose runs.</li>
+          <li><strong>Installation:</strong> missing Docker opens only the official Docker Desktop flow and never bypasses its installer, licensing, administrator, or reboot steps.</li>
+          <li><strong>Recovery:</strong> the native prerequisite screen exposes Retry, Open Docker, Install Docker, and startup-log actions instead of a generic launch error.</li>
+          <li><strong>Packaging:</strong> the helper scripts ship inside both native installers, with mocked state and Compose-ordering tests.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.6.6 — Canonical application icon                     -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

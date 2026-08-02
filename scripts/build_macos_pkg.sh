@@ -8,7 +8,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=${1:-0.2.0}
+VERSION=${1:-0.6.8}
 VERSION=${VERSION#v}
 DIST_DIR="$ROOT_DIR/dist"
 WORK_DIR="$DIST_DIR/macos-$VERSION"
@@ -42,6 +42,8 @@ rm -rf "$WORK_DIR" "$OUTPUT_PKG"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$ROOT_DIR/packaging/macos/launcher.sh" "$RESOURCES_DIR/launcher.sh"
 chmod +x "$RESOURCES_DIR/launcher.sh"
+cp "$ROOT_DIR/packaging/macos/docker-prerequisite.sh" "$RESOURCES_DIR/docker-prerequisite.sh"
+chmod +x "$RESOURCES_DIR/docker-prerequisite.sh"
 cp -R "$ROOT_DIR/browser-extension" "$RESOURCES_DIR/browser-extension"
 sed "s/__VERSION__/$VERSION/g" "$ROOT_DIR/packaging/macos/Info.plist.in" > "$CONTENTS_DIR/Info.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn "$DIST_DIR/enkstein-$VERSION" "$RESOURCES_DIR/runtime"
