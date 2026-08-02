@@ -1,13 +1,13 @@
 /**
- * The blade must open as five categories rather than the full module list,
+ * The blade must open as three workspace modes rather than the full module list,
  * and each category's children must stay inside it.
  */
 import { expect, test } from './fixtures';
 import { mockMarcellusWorkspace } from './marcellus-workspace-mocks';
 
-const TOP_LEVEL = ['Chat', 'Cowork', 'Security', 'Brain Connections', 'Settings'];
+const TOP_LEVEL = ['Chat', 'Cowork', 'Security'];
 
-test('sidebar opens as five categories with nested features hidden', async ({ page }) => {
+test('sidebar opens as three modes with nested features hidden', async ({ page }) => {
   await mockMarcellusWorkspace(page);
   await page.goto('/marcellus');
 

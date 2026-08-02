@@ -1,4 +1,4 @@
-"""The sidebar must open as five categories, not the full module list.
+"""The sidebar must open as three workspace modes, not the full module list.
 
 These are source-level contracts rather than rendering tests: they pin the
 structural decisions that are easy to regress silently, and the Playwright
@@ -10,10 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SIDEBAR = (ROOT / "frontend" / "src" / "components" / "Sidebar.tsx").read_text(encoding="utf-8")
 
-TOP_LEVEL = ("Chat", "Cowork", "Security", "Brain Connections", "Settings")
+TOP_LEVEL = ("Chat", "Cowork", "Security")
 
 
-def test_exactly_five_top_level_categories():
+def test_exactly_three_top_level_categories():
     for label in TOP_LEVEL:
         assert f"label: '{label}'" in SIDEBAR, f"missing top-level category: {label}"
     start = SIDEBAR.index("const SIDEBAR_CATEGORIES")
@@ -21,16 +21,9 @@ def test_exactly_five_top_level_categories():
     assert block.count("label:") == len(TOP_LEVEL)
 
 
-def test_only_the_overview_group_opens_with_security():
-    """Expanding Security reveals the overview group, not every Arm.
-
-    Cortex & Hearts holds Mission Control and Control Center, so it opens to
-    give Security something actionable. All Arms and Studio groups stay closed.
-    """
-    assert SIDEBAR.count("defaultOpen: true") == 1
-    overview = SIDEBAR.index("label: 'Cortex & Hearts'")
-    assert SIDEBAR.index("defaultOpen: true") > overview
-    assert SIDEBAR.index("defaultOpen: true") < SIDEBAR.index("label: 'Capability Studio'")
+def test_security_groups_start_closed():
+    """Security opens to disclosure headers; Arms and nodes stay hidden."""
+    assert "defaultOpen: true" not in SIDEBAR
 
 
 def test_categories_start_closed_and_open_one_at_a_time():
@@ -72,8 +65,5 @@ def test_project_and_conversation_names_render_per_mode():
     assert "getCortexConversations(mode" in SIDEBAR
 
 
-def test_settings_groups_configuration_routes():
-    start = SIDEBAR.index("const SETTINGS_ITEMS")
-    block = SIDEBAR[start:SIDEBAR.index("];", start)]
-    for href in ("/connectors", "/model-cortex", "/policies", "/audit"):
-        assert f"href: '{href}'" in block
+def test_brain_connections_stays_under_security():
+    assert "{ label: 'Brain Connections',href: '/marcellus/brains'" in SIDEBAR

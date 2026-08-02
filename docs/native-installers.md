@@ -127,7 +127,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.6.8 verifies Codex with `codex login status` and Claude Code with
+Version 0.6.7 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -138,11 +138,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.6.8
-open dist/Enkstein-0.6.8-macos.pkg
+./scripts/build_macos_pkg.sh 0.6.7
+open dist/Enkstein-0.6.7-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.6.8-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.6.7-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 
@@ -260,7 +260,7 @@ On a Windows development machine with those tools installed, the equivalent
 local command is:
 
 ```powershell
-.\scripts\build_windows_installer.ps1 -Version 0.6.8
+.\scripts\build_windows_installer.ps1 -Version 0.6.7
 ```
 
 Release gate: the Windows launcher and installer are not considered verified

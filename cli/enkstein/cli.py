@@ -657,7 +657,7 @@ def skillpacks_deactivate(pack_id: str = typer.Argument(..., help="Skill pack ID
 def version():
     """Show CLI version."""
     fmt.header("Enkstein CLI")
-    fmt.kv("Version", "0.6.8")
+    fmt.kv("Version", "0.6.7")
     fmt.kv("API URL", client.BASE_URL)
 
 

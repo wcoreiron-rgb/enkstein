@@ -43,12 +43,12 @@ type NavGroup = {
 
 /** Persisted disclosure state for the security category's sub-groups.
  *
- * The sidebar opens as five top-level categories, so every security sub-group
+ * The sidebar opens as three workspace modes, so every security sub-group
  * starts closed. Remembering the expanded set locally means an operator who
  * lives in one Arm does not have to re-open it on every launch. */
 const NAV_DISCLOSURE_STORAGE_KEY = 'enkstein-nav-open-groups';
 
-/** Which of the five top-level categories is currently expanded. */
+/** Which of the three workspace modes is currently expanded. */
 const CATEGORY_STORAGE_KEY = 'enkstein-nav-category';
 
 function readOpenGroups(): string[] {
@@ -72,10 +72,6 @@ function writeOpenGroups(labels: string[]) {
 const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Cortex & Hearts',
-    // The only group that opens with Security: it holds Mission Control and
-    // Control Center, so expanding Security would otherwise reveal nothing
-    // actionable. Every Arm below stays collapsed.
-    defaultOpen: true,
     items: [
       { label: 'Mission Control',  href: '/marcellus/security', icon: Compass,        tag: 'Overview' },
       { label: 'Control Center',   href: '/control-center',   icon: Shield,           tag: 'Command' },
@@ -107,6 +103,7 @@ const NAV_GROUPS: NavGroup[] = [
       { label: 'Exchange',         href: '/exchange',         icon: ShoppingBag,      tag: 'Marketplace' },
       { label: 'Channel Gateway',  href: '/channel-gateway',  icon: MessageSquare,    tag: 'ChatOps' },
       { label: 'Exec Channels',    href: '/exec-channels',    icon: Shield,           tag: 'Governed' },
+      { label: 'Brain Connections',href: '/marcellus/brains',  icon: BrainCircuit,     tag: 'AI' },
     ],
   },
   {
@@ -167,28 +164,13 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Configuration surfaces reached through the Settings category.
- *
- * These are existing routes; Settings groups them so the top level stays at
- * five entries instead of scattering configuration across the security Arms. */
-const SETTINGS_ITEMS: NavItem[] = [
-  { label: 'Connectors',       href: '/connectors',        icon: Plug },
-  { label: 'Connector Health', href: '/connectors/health', icon: Activity },
-  { label: 'Model Cortex',     href: '/model-cortex',      icon: Sparkles },
-  { label: 'Model Router',     href: '/model-router',      icon: Cpu },
-  { label: 'Policies',         href: '/policies',          icon: FileText },
-  { label: 'Schedules',        href: '/schedules',         icon: CalendarClock },
-  { label: 'Skill Packs',      href: '/skill-packs',       icon: Package },
-  { label: 'Audit',            href: '/audit',             icon: ScrollText },
-];
-
 /** A top-level sidebar category.
  *
  * `mode` is set for the three workspace categories so activating the header
  * also switches the workspace, preserving the previous switch behaviour while
  * removing the separate always-expanded module list. */
 type SidebarCategory = {
-  id: 'chat' | 'cowork' | 'security' | 'brains' | 'settings';
+  id: 'chat' | 'cowork' | 'security';
   label: string;
   icon: React.ElementType;
   mode?: WorkspaceMode;
@@ -199,8 +181,6 @@ const SIDEBAR_CATEGORIES: SidebarCategory[] = [
   { id: 'chat',     label: 'Chat',             icon: MessageSquare,     mode: 'chat' },
   { id: 'cowork',   label: 'Cowork',           icon: BriefcaseBusiness, mode: 'cowork' },
   { id: 'security', label: 'Security',         icon: ShieldCheck,       mode: 'security' },
-  { id: 'brains',   label: 'Brain Connections', icon: BrainCircuit,     href: '/marcellus/brains' },
-  { id: 'settings', label: 'Settings',         icon: Settings },
 ];
 
 type WorkspaceStateDetail = {
@@ -632,7 +612,7 @@ export default function Sidebar() {
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
   // Only one category is expanded at a time, so the blade stays short. `null`
-  // is the initial state: the app opens showing five category headers and
+  // is the initial state: the app opens showing three mode headers and
   // nothing else.
   const [openCategory, setOpenCategory] = useState<SidebarCategory['id'] | null>(null);
 
@@ -655,8 +635,6 @@ export default function Sidebar() {
   useEffect(() => {
     setOpenCategory((current) => {
       const owning = SIDEBAR_CATEGORIES.find((category) => category.mode === workspaceMode);
-      if (pathname.startsWith('/marcellus/brains')) return 'brains';
-      if (SETTINGS_ITEMS.some((item) => pathname === item.href)) return 'settings';
       return owning ? owning.id : current;
     });
   }, [pathname, workspaceMode]);
@@ -753,7 +731,7 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Nav — five top-level categories, each collapsed until opened. */}
+      {/* Nav — three workspace modes, each collapsed until opened. */}
       <nav
         className="flex-1 overflow-y-auto p-2 space-y-0.5"
         style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--rc-border) transparent' }}
@@ -763,9 +741,7 @@ export default function Sidebar() {
           const Icon = category.icon;
           const activeCategory = category.mode
             ? workspaceMode === category.mode
-            : category.href
-              ? pathname.startsWith(category.href)
-              : SETTINGS_ITEMS.some((item) => pathname === item.href);
+            : false;
 
           if (collapsed) {
             return (
@@ -814,27 +790,6 @@ export default function Sidebar() {
                   {category.id === 'security' && NAV_GROUPS.map((group) => (
                     <SidebarGroup key={group.label} group={group} pathname={pathname} collapsed={false} />
                   ))}
-                  {category.id === 'settings' && (
-                    <div className="space-y-0.5 pl-2">
-                      {SETTINGS_ITEMS.map(({ label, href, icon: ItemIcon }) => {
-                        const active = pathname === href;
-                        return (
-                          <Link
-                            key={href}
-                            href={href}
-                            className={clsx(
-                              'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-150',
-                              active ? 'bg-regent-600 font-medium text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
-                            )}
-                            style={active ? {} : { color: 'var(--rc-text-2)' }}
-                          >
-                            <ItemIcon className="h-3.5 w-3.5 shrink-0" />
-                            <span className="flex-1 truncate text-xs">{label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               )}
             </div>

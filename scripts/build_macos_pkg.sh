@@ -8,7 +8,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=${1:-0.6.8}
+VERSION=${1:-0.6.7}
 VERSION=${VERSION#v}
 DIST_DIR="$ROOT_DIR/dist"
 WORK_DIR="$DIST_DIR/macos-$VERSION"
