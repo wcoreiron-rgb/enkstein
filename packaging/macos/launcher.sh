@@ -5,6 +5,7 @@ export PATH="/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:/
 
 APP_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SOURCE_RUNTIME="$APP_ROOT/Resources/runtime"
+DOCKER_HELPER="$APP_ROOT/Resources/docker-prerequisite.sh"
 USER_ROOT="$HOME/Library/Application Support/Marcellus"
 RUNTIME_DIR="$USER_ROOT/runtime"
 LOG_DIR="$HOME/Library/Logs/Marcellus"
@@ -23,6 +24,12 @@ export TMPDIR="$TEMP_DIR"
 notify_status() {
   printf '%s\n' "$1"
 }
+
+if [ ! -f "$DOCKER_HELPER" ]; then
+  printf 'ERROR: Docker prerequisite helper is missing. Reinstall Enkstein.\n' >&2
+  exit 1
+fi
+source "$DOCKER_HELPER"
 
 show_error() {
   local message="$1"
@@ -208,28 +215,18 @@ PLIST
   printf '%s\n' "$source_version" > "$BRIDGE_VERSION_FILE"
 }
 
-if ! command -v docker >/dev/null 2>&1; then
-  show_error "Docker Desktop is required. Install Docker Desktop, then launch Enkstein again."
-  /usr/bin/open "https://www.docker.com/products/docker-desktop/" || true
+notify_status "Docker Desktop required. Checking the local engine..."
+ensure_docker || {
+  state=$?
+  case "$state" in
+    2) show_error "Docker Desktop is missing. Enkstein opened the official Docker installation page. Install Docker Desktop, then retry." ;;
+    3) show_error "Docker Desktop is installed but unhealthy or unavailable after the timeout. Open Docker Desktop, wait for Engine running, then retry." ;;
+    *) show_error "Docker Desktop could not be verified. Open Docker Desktop, then retry." ;;
+  esac
+  # Exit before any runtime staging, install.sh, or Compose invocation. Docker
+  # being unavailable is terminal for this launch attempt.
   exit 1
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  notify_status "Starting Docker Desktop..."
-  /usr/bin/open -a Docker >/dev/null 2>&1 || true
-  /usr/bin/osascript -e 'display notification "Waiting for Docker Desktop to start" with title "Enkstein"' >/dev/null 2>&1 || true
-  for _ in $(seq 1 60); do
-    if docker info >/dev/null 2>&1; then
-      break
-    fi
-    sleep 2
-  done
-fi
-
-if ! docker info >/dev/null 2>&1; then
-  show_error "Docker Desktop did not become ready within two minutes."
-  exit 1
-fi
+}
 
 {
   echo "[$(date -u +%FT%TZ)] Starting Enkstein $source_version"
