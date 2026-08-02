@@ -9,8 +9,11 @@
     <false/>
     <key>BundleIsVersionChecked</key>
     <true/>
+    <!-- Replace deliberately: local beta installs may move backward while
+         testing a release, and Installer otherwise updates only the receipt
+         when the installed bundle has a higher version. -->
     <key>BundleOverwriteAction</key>
-    <string>upgrade</string>
+    <string>replace</string>
     <key>RootRelativeBundlePath</key>
     <string>Applications/Enkstein.app</string>
   </dict>
