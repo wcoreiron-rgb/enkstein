@@ -137,9 +137,7 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 </table>
 
 The theme picker is in the sidebar footer: Dark, Light, and Liquid Glass.
-[Watch the short desktop tour](docs/demo/enkstein-tour.webm) or see the
-[recording guide](docs/demo-video-script.md) to make a version with your own
-project and connected Brains.
+[Watch the product tour](docs/demo/enkstein-tour.webm).
 
 ## How Enkstein Compares
 
