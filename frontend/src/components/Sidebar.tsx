@@ -44,7 +44,6 @@ type NavGroup = {
 const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Cortex & Hearts',
-    defaultOpen: true,
     items: [
       { label: 'Mission Control',  href: '/marcellus/security', icon: Compass,        tag: 'Overview' },
       { label: 'Control Center',   href: '/control-center',   icon: Shield,           tag: 'Command' },
@@ -80,14 +79,12 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Capability Studio',
-    defaultOpen: true,
     items: [
       { label: 'Custom Capability', href: '/capabilities/custom', icon: Plug, tag: 'Builder' },
     ],
   },
   {
     label: 'Protection Arm',
-    defaultOpen: true,
     items: [
       { label: 'AI Security',          href: '/capabilities/ai-security',          icon: Zap,      tag: 'AI' },
       { label: 'Cloud Security',       href: '/capabilities/cloud-security',       icon: Cloud,    tag: 'Cloud' },
@@ -102,7 +99,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Detection Arm',
-    defaultOpen: true,
     items: [
       { label: 'Threat Analysis',       href: '/capabilities/threat-analysis',      icon: Target,    tag: 'D&R' },
       { label: 'Security Telemetry',    href: '/capabilities/security-telemetry',   icon: BookOpen,  tag: 'SIEM' },
@@ -113,7 +109,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Response Arm',
-    defaultOpen: true,
     items: [
       { label: 'Security Automation', href: '/capabilities/security-automation', icon: Bot,      tag: 'SOAR' },
       { label: 'Attack Path Analysis', href: '/capabilities/attack-path-analysis', icon: GitMerge, tag: 'Paths' },
@@ -122,7 +117,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Governance Arm',
-    defaultOpen: true,
     items: [
       { label: 'Compliance Assurance', href: '/capabilities/compliance-assurance', icon: ClipboardCheck, tag: 'GRC' },
       { label: 'Privacy Governance',   href: '/capabilities/privacy-governance',   icon: Lock,           tag: 'Privacy' },
@@ -131,7 +125,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Engineering Arm',
-    defaultOpen: true,
     items: [
       { label: 'Terraform Governance', href: '/capabilities/terraform-governance', icon: Container, tag: 'IaC Sec' },
       { label: 'Developer Security',   href: '/capabilities/developer-security', icon: GitBranch, tag: 'DevSecOps' },
@@ -204,6 +197,29 @@ function dispatchWorkspaceAction(detail: { type: 'new-conversation' | 'open-conv
 // entirely separate CortexProject kinds sharing only the same table/UI shape.
 const CHAT_PROJECT_STORAGE_KEY = 'marcellus-chat-project';
 const COWORK_PROJECT_STORAGE_KEY = 'marcellus-cowork-project';
+const GROUP_OPEN_STORAGE_PREFIX = 'enkstein-nav-group:';
+
+function readGroupOpen(group: NavGroup): boolean | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(GROUP_OPEN_STORAGE_PREFIX + group.label);
+    if (raw === 'open') return true;
+    if (raw === 'closed') return false;
+  } catch {
+    // Storage can be unavailable (private mode, disabled cookies). Fall back
+    // to the collapsed default rather than failing to render the blade.
+  }
+  return null;
+}
+
+function writeGroupOpen(group: NavGroup, open: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GROUP_OPEN_STORAGE_PREFIX + group.label, open ? 'open' : 'closed');
+  } catch {
+    // Non-fatal: the group still toggles for this session.
+  }
+}
 
 function WorkspaceModeNav({ mode, collapsed }: { mode: 'chat' | 'cowork'; collapsed: boolean }) {
   const [conversations, setConversations] = useState<CortexConversation[]>([]);
@@ -500,7 +516,22 @@ function SidebarGroup({
   const hasActive = group.items.some(
     item => pathname === item.href || pathname.startsWith(item.href + '/'),
   );
-  const [open, setOpen] = useState(group.defaultOpen || hasActive);
+  // Groups ship collapsed so the blade stays scannable. A remembered choice
+  // wins, and the group owning the current route always opens so deep links
+  // never land on a hidden item.
+  const [open, setOpen] = useState(() => readGroupOpen(group) ?? (group.defaultOpen ?? false));
+
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
+  const toggleOpen = () => {
+    setOpen(prev => {
+      const next = !prev;
+      writeGroupOpen(group, next);
+      return next;
+    });
+  };
 
   if (collapsed) {
     // Icon-only mode — no group headers, just icon links with tooltips
@@ -532,7 +563,7 @@ function SidebarGroup({
   return (
     <div>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         className="w-full flex items-center gap-2 px-2 py-1.5 mb-0.5 rounded-md text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-80"
         style={{ color: 'var(--rc-text-3)' }}
       >

@@ -320,6 +320,34 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.0 — Brain Bridge recovery                           -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Brain Bridge Recovery</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Brain connections restored</span>
+          <span class="tag tag-feat">Collapsed Security Arms</span>
+          <span class="release-date">August 3, 2026 &nbsp;·&nbsp; Enkstein v0.7.0</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The macOS Brain Bridge could not bind its loopback listener, so every Codex, Claude, and browser companion Brain reported as unavailable. The listener configuration is fixed and startup failures now name the underlying error.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Brain Bridge:</strong> the loopback listener specified its port twice, which macOS rejected with <code>EINVAL</code>, crash-looping the bridge under launchd.</li>
+          <li><strong>Diagnostics:</strong> bridge startup failures report the underlying error instead of a generic configuration message.</li>
+          <li><strong>Sidebar:</strong> Security Arms start collapsed; the group owning the current page opens automatically and manual choices persist.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.6.9 — Three-mode navigation beta release              -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

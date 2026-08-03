@@ -656,7 +656,12 @@ private final class BrainBridge {
             host: NWEndpoint.Host("127.0.0.1"),
             port: config.port
         )
-        let listener = try NWListener(using: parameters, on: config.port)
+        // The port comes from `requiredLocalEndpoint` above. Passing it again
+        // via `on:` makes NWListener reject the whole configuration with
+        // POSIX EINVAL on current macOS, which crash-looped the bridge under
+        // launchd and made every Codex/Claude/browser Brain report as
+        // unavailable.
+        let listener = try NWListener(using: parameters)
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
         }
@@ -2989,6 +2994,8 @@ do {
     activeBridge = BrainBridge(config: try BridgeConfig.load())
     try activeBridge?.start()
 } catch {
-    FileHandle.standardError.write(Data("Invalid Enkstein Brain Bridge configuration.\n".utf8))
+    // Include the underlying error: a bare message made a listener bind
+    // failure indistinguishable from a genuinely malformed argument list.
+    FileHandle.standardError.write(Data("Enkstein Brain Bridge failed to start: \(error)\n".utf8))
     exit(2)
 }
