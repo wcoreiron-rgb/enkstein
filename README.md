@@ -127,6 +127,20 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 
 > More views: [Chat](docs/screenshots/chat.png) · [Platform Overview](docs/screenshots/dashboard.png) · [Swarm](docs/screenshots/swarm.png) · [Remediation](docs/screenshots/remediation.png) · [Zero Trust coverage](docs/screenshots/zero-trust.png) · [Connectors](docs/screenshots/connectors.png)
 
+### Themes
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/cowork-light.png" alt="Cowork in light theme" /><br/><sub><b>Light</b> — a clean opaque workspace for long sessions and bright environments.</sub></td>
+    <td width="50%"><img src="docs/screenshots/cowork-liquid.png" alt="Cowork in Liquid Glass theme" /><br/><sub><b>Liquid Glass</b> — a translucent native-material workspace. This web capture uses a representative backdrop; the desktop app composites your own wallpaper behind it.</sub></td>
+  </tr>
+</table>
+
+The theme picker is in the sidebar footer: Dark, Light, and Liquid Glass.
+[Watch the short desktop tour](docs/demo/enkstein-tour.webm) or see the
+[recording guide](docs/demo-video-script.md) to make a version with your own
+project and connected Brains.
+
 ## How Enkstein Compares
 
 Enkstein sits at the intersection of three tool categories — and is the only one that delivers all of it under one governed roof. Each category below has real strengths (shown honestly); the gap Enkstein fills is **governance + intelligence + security-domain coverage together.**

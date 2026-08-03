@@ -19,6 +19,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT = path.resolve(__dirname, '../../docs/screenshots');
 const BASE = process.env.SHOT_BASE || 'http://localhost:3000';
 const TOKEN = process.env.SHOT_TOKEN;
+// dark | light | liquid. Light and Liquid write <name>-<theme>.png so the dark
+// set keeps the unsuffixed filenames the README already references.
+const THEME = process.env.SHOT_THEME || 'dark';
 
 if (!TOKEN) {
   console.error('SHOT_TOKEN is required — see the header comment for how to mint one.');
@@ -44,12 +47,29 @@ const run = async () => {
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2,           // retina-crisp
-    colorScheme: 'dark',
+    colorScheme: THEME === 'light' ? 'light' : 'dark',
   });
-  await ctx.addInitScript((token) => {
+  await ctx.addInitScript(([token, theme]) => {
     window.sessionStorage.setItem('marcellus_session_token', token);
-  }, TOKEN);
+    window.localStorage.setItem('rc-theme', theme);
+    if (theme === 'liquid') window.localStorage.setItem('rc-glass', 'balanced');
+  }, [TOKEN, THEME]);
   const page = await ctx.newPage();
+
+  // Liquid Glass is genuinely transparent — the native window composites the
+  // desktop behind it. A headless browser has no desktop, so a stand-in
+  // wallpaper goes behind the page; without it every glass shot renders flat
+  // black and proves nothing about the material.
+  const WALLPAPER = `
+    html.liquid {
+      background-image:
+        radial-gradient(1200px 800px at 18% 12%, #2f5d8a 0%, transparent 60%),
+        radial-gradient(1000px 900px at 82% 78%, #7a4a6d 0%, transparent 58%),
+        linear-gradient(140deg, #14202e 0%, #1d2b3a 45%, #241f2e 100%) !important;
+      background-attachment: fixed !important;
+    }
+  `;
+  const suffix = THEME === 'dark' ? '' : `-${THEME}`;
 
   for (const [name, route] of PAGES) {
     try {
@@ -60,8 +80,10 @@ const run = async () => {
         console.log(`⚠️  ${name}: redirected to /login, skipping`);
         continue;
       }
-      await page.screenshot({ path: path.join(OUT, `${name}.png`) });
-      console.log(`✅ ${name}.png`);
+      // Re-apply per navigation: addStyleTag does not survive a page load.
+      if (THEME === 'liquid') await page.addStyleTag({ content: WALLPAPER }).catch(() => {});
+      await page.screenshot({ path: path.join(OUT, `${name}${suffix}.png`) });
+      console.log(`✅ ${name}${suffix}.png`);
     } catch (e) {
       console.log(`⚠️  ${name}: ${e.message.split('\n')[0]}`);
     }
