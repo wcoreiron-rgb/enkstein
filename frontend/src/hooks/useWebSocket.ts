@@ -38,13 +38,33 @@ type Handler = (data: Record<string, unknown>) => void;
 export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'failed';
 
 // The backend WebSocket URL.
-// In local dev the Next.js proxy doesn't forward WS upgrades, so we hit the
-// backend port directly.  For production, point this at your load balancer.
+// Next does not forward WS upgrades, so the browser connects to the backend
+// port directly. The packaged launcher picks a free port at start time rather
+// than always using 8000, so the port is discovered from /api/runtime-config
+// (see `resolveWsPort`) instead of being assumed. For a hosted deployment,
+// set NEXT_PUBLIC_WS_URL to the load balancer.
+let discoveredWsPort: string | null = null;
+
+export async function resolveWsPort(): Promise<void> {
+  if (discoveredWsPort || process.env.NEXT_PUBLIC_WS_URL) return;
+  try {
+    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
+    if (!response.ok) return;
+    const config = await response.json();
+    if (typeof config?.wsPort === 'string') discoveredWsPort = config.wsPort;
+  } catch {
+    // Fall back to the default port below; a failed lookup must not stop the
+    // console from loading.
+  }
+}
+
 const getWebSocketConnection = (): { url: string; protocols?: string[] } => {
+  const scheme = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const port = discoveredWsPort || '8000';
   const url = process.env.NEXT_PUBLIC_WS_URL ||
     (typeof window !== 'undefined'
-      ? `ws://${window.location.hostname}:8000/api/v1/ws`
-      : 'ws://localhost:8000/api/v1/ws');
+      ? `${scheme}://${window.location.hostname}:${port}/api/v1/ws`
+      : `ws://localhost:${port}/api/v1/ws`);
   if (typeof window === 'undefined') return { url };
   const token = getAuthToken();
   return token
@@ -117,6 +137,10 @@ export function useWebSocket(): UseWebSocketReturn {
 
     setStatus('connecting');
 
+    // Learn the launcher's chosen backend port before the first dial. Resolves
+    // immediately once known, so reconnects are not delayed.
+    void resolveWsPort().then(() => {
+    if (unmountedRef.current) return;
     try {
       const connection = getWebSocketConnection();
       const ws = connection.protocols
@@ -195,6 +219,7 @@ export function useWebSocket(): UseWebSocketReturn {
     } catch {
       // WebSocket constructor can throw in SSR / non-browser environments
     }
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Manual reconnect — resets everything and connects immediately

@@ -116,16 +116,16 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/dashboard.png" alt="Platform Overview dashboard" /><br/><sub><b>Platform Overview</b> — risk score, live event feed, module &amp; connector status across the Zero Trust CoreOS.</sub></td>
-    <td width="50%"><img src="docs/screenshots/swarm.png" alt="Swarm multi-agent orchestration" /><br/><sub><b>Swarm Orchestration</b> — parallel multi-claw investigations with judge models, confidence scoring, and approval gates.</sub></td>
+    <td width="50%"><img src="docs/screenshots/cowork.png" alt="Cowork workspace" /><br/><sub><b>Cowork</b> — governed file work in a project folder you select. Pick the runtime group, executor, and whether changes auto-apply or wait for approval.</sub></td>
+    <td width="50%"><img src="docs/screenshots/brains.png" alt="Brain Connections" /><br/><sub><b>Brain Connections</b> — Codex, Claude, browser sessions, and local Ollama models side by side. Cookies and account tokens never enter Enkstein.</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/remediation.png" alt="Autonomous Remediation engine" /><br/><sub><b>Autonomous Remediation</b> — approval queue, action history with one-click rollback, and built-in response playbooks.</sub></td>
-    <td width="50%"><img src="docs/screenshots/arcclaw.png" alt="AI Security Copilot" /><br/><sub><b>Security Copilot (AI Security)</b> — AI agent with live tool calling for CVEs, MITRE ATT&amp;CK, findings, and posture.</sub></td>
+    <td width="50%"><img src="docs/screenshots/security.png" alt="Security mode" /><br/><sub><b>Security</b> — Mission Control and the Capability Nodes, grouped into Arms that stay collapsed until you open them.</sub></td>
+    <td width="50%"><img src="docs/screenshots/trust-fabric.png" alt="Trust Fabric" /><br/><sub><b>Trust Fabric</b> — the policy decision behind every model call, tool invocation, and remediation, with the audit record.</sub></td>
   </tr>
 </table>
 
-> More views: [Trust Fabric](docs/screenshots/trust-fabric.png) · [Control Center](docs/screenshots/control-center.png) · [Connector Marketplace](docs/screenshots/connectors.png)
+> More views: [Chat](docs/screenshots/chat.png) · [Platform Overview](docs/screenshots/dashboard.png) · [Swarm](docs/screenshots/swarm.png) · [Remediation](docs/screenshots/remediation.png) · [Zero Trust coverage](docs/screenshots/zero-trust.png) · [Connectors](docs/screenshots/connectors.png)
 
 ## How Enkstein Compares
 

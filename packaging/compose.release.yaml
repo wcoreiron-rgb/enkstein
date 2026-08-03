@@ -94,6 +94,11 @@ services:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     environment:
       INTERNAL_API_URL: http://backend:8000
+      # The launcher picks a free host port for the backend, so the browser
+      # cannot assume 8000. WebSocket upgrades are not proxied through Next, so
+      # the client reads this published port from /api/runtime-config; without
+      # it the live event feed sits on "Reconnecting..." forever.
+      BACKEND_PORT: ${BACKEND_PORT:-8000}
     depends_on:
       backend:
         condition: service_healthy

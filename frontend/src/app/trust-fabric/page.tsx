@@ -16,6 +16,7 @@ import {
   Ban,
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
+import { capabilityName } from '@/lib/capability-names';
 
 const PRINCIPLES = [
   { icon: Shield, title: 'Every Component Has Identity', desc: 'No anonymous modules, agents, or integrations. Every entity is registered with an owner.' },
@@ -295,7 +296,7 @@ export default function TrustFabricPage() {
               <tbody>
                 {(sreStatus.modules || []).map((m: any) => (
                   <tr key={m.module} className="border-b border-gray-900/80 text-gray-300">
-                    <td className="py-2 pr-3">{m.module}</td>
+                    <td className="py-2 pr-3">{capabilityName(m.module)}</td>
                     <td className="py-2 pr-3">{m.total}</td>
                     <td className="py-2 pr-3">{m.failures}</td>
                     <td className="py-2 pr-3">{(m.error_rate * 100).toFixed(1)}%</td>
@@ -531,7 +532,7 @@ export default function TrustFabricPage() {
               <tbody className="divide-y divide-gray-800">
                 {status.recent_decisions.map((decision: any) => (
                   <tr key={decision.id} className="hover:bg-gray-800/40">
-                    <td className="px-5 py-3 text-gray-200">{decision.module}</td>
+                    <td className="px-5 py-3 text-gray-200">{capabilityName(decision.module)}</td>
                     <td className="px-5 py-3 text-gray-400">{decision.actor || 'system'}</td>
                     <td className="px-5 py-3 text-gray-300">{decision.action}</td>
                     <td className="px-5 py-3">

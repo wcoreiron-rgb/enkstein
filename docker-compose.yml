@@ -85,6 +85,9 @@ services:
       # Setting it to http://localhost:8000 would make the browser try to reach
       # the backend directly, which fails from inside Docker.
       INTERNAL_API_URL: http://backend:8000
+      # Published backend port, read by the browser from /api/runtime-config
+      # because Next does not proxy WebSocket upgrades.
+      BACKEND_PORT: ${BACKEND_PORT:-8000}
     depends_on:
       - backend
     restart: unless-stopped

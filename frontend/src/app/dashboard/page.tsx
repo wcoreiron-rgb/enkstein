@@ -6,6 +6,7 @@ import RiskBadge from '@/components/RiskBadge';
 import { getDashboard } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { capabilityName } from '@/lib/capability-names';
 
 // ── Live toast for real-time events ──────────────────────────────────────────
 interface LiveToast {
@@ -228,7 +229,7 @@ export default function DashboardPage() {
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm truncate" style={{ color: 'var(--rc-text-1)' }}>
-                  <span className="font-medium text-indigo-400">{e.module}</span>
+                  <span className="font-medium text-indigo-400">{capabilityName(e.module)}</span>
                   {' · '}
                   <span style={{ color: 'var(--rc-text-2)' }}>{e.actor} → {e.action}</span>
                 </p>
