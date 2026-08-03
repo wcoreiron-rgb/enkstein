@@ -309,10 +309,13 @@ internal sealed class EnksteinWindow : Form
 
     private void RetryStartup()
     {
-        try { if (_runtimeProcess != null && !_runtimeProcess.HasExited) _runtimeProcess.Kill(true); } catch { }
+        // Kill(bool) is .NET Core only; the installer compiles against the
+        // .NET Framework 4 csc shipped with Windows, so terminate the process
+        // itself and let the runtime script's own cleanup reap its children.
+        try { if (_runtimeProcess != null && !_runtimeProcess.HasExited) _runtimeProcess.Kill(); } catch { }
         _runtimeProcess = null;
         _startupActions.Visible = false;
-        _ = StartRuntimeAsync();
+        StartRuntimeAsync();
     }
 
     private void OpenDocker()
