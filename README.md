@@ -127,6 +127,16 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 
 > More views: [Chat](docs/screenshots/chat.png) · [Platform Overview](docs/screenshots/dashboard.png) · [Swarm](docs/screenshots/swarm.png) · [Remediation](docs/screenshots/remediation.png) · [Zero Trust coverage](docs/screenshots/zero-trust.png) · [Connectors](docs/screenshots/connectors.png)
 
+### Product Tour
+
+<p align="center">
+  <a href="docs/demo/enkstein-tour.webm">
+    <img src="docs/demo/enkstein-tour.gif" alt="Enkstein tour: Cowork, Brain Connections, Light, and Liquid Glass" width="720" />
+  </a>
+</p>
+
+<p align="center"><sub>Click the preview to watch the full tour.</sub></p>
+
 ### Themes
 
 <table>
@@ -137,7 +147,6 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 </table>
 
 The theme picker is in the sidebar footer: Dark, Light, and Liquid Glass.
-[Watch the product tour](docs/demo/enkstein-tour.webm).
 
 ## How Enkstein Compares
 
