@@ -319,9 +319,11 @@ async def arm_profile(claw: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/collectors")
-async def collector_readiness(db: AsyncSession = Depends(get_db)):
+async def collector_readiness(
+    db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
     """Which evidence collectors can run now, and which await a connector."""
-    return await control_collectors.readiness(db)
+    return await control_collectors.readiness(db, tenant_id=caller_tenant(user))
 
 
 @router.post("/collectors/attach")
@@ -334,24 +336,27 @@ async def attach_control_evaluators(db: AsyncSession = Depends(get_db)):
 async def control_evaluation(
     claw: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """PASS / FAIL / NOT_ASSESSED verdicts with an honest assessment score."""
-    return await evaluate_controls(db, claw=claw)
+    return await evaluate_controls(db, claw=claw, tenant_id=caller_tenant(user))
 
 
 @router.get("/remediation/proposals")
 async def remediation_proposals(
     claw: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Failing controls that declare an executable remediation action."""
-    return await control_remediation.proposals(db, claw=claw)
+    return await control_remediation.proposals(db, claw=claw, tenant_id=caller_tenant(user))
 
 
 @router.post("/assessment-summary")
 async def assessment_summary(
     body: AssessmentSummaryRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Advisory narration of one node's finished assessment.
 
@@ -367,8 +372,9 @@ async def assessment_summary(
         for index, source in enumerate(SUMMARY_SOURCES)
     ]
     try:
-        evaluation = await evaluate_controls(db, claw=body.claw)
-        proposals = await control_remediation.proposals(db, claw=body.claw)
+        tenant_id = caller_tenant(user)
+        evaluation = await evaluate_controls(db, claw=body.claw, tenant_id=tenant_id)
+        proposals = await control_remediation.proposals(db, claw=body.claw, tenant_id=tenant_id)
 
         statement = (
             select(Finding)
@@ -376,6 +382,8 @@ async def assessment_summary(
             .order_by(desc(Finding.risk_score))
             .limit(25)
         )
+        if tenant_id is not None:
+            statement = statement.where(Finding.tenant_id == tenant_id)
         result = await db.execute(statement)
         findings = [
             {
@@ -431,6 +439,7 @@ async def remediate_failing_control(
     body: ControlRemediationRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Propose a control's declared remediation through the governed engine."""
     decision = await enforce(
@@ -450,7 +459,8 @@ async def remediate_failing_control(
     if not decision.allowed:
         raise HTTPException(status_code=403, detail=decision.reason)
     return await control_remediation.remediate_control(
-        db, control_id=body.control_id, triggered_by=body.requested_by
+        db, control_id=body.control_id, triggered_by=body.requested_by,
+        tenant_id=caller_tenant(user),
     )
 
 
@@ -458,17 +468,32 @@ async def remediate_failing_control(
 async def verify_remediated_control(
     body: ControlRemediationRequest,
     db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
     """Re-evaluate a control after remediation to confirm the fix held."""
-    return await control_remediation.verify_after_remediation(db, control_id=body.control_id)
+    return await control_remediation.verify_after_remediation(
+        db, control_id=body.control_id, tenant_id=caller_tenant(user)
+    )
 
 
 @router.get("/{control_id:path}/verification")
-async def verify_control(control_id: str, db: AsyncSession = Depends(get_db)):
+async def verify_control(
+    control_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """Return PASS, FAIL, or UNKNOWN from the latest observed evidence."""
-    result = await db.execute(
-        select(Finding).where(Finding.control_id == control_id).order_by(desc(Finding.last_seen)).limit(100)
+    # Verification is an operational verdict. Demonstration, unknown, and
+    # stale non-live rows may be useful UI context but can never prove a
+    # control passed or failed.
+    statement = select(Finding).where(
+        Finding.control_id == control_id,
+        Finding.data_origin == "live",
     )
+    tenant_id = caller_tenant(user)
+    if tenant_id is not None:
+        statement = statement.where(Finding.tenant_id == tenant_id)
+    result = await db.execute(statement.order_by(desc(Finding.last_seen)).limit(100))
     findings = result.scalars().all()
     if any((f.status.value if hasattr(f.status, "value") else f.status) == "open" for f in findings):
         status = "fail"

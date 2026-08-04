@@ -56,7 +56,7 @@ async def test_production_mode_returns_nothing_rather_than_demonstration_data(db
     )
     assert result["mode"] == "empty"
     assert result["findings_created"] == 0
-    assert "demonstration data is disabled" in result["message"]
+    assert "Connect and verify a provider" in result["message"]
 
 
 @pytest.mark.asyncio

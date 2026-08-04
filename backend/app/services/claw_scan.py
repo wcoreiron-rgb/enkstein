@@ -13,10 +13,9 @@ apart in ways a beta tenant would notice:
   * A connector that errored was indistinguishable from one that was absent.
 
 ``run_claw_scan`` centralises the resolution order: try every configured
-adapter, fall back to demonstration data when nothing is configured, and keep
-showing labelled demonstration data (rather than an empty screen) when a
-connector is configured but returned nothing or failed.  Origin tagging is
-applied here so no Claw can accidentally present demo data as live.
+adapter, then return an honest unavailable result unless the operator has
+explicitly enabled local demonstration data. Origin tagging is applied here so
+no Claw can accidentally present demo data as live.
 """
 from __future__ import annotations
 
@@ -191,7 +190,7 @@ async def run_claw_scan(
             raw = await fetch_via_adapter(adapter, creds)
         except Exception as exc:
             logger.warning(
-                "%s: %s connector call failed (%s) — keeping demonstration data",
+                "%s: %s connector call failed (%s)",
                 claw,
                 provider_name,
                 type(exc).__name__,
@@ -236,12 +235,18 @@ async def run_claw_scan(
         "critical": summary["critical"],
         "high": summary["high"],
         "providers": provider_results,
+        "data_source": "live_connector" if mode == "live" else (
+            "seeded_fallback" if mode == "simulated" else "no_data_source"
+        ),
+        "evidence_status": "live" if mode == "live" else (
+            "demo" if mode == "simulated" else "unavailable"
+        ),
     }
     if mode == "simulated" and configured_without_adapter:
         response["message"] = (
             "Connector configured, but no live adapter is available yet for: "
             + ", ".join(sorted(configured_without_adapter))
-            + ". Showing demonstration findings."
+            + ". No environment findings were created."
         )
     elif mode == "empty":
         configured = [n for n, r in provider_results.items() if r.get("status") != "not_configured"]
@@ -250,7 +255,7 @@ async def run_claw_scan(
             + ", ".join(sorted(configured))
             + "."
         ) if configured else (
-            "No connector is configured for this Capability Node, and demonstration "
-            "data is disabled by the production data policy."
+            "No connector is configured for this Capability Node. Connect and verify "
+            "a provider before running an environment scan."
         )
     return response

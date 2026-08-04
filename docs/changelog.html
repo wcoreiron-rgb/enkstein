@@ -320,6 +320,35 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.1 — Evidence-first Security Runtime                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--green);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Evidence-First Security Runtime</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Live evidence by default</span>
+          <span class="tag tag-fix">Verified connector health</span>
+          <span class="release-date">August 3, 2026 &nbsp;·&nbsp; Enkstein v0.7.1</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Security scans now fail closed when no authenticated evidence source is available. Connector configuration, approval, verification, and live evidence are shown as separate states.</div>
+      <div class="change-section">
+        <div class="change-section-title">Changed</div>
+        <ul class="change-list">
+          <li><strong>Capability Nodes:</strong> production scans no longer substitute sample findings for an environment without a verified source.</li>
+          <li><strong>Connector Health:</strong> records a successful read-only provider test before showing Verified; configured and approved connectors still needing a test are explicit.</li>
+          <li><strong>Controls and AI advisories:</strong> use tenant-scoped live evidence only. Demo and unknown origins cannot affect verdicts or remediation candidates.</li>
+          <li><strong>Identity Security:</strong> inventory, risk events, and privileged approvals are tenant-owned and foreign records resolve as not found.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.7.0 — Brain Bridge recovery                           -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

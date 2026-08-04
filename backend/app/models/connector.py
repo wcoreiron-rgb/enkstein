@@ -62,5 +62,10 @@ class Connector(Base):
     trust_score: Mapped[float] = mapped_column(Float, default=70.0)            # 0-100; derived from risk + status
 
     last_used: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Configuration and policy approval do not establish that credentials work.
+    # Preserve the last read-only verification as a separate state.
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verification_level: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_verification_error: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

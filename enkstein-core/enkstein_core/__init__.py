@@ -28,7 +28,7 @@ The full platform (24+ claws, swarms, remediation, Trust Fabric audit) runs
 as the server — see https://github.com/wcoreiron-rgb/enkstein. This package
 is the subset that is genuinely standalone.
 """
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 from .ring_policy import (  # noqa: F401
     classify_ring,

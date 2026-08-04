@@ -21,6 +21,7 @@ class IdentityRiskEvent(Base):
     __tablename__ = "identity_risk_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
 
     identity_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
@@ -42,6 +43,7 @@ class PrivilegedAction(Base):
     __tablename__ = "privileged_actions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     requestor_id: Mapped[str] = mapped_column(String(256), nullable=False)

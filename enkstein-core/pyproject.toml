@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name            = "enkstein-core"
-version         = "0.7.0"
+version         = "0.7.1"
 description     = "Embeddable Enkstein governance primitives — execution ring policy, provenance verification, and secret/PII scanning. No server required."
 readme          = "README.md"
 requires-python = ">=3.11"

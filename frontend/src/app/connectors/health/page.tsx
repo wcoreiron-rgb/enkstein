@@ -15,16 +15,19 @@ type ConnectorHealth = {
   connector_type: string;
   category: string | null;
   status: string;
-  health: 'healthy' | 'unconfigured' | 'pending' | 'blocked' | 'restricted' | 'unknown';
+  health: 'verified' | 'unverified' | 'unconfigured' | 'pending' | 'blocked' | 'restricted' | 'unknown';
   is_configured: boolean;
   trust_score: number;
   risk_level: string;
   last_used: string | null;
+  last_verified_at: string | null;
+  verification_level: string | null;
 };
 
 type Summary = {
   total: number;
-  healthy: number;
+  verified: number;
+  unverified: number;
   unconfigured: number;
   pending: number;
   blocked: number;
@@ -33,7 +36,8 @@ type Summary = {
 };
 
 const HEALTH_META: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
-  healthy:      { icon: CheckCircle,   color: 'text-green-400',  bg: 'bg-green-900/30 border-green-800',   label: 'Healthy' },
+  verified:     { icon: CheckCircle,   color: 'text-green-400',  bg: 'bg-green-900/30 border-green-800',   label: 'Verified' },
+  unverified:   { icon: AlertTriangle, color: 'text-amber-400',  bg: 'bg-amber-900/30 border-amber-800',   label: 'Needs Verification' },
   unconfigured: { icon: Settings,      color: 'text-yellow-400', bg: 'bg-yellow-900/30 border-yellow-800', label: 'Not Configured' },
   pending:      { icon: Clock,         color: 'text-blue-400',   bg: 'bg-blue-900/30 border-blue-800',     label: 'Pending Approval' },
   blocked:      { icon: Ban,           color: 'text-red-400',    bg: 'bg-red-900/30 border-red-800',       label: 'Blocked' },
@@ -93,11 +97,11 @@ export default function ConnectorHealthPage() {
     return true;
   });
 
-  const healthy   = all.filter(c => c.health === 'healthy').length;
-  const issues    = all.filter(c => c.health !== 'healthy').length;
+  const verified = all.filter(c => c.health === 'verified').length;
+  const issues   = all.filter(c => c.health !== 'verified').length;
   const overallHealth = all.length === 0 ? 'unknown' :
-    healthy === all.length ? 'all_healthy' :
-    healthy === 0 ? 'none_healthy' : 'partial';
+    verified === all.length ? 'all_verified' :
+    verified === 0 ? 'none_verified' : 'partial';
 
   return (
     <div className="space-y-6">
@@ -116,7 +120,7 @@ export default function ConnectorHealthPage() {
               <Activity className="text-cyan-400" /> Connector Health
             </h1>
             <p className="text-gray-400 mt-1 text-sm">
-              Real-time health status and trust scores for all configured connectors.
+              Recorded read-only verification status. A connector is verified only after Enkstein completes a provider-specific check.
             </p>
           </div>
           <button onClick={load} className="p-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-400 hover:text-white">
@@ -128,21 +132,21 @@ export default function ConnectorHealthPage() {
       {/* Overall health banner */}
       {summary && (
         <div className={`rounded-xl border px-6 py-4 flex items-center gap-4 ${
-          overallHealth === 'all_healthy' ? 'bg-green-900/20 border-green-800' :
-          overallHealth === 'none_healthy' ? 'bg-red-900/20 border-red-800' :
+          overallHealth === 'all_verified' ? 'bg-green-900/20 border-green-800' :
+          overallHealth === 'none_verified' ? 'bg-red-900/20 border-red-800' :
           'bg-yellow-900/20 border-yellow-800'
         }`}>
-          {overallHealth === 'all_healthy' && <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0" />}
-          {overallHealth === 'none_healthy' && <XCircle className="w-6 h-6 text-red-400 flex-shrink-0" />}
+          {overallHealth === 'all_verified' && <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0" />}
+          {overallHealth === 'none_verified' && <XCircle className="w-6 h-6 text-red-400 flex-shrink-0" />}
           {overallHealth === 'partial' && <AlertTriangle className="w-6 h-6 text-yellow-400 flex-shrink-0" />}
           <div>
             <p className="text-white font-semibold text-sm">
-              {overallHealth === 'all_healthy' && 'All connectors healthy'}
-              {overallHealth === 'none_healthy' && 'No healthy connectors — configure connectors to get started'}
-              {overallHealth === 'partial' && `${healthy} of ${all.length} connectors healthy — ${issues} need attention`}
+              {overallHealth === 'all_verified' && 'All connectors verified'}
+              {overallHealth === 'none_verified' && 'No verified connectors — configure and test a connector to get started'}
+              {overallHealth === 'partial' && `${verified} of ${all.length} connectors verified — ${issues} need attention`}
             </p>
             <p className="text-gray-400 text-xs mt-0.5">
-              {summary.configured} configured · {summary.healthy} approved · {summary.unconfigured} unconfigured · {summary.pending} pending
+              {summary.configured} configured · {summary.verified} verified · {summary.unverified} awaiting test · {summary.unconfigured} unconfigured
             </p>
           </div>
         </div>
@@ -153,7 +157,8 @@ export default function ConnectorHealthPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
             { label: 'Total', value: summary.total, color: 'text-white' },
-            { label: 'Healthy', value: summary.healthy, color: 'text-green-400' },
+            { label: 'Verified', value: summary.verified, color: 'text-green-400' },
+            { label: 'Needs Test', value: summary.unverified, color: summary.unverified > 0 ? 'text-amber-400' : 'text-gray-500' },
             { label: 'Configured', value: summary.configured, color: 'text-blue-400' },
             { label: 'Unconfigured', value: summary.unconfigured, color: summary.unconfigured > 0 ? 'text-yellow-400' : 'text-gray-500' },
             { label: 'Blocked', value: summary.blocked, color: summary.blocked > 0 ? 'text-red-400' : 'text-gray-500' },
@@ -176,7 +181,7 @@ export default function ConnectorHealthPage() {
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <div className="flex gap-1 bg-gray-900 border border-gray-700 rounded-xl p-1">
-          {['all', 'healthy', 'unconfigured', 'pending', 'blocked'].map(h => (
+          {['all', 'verified', 'unverified', 'unconfigured', 'pending', 'blocked'].map(h => (
             <button
               key={h}
               onClick={() => setHealthFilter(h)}
@@ -201,7 +206,7 @@ export default function ConnectorHealthPage() {
               <th className="px-5 py-3 text-left">Health</th>
               <th className="px-5 py-3 text-left">Trust Score</th>
               <th className="px-5 py-3 text-left">Risk</th>
-              <th className="px-5 py-3 text-left">Last Used</th>
+              <th className="px-5 py-3 text-left">Last Verified</th>
               <th className="px-5 py-3 text-left">Test</th>
             </tr>
           </thead>
@@ -255,7 +260,7 @@ export default function ConnectorHealthPage() {
                     }`}>{c.risk_level}</span>
                   </td>
                   <td className="px-5 py-3 text-gray-400 text-xs">
-                    {c.last_used ? <ClientDate value={c.last_used} format="date" /> : '—'}
+                    {c.last_verified_at ? <ClientDate value={c.last_verified_at} format="date" /> : 'Never'}
                   </td>
                   <td className="px-5 py-3">
                     {c.is_configured ? (

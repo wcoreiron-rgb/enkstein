@@ -65,7 +65,8 @@ def test_prepare_never_attaches_a_connector_to_simulated_data():
 
 
 @pytest.mark.asyncio
-async def test_scan_without_connectors_falls_back_to_labelled_demo_data(db_session):
+async def test_scan_without_connectors_falls_back_to_labelled_demo_data(db_session, monkeypatch):
+    monkeypatch.setattr("app.services.claw_scan.settings.REQUIRE_LIVE_DATA", False)
     result = await run_claw_scan(
         db_session,
         claw="accessclaw",
@@ -99,6 +100,7 @@ async def test_configured_adapter_output_is_ingested_as_live(db_session, monkeyp
 
 @pytest.mark.asyncio
 async def test_failing_connector_keeps_demonstration_data(db_session, monkeypatch):
+    monkeypatch.setattr("app.services.claw_scan.settings.REQUIRE_LIVE_DATA", False)
     adapter = _Adapter(error=RuntimeError("upstream 503"))
     monkeypatch.setattr(
         "app.services.claw_scan.resolve_credentials",
@@ -120,6 +122,7 @@ async def test_failing_connector_keeps_demonstration_data(db_session, monkeypatc
 async def test_configured_provider_without_adapter_is_reported_honestly(
     db_session, monkeypatch
 ):
+    monkeypatch.setattr("app.services.claw_scan.settings.REQUIRE_LIVE_DATA", False)
     monkeypatch.setattr(
         "app.services.claw_scan.resolve_credentials",
         _fake_credentials,
@@ -172,6 +175,7 @@ async def test_provider_failure_is_not_reported_as_a_successful_scan(
     findings, and the scan reports success. The operator then reads demo data
     as their own estate. A provider that failed must say so.
     """
+    monkeypatch.setattr("app.services.claw_scan.settings.REQUIRE_LIVE_DATA", False)
     monkeypatch.setattr(
         "app.services.claw_scan.resolve_credentials", _fake_credentials
     )

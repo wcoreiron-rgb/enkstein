@@ -1,5 +1,6 @@
 """CoreOS — Connector Registry routes."""
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -84,7 +85,7 @@ async def register_connector(
     return connector
 
 
-@router.get("/health-summary", summary="Health status for all connectors (no live test)")
+@router.get("/health-summary", summary="Recorded connector verification status (no live test)")
 async def get_health_summary(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
@@ -105,7 +106,9 @@ async def get_health_summary(
         if c.status.value == "blocked":     return "blocked"
         if c.status.value == "restricted":  return "restricted"
         if not secrets_manager.is_configured(str(c.id)): return "unconfigured"
-        if c.status.value == "approved":    return "healthy"
+        if c.status.value == "approved" and c.verification_level in {"credential", "service", "local"}:
+            return "verified"
+        if c.status.value == "approved":    return "unverified"
         if c.status.value == "pending":     return "pending"
         return "unknown"
 
@@ -121,13 +124,16 @@ async def get_health_summary(
             "trust_score":      c.trust_score,
             "risk_level":       c.risk_level.value,
             "last_used":        c.last_used.isoformat() if c.last_used else None,
+            "last_verified_at": c.last_verified_at.isoformat() if c.last_verified_at else None,
+            "verification_level": c.verification_level,
         }
         for c in connectors
     ]
 
     return {
         "total":        len(items),
-        "healthy":      sum(1 for i in items if i["health"] == "healthy"),
+        "verified":     sum(1 for i in items if i["health"] == "verified"),
+        "unverified":   sum(1 for i in items if i["health"] == "unverified"),
         "unconfigured": sum(1 for i in items if i["health"] == "unconfigured"),
         "pending":      sum(1 for i in items if i["health"] == "pending"),
         "blocked":      sum(1 for i in items if i["health"] == "blocked"),
@@ -360,7 +366,13 @@ async def test_connector_connection(
     # Only provider-specific credential or local-service verification can establish
     # connector trust. Generic endpoint reachability and format checks cannot.
     was_pending = connector.status == ConnectorStatus.PENDING
-    establishes_trust = result_obj.verification_level in {"credential", "service"}
+    establishes_trust = result_obj.verification_level in {"credential", "service", "local"}
+    connector.last_verified_at = datetime.now(timezone.utc)
+    connector.verification_level = result_obj.verification_level if result_obj.success else None
+    # Do not persist raw provider detail: keep only the bounded operator-safe
+    # message emitted by the connector test service.
+    connector.last_verification_error = None if result_obj.success else result_obj.message[:256]
+    await db.commit()
     if result_obj.success and establishes_trust and was_pending:
         connector.status = ConnectorStatus.APPROVED
         await db.commit()

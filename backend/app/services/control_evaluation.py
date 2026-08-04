@@ -110,17 +110,20 @@ async def evaluate_controls(
     claw: str | None = None,
     control_id: str | None = None,
     collectors_ran: set[str] | None = None,
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Evaluate a control set and return verdicts plus an honest score."""
     from app.services.control_collectors import collector_ready, configured_connectors
 
-    active = await configured_connectors(db)
+    active = await configured_connectors(db, tenant_id=tenant_id)
     statement = select(Control)
     if control_id:
         statement = statement.where(Control.control_id == control_id)
     controls = (await db.execute(statement)).scalars().all()
 
     finding_statement = select(Finding)
+    if tenant_id is not None:
+        finding_statement = finding_statement.where(Finding.tenant_id == tenant_id)
     if claw:
         finding_statement = finding_statement.where(Finding.claw == claw)
     findings = (await db.execute(finding_statement)).scalars().all()
@@ -179,6 +182,7 @@ async def evaluate_controls(
     return {
         "claw": claw,
         "control_id": control_id,
+        "tenant_id": tenant_id,
         "evaluated": len(results),
         "counts": counts,
         "assessed": assessed,

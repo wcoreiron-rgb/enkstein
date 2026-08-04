@@ -79,7 +79,8 @@ nothing is presented as verified estate data by omission.
 
 Filter with `GET /api/v1/findings?data_origin=live` or use the data-origin
 filter in the Findings console. If you want the platform to refuse
-demonstration data entirely, set `REQUIRE_LIVE_DATA=true`.
+demonstration data is disabled by default (`REQUIRE_LIVE_DATA=true`). Set it to
+`false` only for an explicitly labelled local walkthrough.
 
 Demonstration findings never produce a control verdict. A Zero Trust control
 passes only when a collector actually ran and returned no violation.

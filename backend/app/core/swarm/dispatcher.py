@@ -451,7 +451,7 @@ async def _execute_real_task_if_supported(
     }
 
     if claw == "identityclaw":
-        output = await run_identity_task(IdentityTaskRequest(**payload), db)
+        output = await run_identity_task(IdentityTaskRequest(**payload), db, principal)
     elif claw == "cloudclaw":
         output = await run_cloud_task(CloudTaskRequest(**payload), db, principal)
     elif claw == "threatclaw":

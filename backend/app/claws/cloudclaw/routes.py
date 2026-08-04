@@ -17,6 +17,7 @@ from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.models.connector import Connector
 from app.schemas.finding import FindingRead
 from app.services.secrets_manager import get_credential
+from app.services.claw_scan import fetch_via_adapter
 
 from app.claws.cloudclaw.providers import aws as aws_adapter
 from app.claws.cloudclaw.providers import azure as azure_adapter
@@ -166,7 +167,7 @@ async def get_cloudclaw_findings(
     """List Cloud Security findings with optional filters."""
     stmt = (
         select(Finding)
-        .where(Finding.claw == CLAW_NAME)
+        .where(Finding.claw == CLAW_NAME, Finding.data_origin == "live")
         .order_by(desc(Finding.risk_score), desc(Finding.created_at))
     )
 
@@ -216,7 +217,6 @@ async def trigger_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(
     Uses the finding pipeline for deduplication, policy evaluation, and alert routing.
     """
     from app.services.finding_pipeline import ingest_findings
-    from app.services.claw_scan import fetch_via_adapter
     from app.core.config import settings
 
     tenant_id = caller_tenant(user)
@@ -285,6 +285,12 @@ async def trigger_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(
         # Callers (agent runs, workflows, the console) branch on this to decide
         # whether a result may be treated as the tenant's real estate.
         "mode": "live" if any_live else ("empty" if settings.REQUIRE_LIVE_DATA else "simulated"),
+        "data_source": "live_connector" if any_live else (
+            "no_data_source" if settings.REQUIRE_LIVE_DATA else "seeded_fallback"
+        ),
+        "evidence_status": "live" if any_live else (
+            "unavailable" if settings.REQUIRE_LIVE_DATA else "demo"
+        ),
         "findings_created": total_created,
         "findings_updated": total_updated,
         "providers": provider_results,
@@ -292,6 +298,11 @@ async def trigger_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(
         "message": (
             f"Cloud Security scan complete. {total_created} new findings, "
             f"{total_updated} updated across {len(PROVIDER_CONFIG)} providers."
+        ) if any_live else (
+            "No verified cloud evidence was available. Connect and test an AWS, Azure, GCP, "
+            "or Prowler source before running an environment scan."
+            if settings.REQUIRE_LIVE_DATA else
+            "Demo evidence only. It is not an assessment of this environment."
         ),
     }
 
@@ -324,7 +335,7 @@ async def run_cloud_task(
                 continue
             connector_configured = True
             try:
-                raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+                raw_findings = await fetch_via_adapter(cfg["adapter"], creds)
             except Exception:
                 continue
             for row in raw_findings[:2]:

@@ -24,7 +24,7 @@
 
 <p align="center">
   <sub>
-    <b>v0.7.0</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    <b>Latest installer: v0.7.0</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -199,6 +199,7 @@ Deeper reading:
 - [Runtime Reference](docs/runtime-reference.md) — Missions, Reflexes, Regeneration, Brain runtime groups, and Brain Bridges.
 - [Maturity Matrix](docs/maturity-matrix.md) — what is shipped versus in progress.
 - [Testing Guide](docs/testing-guide.md) — which connectors work without a paid account.
+- [Evidence and Connector Contract](docs/evidence-and-connector-contract.md) — what configured, verified, live, recorded, demo, and unavailable mean.
 
 ## Security Compliance
 
@@ -327,7 +328,7 @@ The Docker frontend runs as a production Next.js server. The image builds the UI
 
 ### Connecting your own tools
 
-Every Capability Node module supports real integrations. Go to **Connectors** and add credentials for the tools you use:
+Capability Nodes use real integrations only after their connector is configured and passes a read-only verification. Go to **Connectors** and add credentials for the tools you use:
 
 | Category | Supported integrations |
 |---|---|
@@ -340,7 +341,7 @@ Every Capability Node module supports real integrations. Go to **Connectors** an
 | Log/SIEM | Splunk |
 | Custom | Any REST API via Custom Capability |
 
-Without credentials, all modules run on realistic simulated findings so the platform is fully usable for demos and evaluation.
+Production installs require live connector evidence by default. A Node without a verified source reports an unavailable scan outcome instead of presenting sample findings. Local walkthrough data is an explicit opt-in only.
 
 Every finding records a **data origin** so the two are never confused once you connect a real
 connector. Findings are labelled `live` (returned by an authenticated provider, with the source
@@ -377,10 +378,10 @@ Hub, Azure Defender for Cloud, GCP SCC), **Endpoint** (CrowdStrike, Defender, Se
 **Developer Security** (GitHub), **Identity** and **Privileged Access** (Entra ID, Okta),
 **Security Telemetry** (Splunk), and **AI Governance**.
 
-The remaining nodes are connector-aware but not yet adapter-backed. Configuring a connector for
-one of them does not empty it: it keeps showing demonstration findings with the `simulated`
-badge and reports `"Connector configured, but no live adapter is available yet"` in the scan
-response, so a configured-but-inert connector is never mistaken for a broken scan.
+Some marketplace connectors are action targets or still require a provider-specific adapter.
+Enkstein reports these as unavailable or `no_adapter`; it does not substitute a simulated estate
+in production. Connector Health separates **configured**, **approved**, and **verified** so an
+operator can see exactly what still needs setup.
 
 ### Connecting Microsoft without an app registration
 
@@ -406,7 +407,7 @@ Enkstein ships in three installable forms beyond the web platform. All three tal
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.7.0-py3-none-any.whl
+pip install ./enkstein_mcp-0.7.1-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -433,7 +434,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install ./enkstein_cli-0.7.0-py3-none-any.whl
+pip install ./enkstein_cli-0.7.1-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -446,7 +447,7 @@ enkstein evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.7.0-py3-none-any.whl
+pip install ./enkstein_core-0.7.1-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

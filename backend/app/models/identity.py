@@ -32,6 +32,7 @@ class Identity(Base):
     __tablename__ = "identities"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[IdentityType] = mapped_column(SAEnum(IdentityType), nullable=False)
     status: Mapped[IdentityStatus] = mapped_column(SAEnum(IdentityStatus), default=IdentityStatus.ACTIVE)

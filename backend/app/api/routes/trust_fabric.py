@@ -294,6 +294,7 @@ async def run_containment_probe(
     )
     identity = Identity(
         name=f"Trust Probe Identity {probe_id}",
+        tenant_id=probe_tenant,
         type=IdentityType.AGENT,
         status=IdentityStatus.ACTIVE,
         description="Temporary identity created for Trust Fabric containment probe.",

@@ -41,9 +41,11 @@ NODE_REMEDIATION_PROVIDER: dict[str, str] = {
 }
 
 
-async def proposals(db: AsyncSession, *, claw: str | None = None) -> dict[str, Any]:
+async def proposals(
+    db: AsyncSession, *, claw: str | None = None, tenant_id: str | None = None
+) -> dict[str, Any]:
     """Failing controls that declare a remediation action, with their evidence."""
-    evaluation = await evaluate_controls(db, claw=claw)
+    evaluation = await evaluate_controls(db, claw=claw, tenant_id=tenant_id)
     failing = [item for item in evaluation["results"] if item["verdict"] == Verdict.FAIL.value]
 
     actionable: list[dict[str, Any]] = []
@@ -86,6 +88,7 @@ async def remediate_control(
     *,
     control_id: str,
     triggered_by: str = "operator",
+    tenant_id: str | None = None,
 ) -> dict[str, Any]:
     """Propose the declared remediation for one failing control.
 
@@ -114,11 +117,15 @@ async def remediate_control(
             "detail": f"No remediation provider is mapped for {control.claw}.",
         }
 
+    finding_statement = select(Finding).where(
+        Finding.control_id == control_id,
+        Finding.status == "open",
+        Finding.data_origin == "live",
+    )
+    if tenant_id is not None:
+        finding_statement = finding_statement.where(Finding.tenant_id == tenant_id)
     finding = (await db.execute(
-        select(Finding)
-        .where(Finding.control_id == control_id, Finding.status == "open")
-        .order_by(desc(Finding.risk_score))
-        .limit(1)
+        finding_statement.order_by(desc(Finding.risk_score)).limit(1)
     )).scalars().first()
     if finding is None:
         return {
@@ -160,9 +167,11 @@ async def remediate_control(
     }
 
 
-async def verify_after_remediation(db: AsyncSession, *, control_id: str) -> dict[str, Any]:
+async def verify_after_remediation(
+    db: AsyncSession, *, control_id: str, tenant_id: str | None = None
+) -> dict[str, Any]:
     """Re-evaluate a control after remediation and report the new verdict."""
-    evaluation = await evaluate_controls(db, control_id=control_id)
+    evaluation = await evaluate_controls(db, control_id=control_id, tenant_id=tenant_id)
     result = evaluation["results"][0] if evaluation["results"] else None
     if result is None:
         return {"control_id": control_id, "status": "unknown_control"}

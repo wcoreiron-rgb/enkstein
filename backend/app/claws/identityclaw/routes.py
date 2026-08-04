@@ -20,9 +20,15 @@ from app.services.secrets_manager import get_credential
 from app.models.connector import Connector, ConnectorStatus
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.claws.accessclaw.providers import entra as entra_adapter
-from app.services.claw_scan import run_claw_scan
+from app.services.claw_scan import fetch_via_adapter, run_claw_scan
 
 router = APIRouter(prefix="/identityclaw", tags=["Identity Security"])
+
+
+def _scope(statement, model, user: dict):
+    """Apply tenant visibility; unscoped admins retain legacy-row access."""
+    tenant_id = caller_tenant(user)
+    return statement.where(model.tenant_id == tenant_id) if tenant_id is not None else statement
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -109,17 +115,20 @@ _SCAN_DEMO_FINDINGS = [
 ]
 
 
-async def _get_identity_provider_credentials(db: AsyncSession, connector_type: str) -> Optional[dict]:
-    result = await db.execute(
-        select(Connector).where(
-            Connector.connector_type == connector_type,
-            Connector.status == ConnectorStatus.APPROVED,
-        )
+async def _get_identity_provider_credentials(
+    db: AsyncSession, connector_type: str, *, tenant_id: str | None = None
+) -> Optional[dict]:
+    statement = select(Connector).where(
+        Connector.connector_type == connector_type,
+        Connector.status == ConnectorStatus.APPROVED,
     )
+    if tenant_id is not None:
+        statement = statement.where(Connector.tenant_id == tenant_id)
+    result = await db.execute(statement)
     connector = result.scalar_one_or_none()
     if not connector:
         return None
-    return get_credential(str(connector.id))
+    return get_credential(str(connector.id), tenant_id=connector.tenant_id)
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
@@ -129,14 +138,15 @@ async def list_identities(
     identity_type: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 100,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    stmt = select(Identity).order_by(desc(Identity.risk_score)).limit(limit)
+    stmt = _scope(select(Identity), Identity, user)
     if identity_type:
         stmt = stmt.where(Identity.type == IdentityType(identity_type))
     if status:
         stmt = stmt.where(Identity.status == IdentityStatus(status))
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.order_by(desc(Identity.risk_score)).limit(limit))
     return result.scalars().all()
 
 
@@ -146,7 +156,7 @@ async def register_identity(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    identity = Identity(**payload.model_dump())
+    identity = Identity(**payload.model_dump(), tenant_id=caller_tenant(user))
     db.add(identity)
     await log_action(
         db=db, actor="system", actor_type="system",
@@ -161,8 +171,10 @@ async def register_identity(
 
 
 @router.get("/identities/{identity_id}", response_model=IdentityRead, summary="Get identity detail")
-async def get_identity(identity_id: str, db: AsyncSession = Depends(get_db)):
-    stmt = select(Identity).where(Identity.id == UUID(identity_id))
+async def get_identity(
+    identity_id: str, db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    stmt = _scope(select(Identity).where(Identity.id == UUID(identity_id)), Identity, user)
     result = await db.execute(stmt)
     identity = result.scalar_one_or_none()
     if not identity:
@@ -171,8 +183,13 @@ async def get_identity(identity_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.patch("/identities/{identity_id}", response_model=IdentityRead, summary="Update identity")
-async def update_identity(identity_id: str, payload: IdentityUpdate, db: AsyncSession = Depends(get_db)):
-    stmt = select(Identity).where(Identity.id == UUID(identity_id))
+async def update_identity(
+    identity_id: str,
+    payload: IdentityUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    stmt = _scope(select(Identity).where(Identity.id == UUID(identity_id)), Identity, user)
     result = await db.execute(stmt)
     identity = result.scalar_one_or_none()
     if not identity:
@@ -185,7 +202,9 @@ async def update_identity(identity_id: str, payload: IdentityUpdate, db: AsyncSe
 
 
 @router.get("/orphaned", response_model=list[IdentityRead], summary="Orphaned identities")
-async def get_orphaned_identities(db: AsyncSession = Depends(get_db)):
+async def get_orphaned_identities(
+    db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
     """Identities with no owner that are agents/connectors — high risk."""
     stmt = (
         select(Identity)
@@ -193,7 +212,7 @@ async def get_orphaned_identities(db: AsyncSession = Depends(get_db)):
         .where(Identity.type.in_([IdentityType.AGENT, IdentityType.CONNECTOR, IdentityType.SERVICE]))
         .where(Identity.status == IdentityStatus.ACTIVE)
     )
-    result = await db.execute(stmt)
+    result = await db.execute(_scope(stmt, Identity, user))
     return result.scalars().all()
 
 
@@ -201,18 +220,23 @@ async def get_orphaned_identities(db: AsyncSession = Depends(get_db)):
 async def list_risk_events(
     limit: int = 50,
     unresolved_only: bool = False,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    stmt = select(IdentityRiskEvent).order_by(desc(IdentityRiskEvent.timestamp)).limit(limit)
+    stmt = _scope(select(IdentityRiskEvent), IdentityRiskEvent, user)
     if unresolved_only:
         stmt = stmt.where(IdentityRiskEvent.is_resolved == False)
-    result = await db.execute(stmt)
+    result = await db.execute(stmt.order_by(desc(IdentityRiskEvent.timestamp)).limit(limit))
     return result.scalars().all()
 
 
 @router.post("/approvals", response_model=PrivilegedActionRead, summary="Request privileged action approval")
-async def request_approval(payload: PrivilegedActionCreate, db: AsyncSession = Depends(get_db)):
-    action = PrivilegedAction(**payload.model_dump())
+async def request_approval(
+    payload: PrivilegedActionCreate,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    action = PrivilegedAction(**payload.model_dump(), tenant_id=caller_tenant(user))
     db.add(action)
     await db.commit()
     await db.refresh(action)
@@ -220,8 +244,13 @@ async def request_approval(payload: PrivilegedActionCreate, db: AsyncSession = D
 
 
 @router.get("/approvals", response_model=list[PrivilegedActionRead], summary="List approval requests")
-async def list_approvals(status: Optional[str] = "pending", db: AsyncSession = Depends(get_db)):
-    stmt = select(PrivilegedAction).where(PrivilegedAction.status == status).order_by(desc(PrivilegedAction.timestamp))
+async def list_approvals(
+    status: Optional[str] = "pending",
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    stmt = _scope(select(PrivilegedAction).where(PrivilegedAction.status == status), PrivilegedAction, user)
+    stmt = stmt.order_by(desc(PrivilegedAction.timestamp))
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -231,9 +260,10 @@ async def review_approval(
     action_id: str,
     decision: str,      # "approved" or "denied"
     reviewed_by: str,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
 ):
-    stmt = select(PrivilegedAction).where(PrivilegedAction.id == UUID(action_id))
+    stmt = _scope(select(PrivilegedAction).where(PrivilegedAction.id == UUID(action_id)), PrivilegedAction, user)
     result = await db.execute(stmt)
     action = result.scalar_one_or_none()
     if not action:
@@ -247,21 +277,23 @@ async def review_approval(
 
 
 @router.get("/stats", response_model=IdentityClawStats, summary="Identity Security summary")
-async def get_stats(db: AsyncSession = Depends(get_db)):
-    total = await db.execute(select(func.count(Identity.id)))
-    humans = await db.execute(select(func.count(Identity.id)).where(Identity.type == IdentityType.HUMAN))
-    non_humans = await db.execute(
+async def get_stats(
+    db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    total = await db.execute(_scope(select(func.count(Identity.id)), Identity, user))
+    humans = await db.execute(_scope(select(func.count(Identity.id)).where(Identity.type == IdentityType.HUMAN), Identity, user))
+    non_humans = await db.execute(_scope(
         select(func.count(Identity.id)).where(
             Identity.type.in_([IdentityType.AGENT, IdentityType.CONNECTOR, IdentityType.SERVICE, IdentityType.MODULE])
-        )
-    )
-    orphaned = await db.execute(
+        ), Identity, user
+    ))
+    orphaned = await db.execute(_scope(
         select(func.count(Identity.id))
         .where(Identity.owner_id.is_(None))
-        .where(Identity.type != IdentityType.HUMAN)
-    )
-    high_risk = await db.execute(select(func.count(Identity.id)).where(Identity.risk_score >= 50))
-    pending = await db.execute(select(func.count(PrivilegedAction.id)).where(PrivilegedAction.status == "pending"))
+        .where(Identity.type != IdentityType.HUMAN), Identity, user
+    ))
+    high_risk = await db.execute(_scope(select(func.count(Identity.id)).where(Identity.risk_score >= 50), Identity, user))
+    pending = await db.execute(_scope(select(func.count(PrivilegedAction.id)).where(PrivilegedAction.status == "pending"), PrivilegedAction, user))
 
     return IdentityClawStats(
         total_identities=total.scalar() or 0,
@@ -274,7 +306,11 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/findings", summary="Identity Security findings compatibility endpoint")
-async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get_db)):
+async def get_identity_findings(
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     """
     Findings for this Capability Node.
 
@@ -287,12 +323,13 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
     """
     findings: list[dict] = []
 
-    scanned = await db.execute(
+    scanned_statement = _scope(
         select(Finding)
         .where(Finding.claw == "identityclaw")
         .order_by(desc(Finding.risk_score), desc(Finding.created_at))
-        .limit(limit)
-    )
+        , Finding, user
+    ).limit(limit)
+    scanned = await db.execute(scanned_statement)
     for f in scanned.scalars().all():
         findings.append({
             "id": str(f.id),
@@ -312,11 +349,11 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
     if len(findings) >= limit:
         return findings
 
-    risk_events = await db.execute(
+    risk_events = await db.execute(_scope(
         select(IdentityRiskEvent)
         .order_by(desc(IdentityRiskEvent.timestamp))
-        .limit(limit - len(findings))
-    )
+        , IdentityRiskEvent, user
+    ).limit(limit - len(findings)))
     for e in risk_events.scalars().all():
         findings.append({
             "id": str(e.id),
@@ -331,9 +368,9 @@ async def get_identity_findings(limit: int = 100, db: AsyncSession = Depends(get
         })
 
     if not findings:
-        identities = await db.execute(
-            select(Identity).order_by(desc(Identity.risk_score)).limit(limit)
-        )
+        identities = await db.execute(_scope(
+            select(Identity), Identity, user
+        ).order_by(desc(Identity.risk_score)).limit(limit))
         for i in identities.scalars().all():
             sev = "high" if (i.risk_score or 0) >= 70 else "medium" if (i.risk_score or 0) >= 40 else "low"
             findings.append({
@@ -364,12 +401,14 @@ async def run_identity_scan(db: AsyncSession = Depends(get_db), user: dict = Dep
 
 
 @router.get("/providers", summary="Identity Security provider connection status")
-async def get_identity_providers(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
+async def get_identity_providers(
+    db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    result = await db.execute(_scope(
         select(Connector).where(
             Connector.connector_type.in_(["okta", "entra_id", "cyberark"])
-        )
-    )
+        ), Connector, user
+    ))
     providers = result.scalars().all()
     return [
         {
@@ -385,22 +424,36 @@ async def get_identity_providers(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/task", summary="Execute focused Identity Security swarm task")
-async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Depends(get_db)):
+async def run_identity_task(
+    payload: IdentityTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
     started = datetime.utcnow()
+    tenant_id = caller_tenant(user)
     connector_state = "unconfigured"
-    identities = await db.execute(select(Identity).order_by(desc(Identity.risk_score)).limit(5))
-    top = identities.scalars().all()
+    finding_statement = (
+        select(Finding)
+        .where(Finding.claw == "identityclaw", Finding.data_origin == "live")
+        .order_by(desc(Finding.risk_score))
+        .limit(5)
+    )
+    if tenant_id is not None:
+        finding_statement = finding_statement.where(Finding.tenant_id == tenant_id)
+    top = (await db.execute(finding_statement)).scalars().all()
     live_rows = []
     live_risks = []
     live_providers = []
     connector_errors = []
     for cfg in IDENTITY_PROVIDER_CONFIG:
-        creds = await _get_identity_provider_credentials(db, cfg["connector_type"])
+        creds = await _get_identity_provider_credentials(
+            db, cfg["connector_type"], tenant_id=tenant_id
+        )
         if not creds:
             continue
         connector_state = "configured"
         try:
-            raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+            raw_findings = await fetch_via_adapter(cfg["adapter"], creds)
         except Exception as exc:
             connector_errors.append({"provider": cfg["provider"], "error": type(exc).__name__})
             continue
@@ -427,8 +480,8 @@ async def run_identity_task(payload: IdentityTaskRequest, db: AsyncSession = Dep
 
     findings = [
         {
-            "title": f"High-risk identity: {i.name}",
-            "detail": f"Identity score {float(i.risk_score or 0.0)} with status {i.status.value if hasattr(i.status, 'value') else i.status}",
+            "title": f"High-risk identity: {i.resource_name or i.resource_id or i.title}",
+            "detail": f"Identity finding risk {float(i.risk_score or 0.0)} with severity {i.severity.value if hasattr(i.severity, 'value') else i.severity}",
         }
         for i in high[:3]
     ]

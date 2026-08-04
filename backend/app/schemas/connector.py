@@ -43,6 +43,9 @@ class ConnectorRead(BaseModel):
     category: Optional[str] = None
     trust_score: float = 70.0
     last_used: Optional[datetime] = None
+    last_verified_at: Optional[datetime] = None
+    verification_level: Optional[str] = None
+    last_verification_error: Optional[str] = None
     created_at: datetime
     # Annotated at runtime from secrets store — not stored in DB
     is_configured: Optional[bool] = False

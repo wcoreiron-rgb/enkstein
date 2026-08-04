@@ -148,7 +148,7 @@ BASELINE_REMEDIATION: dict[str, str] = {
 }
 
 
-async def configured_connectors(db: AsyncSession) -> set[str]:
+async def configured_connectors(db: AsyncSession, *, tenant_id: str | None = None) -> set[str]:
     """Connector types that currently have stored credentials.
 
     A connector row means "this integration exists"; only a stored credential
@@ -162,7 +162,10 @@ async def configured_connectors(db: AsyncSession) -> set[str]:
     except Exception:
         logger.warning("Credential store unavailable; treating all collectors as unconfigured")
         return set()
-    rows = (await db.execute(select(Connector))).scalars().all()
+    statement = select(Connector)
+    if tenant_id is not None:
+        statement = statement.where(Connector.tenant_id == tenant_id)
+    rows = (await db.execute(statement)).scalars().all()
     active: set[str] = set()
     for row in rows:
         status = str(getattr(row.status, "value", row.status) or "").lower()
@@ -214,9 +217,9 @@ async def attach_evaluators(db: AsyncSession) -> dict[str, int]:
     return {"examined": len(rows), "evaluators_attached": attached, "remediation_linked": remediable}
 
 
-async def readiness(db: AsyncSession) -> dict[str, Any]:
+async def readiness(db: AsyncSession, *, tenant_id: str | None = None) -> dict[str, Any]:
     """Which collectors can run right now, and which need a connector."""
-    active = await configured_connectors(db)
+    active = await configured_connectors(db, tenant_id=tenant_id)
     ready, blocked = [], []
     for key, spec in sorted(COLLECTORS.items()):
         entry = {

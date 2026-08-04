@@ -5,6 +5,7 @@ import { Users, AlertTriangle, Clock, UserX, RefreshCw, ShieldCheck, Play, Datab
 import StatCard from '@/components/StatCard';
 import RiskBadge from '@/components/RiskBadge';
 import { apiFetch, createMicrosoftIdentityIncidentSwarm, getIdentityStats, getIdentities, getOrphaned, getApprovals } from '@/lib/api';
+import { describeScanOutcome } from '@/lib/scan-outcome';
 import ClientDate from '@/components/ClientDate';
 import NodeAiAdvisory from '@/components/NodeAiAdvisory';
 
@@ -61,10 +62,7 @@ export default function IdentityClawPage() {
     try {
       const res = await apiFetch<any>('/identityclaw/scan', { method: 'POST' });
       await load();
-      setScanMsg({
-        type: 'success',
-        text: `Scan complete — ${res.findings_created ?? 0} new, ${res.findings_updated ?? 0} updated (${res.mode ?? 'unknown'} data).`,
-      });
+      setScanMsg(describeScanOutcome(res));
     } catch (e: any) {
       setScanMsg({ type: 'error', text: `Scan failed: ${e?.message ?? 'Unknown error'}` });
     } finally {

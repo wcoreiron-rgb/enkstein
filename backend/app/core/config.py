@@ -14,7 +14,7 @@ _INSECURE_DEFAULTS = frozenset({
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "Enkstein"
-    APP_VERSION: str = "0.7.0"
+    APP_VERSION: str = "0.7.1"
     DEBUG: bool = False
 
     # Production data policy.
@@ -25,7 +25,9 @@ class Settings(BaseSettings):
     # an operator can mistake sample data for their own estate. Setting this
     # makes every node return nothing instead, so anything on screen came from
     # an authenticated connector.
-    REQUIRE_LIVE_DATA: bool = False
+    # Production is evidence-first by default. Demonstration findings remain
+    # available only when an operator deliberately opts into a local walkthrough.
+    REQUIRE_LIVE_DATA: bool = True
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://regentclaw:regentclaw@db:5432/regentclaw"

@@ -180,10 +180,23 @@ async def run_scan(db: AsyncSession = Depends(get_db), user: dict = Depends(get_
     return {
         "status": "completed" if not errors else "completed_with_errors",
         "mode": "live" if any_live else ("empty" if settings.REQUIRE_LIVE_DATA else "simulated"),
+        "data_source": "live_connector" if any_live else (
+            "no_data_source" if settings.REQUIRE_LIVE_DATA else "seeded_fallback"
+        ),
+        "evidence_status": "live" if any_live else (
+            "unavailable" if settings.REQUIRE_LIVE_DATA else "demo"
+        ),
         "findings_created": total_created,
         "findings_updated": total_updated,
         "providers": provider_results,
         "errors": errors,
+        "message": (
+            "Endpoint Security scan complete."
+            if any_live else
+            "No verified endpoint evidence was available. Connect and test a CrowdStrike, Defender, or SentinelOne source before scanning."
+            if settings.REQUIRE_LIVE_DATA else
+            "Demo evidence only. It is not an assessment of this environment."
+        ),
     }
 
 
@@ -210,7 +223,7 @@ async def run_endpoint_task(
     tenant_id = caller_tenant(user)
     stmt = (
         select(Finding)
-        .where(Finding.claw == CLAW_NAME)
+        .where(Finding.claw == CLAW_NAME, Finding.data_origin == "live")
         .order_by(desc(Finding.risk_score), desc(Finding.created_at))
         .limit(5)
     )
@@ -228,7 +241,8 @@ async def run_endpoint_task(
                 continue
             connector_configured = True
             try:
-                raw_findings = await cfg["adapter"].get_findings(credentials=creds)
+                from app.services.claw_scan import fetch_via_adapter
+                raw_findings = await fetch_via_adapter(cfg["adapter"], creds)
             except Exception:
                 continue
             for row in raw_findings[:2]:

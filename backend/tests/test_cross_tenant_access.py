@@ -14,6 +14,8 @@ from app.models.agent import AgentRun, RunStatus, Schedule, ScheduleStatus
 from app.models.finding import Finding, FindingSeverity, FindingStatus
 from app.models.swarm import SwarmJob, SwarmJobStatus
 from app.models.trigger import EventTrigger
+from app.models.identity import Identity, IdentityType
+from app.claws.identityclaw.models import PrivilegedAction
 
 OTHER = "tenant-intruder"
 
@@ -56,6 +58,38 @@ async def test_findings_list_excludes_other_tenants(client, db_session):
     resp = await client.get("/api/v1/findings")
     assert resp.status_code == 200
     assert all(f["title"] != "intruder-finding" for f in resp.json())
+
+
+@pytest.mark.asyncio
+async def test_identity_inventory_and_approvals_exclude_other_tenants(client, db_session):
+    identity = Identity(
+        tenant_id=OTHER,
+        name="intruder-admin",
+        type=IdentityType.HUMAN,
+        risk_score=91,
+    )
+    approval = PrivilegedAction(
+        tenant_id=OTHER,
+        requestor_id="intruder-admin",
+        action="disable-account",
+        status="pending",
+    )
+    db_session.add_all([identity, approval])
+    await db_session.commit()
+
+    listed = await client.get("/api/v1/identityclaw/identities")
+    assert listed.status_code == 200, listed.text
+    assert all(row["id"] != str(identity.id) for row in listed.json())
+    assert (await client.get(f"/api/v1/identityclaw/identities/{identity.id}")).status_code == 404
+
+    approvals = await client.get("/api/v1/identityclaw/approvals")
+    assert approvals.status_code == 200, approvals.text
+    assert all(row["id"] != str(approval.id) for row in approvals.json())
+    assert (
+        await client.post(
+            f"/api/v1/identityclaw/approvals/{approval.id}/review?decision=approved&reviewed_by=global-admin"
+        )
+    ).status_code == 404
 
 
 @pytest.mark.asyncio
