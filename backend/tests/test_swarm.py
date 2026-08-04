@@ -263,7 +263,6 @@ async def test_sprint6_suspicious_identity_preset_creates_approval_gated_job(cli
         "automationclaw",
     }
 
-
 @pytest.mark.asyncio
 async def test_microsoft_identity_incident_preset_creates_connector_oriented_job(client):
     response = await client.post(
@@ -293,6 +292,10 @@ async def test_microsoft_identity_incident_preset_creates_connector_oriented_job
         "complianceclaw",
         "automationclaw",
     }
+
+    task_inputs = [json.loads(task["input_json"]) for task in tasks_res.json()]
+    assert all(task_input["evidence_mode"] == "live_or_recorded" for task_input in task_inputs)
+    assert all(task_input["allow_demo_evidence"] is False for task_input in task_inputs)
 
     approve_res = await client.post(f"{BASE}/{job_id}/approve")
     assert approve_res.status_code == 200, approve_res.text

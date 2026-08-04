@@ -543,13 +543,13 @@ POST /api/v1/marcellus/workspace/conversations/{id}/security-investigation</code
 
       <h2>1. Clone and Configure</h2>
       <pre><span class="c-cmd">git clone</span> <span class="c-str">https://github.com/wcoreiron-rgb/enkstein</span>
-<span class="c-cmd">cd</span> regentclaw
+<span class="c-cmd">cd</span> enkstein
 <span class="c-cmd">cp</span> .env.example .env   <span class="c-comment"># Set SECRET_KEY and DB password</span></pre>
 
       <p>Open <code>.env</code> and configure at minimum:</p>
-      <pre><span class="c-key">POSTGRES_USER</span>=regentclaw
+      <pre><span class="c-key">POSTGRES_USER</span>=enkstein
 <span class="c-key">POSTGRES_PASSWORD</span>=<span class="c-str">your-secure-password</span>
-<span class="c-key">POSTGRES_DB</span>=regentclaw
+<span class="c-key">POSTGRES_DB</span>=enkstein
 <span class="c-key">SECRET_KEY</span>=<span class="c-str">your-jwt-secret-key</span>
 <span class="c-key">REDIS_URL</span>=<span class="c-str">redis://localhost:6379</span></pre>
 

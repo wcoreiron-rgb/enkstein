@@ -76,6 +76,56 @@ def _risk_from_severity(severity: str | None) -> float:
     return 0.0
 
 
+def _evidence_status(output: dict[str, Any], task_input: dict[str, Any]) -> tuple[str, str | None]:
+    """Classify task evidence without letting seeded output look operational.
+
+    Capability Node handlers may return live connector rows, existing tenant
+    findings, or an explicitly seeded fallback. A Microsoft identity mission is
+    usable for local demonstration only when the operator asks for that. In its
+    normal mode, seeded/simulated evidence is held back and displayed as an
+    unavailable source instead of contributing a fake score to the judge.
+    """
+    data_source = str(output.get("data_source") or "")
+    execution_mode = str(output.get("execution_mode") or "")
+    allow_demo = bool(task_input.get("allow_demo_evidence", False))
+    require_live_or_recorded = task_input.get("evidence_mode") == "live_or_recorded"
+    demo_source = data_source in {"seeded_fallback", "simulated_fallback"} or execution_mode == "simulated_fallback"
+    no_source = data_source in {"", "no_data_source"}
+
+    if demo_source and require_live_or_recorded and not allow_demo:
+        return "unavailable", "Seeded or simulated evidence is disabled for this investigation. Configure a connector or use recorded tenant evidence."
+    if no_source and require_live_or_recorded:
+        return "unavailable", "No live connector or recorded tenant evidence is available for this Capability Node."
+    if no_source:
+        return "unavailable", None
+    if data_source == "live_connector":
+        return "live", None
+    if data_source == "persisted_db":
+        return "recorded", None
+    if demo_source:
+        return "demo", "Demo evidence was explicitly allowed by the operator."
+    return "recorded", None
+
+
+def _hold_unavailable_evidence(output: dict[str, Any], reason: str) -> dict[str, Any]:
+    """Remove untrusted fallback content before it reaches the Swarm judge."""
+    safe = dict(output)
+    safe.update({
+        "status": "blocked",
+        "severity": "info",
+        "confidence": 0.0,
+        "risk_score": 0.0,
+        "findings": [],
+        "evidence": [],
+        "recommended_actions": [],
+        "blocked_actions": [reason],
+        "execution_mode": "evidence_unavailable",
+        "evidence_status": "unavailable",
+        "evidence_reason": reason,
+    })
+    return safe
+
+
 def _normalize_risk_score(value: Any) -> float:
     try:
         score = float(value or 0.0)
@@ -241,6 +291,14 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
         }
         output = _focus_output_on_selected_finding(output, selected_finding, task.claw)
 
+    evidence_status, evidence_reason = _evidence_status(output, task_input)
+    if evidence_status == "unavailable" and evidence_reason:
+        output = _hold_unavailable_evidence(output, evidence_reason or "Evidence is unavailable.")
+    else:
+        output["evidence_status"] = evidence_status
+        if evidence_reason:
+            output["evidence_reason"] = evidence_reason
+
     adapter = get_agt_adapter()
     secure_channel = adapter.send_secure_message(
         sender=task.claw,
@@ -263,7 +321,11 @@ async def execute_task(db: AsyncSession, task: SwarmTask) -> dict[str, Any]:
             }
         )
 
-    task.status = SwarmTaskStatus.COMPLETED
+    if output.get("evidence_status") == "unavailable" and output.get("evidence_reason"):
+        task.status = SwarmTaskStatus.BLOCKED
+        task.error_message = str(output.get("evidence_reason") or "Evidence is unavailable")
+    else:
+        task.status = SwarmTaskStatus.COMPLETED
     task.severity = output.get("severity")
     task.confidence = output.get("confidence")
     task.risk_score = output.get("risk_score")

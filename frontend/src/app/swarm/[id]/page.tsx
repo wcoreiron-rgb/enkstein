@@ -42,6 +42,21 @@ function executionMeta(outputJson?: string | null): { mode: string; fallbackReas
   }
 }
 
+function evidenceMeta(outputJson?: string | null): { source: string; status: string; reason?: string } {
+  if (!outputJson) return { source: '—', status: 'unavailable' };
+  try {
+    const parsed = JSON.parse(outputJson);
+    const source = String(parsed?.data_source || 'not reported').replace(/_/g, ' ');
+    return {
+      source,
+      status: parsed?.evidence_status || 'not reported',
+      reason: parsed?.evidence_reason,
+    };
+  } catch {
+    return { source: '—', status: 'unavailable' };
+  }
+}
+
 function judgeModelMeta(summary: any): { label: string; detail?: string; blocked?: boolean } {
   const jm = summary?.judge_model;
   if (!jm) return { label: 'deterministic fallback' };
@@ -854,6 +869,7 @@ export default function SwarmJobDetailPage() {
                   <th className="px-5 py-3 text-left">Severity</th>
                   <th className="px-5 py-3 text-left">Confidence</th>
                   <th className="px-5 py-3 text-left">Risk</th>
+                  <th className="px-5 py-3 text-left">Evidence</th>
                   <th className="px-5 py-3 text-left">Secure Channel</th>
                   <th className="px-5 py-3 text-left">Execution</th>
                   <th className="px-5 py-3 text-left">Exec Time</th>
@@ -865,7 +881,15 @@ export default function SwarmJobDetailPage() {
                   const TIcon = tMeta.icon;
                   const secureState = secureChannelMeta(task.output_json);
                   const exec = executionMeta(task.output_json);
+                  const evidence = evidenceMeta(task.output_json);
                   const simulated = exec.mode === 'simulated_fallback';
+                  const evidenceCls = evidence.status === 'live'
+                    ? 'bg-green-900/30 text-green-300 border-green-800'
+                    : evidence.status === 'recorded'
+                      ? 'bg-cyan-900/30 text-cyan-300 border-cyan-800'
+                      : evidence.status === 'demo'
+                        ? 'bg-yellow-900/30 text-yellow-300 border-yellow-800'
+                        : 'bg-gray-800 text-gray-300 border-gray-700';
                   return (
                     <tr key={task.id} className="hover:bg-gray-800/40">
                       <td className="px-5 py-3 text-white">{capabilityName(task.claw)}</td>
@@ -874,6 +898,16 @@ export default function SwarmJobDetailPage() {
                       <td className="px-5 py-3"><RiskBadge value={task.severity || 'info'} /></td>
                       <td className="px-5 py-3 text-gray-300">{task.confidence ?? '—'}</td>
                       <td className="px-5 py-3 text-gray-300">{task.risk_score ?? '—'}</td>
+                      <td className="px-5 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-xs inline-flex w-fit px-1.5 py-0.5 rounded border ${evidenceCls}`}>
+                            {evidence.status === 'live' ? 'live evidence' : evidence.status === 'recorded' ? 'recorded evidence' : evidence.status === 'demo' ? 'demo evidence' : 'evidence unavailable'}
+                          </span>
+                          <span className="text-[11px] text-gray-500 max-w-[200px] truncate" title={evidence.reason || evidence.source}>
+                            {evidence.reason || evidence.source}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-5 py-3 text-gray-300">{secureState}</td>
                       <td className="px-5 py-3">
                         <div className="flex flex-col gap-0.5">

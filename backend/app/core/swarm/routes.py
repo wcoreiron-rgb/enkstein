@@ -79,6 +79,12 @@ def _task_status_events(
                 payload["execution_mode"] = parsed_output.get("execution_mode")
             if parsed_output.get("fallback_reason"):
                 payload["fallback_reason"] = parsed_output.get("fallback_reason")
+            if parsed_output.get("data_source"):
+                payload["data_source"] = parsed_output.get("data_source")
+            if parsed_output.get("evidence_status"):
+                payload["evidence_status"] = parsed_output.get("evidence_status")
+            if parsed_output.get("evidence_reason"):
+                payload["evidence_reason"] = parsed_output.get("evidence_reason")
         if status == SwarmTaskStatus.RUNNING.value:
             events.append(("task_started", payload))
         elif status == SwarmTaskStatus.COMPLETED.value:
@@ -152,14 +158,16 @@ async def create_microsoft_identity_incident_preset(
     user: dict = Depends(get_current_user),
 ):
     """
-    Microsoft security demo preset: identity-led incident investigation.
-    Uses Entra/Defender/Sentinel/Azure-capable Capability Nodes when connectors are configured,
-    with deterministic fallback preserved for local demos without credentials.
+    Microsoft identity incident investigation.
+    Uses Entra/Defender/Sentinel/Azure-capable Capability Nodes when connectors
+    are configured. Demo evidence is opt-in: a normal investigation never
+    quietly turns seeded findings into an incident conclusion.
     """
     payload = body or {}
     identity = payload.get("identity") or payload.get("user_id") or payload.get("principal") or "unknown_identity"
     time_range = payload.get("time_range") or "24h"
     classification = payload.get("classification") or "confidential"
+    allow_demo_evidence = bool(payload.get("allow_demo_evidence", False))
 
     swarm_payload = SwarmJobCreate(
         name=payload.get("name") or f"Microsoft Identity Incident - {identity}",
@@ -188,6 +196,8 @@ async def create_microsoft_identity_incident_preset(
                 "microsoft_sentinel",
             ],
             "requested_outcome": "identity_endpoint_cloud_log_correlation_ticket_draft",
+            "allow_demo_evidence": allow_demo_evidence,
+            "evidence_mode": "demo_allowed" if allow_demo_evidence else "live_or_recorded",
         },
         parallelism=7,
         model_profile=payload.get("model_profile") or "swarm_judge_profile",

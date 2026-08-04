@@ -106,6 +106,21 @@ path.
 **The problem it solves:** how do you let AI agents do real work without handing
 them unbounded power over your environment?
 
+### First workflow: Identity Incident Mission
+
+Enter a suspicious user or principal in **Identity Security** and start an
+Identity Incident Mission. Enkstein correlates approved identity, endpoint,
+cloud, log, threat, and compliance evidence; shows the source of every task as
+live, recorded, demo, or unavailable; then produces a confidence, blast-radius,
+ticket draft, and recommended actions. The investigation is read/analyze/
+recommend only. Any session revocation, account containment, device isolation,
+or ticket action remains a separate Trust Fabric approval.
+
+By default, the mission does **not** use seeded or simulated findings. The
+operator may explicitly enable labeled demo evidence for a local walkthrough.
+See [Identity Incident Mission](docs/identity-incident-mission.md) for the
+evidence policy, connector requirements, and action limits.
+
 Internally the architecture is organism-inspired — a Cortex that routes, Three
 Hearts for trust, memory, and execution, Security Arms, Capability Nodes, and a
 peer Plexus. You do not need any of that vocabulary to use the app; see
@@ -399,9 +414,9 @@ Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
 ```json
 {
   "mcpServers": {
-    "regentclaw": {
+    "enkstein": {
       "command": "enkstein-mcp",
-      "env": { "REGENTCLAW_API_URL": "http://localhost:8000" }
+      "env": { "ENKSTEIN_API_URL": "http://localhost:8000" }
     }
   }
 }
@@ -419,10 +434,10 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 
 ```bash
 pip install ./enkstein_cli-0.7.0-py3-none-any.whl
-export REGENTCLAW_API_URL=http://localhost:8000
-regentclaw status dashboard
-regentclaw connectors test okta
-regentclaw evidence collect --framework soc2
+export ENKSTEIN_API_URL=http://localhost:8000
+enkstein status dashboard
+enkstein connectors test okta
+enkstein evidence collect --framework soc2
 ```
 → [full CLI docs](cli/README.md)
 
@@ -484,7 +499,7 @@ Enkstein exposes AGT rollout through a provider boundary instead of direct Capab
   - `GET /api/v1/trust-fabric/multi-agent/status`
   - `POST /api/v1/trust-fabric/mcp/scan`
 
-Detailed rollout plan: `docs/agt-3.2-regentclaw-plan.md`
+See the [agent workflow guide](docs/agent-workflow.md) for operational guidance.
 
 ## Release History
 

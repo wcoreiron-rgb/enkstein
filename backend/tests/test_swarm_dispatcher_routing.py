@@ -7,7 +7,7 @@ from app.core.swarm.dispatcher import execute_task
 from app.models.swarm import SwarmTask, SwarmTaskStatus
 
 
-def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
+def _mk_task(claw: str, task_type: str = "investigate", task_input: dict | None = None) -> SwarmTask:
     return SwarmTask(
         id=uuid.uuid4(),
         swarm_job_id=uuid.uuid4(),
@@ -15,7 +15,7 @@ def _mk_task(claw: str, task_type: str = "investigate") -> SwarmTask:
         task_type=task_type,
         status=SwarmTaskStatus.PENDING,
         model_profile=None,
-        input_json=json.dumps({"scope": "test"}),
+        input_json=json.dumps(task_input or {"scope": "test"}),
     )
 
 
@@ -76,6 +76,24 @@ async def test_dispatcher_falls_back_for_unsupported_claw(db_session):
     assert out["execution_mode"] == "simulated_fallback"
     assert "Unsupported claw" in out["fallback_reason"]
     assert out["findings"][0]["title"] == "unknownclaw simulated analysis"
+
+
+@pytest.mark.asyncio
+async def test_live_or_recorded_mission_never_scores_simulated_fallback(db_session):
+    task = _mk_task(
+        "unknownclaw",
+        task_input={"scope": "test", "evidence_mode": "live_or_recorded", "allow_demo_evidence": False},
+    )
+    db_session.add(task)
+    await db_session.commit()
+
+    out = await execute_task(db_session, task)
+    assert out["status"] == "blocked"
+    assert out["evidence_status"] == "unavailable"
+    assert out["risk_score"] == 0.0
+    assert out["findings"] == []
+    assert "Seeded or simulated evidence is disabled" in out["evidence_reason"]
+    assert task.status == SwarmTaskStatus.BLOCKED
 
 
 @pytest.mark.asyncio

@@ -9,7 +9,7 @@ it" moment is the whole pitch.
 
 - [ ] Enkstein server running: `docker compose up` (backend reachable on :8000)
 - [ ] `pip install enkstein-mcp` and add it to `~/.cursor/mcp.json` (see README)
-- [ ] Restart Cursor; confirm the `regentclaw` MCP server shows green in Settings → MCP
+- [ ] Restart Cursor; confirm the `enkstein` MCP server shows green in Settings → MCP
 - [ ] Open a sample file with a planted secret, e.g. `demo.env`:
       ```
       AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
@@ -53,7 +53,7 @@ github.com/wcoreiron-rgb/enkstein
 
 Record the `enkstein-cli` equivalent instead — it's deterministic:
 ```bash
-regentclaw status dashboard
+enkstein status dashboard
 # then in another pane, show the MCP scan via a quick python one-liner
 ```
 Or screenshot the 4 key frames and post as a carousel instead of a GIF.
