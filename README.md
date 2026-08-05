@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-macos.pkg">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-macos.pkg">
     <img src="https://img.shields.io/badge/Download%20for-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
   </a>
   &nbsp;
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-windows-x64-setup.exe">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-windows-x64-setup.exe">
     <img src="https://img.shields.io/badge/Download%20for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
   </a>
 </p>

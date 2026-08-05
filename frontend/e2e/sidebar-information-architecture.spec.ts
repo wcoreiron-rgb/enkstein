@@ -34,11 +34,14 @@ test('dark theme uses the white-on-dark mark', async ({ page }) => {
     .toHaveAttribute('src', '/enkstein-icon-dark.png');
 });
 
-test('security shows its arms', async ({ page }) => {
+test('security expands its arms on demand', async ({ page }) => {
   await mockMarcellusWorkspace(page);
   await page.goto('/marcellus');
   await page.getByTitle('Security').click();
   await expect(page.getByRole('link', { name: 'Control Center' })).toBeVisible();
+  // Arms collapse by default so the blade stays short; opening one reveals it.
+  await expect(page.getByRole('link', { name: 'Cloud Security' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Protection Arm' }).click();
   await expect(page.getByRole('link', { name: 'Cloud Security' })).toBeVisible();
 });
 

@@ -186,14 +186,15 @@ def test_release_bundle_is_named_for_the_product() -> None:
 def test_readme_leads_with_working_installer_links() -> None:
     """The first thing a visitor sees should be a download that works.
 
-    The download URLs name the current version, so they must be bumped with the
-    release; a stale name resolves to a 404 on the latest release.
+    The download URLs deliberately do *not* carry a version. The release
+    workflow publishes stable-named aliases beside the versioned artifacts, so
+    these links keep resolving across releases. Version-pinned links silently
+    404 the moment a bump lands without a matching docs edit.
     """
     readme = _read("README.md")
-    version = _read("frontend/package.json").split('"version": "', 1)[1].split('"')[0]
 
-    mac = f"releases/latest/download/Enkstein-{version}-macos.pkg"
-    win = f"releases/latest/download/Enkstein-{version}-windows-x64-setup.exe"
+    mac = "releases/latest/download/Enkstein-macos.pkg"
+    win = "releases/latest/download/Enkstein-windows-x64-setup.exe"
     assert mac in readme
     assert win in readme
 
@@ -203,6 +204,24 @@ def test_readme_leads_with_working_installer_links() -> None:
     assert "Ollama" in head
     # Ollama is genuinely optional; saying otherwise turns people away.
     assert "Optional" in head
+
+
+def test_download_links_are_not_version_pinned() -> None:
+    """A version-pinned download link 404s on the next release.
+
+    This has broken the public download buttons more than once: the version is
+    swept through the docs, but the matching release either lags or is tagged
+    later, leaving the site advertising an asset that does not exist yet.
+    """
+    import re
+
+    pinned = re.compile(r"releases/latest/download/Enkstein-\d+\.\d+\.\d+-")
+    for path in ("README.md", "docs/index.html"):
+        assert not pinned.search(_read(path)), (
+            f"{path} pins a version in a download URL; use the stable "
+            "Enkstein-macos.pkg / Enkstein-windows-x64-setup.exe aliases "
+            "published by the release workflow."
+        )
 
 
 def test_first_launch_prefers_published_images() -> None:

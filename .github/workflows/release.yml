@@ -285,6 +285,20 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Add stable-named download aliases
+        # The docs site and README link to fixed asset names so the download
+        # buttons keep working across releases without a docs edit each time.
+        # The versioned files stay published for archival and checksum use.
+        run: |
+          cd release-assets
+          for f in Enkstein-*-macos.pkg; do
+            [ -e "$f" ] && cp -- "$f" Enkstein-macos.pkg && break
+          done
+          for f in Enkstein-*-windows-x64-setup.exe; do
+            [ -e "$f" ] && cp -- "$f" Enkstein-windows-x64-setup.exe && break
+          done
+          ls -1
+
       - name: Generate SHA-256 checksums
         run: |
           cd release-assets
