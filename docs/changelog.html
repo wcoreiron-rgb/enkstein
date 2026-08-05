@@ -320,6 +320,331 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.10 — Every Cowork executor read as unavailable        -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Every Cowork Executor Read As Unavailable</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Cowork</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.7.10</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The executors were working; they were mislabelled. Both of them report unavailable in two quite different situations &mdash; no project is open, or the open project has no approved local folder &mdash; and both situations were described with the same sentence, blaming a project that in one case had not even been selected. Neither ever mentioned that approving a folder is the fix, so a working feature read as a broken one.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>The two unavailable states now read differently:</strong> with nothing open, Cowork asks for a project rather than blaming one. With a project open but no folder approved, it names the remedy instead of only the problem.</li>
+          <li><strong>Executor state is visible before a turn is sent:</strong> the Brain and Executor panel previously rendered only while a turn was already running, so there was nothing to read at the moment the choice is actually made. It now sits above the composer, with a Connect folder control that opens the same approval dialog &mdash; hidden when the desktop runtime itself is down, since approving a folder cannot help there.</li>
+          <li><strong>Auto is no longer presented as healthy when nothing can run:</strong> it is marked unavailable alongside the executors it would have selected.</li>
+          <li><strong>Local folder status follows the conversation, not the sidebar:</strong> it was keyed to the project picker, so an open conversation belonging to another project could be described by the wrong folder &mdash; the same class of mismatch already corrected for the file panel.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li>Six backend tests covering both unavailable states, the actionable reason carried through Auto, and a down runtime still reported as a runtime problem rather than a folder one.</li>
+          <li>Three interface tests covering the explanation, the offered fix, and its absence when a folder cannot help.</li>
+          <li>All nine were confirmed to fail without the change, and all three states were reproduced against a live workspace before and after.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.9 — Turns keep running while you work elsewhere       -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Turns Keep Running While You Work Elsewhere</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Chat · Cowork · Security</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.7.9</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Starting a long turn meant waiting on it. Opening another conversation unmounted the workspace and abandoned the request mid-flight &mdash; the backend finished and saved the reply, but nothing on screen ever said so. A turn can now be left running while you work somewhere else.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Turns survive navigation:</strong> a governed turn is now owned above the router rather than by the page showing it, so switching conversations, switching workspaces, or moving to Security leaves it running.</li>
+          <li><strong>Running-elsewhere tray:</strong> the sidebar lists every turn still in flight with a live orb whose shape encodes the stage the runtime actually reported &mdash; waiting on a Brain looks different from writing files. Each entry links straight back to its conversation and can be stopped from there.</li>
+          <li><strong>Markers on the workspace switch:</strong> Chat, Cowork, and Security each carry their own marker: a pulsing dot while one of their turns is running, and a green dot once a reply is waiting. The marker clears when the conversation is opened, so a reply that arrived while you were away is never missed.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>A finishing turn no longer drags you back:</strong> the completion path unconditionally set the active conversation and pushed its URL, so a turn settling after you had moved on pulled you out of whatever you switched to. The transcript now updates only while you are still viewing that conversation; otherwise the tray reports it and the reply loads when you choose to return.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li>A turn is started, the operator switches conversations mid-flight, the turn settles while they are elsewhere, and the persisted reply is still there on return &mdash; with exactly one governed submission, proving navigation never replayed it.</li>
+          <li>The tray is absent when nothing is running, and stopping a background turn removes it.</li>
+          <li>All three were confirmed to fail without the change.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.8 — Cowork refused to write files                     -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Cowork Refused To Write Files</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Three independent causes</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.7.8</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">A Cowork request to restyle an interface came back as a refusal &mdash; the content was &ldquo;too large to reproduce safely within this concise response&rdquo; &mdash; with a raw <code>MARCELLUS_CHANGES</code> heading and an empty array printed underneath, after six of eight Brains reported themselves timed out. Three separate defects were involved.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Enkstein told the Brain to be brief while asking it to write a file:</strong> every local and API Brain shared one system prompt instructing it to &ldquo;return a concise answer.&rdquo; On a turn carrying the file-output protocol that is a direct contradiction, and models resolved it by declining to write the file and explaining the content was too long for a short reply &mdash; the exact wording seen on screen. File-authoring turns now get their own instruction stating that length is not a constraint and that a smaller number of complete files is always preferred over truncating one.</li>
+          <li><strong>The protocol block leaked into the visible answer:</strong> Enkstein recognized its change protocol as a fenced <code>marcellus_changes</code> block or as a bare label followed directly by JSON, but not as a label followed by an ordinary code fence &mdash; which is how providers commonly answer it. That form was treated as prose, so the heading and its array were shown verbatim. The label form now accepts an optional surrounding fence, and its real file entries extract normally.</li>
+          <li><strong>Locally executed Brains were cut off too early:</strong> one 60-second budget covered hosted API calls, local Ollama profiles, and CLI-driven Codex/Claude subscriptions alike. A local model generating file content from a large project capsule routinely needs longer, so most of a swarm reported itself as timed out and the answer fell back to whichever Brain finished first. Locally executed Brains now get their own budget, still bounded below the outer turn deadline so a timeout is always reported rather than swallowed.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li><strong>Leak coverage:</strong> three label-and-fence variants must leave no protocol text in the reply, a fenced variant must still yield its real file changes, and ordinary prose naming the protocol must be left untouched.</li>
+          <li><strong>Prompt coverage:</strong> a reasoning turn keeps the concise instruction; a file-authoring turn never receives it.</li>
+          <li><strong>Timeout coverage:</strong> local profiles and CLI subscriptions must exceed the hosted-API budget, browser sessions must exceed both, and every budget must stay under its outer streaming deadline.</li>
+          <li>All eight new tests were confirmed to fail against the prior code.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.7 — Every Brain's answer is readable                  -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Every Brain&rsquo;s Answer Is Readable</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Multi-Brain Swarm</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.7.7</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">A Multi-Brain Swarm ran every selected Brain, scored how much they agreed, then showed a single Brain&rsquo;s answer as the reply. The other Brains&rsquo; answers were computed and then discarded &mdash; only their latency and completion status survived, so there was no way to see what the rest of the swarm actually said.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Per-Brain answer cards:</strong> every Brain that answered now gets its own card under the reply. Cards open one at a time, render Markdown and code the same way the reply does, and each has its own copy button.</li>
+          <li><strong>Which one was used:</strong> the Brain whose text became the reply is labelled directly, so the relationship between the swarm and the answer on screen is explicit rather than inferred.</li>
+          <li><strong>Durable:</strong> the alternate answers are stored inside the same encrypted blob as the reply, so they are still there when the conversation is reopened and never sit at a weaker protection level than the answer itself. Brains that failed or were never reached are left out, and a single-Brain turn shows no cards at all.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li><strong>Backend:</strong> a swarm turn keeps each counted Brain&rsquo;s own answer, flags the primary, drops Brains that never answered, and survives a conversation reload. A single-Brain turn stores nothing. Both confirmed to fail against the prior code.</li>
+          <li><strong>Interface:</strong> an end-to-end test asserts a discarded answer is hidden until its card is opened, then fully readable, and that opening a second card closes the first.</li>
+          <li><strong>Live:</strong> verified against the running app with three real Brains &mdash; a local Ollama model, a ChatGPT browser session, and a Claude subscription &mdash; and confirmed all three answers persisted and reloaded.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.6 — First-message-in-a-new-conversation race fixed    -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">First Turn On A New Conversation</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-sec">Every engine, every swarm mode</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.7.6</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">The very first message sent in a brand-new Chat or Cowork conversation silently disappeared, regardless of which Brain answered or whether Multi-Brain Swarm was in use. The governed turn always completed and the reply was always saved &mdash; it just never reached the screen.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Root cause:</strong> starting a new conversation's first turn created the conversation, then immediately pushed the URL to include its ID. That URL resolves to a different Next.js page file than the one already on screen, so the push unmounted the entire workspace mid-request. The backend kept working and persisted the reply correctly; every callback that would have shown it on screen was firing against a component that no longer existed.</li>
+          <li><strong>Fix:</strong> the URL now updates only after the turn settles &mdash; on success, on failure, and on a stopped turn &mdash; so the workspace stays mounted for the entire request and the reply always renders.</li>
+          <li><strong>Scope:</strong> affected the first message on every brand-new Chat conversation, every unfiled and project-scoped Cowork conversation, Auto Brain, Multi-Brain Swarm, a manually built swarm, and the native Codex agent path alike. A second message in an already-open conversation was never affected.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li><strong>Regression coverage:</strong> a new test opens a mode with no conversation selected, sends a message, and asserts the URL stays put while the turn is in flight and only changes once the reply is visible. Confirmed to fail against the prior code and pass against the fix.</li>
+          <li><strong>Mock persistence:</strong> the shared workspace test double previously always answered a conversation re-fetch with an empty message list, which made this exact bug indistinguishable from correct behavior in a mocked test. The double now persists messages the way the real backend does.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.5 — Liquid Glass overlay depth                       -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Liquid Glass Overlay Depth</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Drawers read as floating</span>
+          <span class="release-date">August 4, 2026 &nbsp;·&nbsp; Enkstein v0.7.5</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Overlay panels in Liquid Glass rendered clamped inside the card that opened them instead of covering the page. Every overlay now escapes its ancestors, and the theme's overlay depth cues were strengthened.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Embedded overlays:</strong> a <code>position: fixed</code> overlay is clamped to any ancestor carrying <code>backdrop-filter</code>. Liquid Glass gives every card that property, so a drawer opened from a connector card collapsed to the card's bounds. Overlays now render through a portal on <code>document.body</code>, so no ancestor can contain them.</li>
+          <li><strong>All overlays covered:</strong> the same fix is applied to the connector configure modal, control scope drawer, policy and workflow editors, Swarm and Mission creation, and the Chat/Cowork research, confirm, and swarm-picker dialogs.</li>
+          <li><strong>Overlay depth:</strong> because every other surface in this theme is see-through, overlays now darken the scrim past the shared <code>bg-black/40</code> and carry a defined edge with a deeper drop shadow. The panel stays opaque; a translucent treatment was measured and rejected because page text read through it.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Testing</div>
+        <ul class="change-list">
+          <li><strong>WebKit coverage:</strong> the packaged desktop app is WKWebView, and WebKit enforces the containing-block rule that Blink ignores, so this defect measured as correct under Chromium while being broken for every user. Playwright now runs a WebKit project over <code>@webkit</code>-tagged specs, with overlay geometry and containment assertions that fail when the portal is removed.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Browser Companion</div>
+        <ul class="change-list">
+          <li><strong>Gemini could never submit:</strong> the send-button search required a real <code>&lt;button&gt;</code> element, but Gemini's composer is built from Angular Material custom elements, so nothing matched. The prompt was typed into the page and left sitting there. Send controls are now matched by role rather than element type, and the selector set no longer assumes an English interface.</li>
+          <li><strong>No submit fallback existed:</strong> when the send control could not be found, the companion threw before any alternative was tried. It now falls back to a synthetic Enter key press, and reports which path failed when neither works.</li>
+          <li><strong>Unknown sites were treated as Gemini:</strong> any host that was not ChatGPT or Claude was assumed to be Gemini, so an unrelated tab would run Gemini's selectors and report a confusing selector error instead of naming the real problem. Provider detection is now explicit.</li>
+          <li><strong>Sessions dropped while still signed in:</strong> readiness expired after 50 seconds, but Chromium clamps the extension's wake-up alarm to 30 seconds and Edge to 60, so a suspended service worker could not check in before expiry. A healthy, still-open tab reported as disconnected within a minute of being left alone. The window now clears the slowest browser's floor with room for cold-start jitter.</li>
+          <li><strong>Long generations looked dead:</strong> the companion stopped checking in entirely while a turn was in flight, leaving readiness dependent on observable streaming. A provider that paused to think long enough would be marked stale mid-turn. It now sends a keepalive that refreshes readiness without leasing new work or disturbing the running task.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Also fixed</div>
+        <ul class="change-list">
+          <li><strong>Workspace crash on older history:</strong> a provenance manifest saved before citations were added would take down the entire Chat and Cowork surface on load, because the citation count was read without a guard. Older manifests now render as having no citations rather than throwing.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Stage-aware activity indicators:</strong> a running turn showed one rotating spinner for every stage, which said only that something was happening. The timeline now draws an animation whose shape encodes the stage actually reported &mdash; planning, gathering context, waiting on a Brain, receiving tokens, writing files, verifying, or comparing Brain results. The distinction that matters most is waiting versus receiving: a browser Brain that accepted the prompt and went quiet no longer looks identical to one that is streaming.</li>
+          <li><strong>Honest by construction:</strong> the stage comes from the step the runtime reported, never from a guess, and only genuinely active steps animate. Finished and skipped steps keep their terminal icons.</li>
+          <li><strong>Revertible without a rebuild:</strong> a control on the timeline header switches back to the original spinner, and the choice persists. Nothing about the governed turn changes with this setting; the step labels are identical either way.</li>
+          <li><strong>Accessibility:</strong> a reduced-motion preference freezes the indicator on a single frame rather than removing it, since the stage it encodes is still information.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Launch and connections</div>
+        <ul class="change-list">
+          <li><strong>Both launch screens:</strong> the native macOS splash appears first and holds through the entire container start, so replacing only the web loader would have left the longest part of startup on the old spinner. The AppKit splash now draws the same planning animation as the web screen, at a matching size, and a test pins the two figures together so they cannot drift apart.</li>
+          <li><strong>Brain Connections:</strong> the ready-Brain count now carries a constellation that wires itself together, which is what the page is about. It depicts the connections rather than work in progress, so it runs whether or not a turn is in flight &mdash; but it is hidden at a count of zero, since a live network above an empty number would claim connections that do not exist.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Liquid Glass depth</div>
+        <ul class="change-list">
+          <li><strong>Cards read as glass, not as outlines:</strong> panels carried a flat slate stroke and a single shadow, which read as a drawn border rather than a lit edge. They now carry a white rim, a top specular highlight, a bottom counter-edge, an inner glow, and a tight contact shadow beneath the ambient one. Measured contrast improved in the WebKit worst case rather than degrading.</li>
+          <li><strong>Scales with the transparency level:</strong> the denser Subtle setting takes a weaker edge, and the Clear setting takes a stronger one, since at high transparency the edge is most of what carries the shape.</li>
+          <li><strong>Reduced transparency:</strong> the specular treatment is dropped entirely and the rim returns to a solid stroke, so the surface stays legible when the system asks for less transparency.</li>
+          <li><strong>Glass was disabled entirely on Windows:</strong> the theme's blur rules were written with both the standard and the <code>-webkit-</code> property names. Authoring both makes the build drop the standard one and ship only the prefixed alias, which Chromium does not support &mdash; so Liquid Glass had no blur at all in the Windows WebView2 host while looking correct in the packaged macOS WKWebView. The rules now declare the standard property alone and let the build emit the alias, and a test fails if the manual prefix returns.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.3 — Remediation sync and Liquid Glass controls        -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Remediation Sync And Glass Controls</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Failing controls reach remediation</span>
+          <span class="tag tag-fix">Readable Liquid Glass controls</span>
+          <span class="release-date">August 4, 2026 &nbsp;·&nbsp; Enkstein v0.7.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Autonomous Remediation now reads the assessment's failing controls instead of only the governed action queue, and Liquid Glass no longer repaints interactive controls.</div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Autonomous Remediation:</strong> the page fetched only the action queue, so a node reporting open violations still showed an empty console. Failing controls from the latest assessment are now listed, with an explicit proposal action that still passes Trust Fabric and the approval gate.</li>
+          <li><strong>Recommendation-only controls:</strong> a failing control with no executable action is listed separately with its reason, instead of offering a button that cannot act.</li>
+          <li><strong>Liquid Glass:</strong> the panel and border rules matched any rounded, bordered box, which repainted every button with the neutral panel surface and erased the colour distinguishing Approve from Block. Controls are excluded and keep their own glass treatment.</li>
+          <li><strong>Liquid Glass colours:</strong> dark-console state colours are remapped for light translucent panels so status text and tints stay legible.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.7.2 — Connector control scope                          -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Connector Control Scope</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-feat">See controls per connector</span>
+          <span class="tag tag-fix">Advisory 500 fixed</span>
+          <span class="release-date">August 4, 2026 &nbsp;·&nbsp; Enkstein v0.7.2</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Every connector can now answer which controls it proves and how they stand in this tenant. A proxy keep-alive mismatch that surfaced completed requests as <code>API error 500</code> is fixed.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>See controls:</strong> each connector opens a drawer showing in-scope, passing, failing, and not-assessed counts with the individual controls and their reasons.</li>
+          <li><strong>Evidence collectors:</strong> the drawer names each bound collector, whether it can run now, and which alternative connectors also satisfy it.</li>
+          <li><strong>Control scope API:</strong> <code>/controls/connector-scope</code> and <code>/controls/connector-scope/{type}</code> resolve adapter aliases, so a tenant configured for <code>azure_ad</code> sees the same scope as <code>entra_id</code>.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Connector coverage:</strong> 39 connectors with working read adapters were bound to no evidence collector, so each looked functional while proving no control. Every reporting adapter now has a collector, and a test prevents a new one shipping unbound.</li>
+          <li><strong>Unevaluated nodes:</strong> Attack Path, Automation, Compliance, Threat Intelligence, Threat Analysis, Release, Vendor Risk, and Recovery Readiness had a baseline control with no evaluator, leaving them permanently unassessable.</li>
+          <li><strong>Baseline install:</strong> installing the control pack now binds its collectors in the same operation, so a fresh deployment is assessable instead of reporting empty scopes.</li>
+          <li><strong>Non-assessing connectors:</strong> Brain providers and notification channels state that they carry no control posture instead of implying a missing collector.</li>
+          <li><strong>AI advisory:</strong> the API server's five-second keep-alive closed idle sockets the console proxy had already reused, so a request the backend answered with <code>200</code> reached the browser as <code>API error 500</code>. The keep-alive window now outlives the proxy's reuse window.</li>
+          <li><strong>Console requests:</strong> read-only calls retry once when a recycled connection is lost. Writes are never replayed.</li>
+          <li><strong>Installer links:</strong> the download buttons name the current release instead of resolving to a missing asset.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.7.1 — Evidence-first Security Runtime                  -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

@@ -1,8 +1,9 @@
 # OWASP Top 10 for Agentic Applications (ASI 2026) — Enkstein Evidence Matrix
 
-**Date:** 2026-05-31  
-**Version:** 2.1  
-**Scope:** Enkstein Zero Trust Security Platform (self-hosted)
+**Date:** 2026-08-05  
+**Version:** 2.2  
+**Scope:** Enkstein Zero Trust Security Platform (self-hosted)  
+**Evidence re-verified:** 2026-08-05 against release 0.7.10. Every test cited in the table below was re-run and passed.
 
 > **Disclaimer:** This is a vendor self-assessment. Status values below are deliberately conservative and mapped to currently shipped code paths and automated tests. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
 

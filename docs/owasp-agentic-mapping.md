@@ -1,8 +1,9 @@
 # OWASP Top 10 for LLM Applications (2025) — Enkstein Evidence Matrix
 
-**Date:** 2026-05-31  
-**Version:** 1.1  
-**Scope:** Enkstein Zero Trust Security Platform (self-hosted)
+**Date:** 2026-08-05  
+**Version:** 1.2  
+**Scope:** Enkstein Zero Trust Security Platform (self-hosted)  
+**Evidence re-verified:** 2026-08-05 against release 0.7.10. Every test cited in the table below was re-run and passed.
 
 > **Disclaimer:** This is a vendor self-assessment. Claims have been matched against source code in this repository but have not been independently audited. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
 
@@ -180,7 +181,7 @@
 **Coverage Gap:** `test_platform_regressions.py` does not include credential/secret exposure tests. The scanner is confirmed to redact AWS keys, API tokens, credit card numbers, and SSNs in code review, but no automated assertion exists for this behavior. This is the primary LLM06 test gap.
 
 **Known Limitations:**
-- Output scanning (LLM responses) is not systematically applied — model completions are not re-scanned before storage (see LLM02).
+- Output scanning redacts secret/PII patterns in model completions (see LLM02), but it is pattern-based rather than semantic, so novel or obfuscated disclosure may pass.
 - Audit log entries include `detail_json` that could contain sensitive context if callers are not careful.
 - No data classification framework (e.g., tagging fields as PII/PHI/PCI) is integrated into the data model.
 
@@ -291,4 +292,4 @@
 
 ---
 
-*Last updated: 2026-05-31. Maintained by the Enkstein security team.*
+*Last updated: 2026-08-05. Maintained by the Enkstein security team.*

@@ -8,7 +8,7 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-VERSION=${1:-0.7.1}
+VERSION=${1:-0.7.10}
 VERSION=${VERSION#v}
 DIST_DIR="$ROOT_DIR/dist"
 WORK_DIR="$DIST_DIR/macos-$VERSION"
@@ -52,9 +52,9 @@ SWIFT_SOURCE="$ROOT_DIR/packaging/macos/MarcellusApp.swift"
 ARM_BINARY="$WORK_DIR/Enkstein-arm64"
 INTEL_BINARY="$WORK_DIR/Enkstein-x86_64"
 xcrun swiftc "$SWIFT_SOURCE" -O -target arm64-apple-macos12.0 \
-  -framework Cocoa -framework WebKit -o "$ARM_BINARY"
+  -framework Cocoa -framework WebKit -framework CoreVideo -o "$ARM_BINARY"
 xcrun swiftc "$SWIFT_SOURCE" -O -target x86_64-apple-macos12.0 \
-  -framework Cocoa -framework WebKit -o "$INTEL_BINARY"
+  -framework Cocoa -framework WebKit -framework CoreVideo -o "$INTEL_BINARY"
 lipo -create "$ARM_BINARY" "$INTEL_BINARY" -output "$MACOS_DIR/Enkstein"
 chmod +x "$MACOS_DIR/Enkstein"
 

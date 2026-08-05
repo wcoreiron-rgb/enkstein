@@ -432,7 +432,7 @@
     <a class="sidebar-link" onclick="show('tf-agt')">Ring Policy &amp; Swarm</a>
 
     <div class="sidebar-section-title">The Capability Node System</div>
-    <a class="sidebar-link" onclick="show('claws-all')">25 Capability Nodes</a>
+    <a class="sidebar-link" onclick="show('claws-all')">26 Capability Nodes</a>
     <a class="sidebar-link" onclick="show('claws-pattern')">Capability Node Pattern</a>
     <a class="sidebar-link" onclick="show('claws-adapters')">Provider Adapters</a>
 
@@ -476,9 +476,16 @@
       <p>Enkstein is a distributed security and AI workspace organized around the principle that <em>every action must be authorized, every decision must be attributable, and no component is trusted by default.</em></p>
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
-        <li><strong>25 Capability Nodes + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. Model Cortex, Command, and Release Governance sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
+        <li><strong>26 Capability Nodes + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. Model Cortex, Command, and Release Governance sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
         <li><strong>Trust Fabric</strong> — The central zero-trust enforcement layer. Every action passes through a 6-stage pipeline: anomaly detection → policy evaluation → risk scoring → audit log → decision. Includes Execution Ring Policy (ring0–ring3 privilege isolation) and SRE Engine (circuit breaker, error budget).</li>
         <li><strong>CoreOS</strong> — The orchestration layer managing agents, Swarm multi-agent jobs, multi-step workflows, event-driven triggers, scheduled jobs, Channel Gateway command ingestion, and human approval flows with dual-approval enforcement.</li>
+      </ul>
+
+      <p>Three runtime subsystems give Capability Nodes bounded independence rather than routing every decision through a central dispatcher:</p>
+      <ul>
+        <li><strong>Plexus</strong> — governed peer messaging between Nodes. A participant identity is required, messages can be held for approval, and metadata is verified on read and acknowledgement.</li>
+        <li><strong>Reflexes</strong> — policy-bounded local autonomy. A Node evaluates an incoming event against its registered reflexes and may act within its bounds, with every decision written to an execution log.</li>
+        <li><strong>Regeneration</strong> — signed Node checkpoints and governed regeneration runs, so a Capability Node can be restored from a verified checkpoint rather than rebuilt by hand.</li>
       </ul>
 
       <h2>Key Design Decisions</h2>
@@ -527,6 +534,18 @@ POST /api/v1/marcellus/workspace/conversations
 POST /api/v1/marcellus/workspace/conversations/{id}/turns
 POST /api/v1/marcellus/workspace/conversations/{id}/branches
 POST /api/v1/marcellus/workspace/conversations/{id}/security-investigation</code></pre>
+
+      <h2>Plexus, Reflexes, and Regeneration</h2>
+      <p>Capability Nodes are not purely centrally dispatched. <strong>Plexus</strong> carries governed peer messages between Nodes: a participant identity is required, a message can be held for approval before delivery, and metadata is verified on read and acknowledgement. <strong>Reflexes</strong> give a Node policy-bounded local autonomy — an incoming event is evaluated against its registered reflexes and may be acted on within its bounds, with every decision written to an execution log. <strong>Regeneration</strong> captures signed Node checkpoints and runs governed restores, so a Node can be rebuilt from a verified checkpoint. All three are tenant-scoped and Trust Fabric authorized.</p>
+      <pre><code>POST /api/v1/marcellus/plexus/messages
+GET  /api/v1/marcellus/plexus/inbox/{node_id}
+POST /api/v1/marcellus/plexus/messages/{message_id}/approve
+POST /api/v1/marcellus/plexus/messages/{message_id}/ack
+POST /api/v1/marcellus/reflexes
+POST /api/v1/marcellus/reflexes/evaluate
+GET  /api/v1/marcellus/reflexes/executions
+POST /api/v1/marcellus/regeneration/checkpoints
+POST /api/v1/marcellus/regeneration/runs</code></pre>
 
       <h2>Prerequisites</h2>
       <ul>
@@ -660,7 +679,7 @@ POST /api/v1/marcellus/workspace/conversations/{id}/security-investigation</code
 ┌──────────────────────▼──────────────────────────────┐
 │                 FastAPI Backend                       │
 │   ┌──────────┐  ┌─────────────┐  ┌───────────────┐  │
-│   │25 Capability Nodes  │  │ Trust Fabric│  │    CoreOS     │  │
+│   │ 26 Nodes │  │ Trust Fabric│  │    CoreOS     │  │
 │   │  Routes  │  │  Pipeline   │  │Swarm/Cmd/Sched│  │
 │   └────┬─────┘  └──────┬──────┘  └───────┬───────┘  │
 │        └───────────────┼──────────────────┘          │
@@ -1079,7 +1098,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
 
     <!-- ─── 25 SECURITY CLAWS ─── -->
     <div id="sec-claws-all" class="doc-section">
-      <h1>25 Capability Nodes</h1>
+      <h1>26 Capability Nodes</h1>
       <p class="lead">Each security claw is a self-contained domain module with standardized endpoints, provider adapters, findings, and focused task execution. Model Cortex, Command, and Release Governance are documented separately as core control surfaces.</p>
 
       <table>
@@ -1117,7 +1136,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
     <!-- ─── CLAW PATTERN ─── -->
     <div id="sec-claws-pattern" class="doc-section">
       <h1>The Capability Node Pattern</h1>
-      <p class="lead">All 25 capability nodes follow a consistent implementation pattern. This makes capability nodes predictable to develop, test, and integrate with the Trust Fabric.</p>
+      <p class="lead">All 26 capability nodes follow a consistent implementation pattern. This makes capability nodes predictable to develop, test, and integrate with the Trust Fabric.</p>
 
       <h2>Directory Structure</h2>
       <pre>backend/app/claws/

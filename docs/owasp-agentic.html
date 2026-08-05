@@ -377,7 +377,7 @@
     Claims in this document have been matched against source code in this repository but have not been
     independently audited. An independent third-party security assessment is strongly recommended before
     relying on this document for compliance or procurement purposes.
-    Last reviewed: <strong>2026-06-08</strong>.
+    Last reviewed: <strong>2026-08-05</strong> against release <strong>0.7.10</strong>; every cited test was re-run and passed.
   </div>
 
   <!-- ── SUMMARY TABLE ── -->
@@ -401,8 +401,8 @@
         <tr>
           <td><span class="cat-num">LLM02</span></td>
           <td>Insecure Output Handling</td>
-          <td><span class="badge badge-partial">Partially Shipped</span></td>
-          <td>No automated test (gap documented)</td>
+          <td><span class="badge badge-shipped">Shipped</span></td>
+          <td><code>test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response</code>, <code>test_cortex_workspace.py::test_provider_download_with_secrets_is_blocked_not_written</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM03</span></td>
@@ -413,8 +413,8 @@
         <tr>
           <td><span class="cat-num">LLM04</span></td>
           <td>Model Denial of Service</td>
-          <td><span class="badge badge-progress">In Progress</span></td>
-          <td>Auth rate-limiting shipped; AI endpoint limits not yet tested</td>
+          <td><span class="badge badge-shipped">Shipped</span></td>
+          <td><code>test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold</code>, <code>test_cortex_workspace.py::test_ai_turn_endpoint_is_rate_limited</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM05</span></td>
@@ -443,8 +443,8 @@
         <tr>
           <td><span class="cat-num">LLM09</span></td>
           <td>Overreliance</td>
-          <td><span class="badge badge-partial">Partially Shipped</span></td>
-          <td>No automated test (gap documented)</td>
+          <td><span class="badge badge-shipped">Shipped</span></td>
+          <td><code>test_model_router_hardening.py::test_classification_downgrade_requires_justification</code>, <code>::test_justified_downgrade_is_recorded_in_the_audit_trail</code></td>
         </tr>
         <tr>
           <td><span class="cat-num">LLM10</span></td>
@@ -498,7 +498,7 @@
         <div class="cat-desc">Failure to validate or sanitize LLM outputs before they are passed to downstream systems or rendered, leading to XSS, code execution, or SSRF.</div>
       </div>
       <div class="cat-badge-wrap">
-        <span class="badge badge-partial">Partially Shipped</span>
+        <span class="badge badge-shipped">Shipped</span>
         <span class="expand-toggle" id="llm02-ev-toggle">Show evidence ↓</span>
       </div>
     </div>
@@ -507,6 +507,8 @@
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
           <li><code>backend/app/claws/arcclaw/scanner.py</code>: <code>scan_text()</code> redacts secrets, API keys, and PII patterns. Applied to prompts entering the system.</li>
+          <li><code>backend/app/core/modelclaw/brain_bridge.py</code>: scanning is now symmetric. The prompt is scanned on the way in and the model response is re-scanned on the way out, with the redacted body substituted whenever the completion is sensitive. Verified by <code>test_model_router_hardening.py::test_model_router_output_rescan_redacts_sensitive_response</code>.</li>
+          <li><code>backend/app/core/marcellus/workspace.py</code>: provider-generated downloads are unpacked and DLP-scanned before they can become a governed file change; a file carrying a live credential is dropped rather than written. Verified by <code>test_cortex_workspace.py::test_provider_download_with_secrets_is_blocked_not_written</code>.</li>
           <li>API responses are serialized through Pydantic schemas — raw LLM output is not reflected directly to clients without structural validation.</li>
           <li>DLP scanner in <code>backend/app/services/finding_pipeline.py</code> flags sensitive patterns in event payloads.</li>
         </ul>
@@ -514,9 +516,8 @@
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>LLM response bodies are stored and returned without a second-pass output scan — if a model returns malicious content, it is not re-inspected after generation.</li>
           <li>No HTML sanitization layer exists for outputs rendered in the frontend dashboard.</li>
-          <li>Output scanning should be applied symmetrically to both prompts (input) and completions (output).</li>
+          <li>Output re-scanning is pattern-based secret/PII redaction. It is not a semantic malicious-content classifier, so novel or obfuscated payloads may pass.</li>
         </ul>
       </div>
     </div>
@@ -562,7 +563,7 @@
         <div class="cat-desc">Attacks that consume excessive compute, memory, or API quota via crafted inputs — very long prompts, recursive queries, or resource-intensive completions.</div>
       </div>
       <div class="cat-badge-wrap">
-        <span class="badge badge-progress">In Progress</span>
+        <span class="badge badge-shipped">Shipped</span>
         <span class="expand-toggle" id="llm04-ev-toggle">Show evidence ↓</span>
       </div>
     </div>
@@ -571,6 +572,8 @@
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
           <li><code>backend/app/api/routes/auth.py</code>: 10 req/min per-IP rate limiter on <code>/auth/token</code> — brute-force protection.</li>
+          <li><code>backend/app/core/marcellus/ai_rate_limit.py</code>: the governed AI surface is rate limited <strong>per authenticated identity</strong> rather than per IP, since every desktop request shares the loopback address. Applied to conversation turns, the streaming variant, and project research through <code>workspace_routes.py</code> and <code>cowork_routes.py</code>; exceeding the budget returns <code>429</code> with <code>Retry-After</code>. Tunable via <code>AI_RATE_LIMIT_WINDOW_SECONDS</code> / <code>AI_RATE_LIMIT_MAX_REQUESTS</code>. Verified by <code>test_cortex_workspace.py::test_ai_turn_endpoint_is_rate_limited</code>.</li>
+          <li><code>backend/app/core/modelclaw/</code>: model routing enforces its own request threshold, verified by <code>test_model_router_hardening.py::test_model_route_rate_limit_blocks_after_threshold</code>.</li>
           <li><code>backend/app/services/sre_policy.py</code>: <code>SREPolicyEngine</code> circuit breaker + error budget for governed modules. Tested via <code>test_asi08_circuit_breaker_trips_after_error_budget_exceeded</code>.</li>
           <li>The platform tracks per-request risk scores which could be used to gate expensive operations.</li>
         </ul>
@@ -578,11 +581,10 @@
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>No per-user rate limiting on AI endpoints (<code>/arcclaw/events</code>, <code>/arcclaw/chat</code>). Only auth routes are rate-limited currently.</li>
           <li>Prompt length is not capped before being forwarded to the model provider.</li>
           <li>No token budget or cost-cap enforcement at the API layer.</li>
           <li>SRE circuit breaker exists for governed modules but is not yet wired to LLM provider 429/503 backpressure.</li>
-          <li>Planned: per-endpoint rate limiting via slowapi on AI Security routes.</li>
+          <li>Rate-limit counters are per-process in-memory windows; a multi-worker deployment needs a shared store to enforce one global budget.</li>
         </ul>
       </div>
     </div>
@@ -650,7 +652,7 @@
       <div class="ev-section">
         <div class="ev-label">Known Limitations</div>
         <ul class="limitations-list">
-          <li>Output scanning is not applied to LLM response text before storage — model completions are not re-scanned after generation (see LLM02).</li>
+          <li>Output scanning redacts secret/PII patterns in completions (see LLM02) but is not a semantic classifier, so novel or obfuscated disclosure may pass.</li>
           <li>No data classification framework (PII/PHI/PCI field tagging) is integrated into the data model.</li>
           <li><code>detail_json</code> in audit log could contain sensitive context if callers are not careful.</li>
         </ul>
@@ -752,7 +754,7 @@
         <div class="cat-desc">Users or automated systems trusting LLM outputs without verification — leading to incorrect decisions, missed alerts, or automated actions based on hallucinated information.</div>
       </div>
       <div class="cat-badge-wrap">
-        <span class="badge badge-partial">Partially Shipped</span>
+        <span class="badge badge-shipped">Shipped</span>
         <span class="expand-toggle" id="llm09-ev-toggle">Show evidence ↓</span>
       </div>
     </div>
@@ -761,6 +763,7 @@
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
           <li><code>backend/app/claws/arcclaw/routes.py</code>: Every AI event stored with a <code>risk_score</code> and <code>outcome</code> computed by the AGT audit and scanner. Users can review scores in the dashboard before acting.</li>
+          <li>Overriding the system's own classification is not silent. Downgrading a detected sensitivity level requires an explicit written justification, and the detected level, the asserted level, and the stated reason all survive into the audit entry. Verified by <code>test_model_router_hardening.py::test_classification_downgrade_requires_justification</code> and <code>::test_justified_downgrade_is_recorded_in_the_audit_trail</code>.</li>
           <li>AI events are not auto-executed — they surface as findings requiring human review or policy-matched response with approval.</li>
           <li>Remediation playbooks have <code>requires_approval</code> flag — high-risk playbooks require human sign-off before execution.</li>
           <li>Findings include <code>severity</code> and <code>confidence</code> fields to help operators contextualize AI-generated detections.</li>
@@ -771,7 +774,7 @@
         <ul class="limitations-list">
           <li>Risk scores are displayed but no mechanism prevents operators from always approving high-risk AI recommendations without actual review.</li>
           <li>No counter-factual explanation or uncertainty quantification is presented alongside AI findings.</li>
-          <li>No "dismissed by user" audit trail — when an operator ignores an AI-generated alert, this is not logged.</li>
+          <li>Classification overrides are audited, but passively ignoring an AI-generated alert is still not recorded as an explicit dismissal event.</li>
           <li>No calibration data or false-positive rate reporting is implemented to help operators judge AI reliability over time.</li>
         </ul>
       </div>
@@ -821,7 +824,7 @@
     <a href="owasp-agentic-mapping.md">Markdown version</a>
     <a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener">GitHub</a>
   </div>
-  <p>Enkstein — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;·&nbsp; 2026-06-08</p>
+  <p>Enkstein — Zero Trust Security Ecosystem &nbsp;·&nbsp; OWASP Agentic Top 10 Self-Assessment &nbsp;&middot;&nbsp; 2026-08-05</p>
 </footer>
 
 <script>

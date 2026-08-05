@@ -13,18 +13,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.0-macos.pkg">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-macos.pkg">
     <img src="https://img.shields.io/badge/Download%20for-macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS" />
   </a>
   &nbsp;
-  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.0-windows-x64-setup.exe">
+  <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-windows-x64-setup.exe">
     <img src="https://img.shields.io/badge/Download%20for-Windows-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download for Windows" />
   </a>
 </p>
 
 <p align="center">
   <sub>
-    <b>Latest installer: v0.7.0</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    <b>Latest installer: v0.7.10</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -94,7 +94,7 @@ what should not travel, and records the decision.
 2. **Cowork** — file-assisted work in a project folder you select. Answering
    models are advisors; Enkstein performs the writes, inside your approved
    folder, with a diff you approve.
-3. **Security** — 25 capability areas covering cloud posture, identity,
+3. **Security** — 26 capability areas covering cloud posture, identity,
    endpoint, threat intel, and DevSec, plus AI-specific governance like
    prompt-injection detection and DLP.
 
@@ -176,7 +176,7 @@ Enkstein sits at the intersection of three tool categories — and is the only o
 | Human-in-the-loop approval gates | ❌ | ~ DIY | ✅ | ✅ dual-approval, self-approval blocked |
 | Immutable audit of every agent action | ❌ | ❌ | ~ | ✅ |
 | AI-specific governance (prompt injection, DLP) | ❌ | ❌ | ❌ | ✅ 12-vector AGT audit |
-| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 25 capability nodes |
+| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 26 capability nodes |
 | Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
 | Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
 
@@ -407,7 +407,7 @@ Enkstein ships in three installable forms beyond the web platform. All three tal
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.7.1-py3-none-any.whl
+pip install ./enkstein_mcp-0.7.10-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -434,7 +434,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### 🖥️ CLI — drive the platform from your shell
 
 ```bash
-pip install ./enkstein_cli-0.7.1-py3-none-any.whl
+pip install ./enkstein_cli-0.7.10-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -447,7 +447,7 @@ enkstein evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.7.1-py3-none-any.whl
+pip install ./enkstein_core-0.7.10-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package
@@ -515,7 +515,7 @@ For where the platform is strong versus still maturing, see the
 [Maturity Matrix](docs/maturity-matrix.md) and the *Known gaps* section of the
 [Testing Guide](docs/testing-guide.md).
 
-## Platform Modules (25 Capability Nodes + 4 Core Surfaces + Core Engines)
+## Platform Modules (26 Capability Nodes + 4 Core Surfaces + Core Engines)
 
 ### Security Domain Capability Nodes (25)
 

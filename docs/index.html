@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Enkstein — Distributed Zero Trust Security</title>
-  <meta name="description" content="25 capability nodes + core control surfaces and platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
+  <meta name="description" content="26 capability nodes + core control surfaces and platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -555,13 +555,13 @@
     Zero Trust Security Platform
   </div>
   <h1>AI Security Automation.<br><span class="accent">Governed by Default.</span></h1>
-  <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 25 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
+  <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 26 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
   <div class="hero-ctas">
-    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.0-macos.pkg" class="btn-primary">
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-macos.pkg" class="btn-primary">
       <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.365 1.43c0 1.14-.42 2.2-1.12 3.02-.85.99-2.24 1.76-3.4 1.67a3.6 3.6 0 0 1 1.15-2.92c.77-.86 2.1-1.5 3.37-1.77zM20.9 17.02c-.55 1.27-.81 1.84-1.52 2.96-1 1.57-2.4 3.52-4.15 3.53-1.55.02-1.95-1.01-4.06-1-2.1.01-2.54 1.02-4.1 1-1.74-.01-3.07-1.77-4.06-3.33C.24 15.8-.06 10.7 2.15 8.02c1.05-1.29 2.7-2.1 4.26-2.1 1.6 0 2.6 1.02 3.92 1.02 1.28 0 2.06-1.02 3.9-1.02 1.4 0 2.87.76 3.92 2.07-3.45 1.89-2.89 6.8.75 8.03z"/></svg>
       Download for macOS
     </a>
-    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.0-windows-x64-setup.exe" class="btn-primary">
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-0.7.10-windows-x64-setup.exe" class="btn-primary">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 3.45 9.75 2.1v9.4H0zM10.95 1.93 24 0v11.4H10.95zM0 12.6h9.75V22L0 20.65zM10.95 12.6H24V24l-13.05-1.9z"/></svg>
       Download for Windows
     </a>
@@ -578,7 +578,7 @@
   </div>
 
   <p class="hero-meta">
-    Latest installer: v0.7.0 &nbsp;&middot;&nbsp; macOS 14+ signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
+    Latest installer: v0.7.10 &nbsp;&middot;&nbsp; macOS 14+ signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest" target="_blank" rel="noopener">all downloads &amp; checksums</a>
   </p>
 </section>
@@ -587,11 +587,11 @@
 <div class="stats-bar">
   <div class="stats-inner">
     <div class="stat">
-      <div class="stat-number">25</div>
+      <div class="stat-number">26</div>
       <div class="stat-label">Capability Nodes</div>
     </div>
     <div class="stat">
-      <div class="stat-number">8</div>
+      <div class="stat-number">9</div>
       <div class="stat-label">Platform Engines</div>
     </div>
     <div class="stat">
@@ -599,12 +599,15 @@
       <div class="stat-label">by Design</div>
     </div>
     <div class="stat">
-      <div class="stat-number">283</div>
+      <div class="stat-number">1391</div>
       <div class="stat-label">Backend Tests</div>
     </div>
   </div>
   <div class="ship-note">
     <strong>Latest shipped:</strong>
+    <strong>Plexus</strong> — governed peer messaging between Capability Nodes, with required participant identity, held-message approval, and verify/acknowledge on read.
+    <strong>Reflexes</strong> — policy-bounded local autonomy: a Node evaluates an event against registered reflexes and acts within its bounds, with every decision recorded.
+    <strong>Regeneration</strong> — signed Node checkpoints and governed regeneration runs, so a Capability Node can be restored from a verified checkpoint.
     <strong>Command</strong> — multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, self-approval guards, timeline audit, bulk review, and delegation controls.
     <strong>Two-Way Channel Replies</strong> — Slack/Teams outbound status cards now preserve thread metadata, expose delivery state, and include approval action metadata for queued commands.
     <strong>Model Cortex</strong> — policy-governed AI model routing with tenant-scoped profiles, call audit, and Swarm Judge synthesis.
@@ -674,7 +677,7 @@
 <section id="claws">
   <div class="section-inner">
     <span class="section-tag">The Capability Node System</span>
-    <h2 class="section-title">25 Capability Nodes + Core Control Surfaces</h2>
+    <h2 class="section-title">26 Capability Nodes + Core Control Surfaces</h2>
     <p class="section-sub">Each Capability Node is a self-contained security domain module with its own provider adapters, findings engine, and governance integration. Core surfaces add model routing, command control, and governed deployment release gates.</p>
     <div class="claws-grid">
 
@@ -855,7 +858,7 @@
   <div class="section-inner">
     <span class="section-tag">Platform Engines</span>
     <h2 class="section-title">Always-On Intelligence. Built In.</h2>
-    <p class="section-sub">Beyond the 25 capability nodes and core control surfaces, these engines run continuously to govern every action, agent, and workflow.</p>
+    <p class="section-sub">Beyond the 26 capability nodes and core control surfaces, these engines run continuously to govern every action, agent, and workflow.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2.5rem;">
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
@@ -987,7 +990,7 @@
       <div class="principle-card">
         <span class="principle-icon">⚙️</span>
         <div class="principle-title">Every module is governed</div>
-        <div class="principle-desc">All 25 capability nodes and core control surfaces share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
+        <div class="principle-desc">All 26 capability nodes and core control surfaces share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
       </div>
     </div>
   </div>

@@ -7,6 +7,33 @@ do, and proves it afterward.
 
 Record at 1440x900, dark theme, 2x scale. Keep the cursor slow.
 
+## Automated capture
+
+The shot list below is scripted in
+[demo-recording.spec.ts](../frontend/e2e/demo-recording.spec.ts), so a take is
+reproducible rather than a performance you have to nail live:
+
+```bash
+cd frontend
+npx playwright test demo-recording --project=demo
+```
+
+That writes `test-results/.../video.webm` at 2880x1800, plus a still at each
+shot boundary in `demo-stills/`. Both are gitignored. Re-run freely; each run
+clears the previous stills so takes cannot interleave.
+
+It drives the same mock harness the workspace tests use. That is deliberate:
+a live tenant has whatever state it happens to have, which makes takes
+non-reproducible, and the guidance below forbids recording empty or simulated
+Security data. Everything shown — a bound folder, ready Brains, the sensitivity
+fallback — is representative of a working install rather than flattering to it.
+
+The recorder is tagged `@demo` and excluded from the normal Playwright run, so
+cosmetic timing drift in a demo never reads as a product regression.
+
+Use the scripted take as the base layer and record voiceover over it. If you
+would rather perform it by hand, the manual checklist still applies.
+
 ## Before you record
 
 - [ ] `docker compose up` and confirm the UI loads
