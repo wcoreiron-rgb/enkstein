@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { getPolicies, updatePolicy, deletePolicy } from '@/lib/api';
 import { capabilityName, marcellusText } from '@/lib/capability-names';
+import OverlayPortal from '@/components/OverlayPortal';
 
 // ── Layer metadata ─────────────────────────────────────────────────────────────
 
@@ -147,6 +148,7 @@ function EditModal({ policy, onSave, onClose }: {
   };
 
   return (
+    <OverlayPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.65)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -240,6 +242,7 @@ function EditModal({ policy, onSave, onClose }: {
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
 

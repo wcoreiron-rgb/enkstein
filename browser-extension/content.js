@@ -1,7 +1,12 @@
 function provider() {
-  if (location.hostname === 'chatgpt.com') return 'chatgpt';
-  if (location.hostname === 'claude.ai') return 'claude';
-  return 'gemini';
+  const host = location.hostname;
+  if (host === 'chatgpt.com' || host.endsWith('.chatgpt.com')) return 'chatgpt';
+  if (host === 'claude.ai' || host.endsWith('.claude.ai')) return 'claude';
+  if (host === 'gemini.google.com') return 'gemini';
+  // Falling through to a provider guess would run ChatGPT's selectors against
+  // an unrelated page and report a confusing selector error rather than the
+  // real problem, so an unknown host is named as such.
+  return null;
 }
 
 const INPUT_SELECTORS = {
@@ -146,6 +151,13 @@ const SEND_SELECTORS = {
     'button[aria-label*="Send message" i]',
     'button[aria-label*="Send" i]',
     'button.send-button',
+    // Gemini's composer is Angular Material custom elements. The send control
+    // is not always a plain <button>, and its accessible name is localised, so
+    // matching only on English "Send" strands a non-English UI.
+    '[aria-label*="Send message" i]',
+    '[aria-label*="Send" i]',
+    '.send-button',
+    'button[mattooltip*="Send" i]',
   ],
 };
 
@@ -156,6 +168,7 @@ function visible(element) {
 }
 
 function findInput(kind) {
+  if (!kind || !INPUT_SELECTORS[kind]) return null;
   for (const selector of INPUT_SELECTORS[kind]) {
     const candidates = [...document.querySelectorAll(selector)].filter(visible);
     if (candidates.length) return candidates[candidates.length - 1];
@@ -354,14 +367,23 @@ async function setInput(element, text, kind) {
 }
 
 function findSendButton(kind) {
+  // A send control is not always an <button>: Gemini renders Material custom
+  // elements, and requiring HTMLButtonElement silently found nothing there, so
+  // an inserted prompt sat in the composer and was never submitted. Accept any
+  // element that is actually clickable and enabled instead.
+  const clickable = (element) => (
+    element instanceof HTMLElement
+    && visible(element)
+    && !element.hasAttribute('disabled')
+    && element.getAttribute('aria-disabled') !== 'true'
+    && typeof element.click === 'function'
+  );
   for (const selector of SEND_SELECTORS[kind]) {
-    const candidates = [...document.querySelectorAll(selector)].filter((button) => (
-      button instanceof HTMLButtonElement && visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true'
-    ));
+    const candidates = [...document.querySelectorAll(selector)].filter(clickable);
     if (candidates.length) return candidates[candidates.length - 1];
   }
-  return [...document.querySelectorAll('button')].filter((button) => {
-    if (!(button instanceof HTMLButtonElement) || !visible(button) || button.disabled) return false;
+  return [...document.querySelectorAll('button, [role="button"]')].filter((button) => {
+    if (!clickable(button)) return false;
     const label = `${button.getAttribute('aria-label') || ''} ${button.getAttribute('data-testid') || ''}`.toLowerCase();
     return label.includes('send') || label.includes('submit');
   }).pop() || null;
@@ -374,7 +396,7 @@ async function waitForSendButton(kind, timeoutMs = 10000) {
     if (button) return button;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error('The provider message field did not enable its Send button. Reload the provider tab and try again.');
+  return null;
 }
 
 function responseElements(kind) {
@@ -548,10 +570,49 @@ async function waitForSubmission(input, originalText, timeoutMs = 15000) {
   throw new Error('The prompt remained in the provider message field and was not submitted. Reload the provider tab and try again.');
 }
 
+/** Every provider composer submits on Enter. This is the fallback for when the
+ *  send control cannot be located at all -- a renamed selector, a localised
+ *  label, or a custom element we do not match. Without it, a selector drift on
+ *  the provider's side leaves the prompt sitting in the composer unsent, which
+ *  is the failure that is visible to the user as "it typed my question but
+ *  nothing happened". */
+function pressEnterToSubmit(input) {
+  input.focus();
+  for (const type of ['keydown', 'keypress', 'keyup']) {
+    input.dispatchEvent(new KeyboardEvent(type, {
+      key: 'Enter',
+      code: 'Enter',
+      keyCode: 13,
+      which: 13,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    }));
+  }
+}
+
 async function submit(kind, input, text) {
   const button = await waitForSendButton(kind);
-  button.click();
-  await waitForSubmission(input, text);
+  if (button) {
+    button.click();
+    try {
+      await waitForSubmission(input, text);
+      return;
+    } catch {
+      // The button existed but the prompt did not leave the composer, so the
+      // element we clicked was not the real send control. Fall through.
+    }
+  }
+  pressEnterToSubmit(input);
+  try {
+    await waitForSubmission(input, text);
+  } catch {
+    throw new Error(
+      button
+        ? 'The prompt stayed in the provider message field after both the Send button and Enter. Reload the provider tab and try again.'
+        : 'Enkstein could not find the provider Send button, and Enter did not submit. The provider page may have changed; reload the tab and try again.',
+    );
+  }
 }
 
 function isStreaming(kind) {

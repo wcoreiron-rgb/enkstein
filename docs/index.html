@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Enkstein — Distributed Zero Trust Security</title>
-  <meta name="description" content="26 capability nodes + core control surfaces and platform engines. One enforcement layer. Every action authorized, monitored, and attributable." />
+  <meta name="description" content="A local, governed AI and security workspace for connected Brains, security evidence, policy-controlled execution, and attributable outcomes." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -161,6 +161,12 @@
       line-height: 1.1;
       max-width: 780px;
       margin: 0 auto 1.5rem;
+    }
+    /* The gradient fill is dark-theme artwork: light greys reading against a
+       near-black page. Applied unconditionally it left the first line of the
+       headline nearly invisible on the light background, so it is scoped to
+       the theme it was designed for and light mode uses solid text. */
+    html[data-theme="dark"] .hero h1 {
       background: linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -195,16 +201,24 @@
     .btn-primary:hover { background: var(--blue-dim); transform: translateY(-1px); }
     .hero-reqs {
       margin: 1.25rem auto 0;
-      max-width: 640px;
+      max-width: 660px;
       font-size: 0.85rem;
       line-height: 1.6;
       color: var(--text2);
+      /* Prerequisites are reference detail, not hero copy. Setting them on
+         their own surface stops five lines of install prose from competing
+         with the headline and the download buttons for the first viewport. */
+      display: grid;
+      gap: 0.5rem;
+      padding: 0.9rem 1.1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      text-align: left;
     }
     .hero-reqs .req {
-      margin: 0.35rem 0;
+      margin: 0;
       text-align: left;
-      padding-left: 1.1rem;
-      text-indent: -1.1rem;
     }
     .hero-reqs .req b { color: var(--text); font-weight: 600; }
     .hero-meta {
@@ -445,6 +459,8 @@
       gap: 3rem;
       align-items: start;
     }
+    .quickstart-wrapper > * { min-width: 0; }
+    .quickstart-text { overflow-wrap: anywhere; }
     .quickstart-text h2 { margin-bottom: 1rem; }
     .quickstart-text p { color: var(--text2); line-height: 1.7; margin-bottom: 1.5rem; }
     .quickstart-text .btn-primary { margin-top: 0.5rem; }
@@ -522,6 +538,7 @@
       .principles-grid { grid-template-columns: 1fr; }
       section { padding: 64px 1.25rem; }
       .hero { padding: 80px 1.25rem 64px; }
+      .quickstart-wrapper { gap: 1.5rem; }
     }
   </style>
 </head>
@@ -555,11 +572,11 @@
     Zero Trust Security Platform
   </div>
   <h1>AI Security Automation.<br><span class="accent">Governed by Default.</span></h1>
-  <p>AI agents that investigate and remediate security problems autonomously — with every action authorized, risk-scored, and audited by a Zero Trust enforcement layer. 26 capability nodes, multi-agent swarms, and a Trust Fabric that governs every move.</p>
+  <p>AI-assisted security investigation and remediation with policy checks, risk scoring, approvals, and audit records around governed execution paths. Bring connected security evidence, multiple Brains, and 26 capability areas into one local control plane.</p>
   <div class="hero-ctas">
-    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-macos.pkg" class="btn-primary">
+    <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest" class="btn-primary">
       <svg width="17" height="17" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.365 1.43c0 1.14-.42 2.2-1.12 3.02-.85.99-2.24 1.76-3.4 1.67a3.6 3.6 0 0 1 1.15-2.92c.77-.86 2.1-1.5 3.37-1.77zM20.9 17.02c-.55 1.27-.81 1.84-1.52 2.96-1 1.57-2.4 3.52-4.15 3.53-1.55.02-1.95-1.01-4.06-1-2.1.01-2.54 1.02-4.1 1-1.74-.01-3.07-1.77-4.06-3.33C.24 15.8-.06 10.7 2.15 8.02c1.05-1.29 2.7-2.1 4.26-2.1 1.6 0 2.6 1.02 3.92 1.02 1.28 0 2.06-1.02 3.9-1.02 1.4 0 2.87.76 3.92 2.07-3.45 1.89-2.89 6.8.75 8.03z"/></svg>
-      Download for macOS
+      macOS package status
     </a>
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest/download/Enkstein-windows-x64-setup.exe" class="btn-primary">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M0 3.45 9.75 2.1v9.4H0zM10.95 1.93 24 0v11.4H10.95zM0 12.6h9.75V22L0 20.65zM10.95 12.6H24V24l-13.05-1.9z"/></svg>
@@ -578,7 +595,7 @@
   </div>
 
   <p class="hero-meta">
-    Latest installer: v0.7.10 &nbsp;&middot;&nbsp; macOS 14+ signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
+    Current release: v0.8.0 &nbsp;&middot;&nbsp; macOS 14+ Developer ID signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest" target="_blank" rel="noopener">all downloads &amp; checksums</a>
   </p>
 </section>
@@ -625,7 +642,7 @@
 <section class="trust-fabric" id="features">
   <div class="section-inner">
     <span class="section-tag">Trust Fabric</span>
-    <h2 class="section-title">Every Request. Every Action.<br>Governed End-to-End.</h2>
+    <h2 class="section-title">From Evidence to Action.<br>Governed in One Workspace.</h2>
     <p class="section-sub">The Trust Fabric is Enkstein's central enforcement layer — a 6-stage pipeline that evaluates every security action before it executes.</p>
     <div class="pipeline">
       <div class="pipeline-step">
@@ -682,169 +699,169 @@
     <div class="claws-grid">
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🤖</span><span class="phase-badge phase-mvp">MVP</span></div>
+        <div class="claw-top"><span class="claw-emoji">🤖</span></div>
         <div class="claw-name">AI Security</div>
         <div class="claw-desc">AI &amp; LLM Security with Microsoft AGT PromptDefenseEvaluator integration</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🪪</span><span class="phase-badge phase-mvp">MVP</span></div>
+        <div class="claw-top"><span class="claw-emoji">🪪</span></div>
         <div class="claw-name">Identity Security</div>
         <div class="claw-desc">Identity Governance &amp; Non-Human Identity (NHI) management</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">☁️</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">☁️</span></div>
         <div class="claw-name">Cloud Security</div>
         <div class="claw-desc">Cloud Security Posture Management across multi-cloud environments</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🌐</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🌐</span></div>
         <div class="claw-name">Exposure Management</div>
         <div class="claw-desc">External Attack Surface Management &amp; continuous exposure monitoring</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🛡️</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🛡️</span></div>
         <div class="claw-name">Endpoint Security</div>
         <div class="claw-desc">Endpoint Detection &amp; Response with behavioral threat correlation</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔍</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔍</span></div>
         <div class="claw-name">Threat Analysis</div>
         <div class="claw-desc">Threat Intelligence &amp; Detection — correlate IOCs across all capability nodes</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">📋</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">📋</span></div>
         <div class="claw-name">Security Telemetry</div>
         <div class="claw-desc">Log Management &amp; SIEM integration for centralized security telemetry</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🌐</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🌐</span></div>
         <div class="claw-name">Network Security</div>
         <div class="claw-desc">Network Security monitoring, segmentation, and traffic analysis</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔑</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔑</span></div>
         <div class="claw-name">Privileged Access</div>
         <div class="claw-desc">Access Control &amp; IAM policy enforcement across systems and services</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🗂️</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🗂️</span></div>
         <div class="claw-name">Data Security</div>
         <div class="claw-desc">Data Loss Prevention — classify, monitor, and protect sensitive data flows</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">📱</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">📱</span></div>
         <div class="claw-name">Application Security</div>
         <div class="claw-desc">Application Security testing, SAST/DAST, and runtime protection</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">☁️</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">☁️</span></div>
         <div class="claw-name">SaaS Security</div>
         <div class="claw-desc">SaaS Security Posture Management — OAuth, shadow IT, and misconfiguration detection</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">⚙️</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">⚙️</span></div>
         <div class="claw-name">Configuration Security</div>
         <div class="claw-desc">Configuration Compliance — drift detection and remediation across infrastructure</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">✅</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">✅</span></div>
         <div class="claw-name">Compliance Assurance</div>
         <div class="claw-desc">Compliance Frameworks — SOC 2, ISO 27001, NIST, CIS, and custom controls</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔒</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔒</span></div>
         <div class="claw-name">Privacy Governance</div>
         <div class="claw-desc">Privacy &amp; GDPR enforcement — consent, data subject rights, and PII tracking</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🏢</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🏢</span></div>
         <div class="claw-name">Vendor Risk</div>
         <div class="claw-desc">Third-Party Risk Management — vendor assessments and supply chain security</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">👤</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">👤</span></div>
         <div class="claw-name">User Risk</div>
         <div class="claw-desc">User Behavior Analytics — anomaly detection for insider risk indicators</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔎</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔎</span></div>
         <div class="claw-name">Insider Risk</div>
         <div class="claw-desc">Insider Threat Detection with contextual risk signals and case management</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">⚡</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">⚡</span></div>
         <div class="claw-name">Security Automation</div>
         <div class="claw-desc">Automation Security — govern scripts, pipelines, and automated processes</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🗺️</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🗺️</span></div>
         <div class="claw-name">Attack Path Analysis</div>
         <div class="claw-desc">Attack Path Analysis — visualize lateral movement and blast radius</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">💻</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">💻</span></div>
         <div class="claw-name">Developer Security</div>
         <div class="claw-desc">DevSecOps &amp; CI/CD security — secrets scanning, SBOM, and pipeline governance</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🧱</span><span class="phase-badge phase-2">Phase 2</span></div>
+        <div class="claw-top"><span class="claw-emoji">🧱</span></div>
         <div class="claw-name">Terraform Governance</div>
         <div class="claw-desc">Terraform &amp; IaC governance — build modules from plain English, review HCL, analyze plans, and map controls</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🧠</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🧠</span></div>
         <div class="claw-name">Threat Intelligence</div>
         <div class="claw-desc">Threat Intelligence Feeds — ingest, normalize, and operationalize external intel</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔄</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔄</span></div>
         <div class="claw-name">Recovery Readiness</div>
         <div class="claw-desc">Incident Recovery — playbooks, runbooks, and recovery validation workflows</div>
       </div>
 
       <div class="claw-card">
-        <div class="claw-top"><span class="claw-emoji">🔌</span><span class="phase-badge phase-3">Phase 3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🔌</span></div>
         <div class="claw-name">Custom Capability</div>
         <div class="claw-desc">Custom REST Integrations — extend Enkstein to any security tool or API</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(139,92,246,0.4);background:rgba(139,92,246,0.04);">
-        <div class="claw-top"><span class="claw-emoji">🧩</span><span class="phase-badge phase-mvp">New v0.3</span></div>
+        <div class="claw-top"><span class="claw-emoji">🧩</span></div>
         <div class="claw-name">Model Cortex</div>
         <div class="claw-desc">AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, and Swarm Judge synthesis</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(59,130,246,0.4);background:rgba(59,130,246,0.04);">
-        <div class="claw-top"><span class="claw-emoji">⚡</span><span class="phase-badge phase-mvp">New v0.3</span></div>
+        <div class="claw-top"><span class="claw-emoji">⚡</span></div>
         <div class="claw-name">Command</div>
         <div class="claw-desc">Multi-channel command ingestion (Teams · Slack · webhook · email · CLI) with multi-operator approval, timeline audit, and bulk review</div>
       </div>
 
       <div class="claw-card" style="border-color:rgba(34,211,238,0.4);background:rgba(34,211,238,0.04);">
-        <div class="claw-top"><span class="claw-emoji">🚀</span><span class="phase-badge phase-mvp">New v0.6</span></div>
+        <div class="claw-top"><span class="claw-emoji">🚀</span></div>
         <div class="claw-name">Release Governance</div>
         <div class="claw-desc">Zero Trust deployment preflight for CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack release gates</div>
       </div>
@@ -858,13 +875,13 @@
   <div class="section-inner">
     <span class="section-tag">Platform Engines</span>
     <h2 class="section-title">Always-On Intelligence. Built In.</h2>
-    <p class="section-sub">Beyond the 26 capability nodes and core control surfaces, these engines run continuously to govern every action, agent, and workflow.</p>
+    <p class="section-sub">Beyond the 26 capability areas and core control surfaces, these engines provide policy, orchestration, and evidence services to the workflows wired through them.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;margin-top:2.5rem;">
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
         <div style="font-size:1.5rem;margin-bottom:.5rem;">🛡️</div>
         <div style="font-weight:700;font-size:1rem;color:var(--text);margin-bottom:.4rem;">Trust Fabric</div>
-        <div style="font-size:.85rem;color:var(--text2);">Central zero-trust enforcement — 6-stage pipeline evaluating every security action before it executes. Policy eval, risk scoring, anomaly detection, immutable audit.</div>
+        <div style="font-size:.85rem;color:var(--text2);">Central zero-trust enforcement for governed security actions: policy evaluation, risk scoring, anomaly detection, and attributable audit records.</div>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:1.5rem;">
@@ -949,7 +966,7 @@
         <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Ed25519 Inter-Agent Signing</div><div class="arch-item-text">Cryptographic identity for every agent envelope</div></div></div>
         <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">PyJWT + Rate Limiting</div><div class="arch-item-text">Short-lived tokens, 10 req/min brute-force guard</div></div></div>
         <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">SRE Engine</div><div class="arch-item-text">Circuit breaker + error budget for all governed modules</div></div></div>
-        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Immutable Audit Log</div><div class="arch-item-text">Every action, approval, and policy event with full lineage</div></div></div>
+        <div class="arch-item"><div class="arch-dot"></div><div><div class="arch-item-label">Attributable Audit Records</div><div class="arch-item-text">Policy decisions, approvals, and recorded outcomes with actor context</div></div></div>
       </div>
     </div>
   </div>
@@ -969,7 +986,7 @@
       </div>
       <div class="principle-card">
         <span class="principle-icon">🔐</span>
-        <div class="principle-title">Every action is authorized</div>
+        <div class="principle-title">Governed actions are authorized</div>
         <div class="principle-desc">No security action executes without passing policy evaluation, risk scoring, and (when required) human approval via the Trust Fabric pipeline.</div>
       </div>
       <div class="principle-card">
@@ -980,7 +997,7 @@
       <div class="principle-card">
         <span class="principle-icon">🧾</span>
         <div class="principle-title">Every workflow is attributable</div>
-        <div class="principle-desc">The immutable audit log captures the full decision chain — who triggered what, which policies matched, what risk score was assigned, and what happened.</div>
+        <div class="principle-desc">Audit records capture the available decision chain — who triggered the action, which policies matched, what risk score was assigned, and the recorded outcome.</div>
       </div>
       <div class="principle-card">
         <span class="principle-icon">🚧</span>
@@ -990,7 +1007,7 @@
       <div class="principle-card">
         <span class="principle-icon">⚙️</span>
         <div class="principle-title">Every module is governed</div>
-        <div class="principle-desc">All 26 capability nodes and core control surfaces share the same governance layer — there are no escape hatches, no unmonitored paths, and no ungoverned execution modes.</div>
+        <div class="principle-desc">Capability areas and control surfaces use shared policy services where wired. The maturity matrix identifies legacy and in-progress paths that have not reached the same assurance level.</div>
       </div>
     </div>
   </div>
@@ -1005,7 +1022,7 @@
         <h2 class="section-title">Up and Running in Minutes</h2>
         <p>Use the native macOS <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">.pkg</code> or Windows <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">setup.exe</code> for one-click startup, or use the portable release bundle. The launcher creates unique secrets and starts the backend API, production Next.js frontend, PostgreSQL, and Redis through Docker Desktop.</p>
         <p>The universal macOS app presents startup progress, waits for the Cortex and UI to become healthy, and loads Enkstein inside a native desktop window. The frontend image builds once and runs with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">next start</code>, with local <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">/api/v1/*</code> calls proxied to the backend service inside Docker.</p>
-        <p>Fully self-hosted. Your credentials stay on your machine — encrypted at rest, never sent anywhere. Add your own API keys via the Connectors UI and each Capability Node connects to your real environment.</p>
+        <p>The control plane is self-hosted. Connector credentials are encrypted in the local secret volume and are sent only to the provider endpoints those connectors authenticate against. Prompts leave the device only when you select a cloud, subscription, or browser Brain, subject to the active policy and redaction decision.</p>
         <p class="quickstart-security-note">
           <strong>Security:</strong> Never commit <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">backend/.secrets/</code> to git. This folder holds your encryption key and is gitignored by default. Each deployment generates its own isolated key on first run.
         </p>

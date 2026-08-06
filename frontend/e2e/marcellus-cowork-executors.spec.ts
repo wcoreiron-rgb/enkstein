@@ -13,6 +13,8 @@ type ExecutorPayload = {
   selected: string;
   selected_label: string;
   any_available: boolean;
+  project_selected?: boolean;
+  needs_folder?: boolean;
 };
 
 const LOCAL_ONLY: ExecutorPayload = {
@@ -33,6 +35,21 @@ const NONE_AVAILABLE: ExecutorPayload = {
   selected: 'unavailable',
   selected_label: 'unavailable',
   any_available: false,
+};
+
+/** A real project is open, but no local folder has been approved for it. This
+ * is the state that made the picker look broken: every executor reported
+ * "unavailable" with no indication that approving a folder is the fix. */
+const NEEDS_FOLDER: ExecutorPayload = {
+  executors: [
+    { executor: 'enkstein_local', label: 'Enkstein Local Runtime', available: false, reason: 'This project has no local folder connected. Use Import folder in the Project files panel to approve one.' },
+    { executor: 'codex_app_server', label: 'Codex App Server', available: false, reason: 'This project has no local folder connected. Use Import folder in the Project files panel to approve one.' },
+  ],
+  selected: 'unavailable',
+  selected_label: 'unavailable',
+  any_available: false,
+  project_selected: true,
+  needs_folder: true,
 };
 
 async function routeExecutors(page: Parameters<typeof mockMarcellusWorkspace>[0], payload: ExecutorPayload) {
@@ -102,6 +119,39 @@ test.describe('Cowork executor independence', () => {
     await page.getByLabel('Executor').selectOption('enkstein_local');
     await page.goto('/marcellus/cowork');
     await expect(page.getByLabel('Executor')).toHaveValue('enkstein_local');
+  });
+
+  test('a folderless project explains itself and offers the fix', async ({ page }) => {
+    const store = await mockMarcellusWorkspace(page);
+    seedProject(store, 'project-a', 'Project A');
+    await routeExecutors(page, NEEDS_FOLDER);
+    await page.goto('/marcellus/cowork');
+    await page.getByLabel('Cowork project').selectOption('project-a');
+
+    // The reason must name the remedy, not just report an unavailable executor.
+    await expect(page.getByText(/no local folder connected/i)).toBeVisible();
+    await expect(page.getByTestId('executor-connect-folder')).toBeVisible();
+  });
+
+  test('Auto is marked unavailable when nothing can actually run', async ({ page }) => {
+    await mockMarcellusWorkspace(page);
+    await routeExecutors(page, NEEDS_FOLDER);
+    await page.goto('/marcellus/cowork');
+
+    // Auto previously read as a healthy default while nothing could execute.
+    await expect
+      .poll(async () => (await page.getByLabel('Executor').locator('option').allTextContents()).join('|'))
+      .toMatch(/Auto — unavailable/);
+  });
+
+  test('does not offer a folder fix when the desktop runtime itself is down', async ({ page }) => {
+    await mockMarcellusWorkspace(page);
+    await routeExecutors(page, NONE_AVAILABLE);
+    await page.goto('/marcellus/cowork');
+
+    await expect(page.getByText(/desktop runtime is not connected/i)).toBeVisible();
+    // Approving a folder cannot help here, so the affordance must stay hidden.
+    await expect(page.getByTestId('executor-connect-folder')).toHaveCount(0);
   });
 });
 

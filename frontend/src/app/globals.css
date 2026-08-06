@@ -107,6 +107,13 @@ html.liquid {
   --rc-glass-a2: 0.46;  /* panels/surfaces */
   --rc-glass-a3: 0.64;  /* elevated/dialogs */
   --rc-glass-a4: 0.56;  /* inputs */
+  /* Edge and light cues, kept as tokens so the glass levels can scale them
+     together with the surface alphas. A pane reads as glass because of how it
+     catches light at its edges, not because of blur alone. */
+  --rc-glass-rim:           rgba(255, 255, 255, 0.34);
+  --rc-glass-specular:      rgba(255, 255, 255, 0.92);
+  --rc-glass-specular-low:  rgba(255, 255, 255, 0.34);
+  --rc-glass-inner:         rgba(255, 255, 255, 0.16);
   /* Translucent rather than a solid tint. Roughly twenty call sites apply
      --rc-bg-base as an inline background, so an opaque value here made the
      whole shell paint over the native window vibrancy. */
@@ -157,6 +164,12 @@ html.liquid[data-glass='subtle'] {
   --rc-glass-a2: 0.74;
   --rc-glass-a3: 0.86;
   --rc-glass-a4: 0.80;
+  /* A denser pane catches less light at its edges; an unchanged specular
+     would read as a drawn white line rather than a lit edge. */
+  --rc-glass-rim:          rgba(255, 255, 255, 0.26);
+  --rc-glass-specular:     rgba(255, 255, 255, 0.72);
+  --rc-glass-specular-low: rgba(255, 255, 255, 0.22);
+  --rc-glass-inner:        rgba(255, 255, 255, 0.10);
 }
 
 html.liquid[data-glass='clear'] {
@@ -164,6 +177,12 @@ html.liquid[data-glass='clear'] {
   --rc-glass-a2: 0.34;
   --rc-glass-a3: 0.52;
   --rc-glass-a4: 0.44;
+  /* At this transparency the edge is most of what defines the panel, so the
+     rim and specular carry more of the shape. */
+  --rc-glass-rim:          rgba(255, 255, 255, 0.44);
+  --rc-glass-specular:     rgba(255, 255, 255, 1);
+  --rc-glass-specular-low: rgba(255, 255, 255, 0.42);
+  --rc-glass-inner:        rgba(255, 255, 255, 0.22);
 }
 
 /* Accessibility and capability fallback. If the OS is set to reduce
@@ -177,6 +196,13 @@ html.liquid[data-glass='clear'] {
     --rc-glass-a2: 1;
     --rc-glass-a3: 1;
     --rc-glass-a4: 1;
+    /* An opaque surface has no lit edge to show. Leaving the specular on would
+       draw a white line along the top of every card for someone who explicitly
+       asked for less transparency. */
+    --rc-glass-rim:          rgba(71, 85, 105, 0.20);
+    --rc-glass-specular:     transparent;
+    --rc-glass-specular-low: transparent;
+    --rc-glass-inner:        transparent;
   }
   html.liquid,
   html.liquid body {
@@ -220,19 +246,95 @@ html.liquid main {
   background: transparent !important;
 }
 
-html.liquid .rounded-xl.border,
-html.liquid .rounded-2xl.border,
-html.liquid .rounded-lg.border,
-html.liquid .rounded-md.border,
-html.liquid .border.rounded-xl,
-html.liquid .border.rounded-2xl,
-html.liquid .border.rounded-lg,
-html.liquid .border.rounded-md {
+/* Panels only. `:not(button)` and the interactive roles matter: a control is
+   also a rounded, bordered box, so without the exclusion this rule repainted
+   every button, tab, and badge with the panel surface and erased the colour
+   that communicates what the control does (Approve green, Block red, the
+   selected filter). Buttons keep their own background and get the glass
+   treatment through the rule below instead. */
+html.liquid :is(.rounded-xl, .rounded-2xl, .rounded-lg, .rounded-md).border:not(button):not(a):not([role='button']):not([role='tab']):not(label):not(select),
+html.liquid .border:is(.rounded-xl, .rounded-2xl, .rounded-lg, .rounded-md):not(button):not(a):not([role='button']):not([role='tab']):not(label):not(select) {
   background: var(--rc-bg-surface) !important;
-  border-color: var(--rc-border) !important;
-  box-shadow: 0 8px 24px rgba(71,85,105,.06), inset 0 1px 0 rgba(255,255,255,.78);
-  backdrop-filter: blur(16px) saturate(115%);
-  -webkit-backdrop-filter: blur(16px) saturate(115%);
+  /* A light rim rather than a grey stroke. A slate border reads as a drawn
+     outline; a white one reads as the lit edge of a pane, which is what makes
+     the surface feel like it has thickness instead of being a flat film. */
+  border-color: var(--rc-glass-rim) !important;
+  /* Four cues, in order: an ambient shadow for lift; a tight contact shadow so
+     the card sits on the page rather than hovering above it; a bright specular
+     highlight along the top edge and a fainter one along the bottom, which is
+     how a real pane catches light on both faces; and a soft inner glow that
+     keeps the centre from looking flat. */
+  box-shadow:
+    0 10px 30px rgba(71,85,105,.10),
+    0 1px 2px rgba(71,85,105,.06),
+    inset 0 1px 0 var(--rc-glass-specular),
+    inset 0 -1px 0 var(--rc-glass-specular-low),
+    inset 0 0 22px var(--rc-glass-inner);
+  /* Higher saturation stops the backdrop washing out to grey; brightness is
+     honoured by Chromium and ignored by WebKit, which costs nothing there.
+
+     Author the standard property only. Writing the -webkit- form by hand makes
+     the build drop the unprefixed one, and Chromium supports only the standard
+     name -- so a hand-prefixed rule silently disables glass in WebView2 on
+     Windows. Autoprefixer emits both forms from this single declaration. */
+  backdrop-filter: blur(16px) saturate(150%) brightness(106%);
+}
+
+/* Controls get depth without losing their meaning. Only a button that sets no
+   background of its own falls back to the elevated surface; anything carrying
+   a state colour (Approve, Restrict, Block, an active filter) keeps it. */
+html.liquid button,
+html.liquid [role='button'],
+html.liquid [role='tab'] {
+  backdrop-filter: blur(10px) saturate(112%);
+}
+
+/* ── Overlay panels ──────────────────────────────────────────────────────────
+   A modal or drawer floats over the page, not over the desktop, so the panel
+   surface alpha that makes a card feel like glass makes an overlay unreadable:
+   the content it covers shows straight through it. Every overlay in the app is
+   an `inset-0 z-50` container whose first child is the panel, so both are
+   pinned here rather than in twelve component files.
+
+   The scrim gets its own blur so whatever sits behind the dialog is visibly
+   pushed back, and the panel itself is fully opaque. This is deliberate: an
+   overlay is a modal surface floating over content, not over the desktop, so
+   legibility outranks translucency. Even 18% transparency let headings and
+   buttons from the page read through the panel's empty regions.
+
+   Because every other surface in this theme is translucent, an opaque panel
+   needs explicit depth cues or it reads as a card embedded in the page rather
+   than a sheet above it. Overlays therefore darken the scrim harder than the
+   shared `bg-black/40` and carry a defined edge plus a deeper drop shadow. */
+html.liquid .fixed.inset-0:is(.z-40, .z-50, [class*='z-[']) {
+  background: rgba(15, 23, 42, .58) !important;
+  backdrop-filter: blur(10px) saturate(102%);
+}
+
+html.liquid .fixed.inset-0:is(.z-40, .z-50, [class*='z-[']) > * {
+  background: rgb(252, 253, 254) !important;
+  border-color: rgba(100, 116, 139, .55) !important;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, .38), inset 0 1px 0 rgba(255, 255, 255, .95);
+  backdrop-filter: blur(28px) saturate(130%);
+}
+
+/* Some drawers are a sibling of their scrim rather than a child of it, so they
+   are `fixed` and edge-pinned instead of `inset-0`. Same reasoning applies. */
+html.liquid .fixed.top-0.right-0.h-full,
+html.liquid .fixed.top-0.left-0.h-full,
+html.liquid .fixed.right-0.top-0.h-full {
+  background: rgb(252, 253, 254) !important;
+  border-color: rgba(100, 116, 139, .55) !important;
+  box-shadow: 0 32px 80px rgba(15, 23, 42, .38), inset 0 1px 0 rgba(255, 255, 255, .95);
+  backdrop-filter: blur(28px) saturate(130%);
+}
+
+/* Panels nested inside an overlay sit on an already-opaque surface, so they
+   need contrast against it rather than transparency of their own. */
+html.liquid .fixed.inset-0:is(.z-40, .z-50, [class*='z-[']) :is(.rounded-xl, .rounded-2xl, .rounded-lg, .rounded-md).border:not(button):not(a):not([role='button']):not([role='tab']):not(label):not(select) {
+  background: rgba(241, 245, 249, 0.92) !important;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 html.liquid input,
@@ -242,21 +344,18 @@ html.liquid textarea {
   color: var(--rc-text-1) !important;
   border-color: var(--rc-border-2) !important;
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 html.liquid table thead,
 html.liquid .sticky {
   background: var(--rc-panel-header) !important;
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
-html.liquid .border,
-html.liquid .border-t,
-html.liquid .border-r,
-html.liquid .border-b,
-html.liquid .border-l {
+/* Same exclusion as the panel rule: a control's border is often the only thing
+   distinguishing Approve from Block, so neutralising it on buttons destroyed
+   the affordance. Layout borders are still normalised. */
+html.liquid :is(.border, .border-t, .border-r, .border-b, .border-l):not(button):not(a):not([role='button']):not([role='tab']):not(label):not(select) {
   border-color: var(--rc-border) !important;
 }
 
@@ -271,6 +370,32 @@ html.liquid .text-gray-300 { color: var(--rc-text-1) !important; }
 html.liquid .text-gray-400,
 html.liquid .text-gray-500 { color: var(--rc-text-2) !important; }
 
+/* State colours are authored for the dark console: a 400-weight foreground on
+   a 900/20 tint. Both are illegible on a light glass panel, so the tint is
+   lightened and the foreground darkened to keep the same meaning at a
+   readable contrast. */
+html.liquid .bg-green-900\/20  { background-color: rgba(16,185,129,.14) !important; }
+html.liquid .bg-red-900\/20    { background-color: rgba(239,68,68,.13) !important; }
+html.liquid .bg-orange-900\/20 { background-color: rgba(249,115,22,.14) !important; }
+html.liquid .bg-yellow-900\/20 { background-color: rgba(202,138,4,.15) !important; }
+html.liquid .bg-indigo-900\/20 { background-color: rgba(99,102,241,.13) !important; }
+html.liquid .bg-blue-900\/20   { background-color: rgba(59,130,246,.13) !important; }
+
+html.liquid .text-green-400  { color: #047857 !important; }
+html.liquid .text-red-400    { color: #b91c1c !important; }
+html.liquid .text-orange-400 { color: #c2410c !important; }
+html.liquid .text-yellow-400 { color: #a16207 !important; }
+html.liquid .text-indigo-400 { color: #4338ca !important; }
+html.liquid .text-blue-400   { color: #1d4ed8 !important; }
+html.liquid .text-emerald-500 { color: #047857 !important; }
+html.liquid .text-slate-400  { color: var(--rc-text-3) !important; }
+
+html.liquid .border-green-800  { border-color: rgba(4,120,87,.34) !important; }
+html.liquid .border-red-800    { border-color: rgba(185,28,28,.34) !important; }
+html.liquid .border-orange-800 { border-color: rgba(194,65,12,.34) !important; }
+html.liquid .border-yellow-800 { border-color: rgba(161,98,7,.34) !important; }
+html.liquid .border-indigo-800 { border-color: rgba(67,56,202,.34) !important; }
+
 html.liquid .enkstein-app-icon {
   padding: 10px;
   border: 1px solid rgba(255,255,255,.78);
@@ -278,7 +403,6 @@ html.liquid .enkstein-app-icon {
   background: rgba(255,255,255,.48);
   box-shadow: 0 12px 28px rgba(100,116,139,.12), inset 0 1px 0 rgba(255,255,255,.95);
   backdrop-filter: blur(18px) saturate(135%);
-  -webkit-backdrop-filter: blur(18px) saturate(135%);
 }
 
 html.liquid .rc-glass-surface {
@@ -286,7 +410,6 @@ html.liquid .rc-glass-surface {
   border-color: rgba(255,255,255,.72);
   box-shadow: 0 8px 24px rgba(100,116,139,.06), inset 0 1px 0 rgba(255,255,255,.86);
   backdrop-filter: blur(14px) saturate(125%);
-  -webkit-backdrop-filter: blur(14px) saturate(125%);
 }
 
 body {

@@ -61,6 +61,25 @@ EXECUTOR_LABELS = {
     AUTO: "Auto",
 }
 
+#: Why an executor is not usable right now. These are distinct situations with
+#: distinct remedies, and collapsing them into one string is what made the
+#: picker read as broken: an operator with no project open was told their
+#: project had no folder, and an operator on a folderless project was never
+#: told that connecting a folder is the fix.
+NO_PROJECT_REASON = (
+    "Select a Cowork project first. Executors run inside an approved project folder."
+)
+NO_BINDING_REASON = (
+    "This project has no local folder connected. Use Import folder in the "
+    "Project files panel to approve one."
+)
+
+
+def binding_reason(*, project_selected: bool) -> str:
+    """Reason text for a missing folder binding, specific to the situation."""
+
+    return NO_BINDING_REASON if project_selected else NO_PROJECT_REASON
+
 
 @dataclass
 class ExecutorCapabilities:
@@ -182,7 +201,9 @@ class Executor(Protocol):
 
     def capabilities(self) -> ExecutorCapabilities: ...
 
-    async def availability(self, *, token: str | None) -> ExecutorAvailability: ...
+    async def availability(
+        self, *, token: str | None, project_selected: bool = True
+    ) -> ExecutorAvailability: ...
 
     async def execute_command(
         self, *, command: str, token: str | None, scope_digest: str, timeout_seconds: int
@@ -211,14 +232,16 @@ class LocalExecutor:
             allowed_programs=ALLOWED_PROGRAMS,
         )
 
-    async def availability(self, *, token: str | None) -> ExecutorAvailability:
+    async def availability(
+        self, *, token: str | None, project_selected: bool = True
+    ) -> ExecutorAvailability:
         if not bridge_configured():
             return ExecutorAvailability(
                 LOCAL, False, "The Enkstein desktop runtime is not connected on this host."
             )
         if not token:
             return ExecutorAvailability(
-                LOCAL, False, "No approved project folder is connected for this project."
+                LOCAL, False, binding_reason(project_selected=project_selected)
             )
         return ExecutorAvailability(LOCAL, True, "")
 
@@ -339,14 +362,16 @@ class CodexExecutor:
             allowed_programs=ALLOWED_PROGRAMS,
         )
 
-    async def availability(self, *, token: str | None) -> ExecutorAvailability:
+    async def availability(
+        self, *, token: str | None, project_selected: bool = True
+    ) -> ExecutorAvailability:
         if not bridge_configured():
             return ExecutorAvailability(
                 CODEX, False, "The Codex App Server is not connected on this host."
             )
         if not token:
             return ExecutorAvailability(
-                CODEX, False, "No approved project folder is connected for this project."
+                CODEX, False, binding_reason(project_selected=project_selected)
             )
         return ExecutorAvailability(CODEX, True, "")
 
@@ -430,7 +455,7 @@ def get_executor(name: str):
 
 
 async def resolve_executor(
-    preference: str, *, token: str | None
+    preference: str, *, token: str | None, project_selected: bool = True
 ) -> tuple[Any | None, ExecutorAvailability]:
     """Pick the executor for a job.
 
@@ -443,17 +468,29 @@ async def resolve_executor(
     requested = (preference or AUTO).strip() or AUTO
     if requested in {LOCAL, CODEX}:
         executor = REGISTRY[requested]
-        availability = await executor.availability(token=token)
+        availability = await executor.availability(
+            token=token, project_selected=project_selected
+        )
         return (executor if availability.available else None), availability
     if requested == NONE:
         return None, ExecutorAvailability(NONE, False, "Execution was disabled for this job.")
 
-    local_availability = await _LOCAL.availability(token=token)
+    local_availability = await _LOCAL.availability(
+        token=token, project_selected=project_selected
+    )
     if local_availability.available:
         return _LOCAL, local_availability
-    codex_availability = await _CODEX.availability(token=token)
+    codex_availability = await _CODEX.availability(
+        token=token, project_selected=project_selected
+    )
     if codex_availability.available:
         return _CODEX, codex_availability
+    # When nothing is connected because no folder is approved, say the thing the
+    # operator can act on rather than the generic "no executor" line.
+    if not token:
+        return None, ExecutorAvailability(
+            NONE, False, binding_reason(project_selected=project_selected)
+        )
     return None, ExecutorAvailability(
         NONE,
         False,
@@ -461,8 +498,14 @@ async def resolve_executor(
     )
 
 
-async def availability_report(token: str | None) -> list[dict[str, Any]]:
+async def availability_report(
+    token: str | None, *, project_selected: bool = True
+) -> list[dict[str, Any]]:
     return [
-        (await _LOCAL.availability(token=token)).as_payload(),
-        (await _CODEX.availability(token=token)).as_payload(),
+        (
+            await _LOCAL.availability(token=token, project_selected=project_selected)
+        ).as_payload(),
+        (
+            await _CODEX.availability(token=token, project_selected=project_selected)
+        ).as_payload(),
     ]

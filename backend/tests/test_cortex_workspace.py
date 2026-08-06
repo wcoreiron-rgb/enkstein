@@ -946,6 +946,48 @@ def test_change_extraction_accepts_bare_labeled_browser_manifest():
     assert "Prepared 2 governed file changes" in cleaned
 
 
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Answer text.\n\nMARCELLUS_CHANGES\n\n```\n[]\n```\n",
+        "Answer text.\n\n### MARCELLUS_CHANGES\n\n```json\n[]\n```\n",
+        "Answer text.\n\nmarcellus_changes:\n```jsonc\n[]\n```\n",
+    ],
+)
+def test_an_empty_labelled_change_block_never_leaks_into_the_reply(answer):
+    """A provider that answers the protocol as a label plus an ordinary code
+    fence used to have the whole block treated as prose, so the user saw a raw
+    MARCELLUS_CHANGES heading and a bare [] under the answer."""
+    cleaned, changes = workspace._extract_change_requests(answer)
+    assert changes == []
+    assert cleaned == "Answer text."
+
+
+def test_a_labelled_fenced_change_block_still_yields_real_changes():
+    """Recognizing the fenced form must extract its files, not just hide it."""
+    answer = (
+        "Restyled the interface.\n\n"
+        "MARCELLUS_CHANGES\n\n"
+        "```json\n"
+        '[{"operation":"create","path":"styles/glass.css","content":"body { backdrop-filter: blur(12px); }\\n"}]\n'
+        "```\n"
+    )
+    cleaned, changes = workspace._extract_change_requests(answer)
+    assert [item["path"] for item in changes] == ["styles/glass.css"]
+    assert "backdrop-filter" in changes[0]["content"]
+    assert "MARCELLUS_CHANGES" not in cleaned
+    assert "```" not in cleaned
+
+
+def test_prose_mentioning_the_protocol_is_left_alone():
+    """The label only counts as a protocol block when a JSON array follows it,
+    so ordinary prose that names it is never silently truncated."""
+    prose = "I would return marcellus_changes here, but there is nothing to write yet."
+    cleaned, changes = workspace._extract_change_requests(prose)
+    assert changes == []
+    assert cleaned == prose
+
+
 def test_change_extraction_recovers_a_full_project_scaffold_beyond_the_old_cap():
     """A real multi-directory scaffold (more than the previous 10-item cap)
     must survive intact -- the '.keep' scaffold case that was silently
@@ -2950,3 +2992,98 @@ def test_unified_diff_is_bounded():
     lines = diff.splitlines()
     assert len(lines) == workspace._MAX_DIFF_LINES + 1
     assert "diff truncated" in lines[-1]
+
+
+def _consensus_gateway_response() -> dict:
+    """Three Brains answer; the gateway picks one and discards the other text."""
+    payload = _gateway_response("Claude's answer")
+    payload["source"] = "claude_subscription"
+    payload["votes"] = [
+        {
+            "source": "profile:ollama_local_fallback",
+            "provider": "ollama",
+            "model": "regent-aegis:bc",
+            "counted": True,
+            "latency_ms": 20491,
+            "response": "The local model's answer",
+        },
+        {
+            "source": "chatgpt_browser",
+            "provider": "chatgpt",
+            "model": "browser-selected",
+            "counted": True,
+            "latency_ms": 35059,
+            "response": "ChatGPT's answer",
+        },
+        {
+            "source": "claude_subscription",
+            "provider": "anthropic_claude_subscription",
+            "model": "subscription-default",
+            "counted": True,
+            "latency_ms": 22677,
+            "response": "Claude's answer",
+        },
+        {
+            "source": "gemini_browser",
+            "counted": False,
+            "reason": "Not connected.",
+        },
+    ]
+    return payload
+
+
+@pytest.mark.asyncio
+async def test_a_swarm_turn_keeps_every_brain_answer_for_comparison(client, monkeypatch):
+    """Multi-Brain turns must keep each counted Brain's own answer, flag which
+    one became the reply, and drop Brains that never answered."""
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    async def consensus_gateway(db, payload, **_kwargs):
+        return _consensus_gateway_response()
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", consensus_gateway)
+    response = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Ask the swarm", "source": "consensus"},
+    )
+    assert response.status_code == 200
+    answers = response.json()["assistant_message"]["brain_answers"]
+    assert [answer["source"] for answer in answers] == [
+        "profile:ollama_local_fallback",
+        "chatgpt_browser",
+        "claude_subscription",
+    ]
+    assert [answer["primary"] for answer in answers] == [False, False, True]
+    assert answers[1]["content"] == "ChatGPT's answer"
+
+    detail = await client.get(f"{BASE}/conversations/{conversation['id']}?tenant_id=tenant-a")
+    reloaded = [item for item in detail.json()["messages"] if item["role"] == "assistant"][-1]
+    assert [answer["content"] for answer in reloaded["brain_answers"]] == [
+        "The local model's answer",
+        "ChatGPT's answer",
+        "Claude's answer",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_single_brain_turn_has_no_comparison_cards(client, monkeypatch):
+    """One Brain answering is not a comparison, so no cards are stored."""
+    _use_identity(_identity())
+    conversation = await _create_conversation(client, mode="chat")
+
+    async def single_gateway(db, payload, **_kwargs):
+        result = _gateway_response("Only answer")
+        result["votes"] = [
+            {"source": "codex_subscription", "counted": True, "response": "Only answer"},
+            {"source": "gemini_browser", "counted": False, "reason": "Not connected."},
+        ]
+        return result
+
+    monkeypatch.setattr(workspace, "execute_cortex_gateway", single_gateway)
+    response = await client.post(
+        f"{BASE}/conversations/{conversation['id']}/turns",
+        json={"tenant_id": "tenant-a", "content": "Ask one Brain"},
+    )
+    assert response.status_code == 200
+    assert response.json()["assistant_message"]["brain_answers"] == []

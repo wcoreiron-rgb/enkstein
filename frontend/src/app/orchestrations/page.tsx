@@ -11,6 +11,7 @@ import {
   triggerWorkflow, getWorkflowRuns,
 } from '@/lib/api';
 import ClientDate from '@/components/ClientDate';
+import OverlayPortal from '@/components/OverlayPortal';
 
 // ── Step type config ──────────────────────────────────────────────────────────
 
@@ -243,6 +244,7 @@ function BuilderModal({ workflow, onSave, onClose }: {
   };
 
   return (
+    <OverlayPortal>
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.7)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -362,6 +364,7 @@ function BuilderModal({ workflow, onSave, onClose }: {
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
 

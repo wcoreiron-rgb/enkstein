@@ -45,14 +45,13 @@ Use this guide when moving Enkstein from local Docker development into a product
 For Terraform-backed releases, run Terraform Governance first:
 
 ```http
-POST /api/v1/terraclaw/build
 POST /api/v1/terraclaw/review
 POST /api/v1/terraclaw/generate
 POST /api/v1/terraclaw/plan
 ```
 
-Use `build` when an operator wants a secure Terraform module from plain
-English. Use `generate` for the Terraform Governance agent/MCP path, which returns
+Use `generate` when an operator wants a governed Terraform module from plain
+English. The Terraform Governance agent/MCP path returns
 Terraform module output, artifacts, applied controls, Trust Fabric metadata, and
 security-review evidence. Use `review` for existing `.tf` content. Use `plan`
 before apply to detect risky creates, deletes, replacements, public network

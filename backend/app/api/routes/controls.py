@@ -31,6 +31,7 @@ from app.services.control_profiles import coverage_matrix, profile_for, repillar
 from app.services.control_evaluation import evaluate_controls
 from app.services import control_collectors
 from app.services import control_remediation
+from app.services import connector_control_scope
 from app.services.control_ai_summary import SUMMARY_SOURCES, summarize_assessment
 from app.core.swarm.orchestrator import create_swarm_job, run_swarm_job
 from app.core.swarm.schemas import SwarmJobCreate
@@ -330,6 +331,26 @@ async def collector_readiness(
 async def attach_control_evaluators(db: AsyncSession = Depends(get_db)):
     """Bind collectors and executable remediation onto baseline controls."""
     return await control_collectors.attach_evaluators(db)
+
+
+@router.get("/connector-scope")
+async def connector_scope_catalog(
+    db: AsyncSession = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    """Per-connector control counts across every collector-bound connector."""
+    return await connector_control_scope.catalog_scope(db, tenant_id=caller_tenant(user))
+
+
+@router.get("/connector-scope/{connector_type}")
+async def connector_scope_detail(
+    connector_type: str,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Controls one connector can prove, with this tenant's live verdicts."""
+    return await connector_control_scope.scope_for_connector(
+        db, connector_type, tenant_id=caller_tenant(user)
+    )
 
 
 @router.get("/evaluation")

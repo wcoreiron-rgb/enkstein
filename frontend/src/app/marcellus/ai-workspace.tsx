@@ -44,6 +44,7 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Square,
   Terminal,
   Trash2,
@@ -57,6 +58,7 @@ import {
   ContextManifest,
   CortexFileChange,
   CortexArtifact,
+  CortexBrainAnswer,
   CortexCodexApproval,
   CortexChangeProposal,
   CortexConversation,
@@ -117,6 +119,14 @@ import {
 import { consumeForceNewProjectIntent } from '@/lib/native-folder-intent';
 import { allFolderPaths, buildFileTree, type FileTreeNode } from '@/lib/file-tree';
 import { useCopyToClipboard } from '@/lib/use-copy-to-clipboard';
+import OverlayPortal from '@/components/OverlayPortal';
+import { ExecutionOrb, type ExecutionActivity } from '@/components/ExecutionOrb';
+import { useBackgroundTurns } from '@/components/BackgroundTurns';
+import {
+  persistActivityIndicator,
+  readStoredActivityIndicator,
+  type ActivityIndicator,
+} from '@/lib/activity-indicator';
 import {
   persistLastActiveConversation,
   readLastActiveConversation,
@@ -386,6 +396,17 @@ export default function AIWorkspace({
   const [streamText, setStreamText] = useState('');
   const [nativeResult, setNativeResult] = useState('');
   const [activity, setActivity] = useState<ExecutionStep[]>([]);
+  // Presentation-only; read after mount so the server render does not depend
+  // on localStorage and hydrate to a different indicator.
+  const [activityIndicator, setActivityIndicator] = useState<ActivityIndicator>('orb');
+  useEffect(() => setActivityIndicator(readStoredActivityIndicator()), []);
+  const toggleActivityIndicator = () => {
+    setActivityIndicator((current) => {
+      const next: ActivityIndicator = current === 'orb' ? 'spinner' : 'orb';
+      persistActivityIndicator(next);
+      return next;
+    });
+  };
   const [codexApprovals, setCodexApprovals] = useState<CortexCodexApproval[]>([]);
   const [reviewingProposal, setReviewingProposal] = useState<string | null>(null);
   const [researchOpen, setResearchOpen] = useState(false);
@@ -417,6 +438,24 @@ export default function AIWorkspace({
   const scrollRef = useRef<HTMLDivElement>(null);
   const turnAbort = useRef<AbortController | null>(null);
   const nativeCodexConversation = useRef<string | null>(null);
+  // Owns in-flight turns above the router, so navigating away from this page
+  // no longer abandons the request. Null only on a surface with no provider.
+  const background = useBackgroundTurns();
+  // The conversation actually on screen right now. Read from a ref because a
+  // settling turn's callbacks fire from inside the stream, where render state
+  // would be the value captured when the turn started.
+  const viewingConversation = useRef<string | null>(null);
+  // Opening a conversation is what marks its finished turn as seen, so a reply
+  // that landed while the operator was elsewhere keeps its marker until then.
+  useEffect(() => {
+    if (active?.id) background?.acknowledge(active.id);
+  }, [active?.id, background]);
+  useEffect(() => {
+    viewingConversation.current = active?.id ?? null;
+    // Unmounting means this workspace is no longer showing anything, so a turn
+    // that settles afterwards must not try to paint into it.
+    return () => { viewingConversation.current = null; };
+  }, [active?.id]);
 
   useEffect(() => {
     folderInput.current?.setAttribute('webkitdirectory', '');
@@ -524,15 +563,20 @@ export default function AIWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    if (mode !== 'cowork' || !projectId) {
+    // Keyed on the *effectively* active project, not the sidebar's picker, for
+    // the same reason the file panel is: an open conversation owns its own
+    // project. Using `projectId` here reported the folder status of whatever
+    // the sidebar happened to have selected, which is what made "Local folder"
+    // and the executor state disagree with the project actually in view.
+    if (mode !== 'cowork' || !activeProjectId) {
       setNativeWorkspace(null);
       return;
     }
-    void getCortexNativeWorkspace(projectId)
+    void getCortexNativeWorkspace(activeProjectId)
       .then((result) => { if (!cancelled) setNativeWorkspace(result); })
       .catch(() => { if (!cancelled) setNativeWorkspace(null); });
     return () => { cancelled = true; };
-  }, [mode, projectId]);
+  }, [mode, activeProjectId]);
 
   useEffect(() => {
     const selected = (event: Event) => {
@@ -770,7 +814,11 @@ export default function AIWorkspace({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
 
-  const createConversation = async () => {
+  // `navigate` defaults to true for the ordinary "start a new conversation"
+  // action (nothing else is running, so pushing the URL immediately is
+  // safe). `submit()` below passes navigate:false and does the navigation
+  // itself only after the turn finishes -- see that call site for why.
+  const createConversation = async (opts: { navigate?: boolean } = {}) => {
     const conversation = await createCortexConversation({
       // A project is optional in both modes. Cowork file writes are
       // project-scoped and the backend already skips them when a conversation
@@ -788,7 +836,7 @@ export default function AIWorkspace({
     setPreview(null);
     setCreatingFile(false);
     setNotFound(null);
-    navigateToConversation(conversation);
+    if (opts.navigate !== false) navigateToConversation(conversation);
     return conversation;
   };
 
@@ -944,6 +992,15 @@ export default function AIWorkspace({
   // (queued -> leased -> submitted -> streaming) so the timeline doesn't grow one row per
   // poll tick, and for finalizing a step to "done"/"skipped".
   const stepCounter = useRef(0);
+  // The conversation whose turn this component currently owns. Kept in a ref
+  // because progress callbacks fire from inside the stream, where reading it
+  // from render state would see a stale value.
+  const runningConversation = useRef<string | null>(null);
+  const reportBackgroundStage = (step: ExecutionStep) => {
+    const conversationId = runningConversation.current;
+    if (!conversationId || !background) return;
+    background.progress(conversationId, stepActivity(step), step.label);
+  };
   const addStep = (kind: ExecutionStepKind, label: string, detail?: string, status: ExecutionStepStatus = 'active') => {
     stepCounter.current += 1;
     const id = `step-${stepCounter.current}`;
@@ -951,6 +1008,9 @@ export default function AIWorkspace({
       ...current.map((step) => (step.kind === kind && step.status === 'active' ? { ...step, status: 'done' as const } : step)),
       { id, kind, label, detail, status },
     ]);
+    // The tray reports the same stage this timeline row does, derived from the
+    // same step, so the two can never disagree about what is happening.
+    reportBackgroundStage({ id, kind, label, detail, status });
     return id;
   };
   const updateLastStep = (kind: ExecutionStepKind, matchLabel: (label: string) => boolean, label: string, detail?: string, status: ExecutionStepStatus = 'active') => {
@@ -962,6 +1022,7 @@ export default function AIWorkspace({
       next[realIndex] = { ...next[realIndex], label, detail, status };
       return next;
     });
+    reportBackgroundStage({ id: 'step-live', kind, label, detail, status });
   };
 
   const submit = async (event?: FormEvent, retryContent?: string) => {
@@ -983,11 +1044,40 @@ export default function AIWorkspace({
     setActivity([]);
     setCodexApprovals([]);
     let keepTransientOutput = false;
+    // Hoisted above the try/catch (rather than read from the `active` state
+    // closure in catch, which won't have observed this render's setActive
+    // call) so a failed or stopped first turn can still navigate to the
+    // conversation row that was already created and already shown in the
+    // sidebar.
+    let startedConversation: CortexConversation | null = null;
     try {
-      const conversation = active || await createConversation();
+      // A brand-new conversation's first turn must not push the URL until the
+      // turn finishes. workspaceRoutePath('chat', {conversationId}) resolves
+      // to a different Next.js page file than plain '/marcellus/chat', so an
+      // immediate router.push() here unmounts this whole component mid-turn
+      // -- the request still completes and the reply is saved server-side,
+      // but every setMessages/setActive callback below fires against a
+      // component that's already gone, so the reply silently never renders.
+      // Deferring navigation to just before the finally block keeps this
+      // instance mounted for the entire stream; startedNewConversation
+      // remembers to navigate once, after the turn (or its failure) settles.
+      const startedNewConversation = !active;
+      const conversation = active || await createConversation({ navigate: false });
       if (!conversation) return;
+      startedConversation = conversation;
       const controller = new AbortController();
       turnAbort.current = controller;
+      // Hand the request to the provider above the router. From here the turn
+      // is no longer this component's to lose: navigating away leaves it
+      // running, and the tray reports its stage until it settles.
+      background?.start({
+        conversationId: conversation.id,
+        mode,
+        projectId: mode === 'cowork' ? (activeProjectId || projectId || null) : null,
+        title: conversation.title,
+        controller,
+      });
+      runningConversation.current = conversation.id;
       // A retry replays a preserved message, so it must not disturb whatever the
       // operator may have since typed into the composer.
       if (retryContent === undefined) setDraft('');
@@ -1047,6 +1137,9 @@ export default function AIWorkspace({
           await cancelCortexCodex(conversation.id).catch(() => undefined);
           throw new Error('The Codex App Server turn timed out after 120 seconds and was cancelled.');
         }
+        // Navigate now that the native Codex turn has settled: this instance
+        // stayed mounted for the whole run, so it's safe to update the URL.
+        if (startedNewConversation) navigateToConversation(conversation);
         return;
       }
       // "custom_swarm" is a UI-only sentinel: the backend's consensus
@@ -1099,16 +1192,29 @@ export default function AIWorkspace({
         if (streamEvent === 'changes_proposed') addStep('pipeline', `${data.count} file change proposal${data.count === 1 ? '' : 's'} ready for review`, undefined, 'done');
         if (streamEvent === 'changes_applied') addStep('pipeline', `${data.count} file change${data.count === 1 ? '' : 's'} applied to the local folder`, undefined, 'done');
       }, controller.signal);
-      setActive(turn.conversation);
-      setMessages((current) => [
-        ...current,
-        turn.user_message,
-        ...(turn.assistant_message ? [turn.assistant_message] : []),
-      ]);
+      // Only paint the reply into the transcript when the operator is still
+      // looking at this conversation. Once they have moved on, forcing it back
+      // into view would drag them out of whatever they switched to; the tray
+      // reports the finished turn instead and the reply is loaded when they
+      // choose to return.
+      const stillViewing = viewingConversation.current === turn.conversation.id;
+      if (stillViewing) {
+        setActive(turn.conversation);
+        setMessages((current) => [
+          ...current,
+          turn.user_message,
+          ...(turn.assistant_message ? [turn.assistant_message] : []),
+        ]);
+      }
       setConversations((current) => [
         turn.conversation,
         ...current.filter((item) => item.id !== turn.conversation.id),
       ]);
+      // Navigate now that the turn has settled and its reply is in state:
+      // this instance stayed mounted for the whole stream, so the URL push
+      // can no longer race the callbacks above.
+      if (startedNewConversation && stillViewing) navigateToConversation(turn.conversation);
+      background?.settle(turn.conversation.id, 'completed');
       await loadProposals();
       // Auto-applied changes create/update artifacts directly, so refresh the
       // file tree to surface them without waiting for a manual reload.
@@ -1116,23 +1222,37 @@ export default function AIWorkspace({
     } catch (requestError) {
       if (requestError instanceof Error && requestError.name === 'AbortError') {
         addStep('pipeline', 'Turn stopped by operator', undefined, 'done');
+        // A stop already removed the tray entry, so there is nothing to settle.
       } else {
         const detail = requestError instanceof Error ? requestError.message : 'The governed request failed.';
         // The governed backend rolls the turn back on failed/timeout/cancelled,
         // so nothing was persisted — the preserved content can be replayed as a
         // fresh turn without duplicating a submission.
         setLastFailure({ content, kind: classifyTurnFailure(detail), detail });
+        if (startedConversation) background?.settle(startedConversation.id, 'failed', detail);
       }
+      // The conversation row itself was created and already appears in the
+      // sidebar (setConversations ran inside createConversation above) even
+      // though its turn failed or was stopped, so the URL should still catch
+      // up to it. startedConversation is null only if createConversation
+      // itself threw, in which case there is nothing to navigate to.
+      if (startedConversation) navigateToConversation(startedConversation);
     } finally {
       turnAbort.current = null;
       nativeCodexConversation.current = null;
+      runningConversation.current = null;
       setBusy(false);
       setStreamText('');
     }
   };
 
   const stopTurn = () => {
-    turnAbort.current?.abort();
+    // Cancel through the provider so the tray entry and the abort handle it
+    // owns are cleared together; falling back to the local handle keeps the
+    // Stop button working on a surface with no provider.
+    const conversationForStop = runningConversation.current;
+    if (conversationForStop && background) background.cancel(conversationForStop);
+    else turnAbort.current?.abort();
     const conversationId = nativeCodexConversation.current;
     if (conversationId) void cancelCortexCodex(conversationId).catch(() => undefined);
   };
@@ -1508,11 +1628,21 @@ export default function AIWorkspace({
             )}
             {mode === 'cowork' && (
               <select value={executorPreference} onChange={(event) => selectExecutorPreference(event.target.value as ExecutorPreference)} aria-label="Executor"
-                title="Which runtime executes commands, tests, and verification in the approved project folder. Independent of the answering Brain."
+                title={executorStatus && !executorStatus.any_available
+                  ? executorStatus.executors.find((item) => item.reason)?.reason
+                    || 'No governed executor is connected.'
+                  : 'Which runtime executes commands, tests, and verification in the approved project folder. Independent of the answering Brain.'}
                 className="h-8 rounded-md border px-2 text-xs outline-none" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)', color: 'var(--rc-text-1)' }}>
                 {EXECUTOR_CHOICES.map((choice) => {
                   const availability = executorStatus?.executors.find((item) => item.executor === choice.value);
-                  const unavailable = choice.value !== 'auto' && availability ? !availability.available : false;
+                  // Auto is only meaningful when something is actually
+                  // connected, so mark it unavailable too rather than letting
+                  // it read as a working default while nothing can run.
+                  const unavailable = choice.value === 'auto'
+                    ? Boolean(executorStatus) && !executorStatus?.any_available
+                    : availability
+                      ? !availability.available
+                      : false;
                   return (
                     <option key={choice.value} value={choice.value}>
                       {choice.label}{unavailable ? ' — unavailable' : ''}
@@ -1612,6 +1742,9 @@ export default function AIWorkspace({
                     {message.role === 'assistant'
                       ? <SafeMarkdown content={message.content} />
                       : <p className="whitespace-pre-wrap text-sm leading-7" style={{ color: 'var(--rc-text-1)' }}>{message.content}</p>}
+                    {message.role === 'assistant' && Array.isArray(message.brain_answers) && (
+                      <BrainAnswerCards answers={message.brain_answers} />
+                    )}
                     <div className={`mt-3 flex items-center gap-3 ${message.role === 'assistant' ? 'justify-between' : 'justify-end'}`}>
                       {message.role === 'assistant' && <GovernanceRecord message={message} />}
                       <div className="flex items-center gap-1">
@@ -1629,15 +1762,49 @@ export default function AIWorkspace({
               ))}
               {busy && (
                 <article className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}><Loader2 className="h-4 w-4 animate-spin" />Cortex is working</div>
+                  {/* The orb and the caption both come from the newest running
+                      step, so a browser Brain that has submitted and is waiting
+                      reads as waiting rather than as generic activity. Falls
+                      back to the plain caption before the first step arrives. */}
+                  <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--rc-text-3)' }}>
+                    {(() => {
+                      const running = [...activity].reverse().find((step) => step.status === 'active');
+                      if (activityIndicator === 'spinner') {
+                        return (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            {running ? running.label : 'Cortex is working'}
+                          </>
+                        );
+                      }
+                      return running ? (
+                        <>
+                          <ExecutionOrb activity={stepActivity(running)} size={20} />
+                          {running.label}
+                        </>
+                      ) : (
+                        <>
+                          <ExecutionOrb activity="planning" size={20} />
+                          Cortex is working
+                        </>
+                      );
+                    })()}
+                  </div>
                   {mode === 'cowork' && (
                     <RuntimeAssignment
                       brainLabel={brainLabel}
                       executorStatus={executorStatus}
                       preference={executorPreference}
+                      onConnectFolder={openFolderPicker}
                     />
                   )}
-                  {activity.length > 0 && <ExecutionTimeline steps={activity} />}
+                  {activity.length > 0 && (
+                    <ExecutionTimeline
+                      steps={activity}
+                      indicator={activityIndicator}
+                      onToggleIndicator={toggleActivityIndicator}
+                    />
+                  )}
                   {streamText && <SafeMarkdown content={streamText} />}
                   {codexApprovals.map((approval) => (
                     <div key={approval.approval_id} className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
@@ -1684,6 +1851,35 @@ export default function AIWorkspace({
 
         <form onSubmit={submit} className="px-3 py-3 md:px-6">
           {error && <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-red-500"><AlertTriangle className="h-4 w-4 shrink-0" />{error}</div>}
+          {/* Executor state belongs here, before a turn is sent -- it used to
+              appear only while a turn was already running, so an operator whose
+              project had no approved folder saw every executor as "unavailable"
+              with no explanation and no way to act on it. Agent tools are what
+              need an executor, so this is scoped to that. */}
+          {mode === 'cowork' && agentMode && executorStatus && !executorStatus.any_available && (
+            <div
+              data-testid="executor-unavailable-notice"
+              className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2 text-[11px]"
+              style={{ color: 'var(--rc-text-3)' }}
+            >
+              <Terminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>
+                {executorStatus.executors.find((item) => item.reason)?.reason
+                  || 'No governed executor is connected.'}
+              </span>
+              {executorStatus.needs_folder && (
+                <button
+                  type="button"
+                  onClick={openFolderPicker}
+                  data-testid="executor-connect-folder"
+                  className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium"
+                  style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+                >
+                  <FolderPlus className="h-3 w-3" aria-hidden="true" />Connect folder
+                </button>
+              )}
+            </div>
+          )}
           {selectedArtifacts.size > 0 && (
             <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-1.5 text-xs" style={{ color: selectedArtifactBytes > 100_000 ? '#dc2626' : 'var(--rc-text-3)' }}>
               <Paperclip className="h-3.5 w-3.5" /> {selectedArtifacts.size} complete file{selectedArtifacts.size === 1 ? '' : 's'} ·{' '}
@@ -1888,6 +2084,7 @@ export default function AIWorkspace({
         </aside>
       )}
       {researchOpen && (
+        <OverlayPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation"
           onMouseDown={(event) => { if (event.target === event.currentTarget && !researching) setResearchOpen(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="research-dialog-title" className="w-full max-w-xl rounded-lg border p-5 shadow-2xl"
@@ -1927,8 +2124,10 @@ export default function AIWorkspace({
             </div>
           </section>
         </div>
+        </OverlayPortal>
       )}
       {dialog && (
+        <OverlayPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !dialogBusy) setDialog(null); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="workspace-dialog-title" className="w-full max-w-md rounded-lg border p-5 shadow-2xl"
             style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
@@ -1973,8 +2172,10 @@ export default function AIWorkspace({
             </div>
           </section>
         </div>
+        </OverlayPortal>
       )}
       {swarmPickerOpen && (
+        <OverlayPortal>
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" role="presentation"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setSwarmPickerOpen(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="swarm-picker-title" className="w-full max-w-lg rounded-lg border p-5 shadow-2xl"
@@ -2037,6 +2238,7 @@ export default function AIWorkspace({
             </div>
           </section>
         </div>
+        </OverlayPortal>
       )}
     </div>
   );
@@ -2058,6 +2260,29 @@ const EXECUTION_STEP_ICON: Record<ExecutionStepKind, typeof BrainCircuit> = {
   file: File,
 };
 
+/** Resolves the running stage an orb should depict for a step.
+ *
+ * The stage comes from what the runtime actually reported, so a browser Brain
+ * that is genuinely idle between "submitted" and the first token shows the
+ * waiting state rather than a busy one. Anything unrecognised falls back to
+ * the step's layer, which is always true even when the label is not
+ * understood. */
+function stepActivity(step: ExecutionStep): ExecutionActivity {
+  const label = step.label.toLowerCase();
+  if (step.kind === 'file') return 'writing-files';
+  if (step.kind === 'brain') {
+    if (label.includes('streaming')) return 'streaming';
+    if (label.includes('queued') || label.includes('leased') || label.includes('submitted')) {
+      return 'waiting-on-brain';
+    }
+    return 'waiting-on-brain';
+  }
+  if (label.includes('context')) return 'gathering-context';
+  if (label.includes('verif') || label.includes('test') || label.includes('command')) return 'verifying';
+  if (label.includes('applied') || label.includes('proposal')) return 'writing-files';
+  return 'planning';
+}
+
 /** Brain and Executor reported as two independent fields.
  *
  * The Brain plans and authors; the Executor runs commands, tests, and
@@ -2070,10 +2295,12 @@ function RuntimeAssignment({
   brainLabel,
   executorStatus,
   preference,
+  onConnectFolder,
 }: {
   brainLabel: string;
   executorStatus: CoworkExecutorStatus | null;
   preference: ExecutorPreference;
+  onConnectFolder?: () => void;
 }) {
   const explicit = preference !== 'auto';
   const chosen = executorStatus?.executors.find((item) => item.executor === preference);
@@ -2104,7 +2331,24 @@ function RuntimeAssignment({
         <Terminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         Executor: <span style={{ color: 'var(--rc-text-2)' }}>{executorLabel}</span>
       </span>
-      {unavailableReason && <span className="basis-full">{unavailableReason}</span>}
+      {unavailableReason && (
+        <span className="flex basis-full flex-wrap items-center gap-2">
+          <span>{unavailableReason}</span>
+          {/* The one unavailable state the operator can resolve from here, so
+              offer the fix rather than only naming the problem. */}
+          {executorStatus?.needs_folder && onConnectFolder && (
+            <button
+              type="button"
+              onClick={onConnectFolder}
+              data-testid="runtime-connect-folder"
+              className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium"
+              style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)', background: 'var(--rc-bg-surface)' }}
+            >
+              <FolderPlus className="h-3 w-3" aria-hidden="true" />Connect folder
+            </button>
+          )}
+        </span>
+      )}
     </div>
   );
 }
@@ -2121,22 +2365,42 @@ function RuntimeAssignment({
  * state to report. "file" rows are per-file write/delete outcomes from
  * the Cowork auto-apply writer. Collapsed to the most recent step by
  * default; expandable to the full timeline. */
-function ExecutionTimeline({ steps }: { steps: ExecutionStep[] }) {
+function ExecutionTimeline({
+  steps,
+  indicator,
+  onToggleIndicator,
+}: {
+  steps: ExecutionStep[];
+  indicator: ActivityIndicator;
+  onToggleIndicator: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const latest = steps[steps.length - 1];
   const visible = expanded ? steps : latest ? [latest] : [];
   return (
     <div className="rounded-lg border" style={{ borderColor: 'var(--rc-border)' }}>
-      <button
-        type="button"
-        onClick={() => setExpanded((current) => !current)}
-        className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px]"
-        style={{ color: 'var(--rc-text-3)' }}
-        aria-expanded={expanded}
-      >
-        <span className="font-medium">Execution steps ({steps.length})</span>
-        {expanded ? <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}
-      </button>
+      <div className="flex w-full items-center gap-1 px-2.5 py-1.5 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="flex flex-1 items-center justify-between gap-2 text-left"
+          style={{ color: 'inherit' }}
+          aria-expanded={expanded}
+        >
+          <span className="font-medium">Execution steps ({steps.length})</span>
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleIndicator}
+          className="shrink-0 rounded p-1 transition-colors hover:bg-[var(--rc-panel-hover)]"
+          style={{ color: 'inherit' }}
+          title={indicator === 'orb' ? 'Use the plain spinner instead' : 'Use animated stage indicators'}
+          aria-label={indicator === 'orb' ? 'Switch to the plain spinner' : 'Switch to animated stage indicators'}
+        >
+          {indicator === 'orb' ? <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> : <Loader2 className="h-3.5 w-3.5" aria-hidden="true" />}
+        </button>
+      </div>
       <div className="space-y-1 border-t px-2.5 py-1.5" style={{ borderColor: 'var(--rc-border)' }}>
         {visible.map((step) => {
           const Icon = EXECUTION_STEP_ICON[step.kind];
@@ -2147,8 +2411,19 @@ function ExecutionTimeline({ steps }: { steps: ExecutionStep[] }) {
                 <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: 'var(--rc-accent, #16a34a)' }} aria-hidden="true" />
               ) : step.status === 'skipped' ? (
                 <Ban className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              ) : spinning ? (
+                // A running step gets the orb: it encodes which stage is in
+                // flight, where a spinner only says "something is happening".
+                // The spinner remains selectable for anyone who prefers it.
+                indicator === 'orb' ? (
+                  <span className="mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                    <ExecutionOrb activity={stepActivity(step)} size={20} />
+                  </span>
+                ) : (
+                  <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                )
               ) : (
-                <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${spinning ? 'animate-spin' : ''}`} aria-hidden="true" />
+                <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               )}
               <span className="min-w-0 break-words">{step.label}</span>
             </div>
@@ -2342,14 +2617,65 @@ function ChangeProposalRow({
 /** Copies a single message's plain-text content to the clipboard. Shown for
  * both user and assistant turns, matching the copy-a-message affordance
  * every mainstream chat AI tool already offers. */
-function MessageCopyButton({ content }: { content: string }) {
+function MessageCopyButton({ content, alwaysVisible = false }: { content: string; alwaysVisible?: boolean }) {
   const { copied, copy } = useCopyToClipboard();
   return (
     <button type="button" onClick={() => void copy(content)}
       title={copied ? 'Copied' : 'Copy message'} aria-label={copied ? 'Message copied to clipboard' : 'Copy message to clipboard'}
-      className="invisible flex h-7 w-7 shrink-0 items-center justify-center rounded group-hover:visible" style={{ color: copied ? '#16a34a' : 'var(--rc-text-3)' }}>
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded ${alwaysVisible ? '' : 'invisible group-hover:visible'}`}
+      style={{ color: copied ? '#16a34a' : 'var(--rc-text-3)' }}>
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
+  );
+}
+
+/** Each Brain that answered gets its own card so the discarded answers are
+ *  readable instead of being reduced to a latency number. The Brain whose text
+ *  became the reply is labelled, and the rest open one at a time. */
+function BrainAnswerCards({ answers }: { answers: CortexBrainAnswer[] }) {
+  const [openSource, setOpenSource] = useState<string | null>(null);
+  if (answers.length < 2) return null;
+  return (
+    <div className="mt-3 space-y-1.5">
+      <p className="text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
+        {`${answers.length} Brains answered.`} The reply above is one Brain&apos;s answer; open a card to read the others.
+      </p>
+      {answers.map((answer, index) => {
+        const key = `${answer.source ?? 'brain'}-${index}`;
+        const open = openSource === key;
+        return (
+          <div key={key} className="rounded-md border" style={{ borderColor: 'var(--rc-border)' }}>
+            <button type="button" onClick={() => setOpenSource(open ? null : key)}
+              aria-expanded={open}
+              className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 text-left text-[11px]"
+              style={{ color: 'var(--rc-text-2)' }}>
+              {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+              <span className="font-medium" style={{ color: 'var(--rc-text-1)' }}>{answer.source || 'Brain'}</span>
+              {answer.model && <span>{answer.model}</span>}
+              {typeof answer.latency_ms === 'number' && <span>{answer.latency_ms}ms</span>}
+              {answer.primary && (
+                <span className="rounded px-1.5 py-0.5" style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-brand)' }}>
+                  used as the reply
+                </span>
+              )}
+            </button>
+            {open && (
+              <div className="border-t px-2.5 py-2" style={{ borderColor: 'var(--rc-border)' }}>
+                <SafeMarkdown content={answer.content} />
+                {answer.truncated && (
+                  <p className="mt-2 text-[11px]" style={{ color: 'var(--rc-text-3)' }}>
+                    This answer was longer than the stored limit and is shown truncated.
+                  </p>
+                )}
+                <div className="mt-2 flex justify-end">
+                  <MessageCopyButton content={answer.content} alwaysVisible />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -2453,8 +2779,12 @@ function GovernanceRecord({ message }: { message: CortexMessageRecord }) {
                   {entry.redacted && <span className="text-amber-500">redacted</span>}
                 </div>
                 <div className="mt-0.5 text-[10px]" style={{ color: 'var(--rc-text-3)' }}>
-                  {entry.selection_reason.replaceAll('_', ' ')}
-                  {entry.citations.length > 0 &&
+                  {entry.selection_reason?.replaceAll('_', ' ')}
+                  {/* Manifests persisted in encrypted history predate some of
+                      these fields, so a stored message can arrive without them.
+                      An unguarded read here takes down the whole workspace, not
+                      just the provenance row. */}
+                  {(entry.citations?.length ?? 0) > 0 &&
                     ` · lines ${entry.citations.map((citation) => `${citation.line_start}-${citation.line_end}`).join(', ')}`}
                 </div>
               </div>

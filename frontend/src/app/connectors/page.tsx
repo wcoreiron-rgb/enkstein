@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { BUNDLED_VENDOR_ICONS } from '@/lib/vendor-icons';
+import ConnectorControlScope from '@/components/ConnectorControlScope';
+import OverlayPortal from '@/components/OverlayPortal';
 
 // ── Brand marks ──────────────────────────────────────────────────────────────
 // Bundled from simple-icons at /vendor-icons/{slug}.svg, or a local raster in
@@ -499,6 +501,7 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
   const hasValues = !loading && (fields.length === 0 || Object.values(values).some(v => v.trim().length > 0));
 
   return (
+    <OverlayPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="w-full max-w-xl rounded-2xl border shadow-2xl overflow-hidden"
@@ -888,6 +891,7 @@ function ConfigureModal({ connector, onClose, onUpdate }: {
         </div>
       </div>
     </div>
+    </OverlayPortal>
   );
 }
 
@@ -898,6 +902,7 @@ function ConnectorCard({ connector, onUpdate, onConfigure }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [saving, setSaving]     = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   const status     = STATUS_STYLE[connector.status] ?? STATUS_STYLE.pending;
   const StatusIcon = status.icon;
@@ -1026,12 +1031,24 @@ function ConnectorCard({ connector, onUpdate, onConfigure }: {
           {/* Admin actions */}
           <div className="flex flex-wrap gap-2 pt-2 border-t" style={{ borderColor: 'var(--rc-border)' }}>
             <p className="w-full text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--rc-text-3)' }}>Admin actions</p>
+            <button onClick={() => setScopeOpen(true)}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border hover:opacity-80"
+              style={{ color: 'var(--rc-text-2)', borderColor: 'var(--rc-border-2)' }}>
+              See controls
+            </button>
             {connector.status !== 'approved'   && <button onClick={() => changeStatus('approved')}   disabled={saving} className="px-3 py-1.5 text-xs font-medium rounded-lg border text-green-400 bg-green-900/20 border-green-800 hover:bg-green-900/40 disabled:opacity-50">✓ Approve</button>}
             {connector.status !== 'restricted' && <button onClick={() => changeStatus('restricted')} disabled={saving} className="px-3 py-1.5 text-xs font-medium rounded-lg border text-orange-400 bg-orange-900/20 border-orange-800 hover:bg-orange-900/40 disabled:opacity-50">⚠ Restrict</button>}
             {connector.status !== 'blocked'    && <button onClick={() => changeStatus('blocked')}    disabled={saving} className="px-3 py-1.5 text-xs font-medium rounded-lg border text-red-400 bg-red-900/20 border-red-800 hover:bg-red-900/40 disabled:opacity-50">🚫 Block</button>}
             {connector.status !== 'pending'    && <button onClick={() => changeStatus('pending')}    disabled={saving} className="px-3 py-1.5 text-xs font-medium rounded-lg border hover:opacity-80 disabled:opacity-50" style={{ color: 'var(--rc-text-2)', borderColor: 'var(--rc-border-2)' }}>Reset to Pending</button>}
           </div>
         </div>
+      )}
+      {scopeOpen && (
+        <ConnectorControlScope
+          connectorType={connector.connector_type}
+          connectorName={connector.name}
+          onClose={() => setScopeOpen(false)}
+        />
       )}
     </div>
   );

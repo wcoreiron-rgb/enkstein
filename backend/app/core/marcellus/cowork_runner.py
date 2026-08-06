@@ -159,8 +159,14 @@ async def run_job(db: AsyncSession, job: CoworkJob) -> None:
         turn_payload["content"] = f"{inspection_brief}\n\n---\n\n{turn_payload.get('content', '')}"
     turn_payload["tenant_id"] = job.tenant_id
 
+    # Both callbacks are synchronous and are invoked from inside the turn, so
+    # they buffer rather than write: appending an event requires the async
+    # session, and touching it mid-turn would interleave with the turn's own
+    # transaction. The buffers are drained below, once the turn has returned.
+    progress_events: list[tuple[str, str, str | None]] = []
+
     def on_progress(progress_source: str, state: str, label: str | None) -> None:
-        _record_progress(job.id, progress_source, state, label)
+        progress_events.append((progress_source, state, label))
 
     file_events: list[tuple[str, str, str]] = []
 
@@ -190,6 +196,18 @@ async def run_job(db: AsyncSession, job: CoworkJob) -> None:
 
     if job.state == states.WAITING_FOR_BRAIN:
         await jobs.transition(db, job, states.BRAIN_STREAMING, step_id=brain_step.id)
+    for progress_source, progress_state, progress_label in progress_events:
+        await jobs.append_event(
+            db,
+            job,
+            event_type="brain_progress",
+            step_id=brain_step.id,
+            payload={
+                "source": progress_source,
+                "state": progress_state,
+                "label": progress_label,
+            },
+        )
     await jobs.finish_step(db, job, brain_step, ok=True)
 
     governance = (turn.assistant_message.governance if turn.assistant_message else {}) or {}

@@ -16,7 +16,30 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+/** Retry budget for a request lost to a recycled proxy socket rather than a real
+ *  server error. A reused keep-alive connection that the upstream closed shows up
+ *  as ECONNRESET (surfaced as 500/502/504 by the Next proxy) or as a thrown
+ *  TypeError, with the handler never having run. Retrying once is safe for the
+ *  read-only endpoints that use it and avoids showing "API error 500" for a
+ *  request that in fact succeeded server-side. */
+const TRANSIENT_PROXY_STATUSES = new Set([500, 502, 503, 504]);
+
+export type ApiFetchOptions = RequestInit & { retryTransient?: boolean };
+
+export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  const { retryTransient, ...init } = options ?? {};
+  try {
+    return await apiFetchOnce<T>(path, init);
+  } catch (error) {
+    const retryable =
+      retryTransient === true &&
+      (!(error instanceof ApiError) || TRANSIENT_PROXY_STATUSES.has(error.status));
+    if (!retryable) throw error;
+    return apiFetchOnce<T>(path, init);
+  }
+}
+
+async function apiFetchOnce<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getAuthToken();
   const authHeader: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
   const res = await fetch(`${BASE}${path}`, {
@@ -721,6 +744,16 @@ export type CortexConversation = {
   updated_at: string;
 };
 
+export type CortexBrainAnswer = {
+  source?: string;
+  provider?: string;
+  model?: string;
+  latency_ms?: number;
+  primary: boolean;
+  content: string;
+  truncated?: boolean;
+};
+
 export type CortexMessageRecord = {
   id: string;
   tenant_id: string;
@@ -732,6 +765,7 @@ export type CortexMessageRecord = {
   provider?: string;
   model?: string;
   governance: Record<string, any>;
+  brain_answers?: CortexBrainAnswer[];
   parent_message_id?: string;
   created_at: string;
 };
@@ -1365,6 +1399,9 @@ export const getAssessmentSummary = (claw: string, classification = 'internal') 
   apiFetch<any>('/controls/assessment-summary', {
     method: 'POST',
     body: JSON.stringify({ claw, classification }),
+    // Brain narration can take tens of seconds, which is exactly when the proxy
+    // is most likely to hand this request a recycled socket.
+    retryTransient: true,
   });
 export const syncProwlerCatalog = () =>
   apiFetch<any>('/controls/sync/prowler', { method: 'POST' });
@@ -1372,6 +1409,12 @@ export const syncNistCatalog = () =>
   apiFetch<any>('/controls/sync/nist', { method: 'POST' });
 export const attachControlEvaluators = () =>
   apiFetch<any>('/controls/collectors/attach', { method: 'POST' });
+export const getConnectorControlScope = (connectorType: string) =>
+  apiFetch<any>(`/controls/connector-scope/${encodeURIComponent(connectorType)}`, {
+    retryTransient: true,
+  });
+export const getConnectorScopeCatalog = () =>
+  apiFetch<any>('/controls/connector-scope', { retryTransient: true });
 export const remediateControl = (control_id: string, requested_by = 'operator') =>
   apiFetch<any>('/controls/remediation/execute', {
     method: 'POST',
@@ -1395,6 +1438,8 @@ export type CoworkExecutorStatus = {
   selected: string;
   selected_label: string;
   any_available: boolean;
+  project_selected: boolean;
+  needs_folder: boolean;
 };
 
 export const getCoworkExecutors = (params: {

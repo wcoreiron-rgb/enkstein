@@ -490,8 +490,20 @@ async function poll() {
       await processJournal(token);
       const journal = await loadJournal();
       const hasActive = Object.values(journal).some((entry) => !TERMINAL_STATES.includes(entry.state));
-      if (!hasActive) {
-        const providers = await availableProviders();
+      const providers = await availableProviders();
+      if (hasActive) {
+        // Still check in while a turn is in flight. Readiness would otherwise
+        // depend entirely on progress events, and a provider that streams
+        // nothing observable for a while (a long ChatGPT "thinking" pause)
+        // would let the bridge mark a perfectly healthy session stale.
+        // The keepalive flag stops the bridge from leasing a second task or
+        // rewinding this one's state, so it refreshes readiness and nothing else.
+        const keepalive = await bridgeRequest('/v1/browser/poll', {
+          token,
+          body: { providers, keepalive: true },
+        }).catch(() => null);
+        await handleBridgeCancelSignal(keepalive, token);
+      } else {
         const result = await bridgeRequest('/v1/browser/poll', { token, body: { providers } }).catch(() => null);
         await handleBridgeCancelSignal(result, token);
         if (result?.task?.task_id) {

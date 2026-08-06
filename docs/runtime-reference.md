@@ -11,7 +11,7 @@ For an overview of what Enkstein is and how to install it, see the
 
 ## Distributed Runtime
 
-Enkstein `0.7.10` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.8.0` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -21,7 +21,7 @@ Enkstein `0.7.10` provides three governed runtime paths on top of the compatibil
 
 The Regeneration implementation recreates the persisted logical Capability Node runtime. A host, process, container, or remote worker adapter is still required before it can replace an external runtime instance.
 
-The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Enkstein Plexus Architecture](docs/marcellus-architecture.md) for endpoint and security details.
+The operator console is available at [`/marcellus`](http://localhost:3000/marcellus). Runtime endpoints are under `/api/v1/marcellus/plexus`, `/api/v1/marcellus/reflexes`, and `/api/v1/marcellus/regeneration`. See [Enkstein Plexus Architecture](marcellus-architecture.md) for endpoint and security details.
 
 ### Persistent Missions and governed Memory
 
@@ -42,7 +42,7 @@ Arms, recent Reflex metadata, blocked activity, and Security Twin health without
 copying raw Reflex event bodies into the report.
 
 The API is under `/api/v1/marcellus/missions`; see
-[Enkstein Architecture](docs/marcellus-architecture.md#persistent-missions-and-governed-memory)
+[Enkstein Architecture](marcellus-architecture.md#persistent-missions-and-governed-memory)
 for the route list and current limitations.
 
 ### Governed AI workspace
@@ -68,7 +68,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.7.10` keeps a paired Browser Companion marked ready while it is
+Version `0.8.0` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -226,7 +226,7 @@ It deliberately exposes no unrestricted terminal or tool execution path.
 Endpoints include `GET /api/v1/modelclaw/brains/status`, `POST
 /api/v1/modelclaw/brains/invoke`, `POST /api/v1/modelclaw/consensus`, and the
 authenticated desktop/browser setup routes under `/api/v1/modelclaw/brains/`. See
-[Brain Bridges](docs/brain-bridges.md) for setup, trust boundaries, and vendor
+[Brain Bridges](brain-bridges.md) for setup, trust boundaries, and vendor
 account limitations.
 
 <p align="center">

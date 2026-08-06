@@ -138,6 +138,7 @@ class CortexMessageRead(BaseModel):
     provider: str | None
     model: str | None
     governance: dict[str, Any]
+    brain_answers: list[dict[str, Any]] = Field(default_factory=list)
     parent_message_id: UUID | None
     created_at: datetime
 

@@ -8,7 +8,10 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
+    /* :root doubles as the no-script default; the theme overrides follow, so
+       this page honours the shared site preference instead of forcing dark. */
+    :root,
+    html[data-theme="dark"] {
       --bg:        #0a0a0a;
       --surface:   #111111;
       --surface2:  #1a1a1a;
@@ -23,6 +26,23 @@
       --text:      #f4f4f5;
       --text2:     #a1a1aa;
       --text3:     #71717a;
+      --radius:    8px;
+    }
+    html[data-theme="light"] {
+      --bg:        #f8fafc;
+      --surface:   #ffffff;
+      --surface2:  #f1f5f9;
+      --border:    #dbe3ee;
+      --blue:      #2563eb;
+      --blue-dim:  #1d4ed8;
+      --purple:    #7c3aed;
+      --green:     #15803d;
+      --orange:    #c2410c;
+      --red:       #dc2626;
+      --amber:     #b45309;
+      --text:      #0f172a;
+      --text2:     #334155;
+      --text3:     #64748b;
       --radius:    8px;
     }
 
@@ -43,7 +63,7 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(10,10,10,0.95);
+      background: color-mix(in srgb, var(--bg) 95%, transparent);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
     }
@@ -88,6 +108,17 @@
     }
     .nav-links .btn-nav:hover { background: var(--blue-dim); }
     .nav-links .active-page { color: var(--text); font-weight: 600; }
+    .theme-toggle {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+    }
 
     /* ── LAYOUT ── */
     .container {
@@ -334,7 +365,8 @@
     footer .footer-links { display: flex; gap: 24px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap; }
 
     @media (max-width: 640px) {
-      .nav-links { display: none; }
+      .nav-links li:not(.theme-item) { display: none; }
+      .nav-links { gap: 0; }
       .cat-header { flex-direction: column; }
       .cat-badge-wrap { flex-direction: row; align-items: center; }
     }
@@ -356,6 +388,7 @@
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html">Changelog</a></li>
       <li><a href="owasp-agentic.html" class="active-page">OWASP</a></li>
+      <li class="theme-item"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">☀️ Light</button></li>
       <li><a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
     </ul>
   </div>
@@ -377,7 +410,7 @@
     Claims in this document have been matched against source code in this repository but have not been
     independently audited. An independent third-party security assessment is strongly recommended before
     relying on this document for compliance or procurement purposes.
-    Last reviewed: <strong>2026-08-05</strong> against release <strong>0.7.10</strong>; every cited test was re-run and passed.
+    Last reviewed: <strong>2026-08-05</strong> against release <strong>0.8.0</strong>; every cited test was re-run and passed.
   </div>
 
   <!-- ── SUMMARY TABLE ── -->
@@ -719,7 +752,7 @@
       <div class="ev-section">
         <div class="ev-label">Evidence</div>
         <ul class="ev-list">
-          <li><code>backend/app/services/ring_policy.py</code>: Four-ring privilege isolation. Every action maps to ring0 (blocked) → ring1 (2 approvals) → ring2 (1 approval or trust ≥ 80) → ring3 (auto-allowed). No agent can skip rings.</li>
+          <li><code>backend/app/services/ring_policy.py</code>: Four-ring privilege isolation for actions evaluated by the service: ring0 (blocked) → ring1 (2 approvals) → ring2 (1 approval or trust ≥ 80) → ring3 (auto-allowed). Ring evaluation rejects an execution that does not satisfy its assigned tier.</li>
           <li><code>backend/app/api/routes/exec_channels.py</code> <code>execute_request</code>: Ring policy evaluated before execution. Violations return HTTP 403 with <code>policy_name</code> and <code>deny_reason</code>.</li>
           <li><code>backend/app/api/routes/remediation.py</code> <code>approve_action</code>: Ring policy check before calling <code>approve_remediation</code>. Blocks role-escalation by low-privilege callers.</li>
           <li><code>backend/app/api/routes/exec_channels.py</code> <code>approve_request</code>: Self-approval blocked (<code>approver == r.requested_by</code> → HTTP 403). Dual approvals required for shell/browser/credential channels.</li>
@@ -836,6 +869,34 @@
     ev.classList.toggle('open', !isOpen);
     if (toggle) toggle.textContent = isOpen ? 'Show evidence ↓' : 'Hide evidence ↑';
   }
+</script>
+
+<script>
+  // Same contract as the other site pages: one shared preference key, system
+  // preference only as the initial default.
+  (function () {
+    const root = document.documentElement;
+    const themeToggle = document.getElementById('theme-toggle');
+    const stored = localStorage.getItem('enkstein-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    function applyTheme(theme) {
+      root.setAttribute('data-theme', theme);
+      if (themeToggle) {
+        themeToggle.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+      }
+    }
+
+    applyTheme(stored || (prefersDark ? 'dark' : 'light'));
+
+    if (themeToggle) {
+      themeToggle.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        localStorage.setItem('enkstein-theme', next);
+      });
+    }
+  })();
 </script>
 
 </body>

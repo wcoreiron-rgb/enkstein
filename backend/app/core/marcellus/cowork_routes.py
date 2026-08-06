@@ -50,6 +50,7 @@ from app.core.marcellus.cowork_executors import (
     availability_report,
     resolve_executor,
 )
+from app.core.modelclaw.brain_bridge import bridge_configured
 from app.core.marcellus.native_workspace import get_binding
 from app.core.marcellus.runtime_security import actor_id, resolve_tenant
 from app.models.marcellus import CoworkBrowserTask, CoworkJob
@@ -352,8 +353,11 @@ async def get_executors(
     scoped = resolve_tenant(user, tenant_id)
     binding = get_binding(scoped, project_id) if project_id else None
     token = (binding or {}).get("token")
-    report = await availability_report(token)
-    executor, availability = await resolve_executor(preference, token=token)
+    project_selected = project_id is not None
+    report = await availability_report(token, project_selected=project_selected)
+    executor, availability = await resolve_executor(
+        preference, token=token, project_selected=project_selected
+    )
     return CoworkExecutorStatusRead(
         executors=[CoworkExecutorRead(**item) for item in report],
         selected=availability.executor if executor is not None else "unavailable",
@@ -361,6 +365,10 @@ async def get_executors(
             availability.executor if executor is not None else "unavailable", "unavailable"
         ),
         any_available=any(item["available"] for item in report),
+        project_selected=project_selected,
+        # A missing folder binding is the one unavailable state the operator can
+        # resolve directly from the Cowork panel.
+        needs_folder=project_selected and not token and bridge_configured(),
     )
 
 

@@ -689,6 +689,9 @@ async def test_multibrain_timeout_returns_safe_unavailable_vote(monkeypatch):
         await asyncio.sleep(1)
 
     monkeypatch.setattr(brain_bridge, "_BRAIN_TIMEOUT_SECONDS", 0.01)
+    # codex_subscription is CLI-driven and now carries the longer local budget,
+    # so the timeout under test is that one, not the hosted-API budget.
+    monkeypatch.setattr(brain_bridge, "_LOCAL_BRAIN_TIMEOUT_SECONDS", 0.01)
     brain_bridge._TENANT_SEMAPHORES.clear()
     brain_bridge._SOURCE_SEMAPHORES.clear()
     votes = await brain_bridge.collect_votes(
@@ -746,6 +749,46 @@ async def test_browser_brain_survives_beyond_the_direct_call_timeout(monkeypatch
     assert calls == ["chatgpt_browser"]
     assert votes[0]["counted"] is True
     assert votes[0]["response"] == "A long response that took a while to stream."
+
+
+def test_locally_executed_brains_get_more_time_than_a_hosted_api_call():
+    """A local Ollama profile and a CLI-driven subscription both run on this
+    machine and were being cut off by a budget tuned for a hosted API round
+    trip, so most of a swarm reported itself as timed out."""
+    hosted = brain_bridge._brain_timeout_seconds("openai_api")
+    local_profile = brain_bridge._brain_timeout_seconds("profile:ollama_local_fallback")
+    codex_cli = brain_bridge._brain_timeout_seconds("codex_subscription")
+    claude_cli = brain_bridge._brain_timeout_seconds("claude_subscription")
+    browser = brain_bridge._brain_timeout_seconds("chatgpt_browser")
+
+    assert local_profile > hosted
+    assert codex_cli == local_profile
+    assert claude_cli == local_profile
+    assert browser > local_profile
+
+
+def test_a_local_brain_budget_stays_under_the_outer_turn_deadline():
+    """The per-Brain timeout must resolve before the streaming turn deadline,
+    otherwise the turn dies first and the Brain's reason is never reported."""
+    from app.core.config import settings
+
+    assert brain_bridge._LOCAL_BRAIN_TIMEOUT_SECONDS < settings.WORKSPACE_STREAM_DEADLINE_SECONDS
+    assert brain_bridge._BROWSER_BRAIN_TIMEOUT_SECONDS < settings.WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS
+
+
+def test_a_file_writing_turn_is_never_told_to_be_concise():
+    """Enkstein's own system prompt was telling a file-authoring Brain to be
+    concise, so it answered that the file was too large to reproduce instead
+    of writing it."""
+    reasoning = brain_bridge._profile_system_prompt("What does this project do?")
+    authoring = brain_bridge._profile_system_prompt(
+        "Return exactly one fenced `marcellus_changes` JSON array and no prose."
+    )
+
+    assert "concise" in reasoning
+    assert "concise" not in authoring
+    assert "complete file contents" in authoring
+    assert "Length is not a constraint" in authoring
 
 
 @pytest.mark.asyncio

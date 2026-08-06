@@ -31,6 +31,7 @@ import {
   startBrowserBrainPairing,
 } from '@/lib/api';
 import { readLastActiveConversation, workspaceRoutePath } from '@/lib/workspace-routes';
+import { ExecutionOrb } from '@/components/ExecutionOrb';
 import type { WorkspaceMode } from '@/lib/workspace-mode';
 
 type BrainReadinessStatus = 'ready' | 'needs_setup' | 'unavailable' | 'policy_blocked';
@@ -369,20 +370,51 @@ export default function BrainConnectionsPage() {
           </div>
         </header>
 
-        <section className="grid gap-3 py-5 sm:grid-cols-3">
-          {[
-            ['Ready Brains', String(readyCount), BrainCircuit],
-            ['Approved Profiles', String(profiles.length), ShieldCheck],
-            ['Discovered Models', String(
-              Object.values(models).reduce((total, rows) => total + rows.length, 0)
-              + brains.reduce((total, row) => total + (row.models?.length || 0), 0),
-            ), Cpu],
-          ].map(([label, value, Icon]) => (
-            <div key={String(label)} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
-              <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4" style={{ color: 'var(--rc-brand)' }} /></div>
-              <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{String(value)}</p>
+        {/* Splits at md rather than sm: at ~700px the two columns are narrow
+            enough that the constellation overflows its card. */}
+        <section className="grid gap-3 py-5 md:grid-cols-2">
+          {/* Ready Brains leads on its own, because the constellation needs
+              room to read as a network rather than a smudge. The two counts
+              that support it stack alongside in the same total height. */}
+          <div className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>Ready Brains</span>
+              <BrainCircuit className="h-4 w-4" style={{ color: 'var(--rc-brand)' }} />
             </div>
-          ))}
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-3xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{readyCount}</p>
+                {/* Without this, the card keeps the stacked column's height and
+                    the space the constellation would occupy reads as a load
+                    that never finished. */}
+                {readyCount === 0 && (
+                  <p className="mt-2 max-w-xs text-xs" style={{ color: 'var(--rc-text-3)' }}>
+                    No Brain is connected yet. Sign in to a subscription CLI, pair a browser
+                    session, or approve a local profile below.
+                  </p>
+                )}
+              </div>
+              {/* The constellation depicts the connections themselves rather
+                  than work in progress, so it runs whether or not a turn is in
+                  flight. A zero count is the one case it would misrepresent:
+                  nothing is connected, so nothing should look like it is. */}
+              {readyCount > 0 && <ExecutionOrb activity="consensus" size={64} scale={168} />}
+            </div>
+          </div>
+          <div className="grid gap-3">
+            {[
+              ['Approved Profiles', String(profiles.length), ShieldCheck],
+              ['Discovered Models', String(
+                Object.values(models).reduce((total, rows) => total + rows.length, 0)
+                + brains.reduce((total, row) => total + (row.models?.length || 0), 0),
+              ), Cpu],
+            ].map(([label, value, Icon]) => (
+              <div key={String(label)} className="rounded-md border p-4" style={{ borderColor: 'var(--rc-border)', background: 'var(--rc-bg-surface)' }}>
+                <div className="flex items-center justify-between"><span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>{String(label)}</span><Icon className="h-4 w-4" style={{ color: 'var(--rc-brand)' }} /></div>
+                <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--rc-text-1)' }}>{String(value)}</p>
+              </div>
+            ))}
+          </div>
         </section>
 
         {warnings.length > 0 && (

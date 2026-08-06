@@ -250,7 +250,7 @@ async def test_auto_falls_back_to_codex_when_local_has_no_root(monkeypatch):
     """
     monkeypatch.setattr(executors, "bridge_configured", lambda: True)
 
-    async def local_down(*, token):
+    async def local_down(*, token, project_selected=True):
         return executors.ExecutorAvailability(
             executors.LOCAL, False, "The desktop runtime is not connected."
         )
@@ -260,6 +260,165 @@ async def test_auto_falls_back_to_codex_when_local_has_no_root(monkeypatch):
     assert executor is not None
     assert executor.name == executors.CODEX
     assert availability.available is True
+
+
+@pytest.mark.asyncio
+async def test_no_selected_project_is_not_reported_as_a_folderless_project(monkeypatch):
+    """Cowork with nothing open must not blame the project.
+
+    Telling an operator who has no project selected that "this project has no
+    folder connected" names a problem they cannot act on and reads as a broken
+    executor. The two states have different remedies and must read differently.
+    """
+    monkeypatch.setattr(executors, "bridge_configured", lambda: True)
+    report = await executors.availability_report(None, project_selected=False)
+    assert [item["available"] for item in report] == [False, False]
+    for item in report:
+        assert item["reason"] == executors.NO_PROJECT_REASON
+        assert "this project" not in item["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_folderless_project_states_the_remedy(monkeypatch):
+    monkeypatch.setattr(executors, "bridge_configured", lambda: True)
+    report = await executors.availability_report(None, project_selected=True)
+    for item in report:
+        assert item["available"] is False
+        assert item["reason"] == executors.NO_BINDING_REASON
+        assert "import folder" in item["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_auto_reports_the_missing_folder_rather_than_a_generic_failure(monkeypatch):
+    """Auto's summary must carry the actionable reason, not swallow it."""
+    monkeypatch.setattr(executors, "bridge_configured", lambda: True)
+    executor, availability = await executors.resolve_executor(
+        "auto", token=None, project_selected=True
+    )
+    assert executor is None
+    assert availability.executor == executors.NONE
+    assert availability.reason == executors.NO_BINDING_REASON
+
+
+@pytest.mark.asyncio
+async def test_auto_still_reports_a_down_runtime_generically(monkeypatch):
+    """A folder is approved but the host runtime is down: that is not a folder
+    problem, so it must not be described as one."""
+    monkeypatch.setattr(executors, "bridge_configured", lambda: False)
+    executor, availability = await executors.resolve_executor(
+        "auto", token="tok", project_selected=True
+    )
+    assert executor is None
+    assert availability.reason == "No governed executor is connected."
+
+
+@pytest.mark.asyncio
+async def test_executor_route_distinguishes_no_project_from_no_folder(client, monkeypatch):
+    """The Cowork picker needs both facts to explain itself.
+
+    ``project_selected`` lets the UI say "pick a project" instead of implying a
+    project is misconfigured, and ``needs_folder`` is what lets it offer the fix
+    rather than only naming the problem.
+    """
+    from app.core.marcellus import cowork_routes
+
+    monkeypatch.setattr(executors, "bridge_configured", lambda: True)
+    monkeypatch.setattr(cowork_routes, "bridge_configured", lambda: True)
+    monkeypatch.setattr(cowork_routes, "get_binding", lambda *_args, **_kwargs: None)
+
+    response = await client.get("/api/v1/marcellus/cowork/executors")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_selected"] is False
+    assert body["needs_folder"] is False
+    assert body["executors"][0]["reason"] == executors.NO_PROJECT_REASON
+
+    scoped = await client.get(
+        "/api/v1/marcellus/cowork/executors",
+        params={"project_id": str(uuid.uuid4())},
+    )
+    assert scoped.status_code == 200
+    scoped_body = scoped.json()
+    assert scoped_body["project_selected"] is True
+    assert scoped_body["needs_folder"] is True
+    assert scoped_body["executors"][0]["reason"] == executors.NO_BINDING_REASON
+
+
+@pytest.mark.asyncio
+async def test_executor_route_does_not_offer_a_folder_fix_when_the_runtime_is_down(
+    client, monkeypatch
+):
+    """Approving a folder cannot help when the desktop bridge is absent, so the
+    UI must not be told to offer that as the remedy."""
+    from app.core.marcellus import cowork_routes
+
+    monkeypatch.setattr(executors, "bridge_configured", lambda: False)
+    monkeypatch.setattr(cowork_routes, "bridge_configured", lambda: False)
+    monkeypatch.setattr(cowork_routes, "get_binding", lambda *_args, **_kwargs: None)
+
+    response = await client.get(
+        "/api/v1/marcellus/cowork/executors",
+        params={"project_id": str(uuid.uuid4())},
+    )
+    assert response.status_code == 200
+    assert response.json()["needs_folder"] is False
+
+
+# --------------------------------------------------------------------------
+# The runner must not reference names that do not exist
+# --------------------------------------------------------------------------
+
+
+def test_runner_has_no_undefined_names():
+    """Every global the runner reads must actually resolve.
+
+    ``run_job`` called ``_record_progress`` -- a function that was never
+    defined -- from the Brain progress callback. Nothing imported the module in
+    a test and the name only resolves when a Brain reports progress, so it
+    reached main as a latent NameError on real Cowork jobs. This walks the
+    module for loaded globals instead of exercising one path, so the whole file
+    is covered rather than the one line that happened to break.
+    """
+    import ast
+    import builtins
+    import inspect
+
+    from app.core.marcellus import cowork_runner
+
+    tree = ast.parse(inspect.getsource(cowork_runner))
+    bound: set[str] = set(dir(builtins)) | set(vars(cowork_runner))
+    for node in ast.walk(tree):
+        # Locals, parameters, and comprehension targets are bound at runtime and
+        # are not resolvable from module globals, so collect them as legitimate.
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            bound.add(node.name)
+            args = node.args
+            for arg in [*args.args, *args.posonlyargs, *args.kwonlyargs]:
+                bound.add(arg.arg)
+            if args.vararg:
+                bound.add(args.vararg.arg)
+            if args.kwarg:
+                bound.add(args.kwarg.arg)
+        elif isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bound.add(node.id)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bound.add(node.name)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            # Function-local imports (used here to break an import cycle with
+            # workspace) bind names that never appear in module globals.
+            for alias in node.names:
+                bound.add((alias.asname or alias.name).split(".", 1)[0])
+
+    undefined = sorted(
+        {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name)
+            and isinstance(node.ctx, ast.Load)
+            and node.id not in bound
+        }
+    )
+    assert undefined == [], f"cowork_runner references undefined names: {undefined}"
 
 
 # --------------------------------------------------------------------------

@@ -24,7 +24,7 @@
 
 <p align="center">
   <sub>
-    <b>Latest installer: v0.7.10</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), signed and notarized &nbsp;&middot;&nbsp;
+    <b>Current release: v0.8.0</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -65,21 +65,25 @@ them and answers those questions.
 - **Verify results.** Every reply carries provenance: which model answered, what
   policy decided, what was redacted, and which files changed.
 
-Bring your own brains — a Codex or Claude subscription, an API key, or free
-local models through Ollama. Enkstein is MIT-licensed and runs entirely on your
-own hardware.
+Bring your own Brains — a Codex or Claude subscription, an API key, or local
+models through Ollama. Enkstein's control plane runs on your hardware. Content
+leaves the device only when you select a cloud, subscription, or browser Brain,
+subject to the active policy and redaction decision.
 
 <p align="center">
   <img src="https://img.shields.io/badge/status-v0.x%20preview-f59e0b?style=flat-square" alt="v0.x preview" />
   <img src="https://img.shields.io/badge/deployment-self--hosted-2563eb?style=flat-square" alt="self-hosted" />
-  <img src="https://img.shields.io/badge/data-simulated%20by%20default-7c3aed?style=flat-square" alt="simulated data by default" />
+  <img src="https://img.shields.io/badge/evidence-origin-always%20labelled-7c3aed?style=flat-square" alt="evidence origin is labelled" />
   <img src="https://img.shields.io/badge/audit-not%20yet%20independently%20audited-64748b?style=flat-square" alt="not yet audited" />
 </p>
 
 > [!NOTE]
 > **Early preview (v0.x).** Enkstein is under active development. Security mode
-> ships with **simulated findings by default** — connect your own credentials to
-> enable live integrations. It has **not had an independent third-party audit**,
+> includes clearly labelled demonstration paths for local evaluation; live
+> assessment requires a configured and verified connector. Some legacy Node
+> workflows still use labelled simulation fallback, while the Identity Incident
+> Mission and control verdicts fail closed without eligible evidence. Enkstein
+> has **not had an independent third-party audit**,
 > so it is built for evaluation and feedback rather than unmonitored production.
 > See the [Maturity Matrix](docs/maturity-matrix.md) for what is shipped versus
 > in progress, and the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html).
@@ -98,10 +102,10 @@ what should not travel, and records the decision.
    endpoint, threat intel, and DevSec, plus AI-specific governance like
    prompt-injection detection and DLP.
 
-Every tool call, credential access, and remediation passes through the Trust
-Fabric: policy evaluation, risk scoring, privilege tiers, human approval for
-high-risk actions, and an immutable audit log. There is no ungoverned execution
-path.
+Governed execution paths apply Trust Fabric policy, risk scoring, privilege
+tiers, human approval for high-risk actions, and an attributable audit record.
+The [Maturity Matrix](docs/maturity-matrix.md) identifies legacy and in-progress
+surfaces that do not yet carry the same assurance level.
 
 **The problem it solves:** how do you let AI agents do real work without handing
 them unbounded power over your environment?
@@ -163,26 +167,23 @@ peer Plexus. You do not need any of that vocabulary to use the app; see
 
 The theme picker is in the sidebar footer: Dark, Light, and Liquid Glass.
 
-## How Enkstein Compares
+## Where Enkstein Fits
 
-Enkstein sits at the intersection of three tool categories — and is the only one that delivers all of it under one governed roof. Each category below has real strengths (shown honestly); the gap Enkstein fills is **governance + intelligence + security-domain coverage together.**
+Enkstein does not replace the model, agent CLI, or security products you
+already use. It provides the local workspace and policy boundary around them.
 
-| Capability | Raw LLM Agents<br/><sub>(AutoGPT-style)</sub> | Agent Frameworks<br/><sub>(LangChain etc.)</sub> | Traditional SOAR<br/><sub>(playbook engines)</sub> | **Enkstein** |
-|---|:---:|:---:|:---:|:---:|
-| Autonomous AI investigation & reasoning | ✅ | ✅ | ❌ rigid scripts | ✅ Copilot + multi-agent swarms |
-| Per-action policy enforcement | ❌ | ❌ build it yourself | ~ static rules | ✅ Trust Fabric on **every** action |
-| Continuous risk scoring (action / session / device) | ❌ | ❌ | ~ | ✅ |
-| Execution privilege isolation | ❌ | ❌ | ❌ | ✅ 4-tier ring policy |
-| Human-in-the-loop approval gates | ❌ | ~ DIY | ✅ | ✅ dual-approval, self-approval blocked |
-| Immutable audit of every agent action | ❌ | ❌ | ~ | ✅ |
-| AI-specific governance (prompt injection, DLP) | ❌ | ❌ | ❌ | ✅ 12-vector AGT audit |
-| Security domain coverage out of the box | ❌ | ❌ | ~ via connectors | ✅ 26 capability nodes |
-| Governed multi-agent orchestration | ~ | ~ | ❌ | ✅ swarms w/ judge + approval |
-| Self-hosted · bring-your-own-keys | ~ | ✅ | ~ | ✅ |
+| Tool category | Primary strength | Enkstein's role |
+|---|---|---|
+| Model and coding assistants | Reasoning, generation, and coding | Route requests to an approved Brain and record provider provenance |
+| Agent frameworks | Tool composition and custom workflows | Apply tenant, policy, approval, and audit controls around execution |
+| Security products and SOAR | Product-specific telemetry and response | Normalize connector evidence and govern cross-product investigation or remediation |
+| Local models | Private, offline inference | Handle eligible work without sending content to a cloud provider |
 
-<sub>✅ native · ~ partial / depends on configuration · ❌ not available. Categories represent common tooling patterns, not specific vendors. This is a vendor self-assessment — see the [OWASP Agentic self-assessment](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html) and [Maturity Matrix](docs/maturity-matrix.md) for evidence of what's shipped vs. in progress.</sub>
-
-**In one line:** an agent framework gives you *capability*, a SOAR gives you *process*, Enkstein gives you **autonomous capability that is governed by default.**
+The distinguishing workflow is evidence-to-action: collect evidence from
+configured tools, analyze it with one or more Brains, propose a bounded action,
+apply policy and approval gates, then record the outcome. Availability and
+assurance depend on the configured connectors and the maturity status of the
+selected surface; see the [Maturity Matrix](docs/maturity-matrix.md).
 
 ## Architecture
 
@@ -203,36 +204,15 @@ Deeper reading:
 
 ## Security Compliance
 
-Enkstein maintains an honest, evidence-backed self-assessment against the **OWASP Top 10 for LLM/Agentic AI Applications (2025)**.
+Security claims are documented as a vendor self-assessment and tied to source or
+tests. Enkstein has not completed an independent third-party audit; do not use
+the self-assessment as compliance certification.
 
-| Document | Format |
-|---|---|
-| [OWASP Evidence Matrix (Interactive)](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html) | Interactive HTML |
-| [LLM Top 10 Mapping (Markdown)](docs/owasp-agentic-mapping.md) | Markdown |
-| [Agentic ASI Top 10 Mapping (Markdown)](docs/owasp-asi-mapping.md) | Markdown |
-| [Platform Maturity Matrix (Markdown)](docs/maturity-matrix.md) | Markdown |
-| [Production Deployment Guide](docs/production-deployment.md) | Markdown |
-
-**Current posture (2026-05-31):**
-
-| Category | Status |
-|---|---|
-| LLM01 Prompt Injection | Shipped — 12-vector AGT audit on every AI event |
-| LLM02 Insecure Output Handling | Shipped — prompt scanning, model-output re-scan/redaction, and DLP scanning of provider-generated binary downloads (OOXML/ZIP members included) before any file is written |
-| LLM03 Training Data Poisoning | N/A — uses provider APIs, no training pipeline |
-| LLM04 Model Denial of Service | Shipped — auth and model-router per-IP limits, plus per-identity rate limiting on governed Cowork/Chat turn, stream, and research endpoints; token-budget quotas remain planned |
-| LLM05 Supply-Chain Vulnerabilities | In Progress — encrypted credentials, pinned deps, AGT supply-chain scan + exchange checksum gate, CI SBOM + blocking dependency policy thresholds |
-| LLM06 Sensitive Information Disclosure | Shipped — Fernet encryption, DLP scanner, masked credential hints |
-| LLM07 Insecure Plugin Design | Partially Shipped — ring policy + SSRF protection shipped; OS sandbox not yet |
-| LLM08 Excessive Agency | Shipped — 4-ring privilege isolation, dual-approval gates, self-approval blocked |
-| LLM09 Overreliance | Shipped — override usage captured in routing audit, and lowering a detected data classification is refused without a recorded justification |
-| LLM10 Model Theft | N/A — no hosted weights; API keys encrypted at rest |
-
-> This is a vendor self-assessment. Independent audit recommended before compliance reliance.
-
-Supply-chain policy gating supports a temporary time-boxed waiver baseline at `security/supply_chain_baseline.json` so CI blocks on net-new risk while legacy debt is being burned down.
-
-Compliance Assurance now exposes a Trust Fabric-governed evidence bundle export at `POST /api/v1/complianceclaw/evidence/export`, including findings, compliance-relevant audit logs, framework rollups, and a SHA-256 chain-of-custody hash.
+- [Interactive OWASP evidence matrix](https://wcoreiron-rgb.github.io/enkstein/owasp-agentic.html)
+- [OWASP LLM mapping](docs/owasp-agentic-mapping.md)
+- [OWASP Agentic ASI mapping](docs/owasp-asi-mapping.md)
+- [Maturity Matrix](docs/maturity-matrix.md)
+- [Production Deployment Guide](docs/production-deployment.md)
 
 ## Quick Start
 
@@ -341,7 +321,10 @@ Capability Nodes use real integrations only after their connector is configured 
 | Log/SIEM | Splunk |
 | Custom | Any REST API via Custom Capability |
 
-Production installs require live connector evidence by default. A Node without a verified source reports an unavailable scan outcome instead of presenting sample findings. Local walkthrough data is an explicit opt-in only.
+Live control verdicts require eligible connector evidence. Some legacy Node
+workflows still expose clearly labelled demonstration fallback for evaluation;
+the Identity Incident Mission, connector control standing, and control verdicts
+do not treat demonstration data as live evidence or a passing assessment.
 
 Every finding records a **data origin** so the two are never confused once you connect a real
 connector. Findings are labelled `live` (returned by an authenticated provider, with the source
@@ -402,12 +385,12 @@ with a scoped app registration is the correct posture for unattended scanning.
 
 Enkstein ships in three installable forms beyond the web platform. All three talk to your running Enkstein server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
 
-### ⚡ Add Enkstein to Cursor in 30 seconds (MCP)
+### MCP integration
 
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.7.10-py3-none-any.whl
+pip install ./enkstein_mcp-0.8.0-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -431,10 +414,10 @@ Restart Cursor, then just ask:
 
 Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findings` · `list_connectors` · `run_swarm_investigation` · `terraclaw_generate_secure_terraform` · `terraclaw_review_hcl` · `terraclaw_analyze_plan`. → [full MCP docs](mcp-server/README.md)
 
-### 🖥️ CLI — drive the platform from your shell
+### CLI
 
 ```bash
-pip install ./enkstein_cli-0.7.10-py3-none-any.whl
+pip install ./enkstein_cli-0.8.0-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -442,12 +425,12 @@ enkstein evidence collect --framework soc2
 ```
 → [full CLI docs](cli/README.md)
 
-### 🧩 Embed the governance core (no server)
+### Python governance library
 
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.7.10-py3-none-any.whl
+pip install ./enkstein_core-0.8.0-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package
@@ -456,51 +439,13 @@ from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_packag
 
 ## API Reference
 
-Full interactive docs at: http://localhost:8000/docs
+With Enkstein running, the generated OpenAPI documentation is available at
+[http://localhost:8000/docs](http://localhost:8000/docs). It is the
+authoritative method, path, and schema reference for the installed version.
 
-Key endpoints:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /api/v1/dashboard | Platform stats |
-| POST | /api/v1/arcclaw/events | Submit AI event for inspection |
-| GET | /api/v1/arcclaw/stats | AI Security risk summary |
-| GET | /api/v1/identityclaw/identities | Identity inventory |
-| GET | /api/v1/identityclaw/orphaned | Orphaned identities |
-| GET | /api/v1/policies | List policies |
-| POST | /api/v1/policies | Create policy |
-| GET | /api/v1/events | All events |
-| GET | /api/v1/events/anomalies | Anomalies only |
-| GET | /api/v1/audit | Audit log |
-| POST | /api/v1/remediation/trigger | Trigger a remediation playbook/action |
-| POST | /api/v1/remediation/actions/{id}/approve | Approve a queued remediation action |
-| POST | /api/v1/swarm/jobs | Launch a multi-agent swarm investigation |
-| POST | /api/v1/exec/shell | Submit a governed shell command (ring + dual-approval) |
-| POST | /api/v1/channel-gateway/message | Ingest a command from Slack/Teams/webhook |
-| POST | /api/v1/remote-agents/register | Register a remote/edge agent |
-| POST | /api/v1/skill-packs/{id}/install | Provenance-verified skill pack install |
-| GET | /api/v1/trust-fabric/containment-probe | Trust Fabric containment self-test |
-
-## Security Design Principles
-
-1. **Every component has identity** — No anonymous modules or connectors
-2. **Every action is authorized** — Policy evaluated before execution
-3. **Every runtime is monitored** — Behavior tracked, not just access
-4. **Every workflow is attributable** — Maps to a human owner
-5. **Every risk is containable** — Isolation, revocation, kill switch
-6. **Every module is governed** — Plug-and-play = plug-and-governed
-
-## AGT + Multi-Agent Governance
-
-Enkstein exposes AGT rollout through a provider boundary instead of direct Capability Node coupling:
-
-- Adapter boundary: `backend/app/fabric/providers/agt/`
-- Feature flags (opt-in): `AGT_ENABLE_MCP_GATEWAY`, `AGT_ENABLE_E2E_MESSAGING`, `AGT_ENABLE_AGENT_MESH`, `AGT_ENABLE_SHADOW_DISCOVERY`
-- Trust Fabric APIs:
-  - `GET /api/v1/trust-fabric/multi-agent/status`
-  - `POST /api/v1/trust-fabric/mcp/scan`
-
-See the [agent workflow guide](docs/agent-workflow.md) for operational guidance.
+Operational guidance lives in the [documentation site](docs/docs.html), the
+[Runtime Reference](docs/runtime-reference.md), and the
+[agent workflow guide](docs/agent-workflow.md).
 
 ## Release History
 
@@ -515,75 +460,18 @@ For where the platform is strong versus still maturing, see the
 [Maturity Matrix](docs/maturity-matrix.md) and the *Known gaps* section of the
 [Testing Guide](docs/testing-guide.md).
 
-## Platform Modules (26 Capability Nodes + 4 Core Surfaces + Core Engines)
+## Platform Map
 
-### Security Domain Capability Nodes (25)
+- **Chat and Cowork:** governed conversation, project context, file proposals,
+  local execution, and Multi-Brain routing.
+- **Security:** 26 capability areas for identity, cloud, endpoint, application,
+  data, network, threat, compliance, and AI security workflows.
+- **Control surfaces:** Trust Fabric, Model Cortex, approvals, remediation,
+  Swarm orchestration, connector health, and audit records.
 
-| Module | Description |
-|--------|-------------|
-| 🤖 AI Security | AI & LLM Security — prompt injection detection (12-vector AGT audit), NVIDIA NIM, Claude, OpenAI, Ollama |
-| 🪪 Identity Security | Identity Governance — human & non-human identity risk scoring, Okta, Entra ID |
-| ☁️ Cloud Security | Cloud Security Posture — AWS, Azure, GCP, real-time findings |
-| 🌐 Exposure Management | External Attack Surface Management — CVE lookup, CISA KEV, MITRE ATT&CK |
-| 🛡️ Endpoint Security | EDR — CrowdStrike, Defender, SentinelOne, quarantine/unquarantine |
-| 🔍 Threat Analysis | Threat Intelligence & Detection — MITRE ATT&CK mapping, automated triage |
-| 📋 Security Telemetry | Log Management & SIEM coverage |
-| 🌉 Network Security | Network Security & segmentation — Palo Alto, Fortinet, Cisco |
-| 🔑 Privileged Access | Access Control & IAM governance — Okta, Entra ID, CyberArk |
-| 🗂️ Data Security | Data Loss Prevention — Varonis, Purview, Macie |
-| 📱 Application Security | Application Security — SAST, SCA, Snyk, Veracode |
-| ☁️ SaaS Security | SaaS Security Posture Management — Netskope, Zscaler |
-| ⚙️ Configuration Security | Configuration Compliance — AWS Config, Azure Policy |
-| 🧱 Terraform Governance | Terraform & IaC Security Governance — chat-style secure generation, Terraform MCP tools, HCL review, plan risk analysis, GCP Cloud SQL/Azure/AWS templates, Terraform Cloud, tfsec/Trivy, Checkov, Infracost |
-| ✅ Compliance Assurance | SOC2, PCI-DSS, ISO 27001, HIPAA, GDPR, CIS — control mappings + evidence |
-| 🔒 Privacy Governance | Privacy & GDPR enforcement — OneTrust, TrustArc |
-| 🏢 Vendor Risk | Third-Party & Supply Chain Risk — BitSight, SecurityScorecard |
-| 👤 User Risk | User Behavior Analytics — UEBA, anomaly detection |
-| 🔎 Insider Risk | Insider Threat Detection — Proofpoint, Purview |
-| ⚡ Security Automation | Automation & CI/CD Security — ServiceNow, Jira, SOAR |
-| 🗺️ Attack Path Analysis | Attack Path Analysis — XM Cyber, Orca, Tenable |
-| 💻 Developer Security | DevSecOps & Secret Scanning — GitHub Advanced Security, Snyk |
-| 🧠 Threat Intelligence | Threat Intelligence Feeds — Recorded Future, MISP |
-| 🔄 Recovery Readiness | Incident Recovery & Runbooks — Veeam, Rubrik |
-| 🔌 Custom Capability | User-defined REST API integrations — no-code builder |
-
-### New Core Platform Surfaces (4)
-
-| Module | Description |
-|--------|-------------|
-| 🧩 Model Cortex | AI Model Governance — policy-governed model routing, tenant-scoped profiles, call audit, Model Cortex Judge synthesis |
-| ⚡ Command | Multi-channel Command Ingestion — Teams, Slack, webhook, email, CLI → unified policy-governed command contract with multi-operator approval |
-| 🎛️ Control Center | Unified operator cockpit — commands, approvals, swarms, remote agents, channel pressure, execution gates |
-| 🚀 Release Governance | Zero Trust Deployment Governance — preflight CI/CD, GitOps, cloud SDK/CLI, script, full-stack, and AI-stack deployments before execution handoff |
-
-### Platform Engines (always-on)
-
-| Engine | Description |
-|--------|-------------|
-| 🛡️ Trust Fabric | Central zero-trust enforcement — policy eval, risk scoring, audit for every action |
-| 🔄 Swarm Orchestration | Multi-agent parallel investigation — planner, dispatcher, judge, SSE stream, ticket handoff |
-| 🚨 Autonomous Remediation | Finding → playbook → action → approval gate → rollback. 5 built-in playbooks, 4 provider integrations |
-| 💍 Ring Policy | 4-tier execution isolation (ring0 blocked → ring3 auto-allow). Deterministic `execution_ring_violation` deny |
-| 📡 Channel Gateway | Multi-channel ingress normalization with approval workflow, bulk review, timeline audit |
-| 🔐 External Agent Control | Remote agent registration, heartbeat, dispatch, tenant enforcement, kill-switch |
-| 📦 Skill Pack Exchange | Signed marketplace for skills, policies, playbooks — provenance-verified install plus preview/upgrade/rollback lifecycle APIs |
-| 🏥 SRE Engine | Circuit breaker, error budget, SLO enforcement for all governed modules |
-| 🖥️ Governed Exec Channels | Shell / browser / credential execution behind dual-approval, ring policy, and fail-closed Trust Fabric gating |
-| 🛰️ Remote Control | Remote/edge agent registration, heartbeat, command dispatch, tenant scoping, and kill-switch |
-| 🚀 Release Governance | Deployment request → Release Governance preflight → Trust Fabric decision → approval/execute handoff → chain-of-custody evidence |
-
-### Skill Pack Exchange Lifecycle
-
-The Skill Pack API now supports governed install and lifecycle operations without a migration by preserving rollback snapshots in pack manifest metadata.
-
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/v1/skill-packs/{id}/install` | Trust Fabric-governed install with optional AGT MCP gateway `scan_path` enforcement |
-| `POST /api/v1/skill-packs/{id}/preview-update` | Shows skills, connectors, Capability Nodes, and scope-permission diff before upgrade |
-| `POST /api/v1/skill-packs/{id}/upgrade` | Upgrades an installed pack and stores a bounded previous-version snapshot |
-| `POST /api/v1/skill-packs/{id}/rollback` | Restores the latest previous version and records rollback actor/reason metadata |
-
-The Skill Packs UI now exposes the same lifecycle controls: optional gateway `scan_path` on install, update preview diff, installed-pack upgrade, rollback availability, and rollback execution.
+See the [documentation site](docs/docs.html) for the module catalog and API
+details, and the [Maturity Matrix](docs/maturity-matrix.md) for current assurance
+and known limitations.
 
 ## Tech Stack
 

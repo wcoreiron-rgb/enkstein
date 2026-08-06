@@ -1,6 +1,6 @@
 {
   "name": "enkstein-frontend",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -18,7 +18,8 @@
     "react-dom": "^18",
     "react-markdown": "^10.1.0",
     "recharts": "^2.12.7",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "thinking-orbs": "0.2.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",

@@ -171,4 +171,16 @@ async def bootstrap_baseline_controls(db: AsyncSession) -> dict[str, int]:
         db.add(Control(**payload))
         added += 1
     await db.commit()
-    return {"added": added, "total": len(baseline_controls())}
+    # Installing the pack without binding its collectors leaves every control
+    # permanently NOT_ASSESSED and every connector feeding it reporting an
+    # empty control scope, so the binding runs as part of bootstrap. It is
+    # idempotent, so an existing deployment is unaffected.
+    from app.services.control_collectors import attach_evaluators
+
+    bound = await attach_evaluators(db)
+    return {
+        "added": added,
+        "total": len(baseline_controls()),
+        "evaluators_attached": bound["evaluators_attached"],
+        "remediation_linked": bound["remediation_linked"],
+    }

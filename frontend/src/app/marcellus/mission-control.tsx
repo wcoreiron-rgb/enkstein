@@ -32,6 +32,7 @@ import {
   updateCortexMission,
 } from '@/lib/api';
 import { capabilityName } from '@/lib/capability-names';
+import OverlayPortal from '@/components/OverlayPortal';
 
 const PARTICIPANTS = [
   ['identityclaw', 'Identity'],
@@ -327,6 +328,7 @@ export default function MissionControl() {
       </div>
 
       {showCreate && (
+        <OverlayPortal>
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setShowCreate(false); }}>
           <div className="w-full max-w-xl rounded-lg border p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="mission-dialog-title"
             style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>
@@ -346,6 +348,7 @@ export default function MissionControl() {
             <div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setShowCreate(false)} className="h-9 rounded-md border px-3 text-sm" style={{ borderColor: 'var(--rc-border)', color: 'var(--rc-text-2)' }}>Cancel</button><button type="button" onClick={() => void createMission()} disabled={busy === 'create' || name.trim().length < 3 || objective.trim().length < 10 || participants.length < 2} className="inline-flex h-9 items-center gap-2 rounded-md bg-cyan-600 px-3 text-sm font-medium text-white disabled:opacity-50">{busy === 'create' && <Loader2 className="h-4 w-4 animate-spin" />} Create Mission</button></div>
           </div>
         </div>
+        </OverlayPortal>
       )}
     </section>
   );

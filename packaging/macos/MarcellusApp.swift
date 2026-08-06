@@ -1,6 +1,129 @@
 import Cocoa
 import WebKit
 
+import CoreVideo
+
+/// The launch indicator shown while the governed runtime starts.
+///
+/// This is a native redraw of the same dotted-orbit motif the web console uses
+/// for its "planning" stage. The startup sequence shows the AppKit splash
+/// first -- through the whole Docker wait, which is the long part -- and only
+/// swaps to web content once the runtime answers. Leaving a stock
+/// `NSProgressIndicator` here would mean the first and longest thing anyone
+/// sees is the one surface that did not get the new indicator.
+///
+/// Drawn with Core Graphics rather than ported from the web library: this runs
+/// before any web content exists, so there is no canvas to share.
+final class LaunchOrbView: NSView {
+    /// Particles per orbit ring. Matched to the 64px web preset.
+    private static let dotsPerRing = 14
+    private static let rings = 3
+    private static let secondsPerRevolution = 4.2
+
+    private var displayLink: CVDisplayLink?
+    private var startedAt = CACurrentMediaTime()
+    /// Frozen art for anyone who asked the system to reduce motion. The state
+    /// still reads as "starting up"; only the animation stops.
+    private var animates = true
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = .clear
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        layer?.backgroundColor = .clear
+    }
+
+    /// Matches the web launch screen's rendered size, so the handoff from this
+    /// splash to web content does not visibly resize the indicator.
+    override var intrinsicContentSize: NSSize { NSSize(width: 112, height: 112) }
+
+    /// Transparent so the splash background -- solid or vibrant -- shows
+    /// through, exactly as the web orb does.
+    override var isOpaque: Bool { false }
+
+    func start() {
+        animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        startedAt = CACurrentMediaTime()
+        guard animates else {
+            needsDisplay = true
+            return
+        }
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let link else { return }
+        displayLink = link
+        CVDisplayLinkSetOutputHandler(link) { [weak self] _, _, _, _, _ in
+            DispatchQueue.main.async { self?.needsDisplay = true }
+            return kCVReturnSuccess
+        }
+        CVDisplayLinkStart(link)
+    }
+
+    func stop() {
+        if let displayLink { CVDisplayLinkStop(displayLink) }
+        displayLink = nil
+    }
+
+    /// `NSProgressIndicator`-compatible controls.
+    ///
+    /// The splash drives this view from several paths -- terminal failure,
+    /// retry, handoff to web content -- that were written against the stock
+    /// indicator. Matching its interface keeps those call sites correct
+    /// instead of scattering equivalent logic through the startup sequence.
+    func startAnimation(_ sender: Any?) { start() }
+
+    func stopAnimation(_ sender: Any?) { stop() }
+
+    deinit { stop() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        let size = min(bounds.width, bounds.height)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius = size * 0.38
+        let dotRadius = max(1.0, size * 0.035)
+        let elapsed = animates ? CACurrentMediaTime() - startedAt : 0.6
+        let phase = elapsed / Self.secondsPerRevolution * 2 * .pi
+
+        // Ink follows the effective appearance so the orb stays legible on a
+        // light, dark, or vibrant splash without being told which it is.
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let ink: CGFloat = dark ? 0.92 : 0.18
+
+        for ring in 0..<Self.rings {
+            // Each ring is tilted, so the rings read as orbits around a sphere
+            // rather than as flat concentric circles.
+            let tilt = Double(ring) * (.pi / Double(Self.rings))
+            let squash = 0.35 + 0.4 * Double(ring) / Double(max(1, Self.rings - 1))
+            for dot in 0..<Self.dotsPerRing {
+                let angle = phase + Double(dot) / Double(Self.dotsPerRing) * 2 * .pi
+                let x = cos(angle) * Double(radius)
+                let y = sin(angle) * Double(radius) * squash
+                // Rotate the squashed ring into its tilt.
+                let rx = x * cos(tilt) - y * sin(tilt)
+                let ry = x * sin(tilt) + y * cos(tilt)
+                // Depth: dots on the far side of the orbit fade, which is what
+                // gives the flat projection its sense of volume.
+                let depth = (sin(angle) + 1) / 2
+                let alpha = ink * CGFloat(0.25 + 0.75 * depth)
+                let scale = CGFloat(0.6 + 0.4 * depth)
+                ctx.setFillColor(NSColor(white: dark ? 1 : 0, alpha: alpha).cgColor)
+                ctx.fillEllipse(in: CGRect(
+                    x: center.x + CGFloat(rx) - dotRadius * scale,
+                    y: center.y + CGFloat(ry) - dotRadius * scale,
+                    width: dotRadius * 2 * scale,
+                    height: dotRadius * 2 * scale))
+            }
+        }
+    }
+}
+
+
 private let defaultURL = URL(string: "http://127.0.0.1:3000/marcellus")!
 
 /// Name of the dedicated theme channel. Kept separate from the workspace
@@ -15,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var glassView: NSVisualEffectView!
     private var loadingView: NSView!
     private var statusLabel: NSTextField!
-    private var spinner: NSProgressIndicator!
+    private var spinner: LaunchOrbView!
     private var retryButton: NSButton!
     private var openDockerButton: NSButton!
     private var installDockerButton: NSButton!
@@ -293,10 +416,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         statusLabel.alignment = .center
         statusLabel.maximumNumberOfLines = 2
 
-        spinner = NSProgressIndicator()
-        spinner.style = .spinning
-        spinner.controlSize = .regular
-        spinner.startAnimation(nil)
+        // The launch indicator matches the web console's "planning" stage, so
+        // the handoff from the native splash to web content does not visibly
+        // change indicator mid-startup.
+        spinner = LaunchOrbView()
+        spinner.translatesAutoresizingMaskIntoConstraints = false
+        spinner.start()
 
         retryButton = NSButton(title: "Retry", target: self, action: #selector(retryStartup(_:)))
         openDockerButton = NSButton(title: "Open Docker", target: self, action: #selector(openDocker(_:)))

@@ -53,6 +53,14 @@ export type WorkspaceStore = {
   // stale-panel regression (an old project's files surviving a project
   // switch) would otherwise hide.
   artifacts: Record<string, MockArtifact[]>;
+  // Keyed by conversation_id. The real backend persists every turn, so a
+  // GET on a conversation after a page remount (a real navigation, or a
+  // client-side route swap) still returns its messages. Without this, the
+  // mock GET handler always answered `messages: []`, which made a
+  // navigate-after-turn-completes test indistinguishable from a genuine
+  // lost-reply regression: both show an empty conversation after the URL
+  // changes.
+  messages: Record<string, unknown[]>;
 };
 
 const ARCHITECTURE_STUB = {
@@ -79,7 +87,7 @@ function nextId(prefix: string): string {
 }
 
 export function createWorkspaceStore(): WorkspaceStore {
-  return { projects: [], conversations: [], nativeWorkspace: {}, artifacts: {} };
+  return { projects: [], conversations: [], nativeWorkspace: {}, artifacts: {}, messages: {} };
 }
 
 /** Seeds a project's mock artifact list with one file per given path. */
@@ -140,7 +148,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
   await page.route('**/api/v1/arcclaw/agent/models', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route('**/api/v1/marcellus/architecture', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ARCHITECTURE_STUB) }));
   await page.route('**/api/v1/marcellus/missions', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.7.1' }) }));
+  await page.route('**/runtime-info', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ version: '0.7.4' }) }));
 
   // Cowork resolves its Executor separately from the answering Brain. Default the
   // harness to a healthy local runtime so specs that don't care about executors
@@ -255,7 +263,7 @@ export async function mockMarcellusWorkspace(page: Page, store: WorkspaceStore =
     if (segments[0] === 'conversations' && segments.length === 2) {
       const conversation = store.conversations.find((item) => item.id === segments[1]);
       if (!conversation) return json(404, { detail: 'not found' });
-      if (method === 'GET') return json(200, { ...conversation, messages: [] });
+      if (method === 'GET') return json(200, { ...conversation, messages: store.messages[segments[1]] || [] });
       if (method === 'DELETE') {
         conversation.status = 'archived';
         conversation.updated_at = now;
@@ -328,6 +336,17 @@ export async function mockTurnStream(
     assistantContent: string;
     outcomes?: TurnOutcome[];
     assistantGovernance?: Record<string, unknown>;
+    /** Alternate Brain answers, as a multi-Brain turn returns them. */
+    brainAnswers?: Array<Record<string, unknown>>;
+    /** Keeps the stream open until the returned promise resolves, so a test
+     *  can act (navigate, stop) while the turn is genuinely still in flight. */
+    hold?: () => Promise<void>;
+    /** Overrides for presentation surfaces. Specs assert behaviour and are
+     *  happy with the placeholder defaults; the demo recorder needs the echoed
+     *  prompt and provider labels to read like a real session on video. */
+    userContent?: string;
+    provider?: string;
+    model?: string;
   },
 ): Promise<() => number> {
   const outcomes = options.outcomes && options.outcomes.length ? options.outcomes : ['completed'];
@@ -336,6 +355,7 @@ export async function mockTurnStream(
   await page.route(`**/marcellus/workspace/conversations/${options.conversationId}/turns/stream`, async (route) => {
     const outcome = outcomes[Math.min(calls, outcomes.length - 1)];
     calls += 1;
+    if (options.hold) await options.hold();
     const now = new Date().toISOString();
     const conversation = store.conversations.find((item) => item.id === options.conversationId);
     const body: string[] = [sse('turn_started', { conversation_id: options.conversationId, agent_mode: false })];
@@ -347,21 +367,32 @@ export async function mockTurnStream(
     } else {
       const userMessage = {
         id: nextId('message'), tenant_id: 'default', conversation_id: options.conversationId,
-        role: 'user', content: 'user prompt', classification: 'internal', governance: {}, created_at: now,
+        role: 'user', content: options.userContent ?? 'user prompt', classification: 'internal', governance: {}, created_at: now,
       };
       const assistantMessage = {
         id: nextId('message'), tenant_id: 'default', conversation_id: options.conversationId,
         role: 'assistant', content: options.assistantContent, classification: 'internal',
-        source: 'auto', provider: 'test-provider', model: 'test-model',
+        source: 'auto', provider: options.provider ?? 'test-provider', model: options.model ?? 'test-model',
         governance: {
           outcome: 'allowed', policy_name: 'default', reason: 'ok', risk_score: 3,
           input_redacted: false, output_redacted: false, confidence: 0.92,
           runtime_group: 'hybrid', latency_ms: 812, votes: [], context_manifest: null,
           ...options.assistantGovernance,
         },
+        brain_answers: options.brainAnswers ?? [],
         created_at: now,
       };
       body.push(sse('response_delta', { delta: options.assistantContent.slice(0, 16) }));
+      // Mirrors real backend persistence: a re-fetch of this conversation
+      // (a genuine navigation, or a client-side route swap after this
+      // stream settles) must see the same messages a completed turn left
+      // behind, or a mock-only rendering gap becomes indistinguishable
+      // from a genuine lost-reply regression.
+      store.messages[options.conversationId] = [
+        ...(store.messages[options.conversationId] || []),
+        userMessage,
+        assistantMessage,
+      ];
       body.push(sse('turn_completed', {
         conversation: conversation || {
           id: options.conversationId, tenant_id: 'default', owner_id: 'e2e-owner', project_id: null,

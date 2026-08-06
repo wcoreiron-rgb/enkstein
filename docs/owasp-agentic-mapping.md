@@ -3,7 +3,7 @@
 **Date:** 2026-08-05  
 **Version:** 1.2  
 **Scope:** Enkstein Zero Trust Security Platform (self-hosted)  
-**Evidence re-verified:** 2026-08-05 against release 0.7.10. Every test cited in the table below was re-run and passed.
+**Evidence re-verified:** 2026-08-05 against release 0.8.0. Every test cited in the table below was re-run and passed.
 
 > **Disclaimer:** This is a vendor self-assessment. Claims have been matched against source code in this repository but have not been independently audited. An independent third-party security assessment is recommended before relying on this document for compliance purposes.
 

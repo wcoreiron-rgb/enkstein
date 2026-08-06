@@ -395,7 +395,11 @@ def _require_owner(user: dict[str, Any], owner_id: str) -> None:
 
 
 def _message_read(message: CortexConversationMessage) -> CortexMessageRead:
-    content = decrypt_json(message.content_ciphertext, message.content_digest)["content"]
+    decrypted = decrypt_json(message.content_ciphertext, message.content_digest)
+    content = decrypted["content"]
+    # Alternate Brain answers live inside the same encrypted blob as the primary
+    # answer, so they never sit at a weaker protection level than the reply itself.
+    brain_answers = decrypted.get("brain_answers") or []
     try:
         governance = json.loads(message.governance_json or "{}")
     except json.JSONDecodeError:
@@ -411,9 +415,47 @@ def _message_read(message: CortexConversationMessage) -> CortexMessageRead:
         provider=message.provider,
         model=message.model,
         governance=governance,
+        brain_answers=brain_answers if isinstance(brain_answers, list) else [],
         parent_message_id=message.parent_message_id,
         created_at=message.created_at,
     )
+
+
+_MAX_BRAIN_ANSWER_CHARS = 20_000
+
+
+def _collect_brain_answers(gateway: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep every counted Brain's own answer so the UI can show them side by side.
+
+    Only votes that actually produced a response are kept. The text is whatever
+    the gateway already returned, which means redaction has already been applied
+    upstream; nothing new is exposed here beyond the answer that was discarded.
+    """
+    votes = gateway.get("votes") or []
+    if not isinstance(votes, list):
+        return []
+    selected_source = gateway.get("source")
+    primary_response = gateway.get("response")
+    answers: list[dict[str, Any]] = []
+    for vote in votes:
+        if not isinstance(vote, dict) or not vote.get("counted"):
+            continue
+        response = vote.get("response")
+        if not isinstance(response, str) or not response.strip():
+            continue
+        answers.append(
+            {
+                "source": vote.get("source"),
+                "provider": vote.get("provider"),
+                "model": vote.get("model"),
+                "latency_ms": vote.get("latency_ms"),
+                "primary": vote.get("source") == selected_source and response == primary_response,
+                "content": response[:_MAX_BRAIN_ANSWER_CHARS],
+                "truncated": len(response) > _MAX_BRAIN_ANSWER_CHARS,
+            }
+        )
+    # A single Brain answering is not a comparison; skip the cards entirely.
+    return answers if len(answers) > 1 else []
 
 
 def _artifact_read(artifact: CortexArtifact, *, include_content: bool = False) -> CortexArtifactRead:
@@ -537,8 +579,7 @@ def _bare_labeled_change_block(text: str) -> tuple[list[Any], tuple[int, int], b
     if not marker:
         return None
     array_start = marker.end()
-    while array_start < len(text) and text[array_start].isspace():
-        array_start += 1
+    array_start = _skip_change_label_fence(text, array_start)
     if array_start >= len(text) or text[array_start] != "[":
         return None
     try:
@@ -550,7 +591,39 @@ def _bare_labeled_change_block(text: str) -> tuple[list[Any], tuple[int, int], b
         return recovered, (marker.start(), len(text)), True
     if not isinstance(parsed, list):
         return None
-    return parsed, (marker.start(), array_start + consumed), False
+    end = _skip_change_label_closing_fence(text, array_start + consumed)
+    return parsed, (marker.start(), end), False
+
+
+def _skip_change_label_fence(text: str, index: int) -> int:
+    """Step past whitespace and an opening code fence after the change label.
+
+    Providers routinely answer the protocol as a ``MARCELLUS_CHANGES`` heading
+    followed by an ordinary fenced block rather than a ``marcellus_changes``
+    info string. Without this the label and its JSON are treated as prose and
+    shown to the user verbatim.
+    """
+    while index < len(text) and text[index].isspace():
+        index += 1
+    if text.startswith("```", index):
+        index += 3
+        line_end = text.find("\n", index)
+        # Only a language-ish info string may follow; anything else is prose.
+        info = text[index:line_end if line_end != -1 else len(text)].strip().lower()
+        if line_end == -1 or (info and info not in {"json", "jsonc", "application/json", "marcellus_changes"}):
+            return index
+        index = line_end + 1
+        while index < len(text) and text[index].isspace():
+            index += 1
+    return index
+
+
+def _skip_change_label_closing_fence(text: str, index: int) -> int:
+    """Consume the closing fence so it is not left behind as stray prose."""
+    probe = index
+    while probe < len(text) and text[probe].isspace():
+        probe += 1
+    return probe + 3 if text.startswith("```", probe) else index
 
 
 def _normalize_change_entry(raw: Any) -> dict[str, Any] | None:
@@ -2443,7 +2516,10 @@ async def execute_turn(
             gateway,
             effective_classification,
         )
-    assistant_ciphertext, assistant_digest = encrypt_json({"content": assistant_text})
+    brain_answers = _collect_brain_answers(gateway)
+    assistant_ciphertext, assistant_digest = encrypt_json(
+        {"content": assistant_text, "brain_answers": brain_answers}
+    )
     persisted_governance = {
         **(gateway.get("governance") or {}),
         "routing": gateway.get("routing"),

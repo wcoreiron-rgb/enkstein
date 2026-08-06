@@ -26,6 +26,8 @@ import {
 } from '@/lib/api';
 import { persistWorkspaceMode, WorkspaceMode } from '@/lib/workspace-mode';
 import { workspaceModeBasePath, workspaceModeFromPath } from '@/lib/workspace-routes';
+import { useBackgroundTurns } from '@/components/BackgroundTurns';
+import BackgroundTurnTray from '@/components/BackgroundTurnTray';
 import { markNextFolderPickAsNewProject } from '@/lib/native-folder-intent';
 
 type NavItem = {
@@ -142,6 +144,9 @@ const WORKSPACE_MODES: Array<{ id: WorkspaceMode; label: string; icon: React.Ele
 ];
 
 function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMode; collapsed: boolean; onModeChange: (mode: WorkspaceMode) => void }) {
+  // A turn left running in another mode is only discoverable if that mode's
+  // button says so, so each button carries a marker for its own pending work.
+  const background = useBackgroundTurns();
   return (
     <div className={clsx('border-b', collapsed ? 'px-2 py-2' : 'px-3 py-3')} style={{ borderColor: 'var(--rc-border)' }}>
       {!collapsed && (
@@ -155,15 +160,21 @@ function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMod
       >
         {WORKSPACE_MODES.map(({ id, label, icon: Icon }) => {
           const active = mode === id;
+          const modeTurns = (background?.turns ?? []).filter((turn) => turn.mode === id);
+          const modeRunning = modeTurns.some((turn) => turn.status === 'running');
+          const modeUnread = modeTurns.some((turn) => turn.status !== 'running' && turn.unread);
+          const marker = modeRunning ? 'running' : modeUnread ? 'unread' : null;
           return (
             <button
               key={id}
               type="button"
-              title={label}
+              title={marker === 'running'
+                ? `${label} — a turn is still running`
+                : marker === 'unread' ? `${label} — a reply is waiting` : label}
               aria-current={active ? 'page' : undefined}
               onClick={() => onModeChange(id)}
               className={clsx(
-                'flex min-h-10 items-center justify-center rounded transition-colors',
+                'relative flex min-h-10 items-center justify-center rounded transition-colors',
                 collapsed ? 'w-10' : 'min-w-0 flex-col gap-1 px-1 py-1.5',
                 active ? 'bg-regent-600 text-white' : 'hover:bg-[var(--rc-bg-elevated)]',
               )}
@@ -171,6 +182,18 @@ function WorkspaceSwitch({ mode, collapsed, onModeChange }: { mode: WorkspaceMod
             >
               <Icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span className="w-full truncate text-center text-[10px] font-medium">{label}</span>}
+              {marker && (
+                <span
+                  data-testid={`mode-activity-${id}`}
+                  data-activity={marker}
+                  aria-hidden="true"
+                  className={clsx(
+                    'absolute right-1 top-1 h-1.5 w-1.5 rounded-full',
+                    marker === 'running' && 'animate-pulse',
+                  )}
+                  style={{ background: marker === 'running' ? 'var(--rc-brand)' : '#16a34a' }}
+                />
+              )}
             </button>
           );
         })}
@@ -719,6 +742,8 @@ export default function Sidebar() {
           <WorkspaceModeNav key={workspaceMode} mode={workspaceMode} collapsed={collapsed} />
         )}
       </nav>
+
+      {!collapsed && <BackgroundTurnTray />}
 
       {/* Footer */}
       <div className="p-2 border-t space-y-2" style={{ borderColor: 'var(--rc-border)' }}>

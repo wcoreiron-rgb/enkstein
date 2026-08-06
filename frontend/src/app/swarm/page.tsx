@@ -5,6 +5,7 @@ import { Bot, CheckCircle2, Clock, Plus, RefreshCw, ShieldAlert, StopCircle, Use
 import RiskBadge from '@/components/RiskBadge';
 import { approveSwarmJob, cancelSwarmJob, createMicrosoftIdentityIncidentSwarm, createSuspiciousIdentitySwarm, createSwarmJob, getSwarmJobs } from '@/lib/api';
 import { capabilityName } from '@/lib/capability-names';
+import OverlayPortal from '@/components/OverlayPortal';
 
 function statusMeta(status: string) {
   const s = (status || '').toLowerCase();
@@ -304,6 +305,7 @@ export default function SwarmPage() {
       </div>
 
       {showCreate && (
+        <OverlayPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={(e) => e.target === e.currentTarget && setShowCreate(false)}>
           <div className="w-full max-w-xl rounded-xl border border-gray-800 bg-gray-900 p-5 space-y-4">
             <h3 className="text-white font-semibold flex items-center gap-2"><Bot className="w-4 h-4 text-cyan-400" /> Create Swarm Job</h3>
@@ -322,6 +324,7 @@ export default function SwarmPage() {
             </div>
           </div>
         </div>
+        </OverlayPortal>
       )}
     </div>
   );

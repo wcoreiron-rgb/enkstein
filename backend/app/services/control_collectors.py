@@ -28,37 +28,56 @@ logger = logging.getLogger("controls.collectors")
 # The connector list is an OR: any one of them provides the evidence.
 COLLECTORS: dict[str, dict[str, Any]] = {
     "identity.entra": {
-        "connectors": ["entra_id", "azure_ad", "okta"],
+        "connectors": ["entra_id", "azure_ad", "okta", "exabeam", "securonix"],
         "domain": "identity",
         "description": "Directory, privileged role, and sign-in risk state from the identity provider.",
     },
     "identity.privilege": {
-        "connectors": ["entra_id", "azure_ad", "okta", "aws_iam"],
+        "connectors": [
+            "entra_id", "azure_ad", "okta", "aws_iam",
+            "cyberark", "hashicorp_vault", "auth0", "ping_identity", "duo",
+            "dtex", "code42",
+        ],
         "domain": "identity",
         "description": "Privileged assignment and standing-access review evidence.",
     },
     "endpoint.posture": {
-        "connectors": ["defender_endpoint", "crowdstrike", "sentinelone", "intune"],
+        "connectors": [
+            "defender_endpoint", "crowdstrike", "sentinelone", "intune",
+            "tanium", "carbonblack",
+        ],
         "domain": "endpoint",
         "description": "Managed device inventory, compliance state, and agent health.",
     },
     "network.exposure": {
-        "connectors": ["aws_security_hub", "azure_defender", "gcp_scc", "shodan", "censys"],
+        "connectors": [
+            "aws_security_hub", "azure_defender", "gcp_scc", "shodan", "censys",
+            "tenable", "qualys", "rapid7",
+        ],
         "domain": "network",
         "description": "Internet-facing surface and boundary enforcement evidence.",
     },
     "network.segmentation": {
-        "connectors": ["aws_security_hub", "azure_defender", "gcp_scc", "paloalto"],
+        "connectors": [
+            "aws_security_hub", "azure_defender", "gcp_scc", "paloalto",
+            "zscaler", "cloudflare", "cisco_umbrella", "fortinet",
+        ],
         "domain": "network",
         "description": "Deny-by-default boundary and traffic-encryption configuration.",
     },
     "data.classification": {
-        "connectors": ["purview", "mcas", "aws_security_hub", "gcp_scc"],
+        "connectors": [
+            "purview", "mcas", "aws_security_hub", "gcp_scc",
+            "varonis", "nightfall", "bigid", "onetrust", "transcend",
+        ],
         "domain": "data",
         "description": "Sensitive-data discovery, labelling, and handling enforcement.",
     },
     "data.access": {
-        "connectors": ["purview", "mcas", "entra_id", "aws_security_hub"],
+        "connectors": [
+            "purview", "mcas", "entra_id", "aws_security_hub",
+            "netskope", "google_workspace", "salesforce", "slack", "ms_teams",
+        ],
         "domain": "data",
         "description": "Access to classified data by identity and stated purpose.",
     },
@@ -68,22 +87,28 @@ COLLECTORS: dict[str, dict[str, Any]] = {
         "description": "Application authorization and input-handling defects from code analysis.",
     },
     "application.supplychain": {
-        "connectors": ["github", "gitlab", "snyk", "dependabot"],
+        "connectors": ["github", "gitlab", "snyk", "dependabot", "jenkins"],
         "domain": "application",
         "description": "Dependency, branch-protection, and secret-scanning state.",
     },
     "cloud.posture": {
-        "connectors": ["prowler", "aws_security_hub", "azure_defender", "gcp_scc"],
+        "connectors": [
+            "prowler", "aws_security_hub", "azure_defender", "gcp_scc",
+            "wiz", "azure_arm", "gcp_iam",
+        ],
         "domain": "cloud",
         "description": "Cloud configuration posture from a read-only scanner.",
     },
     "cloud.logging": {
-        "connectors": ["aws_security_hub", "azure_defender", "gcp_scc", "splunk", "sentinel"],
+        "connectors": [
+            "aws_security_hub", "azure_defender", "gcp_scc", "splunk", "sentinel",
+            "elastic", "datadog", "qradar", "sumologic",
+        ],
         "domain": "cloud",
         "description": "Security-relevant audit event collection and retention.",
     },
     "terraclaw.rule": {
-        "connectors": ["terraform_mcp", "tfsec", "checkov"],
+        "connectors": ["terraform_mcp", "tfsec", "checkov", "terraform_cloud"],
         "domain": "application",
         "description": "Deterministic infrastructure-as-code rule evaluation.",
     },
@@ -92,6 +117,49 @@ COLLECTORS: dict[str, dict[str, Any]] = {
         "domain": "application",
         "description": "Local AI input/output pattern scanner.",
         "local": True,
+    },
+    # Collectors for the eight Capability Nodes whose baseline control shipped
+    # with no evaluator, which left every connector feeding those nodes
+    # reporting an empty control scope even when it had a working adapter.
+    "cloud.attackpath": {
+        "connectors": ["wiz", "orca", "aws_security_hub", "azure_defender", "gcp_scc"],
+        "domain": "cloud",
+        "description": "Exploitable chains correlated across identity, exposure, and workload state.",
+    },
+    "automation.governance": {
+        "connectors": ["jenkins", "terraform_cloud", "servicenow"],
+        "domain": "automation",
+        "description": "Scope, approval, and audit evidence for automated pipelines and jobs.",
+    },
+    "compliance.evidence": {
+        "connectors": ["drata", "vanta", "servicenow"],
+        "domain": "governance",
+        "description": "Traceable control evidence from a compliance automation platform.",
+    },
+    "threat.intelligence": {
+        "connectors": ["cisa_kev", "recorded_future", "misp", "threatfox", "crowdstrike_intel"],
+        "domain": "visibility",
+        "description": "Indicator source, confidence, and freshness provenance.",
+    },
+    "threat.detection": {
+        "connectors": ["virustotal", "crowdstrike", "defender_endpoint", "sentinel", "splunk"],
+        "domain": "visibility",
+        "description": "Indicator correlation against observable detections.",
+    },
+    "application.release": {
+        "connectors": ["github", "gitlab", "jenkins", "terraform_cloud"],
+        "domain": "application",
+        "description": "Build provenance, artifact signing, and deployment-gate evidence.",
+    },
+    "vendor.assurance": {
+        "connectors": ["bitsight", "security_scorecard", "upguard", "servicenow", "jira"],
+        "domain": "governance",
+        "description": "Third-party posture ratings and contractual assurance records.",
+    },
+    "recovery.readiness": {
+        "connectors": ["aws_security_hub", "azure_defender", "gcp_scc", "servicenow"],
+        "domain": "governance",
+        "description": "Backup coverage and tested recovery-objective evidence.",
     },
     "prowler.aws": {"connectors": ["prowler"], "domain": "cloud", "description": "Prowler AWS checks."},
     "prowler.azure": {"connectors": ["prowler"], "domain": "cloud", "description": "Prowler Azure checks."},
@@ -131,6 +199,17 @@ BASELINE_EVALUATORS: dict[str, str] = {
     "enkstein:logclaw:telemetry-integrity": "cloud.logging",
     "enkstein:arcclaw:ai-input": "arcclaw.pattern",
     "enkstein:arcclaw:ai-output": "arcclaw.pattern",
+    # Previously unevaluated nodes. Each is bound to the collector whose
+    # connectors genuinely produce that node's evidence, so a control here is
+    # assessable rather than permanently recommendation-only.
+    "enkstein:attackpathclaw:attack-path": "cloud.attackpath",
+    "enkstein:automationclaw:automation-governance": "automation.governance",
+    "enkstein:complianceclaw:control-evidence": "compliance.evidence",
+    "enkstein:intelclaw:intel-provenance": "threat.intelligence",
+    "enkstein:recoveryclaw:recovery-test": "recovery.readiness",
+    "enkstein:releaseclaw:release-integrity": "application.release",
+    "enkstein:threatclaw:threat-detection": "threat.detection",
+    "enkstein:vendorclaw:vendor-assurance": "vendor.assurance",
 }
 
 # Controls whose remediation the platform can actually execute. Anything not

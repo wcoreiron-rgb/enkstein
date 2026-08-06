@@ -8,7 +8,12 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
+    /* Kept as :root defaults so the page still renders if the theme script
+       never runs, then overridden per theme below. The site shares one theme
+       preference across pages; this page previously ignored it and stayed dark
+       whichever theme the visitor had chosen. */
+    :root,
+    html[data-theme="dark"] {
       --bg:        #0a0a0a;
       --surface:   #111111;
       --surface2:  #1a1a1a;
@@ -23,6 +28,23 @@
       --text:      #f4f4f5;
       --text2:     #a1a1aa;
       --text3:     #71717a;
+      --radius:    8px;
+    }
+    html[data-theme="light"] {
+      --bg:        #f8fafc;
+      --surface:   #ffffff;
+      --surface2:  #f1f5f9;
+      --border:    #dbe3ee;
+      --blue:      #2563eb;
+      --blue-dim:  #1d4ed8;
+      --purple:    #7c3aed;
+      --green:     #15803d;
+      --orange:    #c2410c;
+      --red:       #dc2626;
+      --nvidia:    #4d7c0f;
+      --text:      #0f172a;
+      --text2:     #334155;
+      --text3:     #64748b;
       --radius:    8px;
     }
 
@@ -43,7 +65,7 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(10,10,10,0.95);
+      background: color-mix(in srgb, var(--bg) 95%, transparent);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
     }
@@ -241,17 +263,23 @@
       gap: 8px;
     }
     .change-list li {
-      display: flex;
-      gap: 10px;
       font-size: .9rem;
       color: var(--text2);
       line-height: 1.5;
+      /* Deliberately not a flex row. A flex container makes the leading
+         <strong> its own flex item, so a bold lead-in wraps into a narrow
+         column beside the prose instead of reading as the first words of the
+         sentence. Indent + a hanging marker keeps the arrow aligned while the
+         text stays one continuous paragraph. */
+      padding-left: 22px;
+      position: relative;
     }
     .change-list li::before {
       content: '→';
       color: var(--text3);
-      flex-shrink: 0;
-      margin-top: 1px;
+      position: absolute;
+      left: 0;
+      top: 0;
     }
     .change-list li strong { color: var(--text); font-weight: 600; }
     .change-list li code {
@@ -294,6 +322,24 @@
     }
     footer nav { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; background: none; border: none; position: static; }
     footer nav a:hover { color: var(--text2); }
+
+    .theme-toggle {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+    }
+    @media (max-width: 640px) {
+      .nav-links li:not(.theme-item) { display: none; }
+      .nav-links { gap: 0; }
+      .nav-inner { padding: 0 16px; }
+      .container { padding-left: 16px; padding-right: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -312,6 +358,7 @@
       <li><a href="docs.html">Docs</a></li>
       <li><a href="changelog.html" class="active-page">Changelog</a></li>
       <li><a href="owasp-agentic.html">OWASP</a></li>
+      <li class="theme-item"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle theme">☀️ Light</button></li>
       <li><a href="https://github.com/wcoreiron-rgb/enkstein" target="_blank" rel="noopener" class="btn-nav">GitHub →</a></li>
     </ul>
   </div>
@@ -319,6 +366,50 @@
 
 <!-- ── MAIN ── -->
 <main class="container">
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.8.0 — Work you can leave, evidence you can trace        -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--blue);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Work You Can Leave, Evidence You Can Trace</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Chat · Cowork · Security · Connectors</span>
+          <span class="release-date">August 5, 2026 &nbsp;·&nbsp; Enkstein v0.8.0</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">A turn can now be started and left running while you work elsewhere, every governed Brain that answered a Swarm keeps its own answer, and a connector can finally state which controls it is capable of proving and how those controls stand in your tenant. Alongside that, several things that looked broken turned out to be things that were merely unexplained, and those are now said plainly.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Turns survive navigation:</strong> a governed turn is owned above the router rather than by the page showing it, so switching conversations or workspaces leaves it running. The sidebar lists what is still in flight with a live indicator whose shape reflects the stage the runtime actually reported, and each entry links back to its conversation.</li>
+          <li><strong>Every Brain's answer is kept:</strong> a Multi-Brain Swarm used to discard every answer but the winning one. Each Brain that answered now keeps its own card, with the one that became the reply marked as such, stored under the same encryption as the reply itself.</li>
+          <li><strong>Connector control scope:</strong> a connector now answers two separate questions from one binding &mdash; which controls it could ever produce evidence for, and which of those passed, failed, or were never assessed in this tenant. The second cannot live in a docs site, because only the deployment knows it.</li>
+          <li><strong>Remediation reflects assessment:</strong> the autonomous remediation view is synchronized with control assessment rather than maintaining a separate idea of what needs fixing.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Cowork executors explain themselves:</strong> both executors report unavailable in two quite different situations &mdash; no project is open, or the open project has no approved folder &mdash; and both were described with the same sentence, blaming a project that in one case had not been selected. The two now read differently, the state is visible before a turn is sent rather than only while one runs, and approving a folder is offered as the fix where a folder is genuinely what is missing.</li>
+          <li><strong>A crash waiting in the Cowork runner:</strong> the Brain progress callback called a function that did not exist anywhere in the codebase. It only ran when a Brain reported progress, so it reached a release as a latent failure on real jobs. Progress is now buffered and recorded once the turn returns, matching how file progress already worked, and the runner is checked for unresolvable names rather than for one path.</li>
+          <li><strong>Drawers stopped rendering as embedded panels:</strong> Liquid Glass gives every card a backdrop filter, which silently makes that card the containing block for anything fixed inside it &mdash; so a drawer collapsed to the card's bounds instead of covering the page. Overlays now render against the document.</li>
+          <li><strong>Local folder status follows the conversation:</strong> it was keyed to the sidebar's project picker, so an open conversation belonging to another project could be described by the wrong folder.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Changed</div>
+        <ul class="change-list">
+          <li><strong>Liquid Glass has real depth:</strong> surfaces are layered rather than uniformly translucent, so what is above the page reads as above it.</li>
+          <li><strong>Longer Brains are given longer:</strong> one timeout covered hosted APIs, local models, and subscription CLIs alike, which cut off the slower two mid-answer. Each now gets a budget that matches how it actually works.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.7.10 — Every Cowork executor read as unavailable        -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
@@ -5177,6 +5268,34 @@
   </nav>
   <p>&copy; 2026 Enkstein. Distributed Zero Trust Security.</p>
 </footer>
+
+<script>
+  // Same contract as index.html and docs.html: one shared preference key, and
+  // the system preference only as the initial default.
+  (function () {
+    const root = document.documentElement;
+    const toggle = document.getElementById('theme-toggle');
+    const stored = localStorage.getItem('enkstein-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    function applyTheme(theme) {
+      root.setAttribute('data-theme', theme);
+      if (toggle) {
+        toggle.textContent = theme === 'dark' ? '☀️ Light' : '🌙 Dark';
+      }
+    }
+
+    applyTheme(stored || (prefersDark ? 'dark' : 'light'));
+
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        localStorage.setItem('enkstein-theme', next);
+      });
+    }
+  })();
+</script>
 
 </body>
 </html>

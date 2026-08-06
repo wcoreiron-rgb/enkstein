@@ -6,7 +6,7 @@ import {
   Shield, Activity, Ban
 } from 'lucide-react';
 import { capabilityName, marcellusText } from '@/lib/capability-names';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, getControlRemediationProposals, remediateControl } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -498,25 +498,42 @@ export default function RemediationPage() {
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState<'all' | 'completed' | 'failed'>('all');
+  const [proposals, setProposals] = useState<any | null>(null);
+  const [proposing, setProposing] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [s, pend, hist, pbs] = await Promise.all([
+      const [s, pend, hist, pbs, props] = await Promise.all([
         fetchStats(),
         fetchActions('pending_approval'),
         fetchActions(),
         fetchPlaybooks(),
+        // Failing controls from the assessment. Without this the page shows an
+        // empty queue while the node pages report open violations, which reads
+        // as "nothing to do" when the opposite is true.
+        getControlRemediationProposals().catch(() => null),
       ]);
       setStats(s);
       setPending(pend);
       setHistory(hist.filter(a => a.status !== 'pending_approval'));
       setPlaybooks(pbs);
+      setProposals(props);
     } catch (e) {
       console.error('Remediation fetch error:', e);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handlePropose = useCallback(async (controlId: string) => {
+    setProposing(controlId);
+    try {
+      await remediateControl(controlId);
+      await refresh();
+    } finally {
+      setProposing(null);
+    }
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
@@ -608,6 +625,79 @@ export default function RemediationPage() {
           ))}
         </div>
       )}
+
+      {/* Failing controls from the assessment */}
+      {proposals && (proposals.actionable?.length || proposals.advisory_only?.length) ? (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5" style={{ color: 'var(--rc-brand)' }} />
+            <h2 className="text-base font-semibold" style={{ color: 'var(--rc-text-1)' }}>
+              Failing Controls
+            </h2>
+            <span className="px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: '#ef4444' }}>
+              {proposals.failing}
+            </span>
+            <span className="text-xs" style={{ color: 'var(--rc-text-3)' }}>
+              from the latest assessment
+            </span>
+          </div>
+
+          {proposals.actionable?.length > 0 && (
+            <div className="space-y-2">
+              {proposals.actionable.map((item: any) => (
+                <div
+                  key={item.control_id}
+                  className="rounded-xl border p-3 flex items-start gap-3"
+                  style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}
+                >
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-orange-400" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{item.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--rc-text-3)' }}>
+                      {item.control_id} · {capabilityName(item.claw)} · {item.severity} · {item.evidence_count} finding(s)
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--rc-text-2)' }}>
+                      Proposes <code>{item.action_type}</code> via {item.provider}. Governed by Trust Fabric and the approval gate.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handlePropose(item.control_id)}
+                    disabled={proposing === item.control_id}
+                    className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium border disabled:opacity-50"
+                    style={{ background: 'var(--rc-bg-elevated)', borderColor: 'var(--rc-border-2)', color: 'var(--rc-text-2)' }}
+                  >
+                    {proposing === item.control_id ? 'Proposing…' : 'Propose remediation'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {proposals.advisory_only?.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--rc-text-3)' }}>
+                Recommendation only ({proposals.advisory_only.length})
+              </p>
+              {proposals.advisory_only.map((item: any) => (
+                <div
+                  key={item.control_id}
+                  className="rounded-xl border p-3 flex items-start gap-3"
+                  style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}
+                >
+                  <Ban className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--rc-text-3)' }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium" style={{ color: 'var(--rc-text-1)' }}>{item.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--rc-text-3)' }}>
+                      {item.control_id} · {capabilityName(item.claw)} · {item.evidence_count} finding(s)
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--rc-text-2)' }}>{item.reason}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {/* Approval Queue */}
       <section className="space-y-3">

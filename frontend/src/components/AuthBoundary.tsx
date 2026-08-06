@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
+import { BackgroundTurnsProvider } from '@/components/BackgroundTurns';
+import { ExecutionOrb } from '@/components/ExecutionOrb';
 import { clearAuthToken, CONSOLE_IDLE_TIMEOUT_MS, getAuthToken, lockConsole } from '@/lib/auth';
 
 const BASE = process.env.NEXT_PUBLIC_API_URL
@@ -16,7 +18,12 @@ function PreparingRuntime() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/enkstein-icon.png" alt="Enkstein" width={104} height={104} className="mx-auto mb-5" />
         <h1 className="text-2xl font-semibold">Enkstein</h1>
-        <div className="mx-auto mt-5 h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-red-600" aria-hidden="true" />
+        {/* The launch screen is a fixed white surface regardless of the saved
+            theme, so the orb is pinned to light ink rather than resolving a
+            theme that has not been applied to this screen. */}
+        <div className="mt-5 flex justify-center">
+          <ExecutionOrb activity="planning" size={64} theme="light" scale={112} />
+        </div>
         <p className="mt-3 text-sm text-slate-500">Preparing the Enkstein runtime...</p>
       </div>
     </main>
@@ -91,9 +98,13 @@ export default function AuthBoundary({ children }: { children: React.ReactNode }
   if (!authorized) return <PreparingRuntime />;
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 overflow-auto p-8">{children}</main>
-    </div>
+    // The provider sits above both the sidebar and the routed page, so a turn
+    // it owns survives every client-side navigation between them.
+    <BackgroundTurnsProvider>
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <main className="flex-1 overflow-auto p-8">{children}</main>
+      </div>
+    </BackgroundTurnsProvider>
   );
 }

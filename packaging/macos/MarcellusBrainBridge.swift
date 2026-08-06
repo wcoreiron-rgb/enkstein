@@ -119,10 +119,13 @@ private final class BrowserSessionBroker {
     // Chrome suspends the MV3 background service worker (stopping any plain
     // setInterval) and throttles content-script timers heavily once their
     // tab is backgrounded. Chrome enforces a 30-second floor on alarm
-    // periods, so this must comfortably exceed that floor plus scheduling
-    // jitter/service-worker cold-start time, or a perfectly healthy,
-    // still-open tab gets reported as disconnected between alarm ticks.
-    private static let connectionStalenessSeconds: TimeInterval = 50
+    // periods; Edge and older Chromium builds clamp to 60, and a backgrounded
+    // tab's timers are throttled to roughly the same. A 50-second window was
+    // therefore guaranteed to expire between ticks on Edge, which is what
+    // made a healthy signed-in tab flip to "not connected" within a minute of
+    // being left alone. This must exceed the slowest floor (60s) plus
+    // scheduling jitter and service-worker cold-start time.
+    private static let connectionStalenessSeconds: TimeInterval = 150
     // When a browser turn arrives but the companion has not checked in within
     // connectionStalenessSeconds, wait up to this long for it to reconnect
     // (service worker waking, tab finishing a refresh) before giving up. This
@@ -204,13 +207,23 @@ private final class BrowserSessionBroker {
     // poll re-leases an explicit task_id (service-worker restart recovery) when provided, otherwise
     // leases the next queued task matching the extension's currently available providers. Returns a
     // cancel_task_id when an invoke timeout/cancel needs to be signalled back to the extension.
-    func poll(availableProviders: [String], requestedTaskID: String?) -> (task: [String: Any]?, cancelTaskID: String?) {
+    func poll(
+        availableProviders: [String],
+        requestedTaskID: String?,
+        keepaliveOnly: Bool = false
+    ) -> (task: [String: Any]?, cancelTaskID: String?) {
         condition.lock()
         defer { condition.unlock() }
         providers = Set(availableProviders.filter { ["chatgpt", "claude", "gemini"].contains($0) })
         lastSeen = Date()
 
         let cancelSignal = pendingCancelSignals.isEmpty ? nil : pendingCancelSignals.removeFirst()
+
+        // A keepalive proves the Companion is alive while it is already busy
+        // with a turn. It must not lease new work, and must not rewind the
+        // active task's state the way the restart-recovery path deliberately
+        // does, or a mid-stream check-in would look like a fresh attempt.
+        if keepaliveOnly { return (nil, cancelSignal) }
 
         if let requestedTaskID {
             guard var record = tasks[requestedTaskID] else { return (nil, cancelSignal) }
@@ -764,7 +777,11 @@ private final class BrainBridge {
             }
             let providers = payload["providers"] as? [String] ?? []
             let requestedTaskID = payload["task_id"] as? String
-            let result = browserBroker.poll(availableProviders: providers, requestedTaskID: requestedTaskID)
+            let keepaliveOnly = payload["keepalive"] as? Bool ?? false
+            let result = browserBroker.poll(
+                availableProviders: providers,
+                requestedTaskID: requestedTaskID,
+                keepaliveOnly: keepaliveOnly)
             var body: [String: Any] = ["task": result.task ?? NSNull()]
             if let cancelTaskID = result.cancelTaskID { body["cancel_task_id"] = cancelTaskID }
             send(connection, status: 200, body: body)

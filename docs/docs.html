@@ -389,6 +389,10 @@
     }
     @media (max-width: 640px) {
       .content { padding: 1.5rem 1rem 3rem; }
+      .topbar-right a { display: none; }
+      .topbar-right { gap: 0; }
+      .topbar-title { display: none; }
+      .topbar-sep { display: none; }
     }
   </style>
 </head>
@@ -477,7 +481,7 @@
       <p>The platform is composed of three interconnected layers:</p>
       <ul>
         <li><strong>26 Capability Nodes + core control surfaces</strong> — Specialized domain modules cover AI security, cloud posture, identity governance, endpoint detection, compliance, DLP, Terraform/IaC governance, and more. Model Cortex, Command, and Release Governance sit beside them as governed platform surfaces for model routing, command intake, and deployment preflight.</li>
-        <li><strong>Trust Fabric</strong> — The central zero-trust enforcement layer. Every action passes through a 6-stage pipeline: anomaly detection → policy evaluation → risk scoring → audit log → decision. Includes Execution Ring Policy (ring0–ring3 privilege isolation) and SRE Engine (circuit breaker, error budget).</li>
+        <li><strong>Trust Fabric</strong> — The central policy service for governed actions: anomaly detection, policy evaluation, risk scoring, audit context, and decision. Includes Execution Ring Policy (ring0–ring3 privilege isolation) and SRE Engine (circuit breaker, error budget).</li>
         <li><strong>CoreOS</strong> — The orchestration layer managing agents, Swarm multi-agent jobs, multi-step workflows, event-driven triggers, scheduled jobs, Channel Gateway command ingestion, and human approval flows with dual-approval enforcement.</li>
       </ul>
 
@@ -494,9 +498,9 @@
       </div>
       <ul>
         <li><strong>Modular capability nodes</strong> — add, disable, or extend security domains without touching the core.</li>
-        <li><strong>Provider-agnostic</strong> — each claw ships with adapters for multiple providers (e.g., Cloud Security supports AWS, Azure, GCP).</li>
+        <li><strong>Provider-agnostic</strong> — each Capability Node ships with adapters for multiple providers (e.g., Cloud Security supports AWS, Azure, GCP).</li>
         <li><strong>Async-first backend</strong> — FastAPI with async SQLAlchemy; long-running scans do not block the event loop.</li>
-        <li><strong>Immutable audit trail</strong> — every Trust Fabric decision is permanently recorded with its full context.</li>
+        <li><strong>Attributable audit records</strong> — Trust Fabric decisions record available actor, policy, risk, and outcome context.</li>
         <li><strong>Human-in-the-loop</strong> — configurable approval gates mean humans remain in control of high-risk actions.</li>
       </ul>
 
@@ -516,7 +520,7 @@
     <!-- ─── QUICK START ─── -->
     <div id="sec-quickstart" class="doc-section">
       <h1>Quick Start</h1>
-      <p class="lead">Get a fully functional Enkstein instance running locally in under 10 minutes using Docker Compose.</p>
+      <p class="lead">Start a local Enkstein evaluation environment with Docker Compose.</p>
 
       <h2>Downloadable Package</h2>
       <p>Versioned GitHub Releases include <code>.tar.gz</code> and <code>.zip</code> self-hosted bundles, Python wheels/source distributions, and a <code>SHA256SUMS</code> integrity file. Extract the bundle and run <code>./install.sh</code>. The installer validates Docker Compose, creates unique installation secrets without overwriting an existing <code>.env</code>, and starts the production Compose stack.</p>
@@ -525,7 +529,7 @@ cd enkstein-VERSION
 ./install.sh</code></pre>
 
       <h2>Native Installers</h2>
-      <p>Desktop users can install <code>Enkstein-VERSION-macos.pkg</code> or <code>Enkstein-VERSION-windows-x64-setup.exe</code>. These packages create a Enkstein launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Enkstein in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. The macOS package is Developer ID signed and notarized, and tagged public Windows installers require Authenticode signing.</p>
+      <p>Desktop users can install <code>Enkstein-VERSION-macos.pkg</code> or <code>Enkstein-VERSION-windows-x64-setup.exe</code>. These packages create an Enkstein launcher that starts Docker Desktop, initializes secrets, and starts the governed runtime. The universal macOS app shows startup progress, waits for backend and frontend health, and embeds Enkstein in a native WebKit window instead of opening the browser. Docker Desktop remains a prerequisite. Published macOS packages are Developer ID signed and released after Apple notarization; public Windows installers remain unsigned until Authenticode signing is configured.</p>
 
       <h2>Persistent Chat and Cowork</h2>
       <p>Enkstein provides encrypted tenant-scoped conversations, searchable history, branches, and Cowork Projects. The desktop shell can grant a project access to one selected local folder through an opaque native token; raw host paths never enter the container or web UI. Bounded text files become persistent Cowork context and can be created, edited, renamed, moved, synchronized, or sent to recoverable project trash. Browser Cowork keeps an import-copy fallback. Mutations are tenant-scoped and Trust Fabric authorized, with traversal and symlink defenses at the native boundary. Auto Brain routing records its candidates, attempts, selected source, and policy reason. A conversation can be handed to an approval-gated Security Swarm without copying plaintext conversation content into the Swarm record.</p>
@@ -623,16 +627,16 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
       </table>
 
       <div class="callout tip">
-        <strong>Default credentials:</strong> After seeding, log in with the default admin user created by the seed scripts. Check your seed script output for the generated credentials, or look for <code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code> in your <code>.env</code> file.
+        <strong>First launch:</strong> The desktop flow creates a local owner password, enrolls TOTP, and issues recovery codes. Development deployments may use <code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code> from their private <code>.env</code>; there is no public default password.
       </div>
 
       <h2 id="connectors">5. Add Your Own API Credentials</h2>
-      <p>Every Capability Node module ships with realistic simulated data so the platform works out of the box. To connect your real environment, add credentials via the <strong>Connectors</strong> page in the UI:</p>
+      <p>Capability Nodes require a configured connector for live evidence. Some legacy workflows can expose clearly labelled demonstration data for evaluation; demo evidence is never presented as a verified estate result or a passing control verdict. Add your environment through the <strong>Connectors</strong> page:</p>
 
       <ol class="steps">
         <li><div><strong>Open Connectors</strong><br>Go to <code>http://localhost:3000/connectors</code> and find the integration you want to connect.</div></li>
         <li><div><strong>Click Configure</strong><br>A modal opens asking for your API key, token, or OAuth credentials — whatever that integration requires.</div></li>
-        <li><div><strong>Enter your credentials</strong><br>Credentials are encrypted with Fernet AES-128 before being saved. They are stored only in <code>backend/.secrets/connectors.json</code> on your machine — never in the database, never sent anywhere, never logged.</div></li>
+        <li><div><strong>Enter your credentials</strong><br>Credentials are encrypted before being stored in the local secret volume and are not written to logs. Enkstein sends them only to the configured provider endpoint when that connector authenticates; it does not send connector credentials to model providers.</div></li>
         <li><div><strong>Test the connection</strong><br>Enkstein makes a real read-only API call to verify your credentials work. On success, the connector status turns green and the corresponding Capability Node begins pulling real findings.</div></li>
       </ol>
 
@@ -650,11 +654,11 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
       </table>
 
       <div class="callout tip">
-        <strong>No credentials? No problem.</strong> Every module falls back to simulated findings automatically. You can demo and evaluate the full platform without connecting a single real tool. Add credentials incrementally as you validate each integration.
+        <strong>No connector means no live assessment.</strong> An unavailable adapter or missing credential is reported as unavailable or not assessed. Where a legacy demonstration fallback exists, its evidence origin remains labelled <code>simulated</code> and cannot become a live control verdict.
       </div>
 
       <div class="callout warning" style="border-color:#ef4444;background:rgba(239,68,68,0.08);">
-        <strong style="color:#ef4444;">Important:</strong> Use read-only API keys where possible. Enkstein only reads security findings — it does not need write or admin permissions for discovery integrations. Follow the principle of least privilege when creating service accounts.
+        <strong style="color:#ef4444;">Important:</strong> Use read-only credentials for discovery integrations. Remediation and response connectors may require narrowly scoped write permissions, but those actions remain separate from assessment and pass through their own Trust Fabric and approval checks.
       </div>
 
       <h2>Stopping and Resetting</h2>
@@ -695,38 +699,38 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
     └─────────────────┘  └────────────────┘</span></pre>
 
       <h2>Backend</h2>
-      <p>The FastAPI backend is the heart of Enkstein. It exposes a versioned REST API under <code>/api/v1/</code> and organizes routes by claw and platform feature:</p>
+      <p>The FastAPI backend exposes a versioned REST API under <code>/api/v1/</code> and organizes routes by Capability Node and platform feature:</p>
       <ul>
-        <li><strong>Capability Node routers</strong> — <code>/app/claws/{name}/routes.py</code> — each claw registers its own FastAPI router with consistent endpoints (<code>/stats</code>, <code>/findings</code>, <code>/providers</code>, <code>/scan</code>).</li>
-        <li><strong>Trust Fabric</strong> — <code>/app/trust_fabric/</code> — standalone pipeline that every claw action passes through.</li>
+        <li><strong>Capability Node routers</strong> — <code>/app/claws/{name}/routes.py</code> — Node routers commonly expose <code>/stats</code>, <code>/findings</code>, <code>/providers</code>, <code>/scan</code>, and <code>/task</code>; consult OpenAPI for the exact surface.</li>
+        <li><strong>Trust Fabric</strong> — <code>/app/trust_fabric/</code> — shared policy and risk services used by governed Node actions.</li>
         <li><strong>CoreOS</strong> — <code>/app/core/</code> — agent execution, workflow DAGs, trigger evaluation, scheduling.</li>
-        <li><strong>Auth</strong> — JWT-based with refresh token rotation; all routes require a valid bearer token.</li>
+        <li><strong>Auth</strong> — bearer-token authentication with local owner password and TOTP enrollment for desktop installs.</li>
       </ul>
 
       <h2>Database</h2>
       <p>PostgreSQL is the primary data store. Schema migrations are managed with Alembic. Key schema groups:</p>
       <ul>
-        <li><strong>Findings tables</strong> — one per claw, normalized to a common findings schema.</li>
+        <li><strong>Findings tables</strong> — one per Capability Node, normalized to a common findings schema.</li>
         <li><strong>Policy tables</strong> — policies, policy packs, evaluation results.</li>
-        <li><strong>Audit tables</strong> — immutable Trust Fabric decision log.</li>
+        <li><strong>Audit tables</strong> — tenant-scoped Trust Fabric decision records.</li>
         <li><strong>CoreOS tables</strong> — agents, workflows, triggers, schedules, approvals.</li>
       </ul>
 
       <h2>Frontend</h2>
-      <p>Built with Next.js 14 App Router. Each claw has a dedicated page at <code>/src/app/{clawname}/page.tsx</code>. Shared components live in <code>/src/components/</code>. Authentication uses HTTP-only cookies backed by the FastAPI JWT endpoint.</p>
+      <p>Built with the Next.js App Router. Capability Nodes and shared control surfaces are presented through route-specific pages under <code>/src/app/</code>. Shared components live in <code>/src/components/</code>.</p>
     </div>
 
     <!-- ─── TRUST FABRIC: HOW IT WORKS ─── -->
     <div id="sec-tf-how" class="doc-section">
       <h1>How the Trust Fabric Works</h1>
-      <p class="lead">The Trust Fabric is the zero-trust enforcement core of Enkstein. Every security action — whether initiated by a user, an agent, or a scheduled workflow — passes through a mandatory 6-stage pipeline before execution.</p>
+      <p class="lead">The Trust Fabric is the policy and risk core for governed Enkstein actions. Covered execution paths provide actor, target, policy, risk, decision, and audit context before execution.</p>
 
       <h2>The Six Stages</h2>
       <ol class="steps">
         <li>
           <div>
             <strong>Action Request</strong>
-            Any security action enters the Trust Fabric with a context payload: actor identity, action type, target resource, claw origin, and metadata. No action bypasses this entry point.
+            A governed security action enters the Trust Fabric with a context payload: actor identity, action type, target resource, Node origin, and metadata.
           </div>
         </li>
         <li>
@@ -738,7 +742,7 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
         <li>
           <div>
             <strong>Policy Evaluation</strong>
-            The policy engine evaluates all applicable policies — organizational, claw-specific, and compliance-driven — in priority order. Policies can allow, deny, or escalate. Policy pack groupings let you apply compliance frameworks (SOC 2, ISO 27001) as a unit.
+            The policy engine evaluates all applicable policies — organizational, Node-specific, and compliance-driven — in priority order. Policies can allow, deny, or escalate. Policy pack groupings let you apply compliance frameworks (SOC 2, ISO 27001) as a unit.
           </div>
         </li>
         <li>
@@ -750,7 +754,7 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
         <li>
           <div>
             <strong>Audit Log</strong>
-            The complete evaluation context is written to the immutable audit log before a decision is reached. This ensures every decision is reconstructible even if the action is later contested.
+            The available evaluation context is written to the audit record with the decision, so an operator can reconstruct the policy inputs and recorded outcome later.
           </div>
         </li>
         <li>
@@ -778,7 +782,7 @@ POST /api/v1/marcellus/regeneration/runs</code></pre>
         <li><strong>Priority</strong> — lower number = evaluated first</li>
         <li><strong>Conditions</strong> — JSON-encoded predicate tree (actor, action, resource, time, risk score)</li>
         <li><strong>Effect</strong> — <code>ALLOW</code>, <code>DENY</code>, or <code>ESCALATE</code></li>
-        <li><strong>Scope</strong> — global, claw-specific, or per-actor-type</li>
+        <li><strong>Scope</strong> — global, Node-specific, or per-actor-type</li>
         <li><strong>Enabled flag</strong> — toggle without deleting</li>
       </ul>
 
@@ -835,7 +839,7 @@ Content-Type: application/json
           <tr><td>Frequency spike</td><td>Action rate 3x+ above baseline</td><td>+20–40</td></tr>
           <tr><td>Novel target</td><td>Resource not previously accessed by this actor</td><td>+15–30</td></tr>
           <tr><td>Bulk operation</td><td>Volume 5x+ above actor's typical batch size</td><td>+25–50</td></tr>
-          <tr><td>Cross-claw correlation</td><td>Similar anomalies across multiple capability nodes simultaneously</td><td>+30–60</td></tr>
+          <tr><td>Cross-Node correlation</td><td>Similar anomalies across multiple capability nodes simultaneously</td><td>+30–60</td></tr>
         </tbody>
       </table>
 
@@ -847,7 +851,7 @@ Content-Type: application/json
     <!-- ─── TRUST FABRIC: EXECUTION MODES ─── -->
     <div id="sec-tf-modes" class="doc-section">
       <h1>Execution Modes</h1>
-      <p class="lead">Enkstein supports five execution modes that control how the Trust Fabric responds to a given action. Modes can be set globally, per claw, or per workflow step.</p>
+      <p class="lead">Enkstein supports five execution modes that control how the Trust Fabric responds to a given action. Modes can be set globally, per Capability Node, or per workflow step.</p>
 
       <div class="mode-grid">
         <div class="mode-card">
@@ -873,17 +877,15 @@ Content-Type: application/json
       </div>
 
       <h2>Configuring Modes</h2>
-      <p>Modes are configured per claw in the database and overridable via the API:</p>
-      <pre><span class="c-cmd">PATCH</span> /api/v1/claws/cloudclaw/mode
+      <p>Modes are configured per registered agent and bounded by the platform autonomy ceiling:</p>
+      <pre><span class="c-cmd">PATCH</span> /api/v1/autonomy/agents/{agent_id}/mode
 {
-  <span class="c-key">"mode"</span>: <span class="c-str">"APPROVAL"</span>,
-  <span class="c-key">"risk_threshold"</span>: <span class="c-num">60</span>
+  <span class="c-key">"mode"</span>: <span class="c-str">"approval"</span>
 }</pre>
 
       <p>For emergency activation:</p>
-      <pre><span class="c-cmd">POST</span> /api/v1/trust-fabric/emergency
+      <pre><span class="c-cmd">POST</span> /api/v1/autonomy/emergency/activate
 {
-  <span class="c-key">"scope"</span>: <span class="c-str">"cloudclaw"</span>,
   <span class="c-key">"reason"</span>: <span class="c-str">"Active incident — suspected data exfiltration"</span>
 }</pre>
     </div>
@@ -891,7 +893,7 @@ Content-Type: application/json
     <!-- ─── TRUST FABRIC: AGT ROLLOUT & SWARM ─── -->
     <div id="sec-tf-agt" class="doc-section">
       <h1>AGT Rollout &amp; Swarm</h1>
-      <p class="lead">Enkstein integrates AGT through a provider adapter boundary and feature flags. This allows staged rollout without coupling every claw directly to AGT internals.</p>
+      <p class="lead">Enkstein integrates AGT through a provider adapter boundary and feature flags. This allows staged rollout without coupling every Capability Node directly to AGT internals.</p>
 
       <div class="callout tip">
         <strong>Latest operator updates (May 2026):</strong> Left-blade module route coverage was validated across all sidebar modules, Trigger UI now supports direct <code>/triggers/{id}/test</code> execution and <code>start_swarm/fire_swarm</code> action configuration, Swarm detail now includes live ticket draft + compliance rollup with direct <code>Create Ticket</code> handoff to <code>/api/v1/remediation/trigger</code>, channel ingress is normalized to the Command command contract, and execution/remediation routes now fail closed when Trust Fabric policy evaluation is unavailable.
@@ -1047,7 +1049,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
       </ul>
 
       <h2>Swarm + E2E Messaging Flag Path</h2>
-      <p>Swarm task execution now emits secure inter-claw handoff metadata when <code>AGT_ENABLE_E2E_MESSAGING=true</code>.</p>
+      <p>Swarm task execution now emits secure inter-Node handoff metadata when <code>AGT_ENABLE_E2E_MESSAGING=true</code>.</p>
       <ul>
         <li>Task output includes a <code>secure_channel</code> envelope and digest.</li>
         <li><code>policy_decisions</code> includes <code>E2E_MESSAGE</code> outcome metadata.</li>
@@ -1099,36 +1101,39 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
     <!-- ─── 25 SECURITY CLAWS ─── -->
     <div id="sec-claws-all" class="doc-section">
       <h1>26 Capability Nodes</h1>
-      <p class="lead">Each security claw is a self-contained domain module with standardized endpoints, provider adapters, findings, and focused task execution. Model Cortex, Command, and Release Governance are documented separately as core control surfaces.</p>
+      <p class="lead">Each security Capability Node is a self-contained domain module with standardized endpoints, provider adapters, findings, and focused task execution. Model Cortex, Command, and Release Governance are documented separately as core control surfaces.</p>
+      <div class="callout warning">
+        <strong>Availability varies by connector.</strong> Provider names below describe intended or implemented evidence sources, not a promise that every adapter is configured or live in your deployment. Connector Health and the Maturity Matrix are authoritative for readiness.
+      </div>
 
       <table>
-        <thead><tr><th>Capability Node</th><th>Domain</th><th>Phase</th><th>Key Providers</th></tr></thead>
+        <thead><tr><th>Capability Node</th><th>Domain</th><th>Key Providers</th></tr></thead>
         <tbody>
-          <tr><td>🤖 AI Security</td><td>AI &amp; LLM Security</td><td><span class="badge badge-blue">MVP</span></td><td>Microsoft AGT, OpenAI, Anthropic</td></tr>
-          <tr><td>🪪 Identity Security</td><td>Identity Governance &amp; NHI</td><td><span class="badge badge-blue">MVP</span></td><td>Entra ID, Okta, AWS IAM</td></tr>
-          <tr><td>☁️ Cloud Security</td><td>Cloud Security Posture</td><td><span class="badge badge-purple">Phase 2</span></td><td>AWS, Azure, GCP</td></tr>
-          <tr><td>🌐 Exposure Management</td><td>External Attack Surface</td><td><span class="badge badge-purple">Phase 2</span></td><td>Shodan, Censys, custom</td></tr>
-          <tr><td>🛡️ Endpoint Security</td><td>Endpoint Detection &amp; Response</td><td><span class="badge badge-purple">Phase 2</span></td><td>CrowdStrike, SentinelOne, Defender</td></tr>
-          <tr><td>🔍 Threat Analysis</td><td>Threat Intelligence</td><td><span class="badge badge-purple">Phase 2</span></td><td>VirusTotal, MISP, custom feeds</td></tr>
-          <tr><td>📋 Security Telemetry</td><td>Log Management &amp; SIEM</td><td><span class="badge badge-purple">Phase 2</span></td><td>Splunk, Elastic, Sentinel</td></tr>
-          <tr><td>🌐 Network Security</td><td>Network Security</td><td><span class="badge badge-purple">Phase 2</span></td><td>Palo Alto, Fortinet, Cisco</td></tr>
-          <tr><td>🔑 Privileged Access</td><td>Access Control &amp; IAM</td><td><span class="badge badge-purple">Phase 2</span></td><td>Okta, Entra ID, AWS IAM</td></tr>
-          <tr><td>🗂️ Data Security</td><td>Data Loss Prevention</td><td><span class="badge badge-purple">Phase 2</span></td><td>Purview, Nightfall, Symantec DLP</td></tr>
-          <tr><td>📱 Application Security</td><td>Application Security</td><td><span class="badge badge-purple">Phase 2</span></td><td>Snyk, Semgrep, Checkmarx</td></tr>
-          <tr><td>☁️ SaaS Security</td><td>SaaS Security Posture</td><td><span class="badge badge-purple">Phase 2</span></td><td>Obsidian, AppOmni, custom</td></tr>
-          <tr><td>⚙️ Configuration Security</td><td>Configuration Compliance</td><td><span class="badge badge-purple">Phase 2</span></td><td>AWS Config, Azure Policy, Chef InSpec</td></tr>
-          <tr><td>🧱 Terraform Governance</td><td>Terraform &amp; IaC Security Governance</td><td><span class="badge badge-purple">Phase 2</span></td><td>Terraform Cloud, tfsec/Trivy, Checkov, Infracost</td></tr>
-          <tr><td>✅ Compliance Assurance</td><td>Compliance Frameworks</td><td><span class="badge badge-purple">Phase 2</span></td><td>Drata, Vanta, custom</td></tr>
-          <tr><td>🔒 Privacy Governance</td><td>Privacy &amp; GDPR</td><td><span class="badge badge-gray">Phase 3</span></td><td>OneTrust, custom</td></tr>
-          <tr><td>🏢 Vendor Risk</td><td>Third-Party Risk</td><td><span class="badge badge-gray">Phase 3</span></td><td>BitSight, SecurityScorecard</td></tr>
-          <tr><td>👤 User Risk</td><td>User Behavior Analytics</td><td><span class="badge badge-gray">Phase 3</span></td><td>Varonis, Securonix</td></tr>
-          <tr><td>🔎 Insider Risk</td><td>Insider Threat</td><td><span class="badge badge-gray">Phase 3</span></td><td>Teramind, custom</td></tr>
-          <tr><td>⚡ Security Automation</td><td>Automation Security</td><td><span class="badge badge-gray">Phase 3</span></td><td>Custom, GitHub Actions</td></tr>
-          <tr><td>🗺️ Attack Path Analysis</td><td>Attack Path Analysis</td><td><span class="badge badge-gray">Phase 3</span></td><td>BloodHound, Orca, custom</td></tr>
-          <tr><td>💻 Developer Security</td><td>DevSecOps &amp; CI/CD</td><td><span class="badge badge-gray">Phase 3</span></td><td>Snyk, Trivy, GitHub Advanced Security</td></tr>
-          <tr><td>🧠 Threat Intelligence</td><td>Threat Intel Feeds</td><td><span class="badge badge-gray">Phase 3</span></td><td>STIX/TAXII, custom OSINT</td></tr>
-          <tr><td>🔄 Recovery Readiness</td><td>Incident Recovery</td><td><span class="badge badge-gray">Phase 3</span></td><td>PagerDuty, custom runbooks</td></tr>
-          <tr><td>🔌 Custom Capability</td><td>Custom REST Integrations</td><td><span class="badge badge-gray">Phase 3</span></td><td>Any REST API</td></tr>
+          <tr><td>🤖 AI Security</td><td>AI &amp; LLM Security</td><td>Microsoft AGT, OpenAI, Anthropic</td></tr>
+          <tr><td>🪪 Identity Security</td><td>Identity Governance &amp; NHI</td><td>Entra ID, Okta, AWS IAM</td></tr>
+          <tr><td>☁️ Cloud Security</td><td>Cloud Security Posture</td><td>AWS, Azure, GCP</td></tr>
+          <tr><td>🌐 Exposure Management</td><td>External Attack Surface</td><td>Shodan, Censys, custom</td></tr>
+          <tr><td>🛡️ Endpoint Security</td><td>Endpoint Detection &amp; Response</td><td>CrowdStrike, SentinelOne, Defender</td></tr>
+          <tr><td>🔍 Threat Analysis</td><td>Threat Intelligence</td><td>VirusTotal, MISP, custom feeds</td></tr>
+          <tr><td>📋 Security Telemetry</td><td>Log Management &amp; SIEM</td><td>Splunk, Elastic, Sentinel</td></tr>
+          <tr><td>🌐 Network Security</td><td>Network Security</td><td>Palo Alto, Fortinet, Cisco</td></tr>
+          <tr><td>🔑 Privileged Access</td><td>Access Control &amp; IAM</td><td>Okta, Entra ID, AWS IAM</td></tr>
+          <tr><td>🗂️ Data Security</td><td>Data Loss Prevention</td><td>Purview, Nightfall, Symantec DLP</td></tr>
+          <tr><td>📱 Application Security</td><td>Application Security</td><td>Snyk, Semgrep, Checkmarx</td></tr>
+          <tr><td>☁️ SaaS Security</td><td>SaaS Security Posture</td><td>Obsidian, AppOmni, custom</td></tr>
+          <tr><td>⚙️ Configuration Security</td><td>Configuration Compliance</td><td>AWS Config, Azure Policy, Chef InSpec</td></tr>
+          <tr><td>🧱 Terraform Governance</td><td>Terraform &amp; IaC Security Governance</td><td>Terraform Cloud, tfsec/Trivy, Checkov, Infracost</td></tr>
+          <tr><td>✅ Compliance Assurance</td><td>Compliance Frameworks</td><td>Drata, Vanta, custom</td></tr>
+          <tr><td>🔒 Privacy Governance</td><td>Privacy &amp; GDPR</td><td>OneTrust, custom</td></tr>
+          <tr><td>🏢 Vendor Risk</td><td>Third-Party Risk</td><td>BitSight, SecurityScorecard</td></tr>
+          <tr><td>👤 User Risk</td><td>User Behavior Analytics</td><td>Varonis, Securonix</td></tr>
+          <tr><td>🔎 Insider Risk</td><td>Insider Threat</td><td>Teramind, custom</td></tr>
+          <tr><td>⚡ Security Automation</td><td>Automation Security</td><td>Custom, GitHub Actions</td></tr>
+          <tr><td>🗺️ Attack Path Analysis</td><td>Attack Path Analysis</td><td>BloodHound, Orca, custom</td></tr>
+          <tr><td>💻 Developer Security</td><td>DevSecOps &amp; CI/CD</td><td>Snyk, Trivy, GitHub Advanced Security</td></tr>
+          <tr><td>🧠 Threat Intelligence</td><td>Threat Intel Feeds</td><td>STIX/TAXII, custom OSINT</td></tr>
+          <tr><td>🔄 Recovery Readiness</td><td>Incident Recovery</td><td>PagerDuty, custom runbooks</td></tr>
+          <tr><td>🔌 Custom Capability</td><td>Custom REST Integrations</td><td>Any REST API</td></tr>
         </tbody>
       </table>
     </div>
@@ -1136,7 +1141,7 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
     <!-- ─── CLAW PATTERN ─── -->
     <div id="sec-claws-pattern" class="doc-section">
       <h1>The Capability Node Pattern</h1>
-      <p class="lead">All 26 capability nodes follow a consistent implementation pattern. This makes capability nodes predictable to develop, test, and integrate with the Trust Fabric.</p>
+      <p class="lead">Capability Nodes share conventions for findings, providers, scans, and focused tasks, while their exact routes reflect the evidence and actions of each domain. OpenAPI remains authoritative.</p>
 
       <h2>Directory Structure</h2>
       <pre>backend/app/claws/
@@ -1150,8 +1155,8 @@ AGT_ENABLE_SHADOW_DISCOVERY=false</pre>
         ├── azure.py
         └── gcp.py</pre>
 
-      <h2>Standard Endpoints</h2>
-      <p>Every claw exposes these four endpoints under <code>/api/v1/{clawname}/</code>:</p>
+      <h2>Common Endpoint Patterns</h2>
+      <p>Common routes under <code>/api/v1/{clawname}/</code> include:</p>
       <div class="endpoint-row">
         <span class="method method-get">GET</span>
         <span class="endpoint-path">/stats</span>
@@ -1206,7 +1211,7 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
     <!-- ─── PROVIDER ADAPTERS ─── -->
     <div id="sec-claws-adapters" class="doc-section">
       <h1>Provider Adapters</h1>
-      <p class="lead">Each claw connects to external security tools and cloud services via provider adapters. Adapters normalize provider-specific responses into Enkstein's standard findings schema.</p>
+      <p class="lead">Each Capability Node connects to external security tools and cloud services via provider adapters. Adapters normalize provider-specific responses into Enkstein's standard findings schema.</p>
 
       <h2>Adapter Interface</h2>
       <p>All adapters implement a consistent interface:</p>
@@ -1239,7 +1244,7 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
       <pre><span class="c-cmd">GET</span>    /api/v1/connectors/
 <span class="c-cmd">POST</span>   /api/v1/connectors/
 <span class="c-cmd">PATCH</span>  /api/v1/connectors/{id}
-<span class="c-cmd">DELETE</span> /api/v1/connectors/{id}</pre>
+<span class="c-cmd">DELETE</span> /api/v1/connectors/{connector_id}/credentials</pre>
       <p>Connector cards use curated brand icons (local assets first, CDN fallback second). Key normalization, alias resolution, and keyword fallback prevent broken logos when connector types vary slightly across providers.</p>
       <p>Latest connector UI updates include curated local brand assets for major providers (identity, SIEM, endpoint, cloud, and network connectors) plus white-background rendering for logo families that require it.</p>
     </div>
@@ -1255,7 +1260,7 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
         <li><strong>Identity</strong> — every agent has its own principal for Trust Fabric evaluation</li>
         <li><strong>Skill packs</strong> — curated sets of allowed actions the agent can perform</li>
         <li><strong>Memory</strong> — persistent key-value context carried between executions</li>
-        <li><strong>Execution mode</strong> — agents inherit or override the claw's execution mode</li>
+        <li><strong>Execution mode</strong> — agents inherit or override the Capability Node's execution mode</li>
         <li><strong>Profile</strong> — behavioral baseline profile used by anomaly detection</li>
       </ul>
       <p>Agents are seeded via <code>seed_agents.py</code> and managed at <code>/api/v1/agents/</code>.</p>
@@ -1359,11 +1364,11 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
     <!-- ─── COREOS: TERRACLAW ─── -->
     <div id="sec-core-terraclaw" class="doc-section">
       <h1>Terraform Governance</h1>
-      <p class="lead">Terraform Governance is the Terraform and infrastructure-as-code governance claw. It builds secure Terraform from plain English, reviews HCL, generates secure templates, analyzes Terraform plan risk before apply, and participates in Swarm investigations through the standard task contract.</p>
+      <p class="lead">Terraform Governance is the Terraform and infrastructure-as-code governance Capability Node. It builds secure Terraform from plain English, reviews HCL, generates secure templates, analyzes Terraform plan risk before apply, and participates in Swarm investigations through the standard task contract.</p>
 
       <h2>What Terraform Governance Covers</h2>
       <ul>
-        <li><strong>Natural-language build wizard:</strong> <code>POST /api/v1/terraclaw/build</code> turns an operator request into a hardened Terraform module after AI Security prompt-injection scanning and Trust Fabric policy evaluation.</li>
+        <li><strong>Natural-language generation:</strong> <code>POST /api/v1/terraclaw/generate</code> returns governed Terraform output with review evidence and applied controls.</li>
         <li><strong>HCL review:</strong> local rule checks for public network exposure, weak data protection, excessive IAM permissions, hardcoded secrets, missing diagnostics, and risky Kubernetes control plane settings.</li>
         <li><strong>Agentic secure generation:</strong> approved Terraform templates for common cloud patterns with private networking, encryption, diagnostic logging, and secret-management defaults. The Generate surface now behaves like a Terraform Governance agent session with Terraform MCP trace, module artifacts, applied controls, and handoffs into Review and Plan Analysis.</li>
         <li><strong>Plan analysis:</strong> pre-apply review of creates, updates, deletes, replacements, and sensitive attribute changes with APPROVE / WARN / BLOCK decisions.</li>
@@ -1377,7 +1382,6 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
       <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/stats</span><span class="endpoint-desc">Summary counts and secure score</span></div>
       <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/findings</span><span class="endpoint-desc">Normalized Terraform/IaC findings using 0-100 risk scores</span></div>
       <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/terraclaw/providers</span><span class="endpoint-desc">Terraform MCP, Terraform Cloud, tfsec/Trivy, Checkov, and Infracost connector status</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/build</span><span class="endpoint-desc">Natural-language Terraform module builder with AI Security input scan and secure output review</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/review</span><span class="endpoint-desc">Trust Fabric-gated Terraform HCL security review</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/generate</span><span class="endpoint-desc">Generate secure Terraform from a natural-language description with MCP trace, artifacts, controls, and review evidence</span></div>
       <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/terraclaw/plan</span><span class="endpoint-desc">Analyze Terraform plan changes before apply</span></div>
@@ -1439,7 +1443,7 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
     <!-- ─── COREOS: APPROVALS ─── -->
     <div id="sec-core-approvals" class="doc-section">
       <h1>Approval Flows</h1>
-      <p class="lead">When the Trust Fabric returns an ESCALATE decision — or when a claw step is configured with APPROVAL execution mode — the action enters an approval queue requiring explicit human sign-off.</p>
+      <p class="lead">When the Trust Fabric returns an ESCALATE decision — or when a Node step is configured with APPROVAL execution mode — the action enters an approval queue requiring explicit human sign-off.</p>
 
       <h2>Approval Tiers</h2>
       <table>
@@ -1451,26 +1455,27 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
         </tbody>
       </table>
 
-      <h2>Approval API</h2>
+      <h2>Approval APIs</h2>
+      <p>Approvals are owned by the workflow that created them; there is no global queue that can approve unrelated action types through one generic endpoint.</p>
       <div class="endpoint-row">
         <span class="method method-get">GET</span>
-        <span class="endpoint-path">/api/v1/approvals/</span>
-        <span class="endpoint-desc">List pending approvals (filterable by tier, claw)</span>
-      </div>
-      <div class="endpoint-row">
-        <span class="method method-get">GET</span>
-        <span class="endpoint-path">/api/v1/approvals/{id}</span>
-        <span class="endpoint-desc">Approval detail with full Trust Fabric context</span>
+        <span class="endpoint-path">/api/v1/remediation/actions</span>
+        <span class="endpoint-desc">List remediation actions and their approval state</span>
       </div>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>
-        <span class="endpoint-path">/api/v1/approvals/{id}/approve</span>
-        <span class="endpoint-desc">Approve the queued action</span>
+        <span class="endpoint-path">/api/v1/remediation/actions/{action_id}/approve</span>
+        <span class="endpoint-desc">Approve a queued remediation action</span>
+      </div>
+      <div class="endpoint-row">
+        <span class="method method-get">GET</span>
+        <span class="endpoint-path">/api/v1/exec/requests</span>
+        <span class="endpoint-desc">List governed execution requests</span>
       </div>
       <div class="endpoint-row">
         <span class="method method-post">POST</span>
-        <span class="endpoint-path">/api/v1/approvals/{id}/reject</span>
-        <span class="endpoint-desc">Reject with required reason</span>
+        <span class="endpoint-path">/api/v1/exec/requests/{req_id}/approve</span>
+        <span class="endpoint-desc">Approve one governed execution request</span>
       </div>
 
       <h2>Execution Ring Policy</h2>
@@ -1603,21 +1608,21 @@ router = APIRouter(prefix=<span class="c-str">f"/api/v1/{CLAW_NAME}"</span>, tag
     <!-- ─── API: AUTHENTICATION ─── -->
     <div id="sec-api-auth" class="doc-section">
       <h1>Authentication</h1>
-      <p class="lead">Enkstein uses JWT bearer token authentication. Tokens are short-lived (15 minutes) with refresh token rotation for long-lived sessions.</p>
+      <p class="lead">Enkstein uses bearer tokens for authenticated API calls. The desktop owner flow requires a local username, password, and TOTP code.</p>
 
       <h2>Obtaining a Token</h2>
-      <pre><span class="c-cmd">POST</span> /api/v1/auth/login
+      <pre><span class="c-cmd">POST</span> /api/v1/auth/owner/login
 Content-Type: application/json
 
 {
-  <span class="c-key">"email"</span>: <span class="c-str">"redacted_user"</span>,
-  <span class="c-key">"password"</span>: <span class="c-str">"your-password"</span>
+  <span class="c-key">"username"</span>: <span class="c-str">"local-owner"</span>,
+  <span class="c-key">"password"</span>: <span class="c-str">"your-owner-password"</span>,
+  <span class="c-key">"code"</span>: <span class="c-str">"123456"</span>
 }</pre>
 
       <p>Response:</p>
       <pre>{
   <span class="c-key">"access_token"</span>: <span class="c-str">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>,
-  <span class="c-key">"refresh_token"</span>: <span class="c-str">"dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."</span>,
   <span class="c-key">"token_type"</span>: <span class="c-str">"bearer"</span>,
   <span class="c-key">"expires_in"</span>: <span class="c-num">900</span>
 }</pre>
@@ -1627,22 +1632,15 @@ Content-Type: application/json
       <pre><span class="c-cmd">GET</span> /api/v1/cloudclaw/findings
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</pre>
 
-      <h2>Refreshing a Token</h2>
-      <pre><span class="c-cmd">POST</span> /api/v1/auth/refresh
-{
-  <span class="c-key">"refresh_token"</span>: <span class="c-str">"dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4..."</span>
-}</pre>
-
       <h2>Token Claims</h2>
-      <p>The JWT payload includes:</p>
+      <p>The local owner token includes:</p>
       <ul>
-        <li><code>sub</code> — user UUID</li>
-        <li><code>email</code> — user email</li>
-        <li><code>roles</code> — array of assigned roles</li>
+        <li><code>sub</code> — local owner username</li>
+        <li><code>role</code> — owner role (<code>admin</code>)</li>
+        <li><code>mfa_verified</code> and <code>auth_method</code> — authentication assurance context</li>
         <li><code>exp</code> — expiry timestamp</li>
-        <li><code>iat</code> — issued-at timestamp</li>
       </ul>
-      <p>The Trust Fabric uses the <code>sub</code> claim as the actor identity for all policy and anomaly evaluation.</p>
+      <p>Governed routes use the authenticated subject as actor context when evaluating policy and writing audit records.</p>
     </div>
 
     <!-- ─── API: ENDPOINTS OVERVIEW ─── -->
@@ -1651,39 +1649,34 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</pre>
       <p class="lead">All endpoints are under <code>/api/v1/</code>. The interactive Swagger UI is available at <code>http://localhost:8000/docs</code> when running locally.</p>
 
       <h2>Auth</h2>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/auth/login</span><span class="endpoint-desc">Obtain access and refresh tokens</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/auth/refresh</span><span class="endpoint-desc">Rotate refresh token</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/auth/logout</span><span class="endpoint-desc">Revoke refresh token</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/auth/owner/status</span><span class="endpoint-desc">Check local owner enrollment state</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/auth/owner/setup</span><span class="endpoint-desc">Begin local owner password and TOTP enrollment</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/auth/owner/login</span><span class="endpoint-desc">Obtain a bearer token using owner credentials and TOTP</span></div>
 
       <h2>Trust Fabric</h2>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/trust-fabric/evaluate</span><span class="endpoint-desc">Manually evaluate an action through the pipeline</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/trust-fabric/audit-log</span><span class="endpoint-desc">Paginated audit log with filtering</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/trust-fabric/emergency</span><span class="endpoint-desc">Activate emergency containment mode</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/trust-fabric/evaluate</span><span class="endpoint-desc">Evaluate an action through the policy service</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/audit</span><span class="endpoint-desc">List tenant-visible audit records</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/autonomy/emergency/activate</span><span class="endpoint-desc">Activate platform emergency mode</span></div>
 
       <h2>Policies</h2>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/policies/</span><span class="endpoint-desc">List all policies</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/policies/</span><span class="endpoint-desc">Create a policy</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/policies/{id}</span><span class="endpoint-desc">Get policy detail</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/policies</span><span class="endpoint-desc">List tenant-visible policies</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/policies</span><span class="endpoint-desc">Create a policy</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/policies/{policy_id}</span><span class="endpoint-desc">Get policy detail</span></div>
 
-      <h2>Capability Node Endpoints (per claw)</h2>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/{claw}/stats</span><span class="endpoint-desc">Dashboard statistics</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/{claw}/findings</span><span class="endpoint-desc">Findings list (paginated)</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/{claw}/findings/{id}</span><span class="endpoint-desc">Finding detail</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/{claw}/scan</span><span class="endpoint-desc">Trigger scan</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/{claw}/providers</span><span class="endpoint-desc">Provider status</span></div>
+      <h2>Capability Nodes</h2>
+      <p>Node routes vary by domain. Common suffixes include <code>/stats</code>, <code>/findings</code>, <code>/providers</code>, <code>/scan</code>, and <code>/task</code>; use the generated OpenAPI page for the exact installed surface.</p>
 
       <h2>CoreOS</h2>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/agents/</span><span class="endpoint-desc">List agents</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/workflows/</span><span class="endpoint-desc">List workflows</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/workflows/{id}/run</span><span class="endpoint-desc">Execute a workflow</span></div>
-      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/approvals/</span><span class="endpoint-desc">Pending approvals</span></div>
-      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/approvals/{id}/approve</span><span class="endpoint-desc">Approve action</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/agents</span><span class="endpoint-desc">List tenant-visible agents</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/orchestrations</span><span class="endpoint-desc">List orchestrations</span></div>
+      <div class="endpoint-row"><span class="method method-post">POST</span><span class="endpoint-path">/api/v1/orchestrations/{workflow_id}/run</span><span class="endpoint-desc">Run an orchestration</span></div>
+      <div class="endpoint-row"><span class="method method-get">GET</span><span class="endpoint-path">/api/v1/remediation/actions</span><span class="endpoint-desc">List remediation approval state</span></div>
     </div>
 
     <!-- ─── API: FINDINGS PIPELINE ─── -->
     <div id="sec-api-findings" class="doc-section">
       <h1>Findings Pipeline</h1>
-      <p class="lead">When a claw scan completes, findings pass through a normalization and enrichment pipeline before being stored and surfaced to the dashboard.</p>
+      <p class="lead">When a Node scan completes, findings pass through a normalization and enrichment pipeline before being stored and surfaced to the dashboard.</p>
 
       <h2>Pipeline Stages</h2>
       <ol class="steps">
@@ -1691,7 +1684,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</pre>
         <li><div><strong>Normalization</strong> — Adapter maps provider fields to the standard finding schema.</div></li>
         <li><div><strong>Deduplication</strong> — Findings are matched against existing open findings by resource ID + title hash. Duplicates update <code>last_seen</code> rather than creating new records.</div></li>
         <li><div><strong>Enrichment</strong> — Compliance tag mapping, asset context lookup, and risk score calculation are applied.</div></li>
-        <li><div><strong>Storage</strong> — Enriched findings are written to the claw's findings table.</div></li>
+        <li><div><strong>Storage</strong> — Enriched findings are written to the Capability Node's findings table.</div></li>
         <li><div><strong>Trigger evaluation</strong> — New CRITICAL findings and threshold crossings are evaluated against active triggers.</div></li>
       </ol>
 
@@ -1741,7 +1734,7 @@ SUPPRESSED  <span class="c-comment">(skip notifications; still logged)</span></p
 <span class="c-comment"># Run all tests</span>
 <span class="c-cmd">pytest</span> tests/ -v --tb=short
 
-<span class="c-comment"># Run a specific claw's tests</span>
+<span class="c-comment"># Run a specific Capability Node's tests</span>
 <span class="c-cmd">pytest</span> tests/claws/test_cloudclaw.py -v
 
 <span class="c-comment"># Run with coverage</span>
@@ -1789,7 +1782,7 @@ SUPPRESSED  <span class="c-comment">(skip notifications; still logged)</span></p
     <!-- ─── DEV: NEW CLAW ─── -->
     <div id="sec-dev-newclaw" class="doc-section">
       <h1>Adding a New Capability Node</h1>
-      <p class="lead">Adding a new security domain claw takes 5 steps. The existing capability nodes in <code>/backend/app/claws/</code> are the best reference implementations.</p>
+      <p class="lead">Adding a new security Capability Node takes 5 steps. The existing capability nodes in <code>/backend/app/claws/</code> are the best reference implementations.</p>
 
       <ol class="steps">
         <li>

@@ -60,6 +60,14 @@ _BRAIN_TIMEOUT_SECONDS = 60.0
 # outer WORKSPACE_STREAM_BROWSER_DEADLINE_SECONDS both give real headroom
 # for that instead of a short ceiling tuned for a simple chat answer.
 _BROWSER_BRAIN_TIMEOUT_SECONDS = 890.0
+# A local Ollama profile generating file content runs on the user's own CPU/GPU
+# with a large project capsule in its context, which is routinely slower than a
+# hosted API call to first token. The 60s budget above is tuned for an API/CLI
+# round trip and was cutting local Brains off mid-generation, so a swarm would
+# report most of itself as timed out and fall back to whichever Brain happened
+# to be fastest. This stays under WORKSPACE_STREAM_DEADLINE_SECONDS (180s) so
+# the per-Brain timeout still resolves before the outer turn deadline.
+_LOCAL_BRAIN_TIMEOUT_SECONDS = 165.0
 _TENANT_SEMAPHORES: dict[tuple[int, str], asyncio.Semaphore] = {}
 _SOURCE_SEMAPHORES: dict[tuple[int, str, str], asyncio.Semaphore] = {}
 
@@ -105,6 +113,28 @@ def _brain_kind(name: str) -> str:
     if name.endswith("_browser"):
         return "browser_session"
     return "subscription"
+
+
+# Subscription Brains driven by a local CLI process (Codex CLI, Claude Code)
+# are not hosted API calls: they start a process on this machine, read the
+# whole prompt over stdin, and stream a full answer back. On a large Cowork
+# prompt they routinely need more than an API round trip's worth of time.
+_CLI_SUBSCRIPTION_BRAINS = {"codex_subscription", "claude_subscription"}
+
+
+def _brain_timeout_seconds(source: str) -> float:
+    """Per-Brain budget matched to how that Brain actually runs.
+
+    Browser Companion sessions run at page speed, local profiles run on the
+    user's own hardware, and hosted subscription/API calls are the fastest of
+    the three. A single budget tuned for the last one silently reported the
+    other two as timed out.
+    """
+    if source.endswith("_browser"):
+        return _BROWSER_BRAIN_TIMEOUT_SECONDS
+    if source.startswith("profile:") or source in _CLI_SUBSCRIPTION_BRAINS:
+        return _LOCAL_BRAIN_TIMEOUT_SECONDS
+    return _BRAIN_TIMEOUT_SECONDS
 
 
 def _installed_ollama_model(requested: str, installed: list[str]) -> str | None:
@@ -606,6 +636,31 @@ async def _prepare_profile_brain(
     }
 
 
+# A turn that carries Enkstein's file-output protocol is asking for complete
+# file bodies. Telling that same turn to be "concise" is a direct conflict, and
+# models resolve it by refusing to write the file and explaining that the
+# content was too large for a short answer. Detected from the prompt because
+# the protocol is what actually distinguishes the two cases.
+_FILE_OUTPUT_PROMPT = re.compile(r"marcellus_changes", re.IGNORECASE)
+
+_REASONING_SYSTEM_PROMPT = (
+    "You are a reasoning-only Brain inside Enkstein. Return a concise, evidence-aware answer. "
+    "Do not claim to have executed tools or changed systems."
+)
+
+_FILE_AUTHOR_SYSTEM_PROMPT = (
+    "You are a file-authoring Brain inside Enkstein. Enkstein's deterministic writer applies whatever "
+    "you return, so return complete file contents, never an abbreviation, summary, placeholder, or a "
+    "note that the content is too long. Length is not a constraint: if the whole change set will not "
+    "fit, emit a smaller number of COMPLETE files rather than truncating any single file. "
+    "Do not claim to have executed tools or changed systems yourself."
+)
+
+
+def _profile_system_prompt(prompt: str) -> str:
+    return _FILE_AUTHOR_SYSTEM_PROMPT if _FILE_OUTPUT_PROMPT.search(prompt) else _REASONING_SYSTEM_PROMPT
+
+
 async def _invoke_prepared_profile(prepared: dict[str, Any], prompt: str) -> dict[str, Any]:
     source = prepared["source"]
     profile = prepared["profile"]
@@ -624,10 +679,7 @@ async def _invoke_prepared_profile(prepared: dict[str, Any], prompt: str) -> dic
         provider,
         transmitted_prompt,
         model=resolved_model,
-        system=(
-            "You are a reasoning-only Brain inside Enkstein. Return a concise, evidence-aware answer. "
-            "Do not claim to have executed tools or changed systems."
-        ),
+        system=_profile_system_prompt(prompt),
         api_key=api_key,
         max_tokens=int(profile.get("max_tokens") or 0) or None,
     )
@@ -700,10 +752,7 @@ async def collect_votes(
     async def invoke(source: str) -> dict[str, Any]:
         tenant_semaphore, source_semaphore = _execution_semaphores(tenant_id, source)
         async with tenant_semaphore, source_semaphore:
-            # Browser Companion sources get a longer budget than a direct
-            # API/CLI call; every other source kind keeps the original,
-            # unchanged timeout.
-            budget = _BROWSER_BRAIN_TIMEOUT_SECONDS if source.endswith("_browser") else _BRAIN_TIMEOUT_SECONDS
+            budget = _brain_timeout_seconds(source)
             try:
                 return await asyncio.wait_for(invoke_unbounded(source), timeout=budget)
             except asyncio.TimeoutError:

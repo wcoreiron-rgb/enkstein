@@ -114,6 +114,14 @@ class CoworkExecutorStatusRead(BaseModel):
     selected: str
     selected_label: str
     any_available: bool
+    #: True once a project is selected, so the UI can distinguish "pick a
+    #: project" from "this project needs a folder" rather than showing one
+    #: undifferentiated "unavailable".
+    project_selected: bool = False
+    #: True when the only thing standing between the operator and a working
+    #: executor is approving a local folder for this project. Lets the UI offer
+    #: the fix instead of only naming the problem.
+    needs_folder: bool = False
 
 
 class CoworkRetryRequest(BaseModel):

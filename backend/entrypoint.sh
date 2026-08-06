@@ -134,7 +134,17 @@ echo ""
 echo "🚀  Starting Marcellus API on :8000"
 echo ""
 
-uvicorn_args=(main:app --host 0.0.0.0 --port 8000)
+# --timeout-keep-alive must exceed the reverse proxy's idle socket reuse window.
+# uvicorn's 5s default closes an idle keep-alive connection that the Next.js
+# proxy has already selected for the next request, which surfaces in the browser
+# as ECONNRESET -> a synthetic 500 on slow endpoints (AI advisory, scans) even
+# though the handler itself returned 200.
+uvicorn_args=(
+  main:app
+  --host 0.0.0.0
+  --port 8000
+  --timeout-keep-alive "${UVICORN_KEEP_ALIVE_TIMEOUT:-75}"
+)
 if [ "${UVICORN_RELOAD:-false}" = "true" ]; then
   echo "    Development reload enabled."
   uvicorn_args+=(--reload)

@@ -218,7 +218,7 @@ async def run(credentials: dict[str, Any]) -> list[dict[str, Any]]:
             except (OSError, json.JSONDecodeError):
                 continue
         if process.returncode and not records:
-            detail = stderr.decode(errors="replace").strip().splitlines()[-1:] 
+            detail = stderr.decode(errors="replace").strip().splitlines()[-1:]
             raise ProwlerError(detail[0][:300] if detail else f"Prowler exited with code {process.returncode}")
         return normalize(records, _provider(credentials.get("provider", "aws")))
 
