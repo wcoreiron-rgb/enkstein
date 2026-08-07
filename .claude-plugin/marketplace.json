@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Governed AI security tooling from the Enkstein project.",
-    "version": "0.8.2"
+    "version": "0.8.3"
   },
   "plugins": [
     {

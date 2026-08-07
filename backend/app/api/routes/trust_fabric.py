@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,6 +38,35 @@ class TrustActionPayload(BaseModel):
     target: Optional[str] = Field(default="trust-fabric", max_length=512)
     target_type: Optional[str] = Field(default="module", max_length=64)
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+class GuardActionPayload(BaseModel):
+    """Privacy-safe evidence from Enkstein Guard.
+
+    Raw prompts, file contents, command arguments, paths, secrets, and working
+    directories are deliberately absent. The hook sends only deterministic
+    classifications and one-way digests, which are sufficient for policy and
+    audit without turning the audit database into a second disclosure.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    surface: Literal["prompt", "write", "command"]
+    tool: str = Field(..., min_length=1, max_length=64)
+    operation: str = Field(..., min_length=1, max_length=128)
+    target_kind: str = Field(default="unknown", max_length=64)
+    target_labels: list[str] = Field(default_factory=list, max_length=20)
+    target_digest: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+    content_digest: str = Field(..., pattern=r"^[a-f0-9]{64}$")
+    content_length: int = Field(default=0, ge=0, le=10_000_000)
+    local_decision: Literal["allow", "monitor", "mask", "require_approval", "deny"]
+    local_policy_ids: list[str] = Field(default_factory=list, max_length=128)
+    local_findings_count: int = Field(default=0, ge=0, le=10_000)
+    risk_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    risk_level: Literal["none", "low", "medium", "high", "critical"] = "none"
+    is_sensitive: bool = False
+    prompt_injection_risk: bool = False
+    signals: dict[str, bool | int | float] = Field(default_factory=dict)
 
 
 class PromptAuditPayload(BaseModel):
@@ -75,11 +105,13 @@ def _decision_payload(decision) -> dict[str, Any]:
     return {
         "allowed": decision.allowed,
         "outcome": decision.outcome.value,
+        "policy_action": getattr(getattr(decision, "policy_action", None), "value", None),
         "risk_score": decision.risk_score,
         "severity": decision.severity.value,
         "policy_name": decision.policy_name,
         "reason": decision.reason,
         "anomalies": decision.anomalies,
+        "policy_coverage": getattr(decision, "policy_coverage", {}),
     }
 
 
@@ -210,6 +242,85 @@ async def evaluate_trust_action(
     decision = await enforce(db, action_request, ip_address=request.client.host if request.client else None)
     if settings.SRE_POLICY_ENABLED:
         sre.record_outcome(payload.module, success=decision.allowed)
+    return _decision_payload(decision)
+
+
+_GUARD_IDENTIFIER = re.compile(r"^[a-zA-Z0-9_.:-]{1,128}$")
+_GUARD_RESERVED_SIGNALS = {
+    "module", "actor_id", "actor_name", "actor_type", "action", "target",
+    "target_type", "tenant_id", "channel", "surface", "tool",
+    "target_digest", "content_digest", "content_length", "local_decision",
+    "local_policy_ids", "local_findings_count", "risk_score", "risk_level",
+    "is_sensitive", "agt_injection_risk", "auth_token",
+}
+
+
+@router.post("/guard/evaluate", summary="Evaluate Enkstein Guard evidence across CoreOS")
+async def evaluate_guard_action(
+    payload: GuardActionPayload,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Apply the complete active CoreOS catalog to a coding-agent action.
+
+    The Guard hook performs content inspection on the developer's machine and
+    sends only safe evidence. This endpoint must never accept or persist raw
+    prompt text, source content, command arguments, filesystem paths, or a
+    working directory.
+    """
+    tenant_id = caller_tenant(user)
+    policy_ids = [
+        value for value in payload.local_policy_ids
+        if _GUARD_IDENTIFIER.fullmatch(value)
+    ]
+    labels = [
+        value.lower() for value in payload.target_labels
+        if _GUARD_IDENTIFIER.fullmatch(value)
+    ]
+    safe_signals = {
+        key: value
+        for key, value in payload.signals.items()
+        if (_GUARD_IDENTIFIER.fullmatch(key)
+            and key not in _GUARD_RESERVED_SIGNALS)
+    }
+
+    action_request = ActionRequest(
+        module="enkstein_guard",
+        actor_id=f"coding-agent:{str(user.get('sub') or 'unknown')[:128]}",
+        actor_name=f"Enkstein Guard ({payload.tool})",
+        actor_type="agent",
+        action=payload.operation,
+        target=(
+            f"{payload.target_kind}:" + ",".join(labels)
+            if labels else payload.target_kind
+        ),
+        target_type=f"agent_{payload.surface}",
+        context={
+            "tenant_id": tenant_id,
+            "channel": "coding_agent",
+            "surface": payload.surface,
+            "tool": payload.tool,
+            "target_digest": payload.target_digest,
+            "content_digest": payload.content_digest,
+            "content_length": payload.content_length,
+            "local_decision": payload.local_decision,
+            "local_policy_ids": policy_ids,
+            "local_findings_count": payload.local_findings_count,
+            "risk_score": payload.risk_score,
+            "risk_level": payload.risk_level,
+            "is_sensitive": payload.is_sensitive,
+            "agt_injection_risk": payload.prompt_injection_risk,
+            "auth_token": "present",
+            **safe_signals,
+        },
+    )
+    decision = await enforce(
+        db,
+        action_request,
+        ip_address=request.client.host if request.client else None,
+        evaluate_full_catalog=True,
+    )
     return _decision_payload(decision)
 
 

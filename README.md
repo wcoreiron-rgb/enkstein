@@ -24,7 +24,7 @@
 
 <p align="center">
   <sub>
-    <b>Current release: v0.8.2</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
+    <b>Current release: v0.8.3</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -418,9 +418,13 @@ It governs what you type, too. A credential pasted into chat is out of your
 control the moment the turn is sent, so Guard scans the prompt itself and stops
 the message before it leaves your machine.
 
-Runs fully local by default. Set `ENKSTEIN_API_URL` and it also consults your
-Enkstein server, so tenant policy, approvals, and the console audit trail apply —
-the two combine strictest-wins, so connecting can only add enforcement.
+Runs fully local by default with 30 tuned public rules. Your private 60-policy
+pack stays outside Git and currently contributes 228 local detections. Set
+`ENKSTEIN_API_URL` and Guard also evaluates all 270 active CoreOS policies,
+across every scope, preserving priority and first-match behavior. Raw prompts,
+source, commands, paths, and working directories never enter that request;
+Trust Fabric receives only classifications, policy IDs, lengths, and digests.
+The tiers combine strictest-wins, so connecting can only add enforcement.
 → [plugin docs](plugins/enkstein-guard/README.md)
 
 ### Server-backed tools
@@ -432,7 +436,7 @@ The forms below talk to your running Enkstein server, so the **Trust Fabric gove
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.8.2-py3-none-any.whl
+pip install ./enkstein_mcp-0.8.3-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -459,7 +463,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### CLI
 
 ```bash
-pip install ./enkstein_cli-0.8.2-py3-none-any.whl
+pip install ./enkstein_cli-0.8.3-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -472,7 +476,7 @@ enkstein evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.8.2-py3-none-any.whl
+pip install ./enkstein_core-0.8.3-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

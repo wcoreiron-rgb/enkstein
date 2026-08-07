@@ -16,7 +16,10 @@ connected tier is where fail-closed enforcement belongs.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
+import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -86,19 +89,136 @@ def _agent_identity() -> str:
     return "AI coding agent"
 
 
-def _target_of(tool: str, payload: dict) -> str:
-    """A short, human-readable subject for the audit row."""
-    for key in ("file_path", "path", "notebook_path"):
-        value = payload.get(key)
-        if isinstance(value, str) and value:
-            return value[:512]
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _risk_for(decision: policy.Decision) -> tuple[float, str]:
+    return {
+        policy.DENY: (95.0, "critical"),
+        policy.REQUIRE_APPROVAL: (75.0, "high"),
+        policy.MASK: (50.0, "medium"),
+        policy.MONITOR: (25.0, "low"),
+        policy.ALLOW: (0.0, "none"),
+    }.get(decision.decision, (0.0, "none"))
+
+
+_LABEL_WORDS = {
+    "audit", "config", "credential", "database", "deploy", "environment",
+    "external", "identity", "key", "log", "network", "password", "private",
+    "production", "secret", "security", "token", "vendor",
+}
+
+
+def _safe_target(tool: str, payload: dict) -> tuple[str, list[str], str]:
+    """Return a non-sensitive kind, labels, and digest for policy/audit.
+
+    The digest preserves correlation across events without persisting a path or
+    command. Labels come from a fixed vocabulary, so a filename containing a
+    customer, secret, or case name cannot leak through metadata.
+    """
+    if tool in WRITE_TOOLS:
+        raw = next((payload.get(key) for key in ("file_path", "path", "notebook_path")
+                    if isinstance(payload.get(key), str)), "")
+        lowered = raw.lower()
+        labels = sorted(word for word in _LABEL_WORDS if word in lowered)
+        suffix = Path(raw).suffix.lower().lstrip(".")
+        if suffix and re.fullmatch(r"[a-z0-9]{1,12}", suffix):
+            labels.append(f"ext_{suffix}")
+        return "workspace_file", labels[:20], _digest(raw or tool)
+
     command = _extract_command(payload)
-    if command:
-        return command.strip()[:512]
-    return tool
+    labels: list[str] = []
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        parts = []
+    if parts:
+        program = Path(parts[0]).name.lower()
+        if re.fullmatch(r"[a-z0-9_.-]{1,32}", program):
+            labels.append(f"program_{program}")
+    return "shell_command", labels, _digest(command or tool)
 
 
-def _remote_decision(tool: str, payload: dict) -> policy.Decision | None:
+def _semantic_operation(tool: str, decision: policy.Decision) -> str:
+    ids = " ".join(f.rule_id for f in decision.findings).lower()
+    if tool == "UserPromptSubmit":
+        return "llm_prompt"
+    if tool in WRITE_TOOLS:
+        if "secret" in ids or "credential" in ids or "api_key" in ids:
+            return "write_file commit_with_secret"
+        return "write_file"
+
+    labels = ["shell_execute"]
+    if "delete" in ids:
+        labels.append("delete_file")
+    if "privilege" in ids:
+        labels.append("escalate")
+    if "publish" in ids:
+        labels.append("package_publish")
+    if "exfil" in ids:
+        labels.append("email_external")
+    return " ".join(labels)
+
+
+def _safe_evidence(
+    tool: str,
+    payload: dict,
+    local: policy.Decision,
+    surface: str,
+) -> dict:
+    if surface == "prompt":
+        content = str(payload.get("prompt") or "")
+        target_kind, labels, target_digest = "model_provider", [], _digest("model_provider")
+    elif surface == "command":
+        content = _extract_command(payload)
+        target_kind, labels, target_digest = _safe_target(tool, payload)
+    else:
+        content = _extract_content(payload)
+        target_kind, labels, target_digest = _safe_target(tool, payload)
+
+    policy_ids = sorted({
+        finding.rule_id for finding in local.findings
+        if re.fullmatch(r"[a-zA-Z0-9_.:-]{1,128}", finding.rule_id)
+    })[:128]
+    joined = " ".join(policy_ids).lower()
+    risk_score, risk_level = _risk_for(local)
+
+    if any(word in joined for word in ("secret", "credential", "key", "token", "password")):
+        labels.extend(["credential", "secret"])
+
+    return {
+        "surface": surface,
+        "tool": tool[:64],
+        "operation": _semantic_operation(tool, local),
+        "target_kind": target_kind,
+        "target_labels": sorted(set(labels))[:20],
+        "target_digest": target_digest,
+        "content_digest": _digest(content),
+        "content_length": min(len(content), 10_000_000),
+        "local_decision": local.decision,
+        "local_policy_ids": policy_ids,
+        "local_findings_count": min(len(local.findings), 10_000),
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "is_sensitive": bool(local.findings),
+        "prompt_injection_risk": "prompt_injection" in joined,
+        "signals": {
+            "secret_in_repo_commit": bool(
+                surface == "write" and any(word in joined for word in ("secret", "credential", "key", "token"))
+            ),
+            "shell_access": surface == "command",
+            "prompt_count_hour": 1 if surface == "prompt" else 0,
+        },
+    }
+
+
+def _remote_decision(
+    tool: str,
+    payload: dict,
+    local: policy.Decision,
+    surface: str,
+) -> policy.Decision | None:
     """Ask a reachable Enkstein backend to apply the full Trust Fabric.
 
     Returns None when no backend is configured or it does not answer promptly,
@@ -111,29 +231,10 @@ def _remote_decision(tool: str, payload: dict) -> policy.Decision | None:
     import urllib.error
     import urllib.request
 
-    # Identify the agent and workspace so a console reader can tell *which*
-    # assistant, on *which* project, tried the action. Without this the Events
-    # table shows an unattributed row and the audit trail is much less useful.
-    agent = _agent_identity()
-    body = json.dumps({
-        "module": "arcclaw",
-        "action": f"agent_tool:{tool}",
-        "actor_id": f"coding-agent:{agent}",
-        "actor_name": f"{agent} ({Path.cwd().name})",
-        "actor_type": "ai_agent",
-        "target": _target_of(tool, payload),
-        "target_type": "workspace_file" if tool in WRITE_TOOLS else "shell_command",
-        "context": {
-            "tool": tool,
-            "tool_input": payload,
-            "channel": "coding_agent",
-            "agent": agent,
-            "workspace": str(Path.cwd()),
-        },
-    }).encode()
+    body = json.dumps(_safe_evidence(tool, payload, local, surface)).encode()
 
     request = urllib.request.Request(
-        base.rstrip("/") + "/api/v1/trust-fabric/evaluate",
+        base.rstrip("/") + "/api/v1/trust-fabric/guard/evaluate",
         data=body,
         headers={"Content-Type": "application/json"},
     )
@@ -152,12 +253,15 @@ def _remote_decision(tool: str, payload: dict) -> policy.Decision | None:
     # here would silently never match and the connected tier would look like it
     # was working while enforcing nothing.
     outcome = str(data.get("outcome") or "").lower()
+    action = str(data.get("policy_action") or "").lower()
     allowed = data.get("allowed")
 
-    if outcome == "blocked":
+    if action in ("deny", "isolate") or outcome == "blocked":
         decision = policy.DENY
-    elif outcome == "requires_approval":
+    elif action == "require_approval" or outcome == "requires_approval":
         decision = policy.REQUIRE_APPROVAL
+    elif action == "monitor":
+        decision = policy.MONITOR
     elif outcome in ("allowed", "flagged", "pending"):
         decision = policy.ALLOW
     elif allowed is False:
@@ -169,7 +273,7 @@ def _remote_decision(tool: str, payload: dict) -> policy.Decision | None:
         return None
 
     findings = []
-    if decision in (policy.DENY, policy.REQUIRE_APPROVAL):
+    if decision != policy.ALLOW:
         findings.append(policy.Finding(
             rule_id=str(data.get("policy_name") or "trust_fabric"),
             title="Trust Fabric policy",
@@ -284,7 +388,8 @@ def _evaluate(tool: str, payload: dict) -> tuple[policy.Decision, str]:
     "default allow". Strictest-wins keeps the connected tier purely additive.
     """
     local = _local_decision(tool, payload)
-    remote = _remote_decision(tool, payload)
+    surface = "command" if tool in COMMAND_TOOLS else "write"
+    remote = _remote_decision(tool, payload, local, surface)
     if remote is None:
         return local, "standalone"
 
@@ -341,7 +446,14 @@ def _handle_prompt(event: dict) -> None:
     if not isinstance(prompt, str) or not prompt.strip():
         sys.exit(0)
 
-    decision = policy.scan_prompt(prompt)
+    local = policy.scan_prompt(prompt)
+    remote = _remote_decision(
+        "UserPromptSubmit",
+        {"prompt": prompt},
+        local,
+        "prompt",
+    )
+    decision = local if remote is None else policy.combine(local, remote)
     if not decision.blocked:
         sys.exit(0)
 
@@ -358,8 +470,7 @@ def _handle_prompt(event: dict) -> None:
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": message,
+            "suppressOriginalPrompt": True,
         },
         "decision": "block",
         "reason": message,

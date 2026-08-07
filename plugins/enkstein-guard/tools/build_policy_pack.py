@@ -26,6 +26,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
 DENY = "deny"
 REQUIRE_APPROVAL = "require_approval"
@@ -99,6 +100,30 @@ EXCLUDE_EXACT = {
     "FINANCIAL_FORECAST", "LEGAL_STRATEGY", "ATTORNEY_CLIENT",
     "CUSTOM_KEYWORD", "PERSONA", "PATENT", "TRADE_SECRET",
 }
+
+# These two private policies are covered by stricter open rules. The private
+# SSN expression is context-free and would block ticket/version numbers; the
+# card expression lacks the Luhn validation that prevents long-number noise.
+# Keeping the policy identity with a `covered_by` marker preserves all 60
+# policies without reintroducing known false positives.
+BUILT_IN_POLICY_COVERAGE = {
+    1: ["prompt.ssn", "secret.ssn"],
+    2: ["prompt.payment_card"],
+}
+
+# These policy families contain deterministic credential/key expressions that
+# remain meaningful in source code without the licensed engine's LLM context
+# layer. Other policies still govern prompts, but their regex fallbacks alone
+# are too broad for files (`source code`, `internal URL`, `network address`,
+# and `R&D` matched 131 of 282 ordinary Python files during measurement).
+SAFE_CONTENT_POLICY_IDS = {4, 5, 13, 32}
+
+# Within otherwise code-safe policy families, these regex fallbacks are still
+# broader than Enkstein's tuned built-ins: short `sk-*` identifiers, field names
+# such as `api_key_type`, function calls containing `password`, and
+# `private_key()` all look like values to the raw expression. They remain active
+# for prompts but not source or command content.
+PROMPT_ONLY_POLICY_RULES = {(4, 1), (4, 2), (32, 4), (32, 6)}
 
 
 def _dict_node(tree: ast.Module, name: str) -> ast.Dict | None:
@@ -189,7 +214,146 @@ def _usable(pattern: str) -> bool:
     return len(pattern) > 12
 
 
+def _literal_assignment(tree: ast.AST, name: str, default=None):
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        if not any(isinstance(target, ast.Name) and target.id == name for target in targets):
+            continue
+        try:
+            return ast.literal_eval(node.value)
+        except (ValueError, TypeError):
+            return default
+    return default
+
+
+def _policy_source_dir(source_path: str) -> Path | None:
+    source = Path(source_path).expanduser().resolve()
+    candidates = []
+    if source.is_dir():
+        candidates.extend((source, source / "core" / "llm_policy_engine"))
+    else:
+        candidates.extend((source.parent / "core" / "llm_policy_engine", source.parent))
+    for candidate in candidates:
+        if len(list(candidate.glob("policy[0-9][0-9]_*.py"))) == 60:
+            return candidate
+    return None
+
+
+def _extract_policy_module(path: Path) -> dict:
+    source = path.read_text(encoding="utf-8", errors="replace")
+    tree = ast.parse(source)
+    policy_id = int(_literal_assignment(tree, "POLICY_ID", 0) or 0)
+    policy_key = str(_literal_assignment(tree, "POLICY_KEY", "") or "")
+    policy_name = str(_literal_assignment(tree, "POLICY_NAME", "") or "")
+    severity = str(_literal_assignment(tree, "SEVERITY", "medium") or "medium").lower()
+    risk_score = int(_literal_assignment(tree, "DEFAULT_RISK_SCORE", 50) or 50)
+    scopes = list(_literal_assignment(tree, "SCOPES", []) or [])
+    patterns = list(_literal_assignment(tree, "REGEX_PATTERNS", []) or [])
+
+    # A small number of policies implement a custom compiled expression rather
+    # than REGEX_PATTERNS. Extract the literal without importing the licensed
+    # package or executing any of its code.
+    if not patterns:
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "compile"
+                    and node.args
+                    and isinstance(node.args[0], ast.Constant)
+                    and isinstance(node.args[0].value, str)):
+                continue
+            patterns.append(node.args[0].value)
+
+    if not (1 <= policy_id <= 60 and policy_key and policy_name):
+        raise ValueError(f"Invalid policy metadata in {path.name}")
+    return {
+        "id": policy_id,
+        "key": policy_key,
+        "name": policy_name,
+        "severity": severity,
+        "risk_score": risk_score,
+        "source_scopes": scopes,
+        "patterns": patterns,
+    }
+
+
+def _guard_scopes(policy_id: int, source_scopes: list[str]) -> list[str]:
+    scopes = {"prompt"}
+    if (policy_id in SAFE_CONTENT_POLICY_IDS
+            and any(value in source_scopes for value in ("code_text", "config_text"))):
+        scopes.update(("content", "command"))
+    return sorted(scopes)
+
+
+def _build_policy_modules(source_dir: Path, pack_name: str) -> dict:
+    modules = [
+        _extract_policy_module(path)
+        for path in sorted(source_dir.glob("policy[0-9][0-9]_*.py"))
+    ]
+    ids = [item["id"] for item in modules]
+    if ids != list(range(1, 61)):
+        raise SystemExit(f"Expected private policy IDs 1-60, found {ids}")
+
+    rules = []
+    policies = []
+    skipped = 0
+    for item in modules:
+        built_in = BUILT_IN_POLICY_COVERAGE.get(item["id"], [])
+        action = SEVERITY_ACTION.get(item["severity"], MONITOR)
+        scopes = _guard_scopes(item["id"], item["source_scopes"])
+        rule_count = 0
+
+        if not built_in:
+            for index, pattern in enumerate(item["patterns"], start=1):
+                if not _usable(pattern):
+                    skipped += 1
+                    continue
+                rule_scopes = (
+                    ["prompt"]
+                    if (item["id"], index) in PROMPT_ONLY_POLICY_RULES
+                    else scopes
+                )
+                rules.append({
+                    "id": f"{pack_name}.policy{item['id']:02d}.{item['key']}.r{index}",
+                    "policy_id": item["id"],
+                    "policy_key": item["key"],
+                    "policy_name": item["name"],
+                    "title": item["name"],
+                    "pattern": pattern,
+                    "action": action,
+                    "scope": rule_scopes,
+                })
+                rule_count += 1
+
+        policies.append({
+            "id": item["id"],
+            "key": item["key"],
+            "name": item["name"],
+            "severity": item["severity"],
+            "risk_score": item["risk_score"],
+            "scope": scopes,
+            "rule_count": rule_count,
+            "covered_by": built_in,
+        })
+
+    return {
+        "name": pack_name,
+        "version": 2,
+        "source": source_dir.name,
+        "policy_count": len(policies),
+        "policies": policies,
+        "rules": rules,
+        "_skipped": skipped,
+    }
+
+
 def build(source_path: str, pack_name: str) -> dict:
+    policy_dir = _policy_source_dir(source_path)
+    if policy_dir is not None:
+        return _build_policy_modules(policy_dir, pack_name)
+
     with open(source_path, encoding="utf-8", errors="replace") as handle:
         source = handle.read()
 
@@ -234,6 +398,11 @@ def build(source_path: str, pack_name: str) -> dict:
         "name": pack_name,
         "version": 1,
         "source": os.path.basename(source_path),
+        "policy_count": len(groups),
+        "policies": [
+            {"key": key, "name": key.replace("_", " ").title()}
+            for key in sorted(groups)
+        ],
         "rules": rules,
         "_skipped": skipped,
     }
@@ -267,7 +436,7 @@ def _measure(pack: dict, root: str) -> int:
         pattern = re.compile(rule["pattern"], re.IGNORECASE)
         hits = sum(1 for text in texts if pattern.search(text))
         if hits:
-            counts.append((hits, rule["id"].rsplit(".", 1)[-1].upper()))
+            counts.append((hits, rule["id"]))
 
     print(f"Scanned {len(texts)} files under {root}")
     if not counts:
@@ -295,7 +464,7 @@ def main() -> int:
         os.path.expanduser("~"), ".enkstein", "policy-packs"))
     args = parser.parse_args()
 
-    if not os.path.isfile(args.source):
+    if not os.path.exists(args.source):
         print(f"Source engine not found: {args.source}", file=sys.stderr)
         return 1
 
@@ -315,7 +484,10 @@ def main() -> int:
     for rule in pack["rules"]:
         counts[rule["action"]] = counts.get(rule["action"], 0) + 1
 
-    print(f"Wrote {len(pack['rules'])} rules to {destination}")
+    print(
+        f"Wrote {len(pack.get('policies', []))} policies / "
+        f"{len(pack['rules'])} rules to {destination}"
+    )
     print(f"Skipped {skipped} detections as too noisy for a coding agent.")
     for action in (DENY, REQUIRE_APPROVAL, MASK, MONITOR):
         if counts.get(action):

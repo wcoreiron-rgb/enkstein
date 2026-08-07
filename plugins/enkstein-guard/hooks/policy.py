@@ -181,6 +181,33 @@ def _is_benign(rule_id: str, snippet: str, line_text: str) -> bool:
     # surrounding line rather than the matched snippet.
     if rule_id == "secret.connection_string" and LOCAL_HOSTS.search(line_text):
         return True
+    # Private policy 14's regex sees `user:pass` inside a localhost URL as a
+    # username disclosure even though the built-in connection-string rule has
+    # already classified that development URL as local and harmless.
+    if ".policy14." in rule_id and LOCAL_HOSTS.search(line_text):
+        return True
+    # A bare phone-shaped value in ordinary prose is too weak to interrupt a
+    # conversation. Preserve Policy 7 for explicit PII context while avoiding
+    # warnings on routine vendor/contact details.
+    if ".policy07." in rule_id and re.fullmatch(
+        r"(?:\+?1[\s.-]?)?(?:\([2-9]\d{2}\)|[2-9]\d{2})[\s.-][2-9]\d{2}[\s.-]\d{4}",
+        snippet,
+    ):
+        if not re.search(r"(?i)\b(?:customer|patient|employee|personal|private|phone|mobile)\b", line_text):
+            return True
+    # Policy 33's recovery-key fallback accepts four groups of 4-5 digits.
+    # Four consecutive calendar years have the same shape but no authentication
+    # meaning; requiring either a non-year group or auth context removes that
+    # high-frequency false positive without weakening real backup-code text.
+    if ".policy33." in rule_id:
+        groups = re.findall(r"\b\d{4}\b", snippet)
+        all_years = len(groups) >= 4 and all(1900 <= int(value) <= 2100 for value in groups)
+        has_auth_context = bool(re.search(
+            r"(?i)\b(?:backup|recovery|mfa|2fa|otp|authenticator|verification)\b",
+            line_text,
+        ))
+        if all_years and not has_auth_context:
+            return True
     return False
 
 
@@ -493,6 +520,9 @@ class PackRule:
     action: str
     scopes: tuple[str, ...]
     pack: str
+    policy_id: int | None = None
+    policy_key: str | None = None
+    policy_name: str | None = None
     # Lowercased literals, at least one of which must appear for the pattern to
     # have any chance of matching. A substring test is far cheaper than a regex
     # sweep, and across hundreds of rules that is the whole cost of the hook.
@@ -608,6 +638,9 @@ def _compile_pack(raw: dict, source: str) -> list[PackRule]:
             action=action,
             scopes=scopes,
             pack=pack_name,
+            policy_id=(int(entry["policy_id"]) if entry.get("policy_id") is not None else None),
+            policy_key=(str(entry["policy_key"]) if entry.get("policy_key") else None),
+            policy_name=(str(entry["policy_name"]) if entry.get("policy_name") else None),
             anchor=_anchor_for(entry["pattern"]),
         ))
     return rules
@@ -626,6 +659,34 @@ def load_packs() -> tuple[PackRule, ...]:
         if isinstance(raw, dict):
             rules.extend(_compile_pack(raw, path))
     return tuple(rules)
+
+
+@functools.lru_cache(maxsize=1)
+def pack_policy_summary() -> tuple[dict, ...]:
+    """Return policy identities without exposing their private expressions."""
+    policies: list[dict] = []
+    for path in _pack_paths():
+        try:
+            with open(path, encoding="utf-8") as handle:
+                raw = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(raw, dict):
+            continue
+        pack_name = str(raw.get("name") or os.path.basename(path))
+        for item in raw.get("policies") or []:
+            if not isinstance(item, dict):
+                continue
+            policies.append({
+                "pack": pack_name,
+                "id": item.get("id"),
+                "key": item.get("key"),
+                "name": item.get("name"),
+                "severity": item.get("severity"),
+                "rule_count": int(item.get("rule_count") or 0),
+                "covered_by": tuple(item.get("covered_by") or ()),
+            })
+    return tuple(policies)
 
 
 def scan_with_packs(text: str, scope: str) -> Decision:

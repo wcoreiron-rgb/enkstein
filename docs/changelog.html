@@ -367,6 +367,40 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.8.3 — Complete Guard policy coverage                   -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Complete Guard Policy Coverage</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Guard · CoreOS · Private Policies</span>
+          <span class="release-date">August 7, 2026 &nbsp;·&nbsp; Enkstein v0.8.3</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Connected Enkstein Guard now evaluates the complete active CoreOS policy catalog, while the private builder preserves all 60 licensed policy identities. Raw prompts, source, commands, paths, and working directories stay on the developer's machine.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Complete connected CoreOS coverage:</strong> prompts, writes, and commands evaluate every active policy across Global, Module, Connector, and Identity scopes while retaining priority order and first-match enforcement. Coverage counts are returned and written into the audit evidence.</li>
+          <li><strong>Complete private policy identity:</strong> the builder reads the numbered private policy modules directly, preserving all 60 IDs, names, severities, risk scores, and scopes. The current source produces 228 local rules without placing their expressions in the public repository.</li>
+          <li><strong>Safe correlation:</strong> policy IDs, fixed labels, lengths, and SHA-256 digests provide audit correlation without sending raw prompt, file content, command arguments, paths, or working directories to Trust Fabric.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Hardened</div>
+        <ul class="change-list">
+          <li>Signal-map fields cannot override tenant, actor, action, risk, classification, digest, or authentication context derived by the server.</li>
+          <li>Private regex fallbacks were measured against the real source tree; LLM-context-dependent rules remain prompt-only, and deterministic credential/key families alone extend file and command scanning.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.8.2 — Private policy packs and safe masking             -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

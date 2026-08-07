@@ -55,8 +55,15 @@ all pass without comment. A security tool that cries wolf gets uninstalled.
 network calls, no dependencies beyond Python 3. Every decision is local.
 
 **Connected.** Set `ENKSTEIN_API_URL` (and `ENKSTEIN_TOKEN`) and the hook also
-consults a running Enkstein backend, so tenant policy, approval queues,
-isolation, and the console audit trail all apply.
+consults a running Enkstein backend. Every active CoreOS policy is evaluated
+across Global, Module, Connector, and Identity scopes; enforcement retains the
+console's priority order and first-match-wins behavior. The response includes
+the catalog, evaluated, matched, and invalid-condition counts for audit proof.
+
+Guard never sends the raw prompt, file content, command arguments, path, or
+working directory to this endpoint. Trust Fabric receives policy IDs, fixed
+classification labels, lengths, and SHA-256 digests, so connecting centralized
+governance cannot create a second copy of the sensitive value in Events.
 
 The two tiers **combine, strictest wins** — connecting a backend is purely
 additive and can never reduce what the local pack already catches. If the
@@ -67,6 +74,11 @@ or stopped runtime never blocks your editor.
 export ENKSTEIN_API_URL=http://localhost:8000
 export ENKSTEIN_TOKEN=…
 ```
+
+CoreOS policy behavior is literal. If **Block Shell Execution** is active, a
+connected Guard shell call is denied even when the standalone command pack
+would allow it. Disable or change that policy in Enkstein when your tenant wants
+approval or monitoring instead.
 
 ## Private policy packs
 
@@ -82,6 +94,12 @@ and loaded at runtime:
 python3 tools/build_policy_pack.py --source /path/to/engine.py --name mypack
 # -> ~/.enkstein/policy-packs/mypack.json  (mode 0600, never committed)
 ```
+
+For a numbered 60-policy source, the builder preserves all 60 policy identities,
+names, severities, risk scores, and scopes. Policies 1 and 2 delegate to
+Enkstein's context-aware SSN and Luhn-validated payment-card rules rather than
+importing their noisier fallback expressions. The current private source builds
+60 policies backed by 228 local rules.
 
 Point `ENKSTEIN_POLICY_PACK` at a different file or directory to override the
 default location. Pack rules combine with the built-in pack, strictest wins, so

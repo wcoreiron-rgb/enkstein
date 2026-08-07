@@ -3,6 +3,7 @@ CoreOS — Policy Engine
 Deterministic policy evaluation. Every action is checked before execution.
 """
 import json
+from dataclasses import dataclass
 from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -19,6 +20,24 @@ class PolicyResult:
 
     def __repr__(self):
         return f"<PolicyResult action={self.action} policy={self.policy_name}>"
+
+
+@dataclass(frozen=True)
+class PolicyCatalogResult:
+    """Cross-module policy result with proof of catalog coverage.
+
+    CoreOS is first-match-wins for enforcement, but Guard is a cross-cutting
+    caller: a prompt, write, or command may implicate Identity, Data, Dev, AI
+    Security, or several Arms at once. The Guard evaluator therefore checks
+    every active policy condition across every scope, records the complete
+    coverage count, then enforces the highest-priority match.
+    """
+
+    result: PolicyResult
+    catalog_total: int
+    policies_evaluated: int
+    policies_matched: int
+    invalid_conditions: int
 
 
 OPERATORS = {
@@ -95,4 +114,69 @@ async def evaluate_action(
         action=PolicyAction.ALLOW,
         policy_name="default",
         reason="No matching policy — default allow"
+    )
+
+
+async def evaluate_policy_catalog(
+    db: AsyncSession,
+    context: dict[str, Any],
+) -> PolicyCatalogResult:
+    """Evaluate the complete active CoreOS catalog for Enkstein Guard.
+
+    Unlike module execution, Guard spans all modules, connector scopes, and
+    identity scopes. Scope is still preserved as policy metadata; it simply
+    does not remove a policy from consideration. Conditions whose evidence is
+    absent return false, so a Cloud or Identity policy cannot fire merely
+    because Guard evaluated it.
+    """
+    stmt = (
+        select(Policy)
+        .where(Policy.is_active == True)
+        .order_by(Policy.priority.asc(), Policy.name.asc())
+    )
+    result = await db.execute(stmt)
+    policies = result.scalars().all()
+
+    first: PolicyResult | None = None
+    evaluated = 0
+    matched = 0
+    invalid = 0
+
+    for item in policies:
+        try:
+            condition = json.loads(item.condition_json)
+        except (json.JSONDecodeError, TypeError):
+            invalid += 1
+            continue
+        if not isinstance(condition, dict):
+            invalid += 1
+            continue
+
+        evaluated += 1
+        if not _evaluate_condition(condition, context):
+            continue
+
+        matched += 1
+        if first is None:
+            first = PolicyResult(
+                action=item.action,
+                policy_name=item.name,
+                reason=(
+                    f"Matched policy '{item.name}' (priority {item.priority}; "
+                    f"scope {item.scope.value}"
+                    f"{':' + item.scope_target if item.scope_target else ''})"
+                ),
+            )
+
+    selected = first or PolicyResult(
+        action=PolicyAction.ALLOW,
+        policy_name="default",
+        reason="No matching policy — default allow",
+    )
+    return PolicyCatalogResult(
+        result=selected,
+        catalog_total=len(policies),
+        policies_evaluated=evaluated,
+        policies_matched=matched,
+        invalid_conditions=invalid,
     )

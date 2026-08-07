@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.policy_engine import evaluate_action, PolicyResult
+from app.services.policy_engine import evaluate_action, evaluate_policy_catalog, PolicyResult
 from app.services.risk_scoring import calculate_event_risk, severity_from_score
 from app.services.audit_service import log_action
 from app.services.ring_policy import (
@@ -59,6 +59,8 @@ class EnforcementDecision:
         policy_name: str,
         reason: str,
         anomalies: list[str],
+        policy_action: Optional[PolicyAction] = None,
+        policy_coverage: Optional[dict[str, Any]] = None,
     ):
         self.allowed = allowed
         self.outcome = outcome
@@ -67,12 +69,15 @@ class EnforcementDecision:
         self.policy_name = policy_name
         self.reason = reason
         self.anomalies = anomalies
+        self.policy_action = policy_action
+        self.policy_coverage = policy_coverage or {}
 
 
 async def enforce(
     db: AsyncSession,
     request: ActionRequest,
     ip_address: Optional[str] = None,
+    evaluate_full_catalog: bool = False,
 ) -> EnforcementDecision:
     """
     Main enforcement entrypoint.
@@ -105,6 +110,7 @@ async def enforce(
         or channel in CHANNEL_RING_MAP
     )
     ring_meta: dict[str, Any] | None = None
+    policy_coverage: dict[str, Any] = {}
     if ring_enforce:
         ring = classify_ring(request.action, channel)
         trust_score = float(request.context.get("trust_score", 50.0))
@@ -140,7 +146,17 @@ async def enforce(
             )
     else:
         # 3. Standard policy evaluation
-        policy_result = await evaluate_action(db, eval_context, module=request.module)
+        if evaluate_full_catalog:
+            catalog = await evaluate_policy_catalog(db, eval_context)
+            policy_result = catalog.result
+            policy_coverage = {
+                "catalog_total": catalog.catalog_total,
+                "policies_evaluated": catalog.policies_evaluated,
+                "policies_matched": catalog.policies_matched,
+                "invalid_conditions": catalog.invalid_conditions,
+            }
+        else:
+            policy_result = await evaluate_action(db, eval_context, module=request.module)
 
     # 4. Risk scoring
     signals = list(anomalies)
@@ -180,7 +196,12 @@ async def enforce(
         policy_name=policy_result.policy_name,
         policy_reason=policy_result.reason,
         description=f"[{request.module}] {request.actor_name} → {request.action}",
-        metadata_json=json.dumps({"anomalies": anomalies, "context": request.context, "ring": ring_meta}),
+        metadata_json=json.dumps({
+            "anomalies": anomalies,
+            "context": request.context,
+            "ring": ring_meta,
+            "policy_coverage": policy_coverage,
+        }),
         is_anomaly=bool(anomalies),
         requires_review=risk_score >= 50 or outcome == EventOutcome.REQUIRES_APPROVAL,
     )
@@ -199,7 +220,12 @@ async def enforce(
         reason=policy_result.reason,
         module=request.module,
         ip_address=ip_address,
-        detail_json=json.dumps({"risk_score": risk_score, "anomalies": anomalies, "ring": ring_meta}),
+        detail_json=json.dumps({
+            "risk_score": risk_score,
+            "anomalies": anomalies,
+            "ring": ring_meta,
+            "policy_coverage": policy_coverage,
+        }),
         compliance_relevant=risk_score >= 25,
         tenant_id=str(request.context.get("tenant_id") or "") or None,
     )
@@ -214,4 +240,6 @@ async def enforce(
         policy_name=policy_result.policy_name,
         reason=policy_result.reason,
         anomalies=anomalies,
+        policy_action=policy_result.action,
+        policy_coverage=policy_coverage,
     )

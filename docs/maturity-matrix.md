@@ -1,7 +1,7 @@
 # Enkstein Maturity Matrix (2026)
 
 **Date:** 2026-08-07
-**Release:** 0.8.2
+**Release:** 0.8.3
 **Purpose:** Public, conservative status tracking for platform security/runtime maturity.
 
 Status legend:

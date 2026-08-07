@@ -293,7 +293,8 @@ def test_connected_tier_blocks_on_trust_fabric_outcome():
     assert result.returncode == 2
     assert "Change freeze in effect" in result.stderr
     assert captured, "hook must actually call the backend"
-    assert captured[0]["action"] == "agent_tool:Write"
+    assert captured[0]["operation"] == "write_file"
+    assert captured[0]["surface"] == "write"
 
 
 def test_connected_tier_maps_requires_approval():
@@ -411,35 +412,72 @@ def test_wrapped_safe_commands_stay_allowed(name, command):
     assert not decision.blocked, f"{name} false positive: {decision.reason()}"
 
 
-def test_connected_events_are_attributable_in_the_console():
-    """An Events row must say which agent, which project, and what it touched.
-
-    The console renders actor_name, action, and target; without them a blocked
-    call appears as an unattributed row and the audit trail loses most of its
-    value.
-    """
+def test_connected_events_send_safe_correlatable_evidence():
+    """Connected policy must not turn the audit database into a disclosure."""
     _, captured = run_hook_connected(
         {"tool_name": "Write", "tool_input": {"file_path": "src/config.ts", "content": "const a = 1"}},
         {"allowed": True, "outcome": "allowed", "policy_name": "default", "reason": "ok"},
     )
     sent = captured[0]
-    assert sent["action"] == "agent_tool:Write"
-    assert sent["actor_type"] == "ai_agent"
-    assert sent["actor_id"].startswith("coding-agent:")
-    assert sent["actor_name"], "console shows actor_name; it must not be empty"
-    assert sent["target"] == "src/config.ts"
-    assert sent["target_type"] == "workspace_file"
-    assert sent["context"]["workspace"]
+    assert sent["operation"] == "write_file"
+    assert sent["target_kind"] == "workspace_file"
+    assert sent["target_labels"] == ["config", "ext_ts"]
+    assert len(sent["target_digest"]) == 64
+    assert len(sent["content_digest"]) == 64
+    serialized = json.dumps(sent)
+    assert "src/config.ts" not in serialized
+    assert "const a = 1" not in serialized
+    assert '"workspace":' not in serialized
+    assert '"tool_input":' not in serialized
 
 
-def test_connected_events_describe_shell_commands():
+def test_connected_events_classify_shell_without_sending_arguments():
     _, captured = run_hook_connected(
         {"tool_name": "Bash", "tool_input": {"command": "npm run build"}},
         {"allowed": True, "outcome": "allowed", "policy_name": "default", "reason": "ok"},
     )
     sent = captured[0]
-    assert sent["target"] == "npm run build"
-    assert sent["target_type"] == "shell_command"
+    assert sent["operation"] == "shell_execute"
+    assert sent["target_kind"] == "shell_command"
+    assert sent["target_labels"] == ["program_npm"]
+    assert "npm run build" not in json.dumps(sent)
+
+
+def test_connected_secret_evidence_never_sends_the_secret():
+    result, captured = run_hook_connected(
+        SECRET_WRITE,
+        {"allowed": True, "outcome": "allowed", "policy_action": "allow",
+         "policy_name": "default", "reason": "ok"},
+    )
+    assert result.returncode == 2
+    sent = json.dumps(captured[0])
+    assert "AKIA3ZK7QWERTYUIOPAS" not in sent
+    assert "secret.aws_access_key" in sent
+    assert captured[0]["is_sensitive"] is True
+
+
+def test_connected_prompt_is_governed_without_sending_prompt_text():
+    prompt = "Explain how dependency injection works."
+    result, captured = run_hook_connected(
+        {"hook_event_name": "UserPromptSubmit", "prompt": prompt},
+        {"allowed": False, "outcome": "blocked", "policy_action": "deny",
+         "policy_name": "maintenance_freeze", "reason": "Prompt use is paused"},
+    )
+    assert result.returncode == 2
+    assert "Prompt use is paused" in result.stderr
+    sent = captured[0]
+    assert sent["surface"] == "prompt"
+    assert sent["operation"] == "llm_prompt"
+    assert prompt not in json.dumps(sent)
+
+
+def test_prompt_block_suppresses_original_prompt_in_hook_output():
+    result = run_hook({
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "my key is AKIA3ZK7QWERTYUIOPAS",
+    })
+    output = json.loads(result.stdout)["hookSpecificOutput"]
+    assert output["suppressOriginalPrompt"] is True
 
 
 # ── Prompt governance ──────────────────────────────────────────────────────────
@@ -829,3 +867,63 @@ def test_pack_scanning_is_bounded(pack):
     start = time.perf_counter()
     policy.scan_content(text)
     assert (time.perf_counter() - start) < 1.0
+
+
+# ---------------------------------------------------------------------------
+# Sixty-policy private source contract
+# ---------------------------------------------------------------------------
+
+def _load_pack_builder():
+    import importlib.util
+
+    path = PLUGIN / "tools" / "build_policy_pack.py"
+    spec = importlib.util.spec_from_file_location("enkstein_pack_builder", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_private_builder_preserves_all_60_policy_identities(tmp_path, monkeypatch):
+    """Coverage is counted by policy, not by however many regexes it owns."""
+    source_root = tmp_path / "licensed-engine"
+    policy_dir = source_root / "core" / "llm_policy_engine"
+    policy_dir.mkdir(parents=True)
+    proxy = source_root / "regent_proxy_addon_llm.py"
+    proxy.write_text("# discovery anchor\n")
+
+    for number in range(1, 61):
+        (policy_dir / f"policy{number:02d}_example.py").write_text(
+            "class ExamplePolicy:\n"
+            f"    POLICY_ID = {number}\n"
+            f"    POLICY_KEY = 'policy_{number:02d}'\n"
+            f"    POLICY_NAME = 'Policy {number:02d}'\n"
+            "    SEVERITY = 'medium'\n"
+            "    DEFAULT_RISK_SCORE = 50\n"
+            "    SCOPES = ['llm_prompt', 'code_text']\n"
+            f"    REGEX_PATTERNS = [r'POLICY{number:02d}-[0-9]{{4}}']\n"
+        )
+
+    builder = _load_pack_builder()
+    pack_data = builder.build(str(proxy), "private")
+
+    assert pack_data["policy_count"] == 60
+    assert [item["id"] for item in pack_data["policies"]] == list(range(1, 61))
+    assert len(pack_data["rules"]) == 58  # Policies 1-2 use safer built-ins.
+    assert pack_data["policies"][0]["covered_by"] == ["prompt.ssn", "secret.ssn"]
+    assert pack_data["policies"][-1]["key"] == "policy_60"
+
+    pack_path = tmp_path / "private.json"
+    pack_path.write_text(json.dumps({key: value for key, value in pack_data.items()
+                                     if not key.startswith("_")}))
+    monkeypatch.setenv("ENKSTEIN_POLICY_PACK", str(pack_path))
+    policy.load_packs.cache_clear()
+    policy.pack_policy_summary.cache_clear()
+    try:
+        summary = policy.pack_policy_summary()
+        assert len(summary) == 60
+        assert summary[0]["id"] == 1
+        assert summary[-1]["id"] == 60
+    finally:
+        policy.load_packs.cache_clear()
+        policy.pack_policy_summary.cache_clear()

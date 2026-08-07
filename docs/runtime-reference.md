@@ -11,7 +11,7 @@ For an overview of what Enkstein is and how to install it, see the
 
 ## Distributed Runtime
 
-Enkstein `0.8.2` provides three governed runtime paths on top of the compatibility platform:
+Enkstein `0.8.3` provides three governed runtime paths on top of the compatibility platform:
 
 | Layer | Shipped behavior | Maturity |
 |---|---|---|
@@ -68,7 +68,7 @@ Brain, consensus, and compatibility model routes are tenant-bound; profile
 mutation requires an operator identity; and Multi-Brain calls use bounded
 per-tenant/per-source concurrency with safe timeouts.
 
-Version `0.8.2` keeps a paired Browser Companion marked ready while it is
+Version `0.8.3` keeps a paired Browser Companion marked ready while it is
 submitting, streaming, or completing a long provider turn, and routes workspace
 SSE through a dedicated streaming proxy rather than the generic API rewrite.
 This prevents an active signed-in ChatGPT, Claude, or Gemini tab from being
@@ -90,6 +90,27 @@ groups likely root causes, and orders advisory remediation steps with control
 IDs and evidence counts. The panel can report a clean assessment or an
 unavailable Brain honestly; it cannot change a verdict, score, or remediation
 gate. The same advisory surface is available from Zero Trust control coverage.
+
+### Enkstein Guard policy layers
+
+Enkstein Guard works without the desktop runtime using its tuned public rules
+and any operator-owned pack under `~/.enkstein/policy-packs`. The current
+private source is represented as 60 policy identities backed by 228 local rules;
+the generated expressions remain outside the public repository.
+
+When `ENKSTEIN_API_URL` and `ENKSTEIN_TOKEN` are configured, prompts, writes,
+and commands call `POST /api/v1/trust-fabric/guard/evaluate`. The endpoint
+evaluates the complete active CoreOS catalog across Global, Module, Connector,
+and Identity scopes, retains priority-order/first-match enforcement, and returns
+catalog, evaluated, matched, and invalid-condition counts. It is authenticated
+and tenant-bound.
+
+The request contains no raw prompt, source text, command arguments, filesystem
+path, or working directory. Guard sends bounded policy identifiers and labels,
+lengths, local risk classifications, and SHA-256 digests. Those same safe fields
+form the event and audit evidence. CoreOS decisions combine with local findings
+using strictest-wins semantics; a stopped or unreachable runtime leaves the
+standalone decision in effect.
 
 The console has three persisted themes: **Dark**, **Light**, and **Liquid
 Glass**. Liquid Glass uses neutral clear-glass surfaces and slate accents, and
