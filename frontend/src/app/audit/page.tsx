@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollText } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { getAuditLogs } from '@/lib/api';
@@ -7,11 +7,18 @@ import ClientDate from '@/components/ClientDate';
 
 export default function AuditPage() {
   const [logs, setLogs] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [complianceOnly, setComplianceOnly] = useState(false);
 
-  useEffect(() => {
-    getAuditLogs(complianceOnly).then(setLogs).catch(console.error);
+  const loadAuditLogs = useCallback(() => {
+    getAuditLogs(complianceOnly)
+      .then(rows => { setLogs(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'));
   }, [complianceOnly]);
+
+  useEffect(() => {
+    loadAuditLogs();
+  }, [loadAuditLogs]);
 
   return (
     <div className="space-y-8">
@@ -28,6 +35,18 @@ export default function AuditPage() {
         </label>
       </div>
 
+      {loadError ? (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="text-red-400 font-semibold mb-2">Could not load audit logs</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={loadAuditLogs}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
+      ) : (
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -61,6 +80,7 @@ export default function AuditPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

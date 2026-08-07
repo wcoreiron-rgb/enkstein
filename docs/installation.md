@@ -2,8 +2,7 @@
 
 ## Native installers
 
-For the simplest desktop experience, download the installer for your operating
-system from GitHub Releases:
+When a native installer is included in a GitHub Release, its asset name is:
 
 - macOS: `Enkstein-VERSION-macos.pkg`
 - Windows x64: `Enkstein-VERSION-windows-x64-setup.exe`
@@ -16,16 +15,17 @@ window. On Windows, WebView2 provides the native window, but Docker Desktop
 remains required because Enkstein includes multiple services and persistent
 PostgreSQL/Redis data. Neither installer is a standalone Docker-free runtime.
 
-The macOS package is signed and notarized by Apple. Tagged public Windows
-installers require Authenticode signing.
+The published macOS package is Developer ID signed and notarized. Windows
+installers may be unsigned when Authenticode credentials are not configured;
+Windows then displays a publisher warning.
 See [native installer and signing details](native-installers.md).
 
 ## Downloadable self-hosted package
 
-Each versioned GitHub Release includes a `.tar.gz` and `.zip` bundle. The
-bundle contains the backend, frontend, production Compose configuration, and a
-small installer. Docker images are built locally so users can inspect the exact
-source they run.
+The versioned `.tar.gz` release bundle contains the backend, frontend,
+production Compose configuration, and a small installer. The installer first
+tries the versioned images configured in `compose.yaml`. If either image cannot
+be pulled, it builds the backend and frontend from the bundled source.
 
 Requirements:
 
@@ -42,9 +42,10 @@ cd enkstein-VERSION
 ```
 
 The installer creates `.env` with unique random values for `SECRET_KEY`,
-`POSTGRES_PASSWORD`, and `REDIS_PASSWORD`, validates the Compose model, builds
-the containers, and starts Enkstein. Existing `.env` files are never
-overwritten.
+`POSTGRES_PASSWORD`, and `REDIS_PASSWORD`, validates the Compose model, pulls or
+builds the containers as described above, and starts Enkstein. Existing `.env`
+files are never overwritten. Backend startup creates or migrates the database
+schema and seeds built-in data; no manual seeding command is required.
 
 Open:
 

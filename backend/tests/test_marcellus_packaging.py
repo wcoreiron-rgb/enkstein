@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -36,6 +38,27 @@ def test_native_package_workflow_builds_both_desktop_installers() -> None:
     assert "Enkstein-${{ env.VERSION }}-windows-x64-setup.exe" in workflow
     assert "Contents/Resources/EnksteinBrainBridge" in workflow
     assert "BrainBridge.ps1" in workflow
+
+
+def test_release_publish_gate_requires_images_and_windows_to_succeed() -> None:
+    """A release cannot go public without its runtime or Windows installer."""
+    workflow = yaml.safe_load(_read(".github/workflows/release.yml"))
+    publish = workflow["jobs"]["publish"]
+
+    assert {"images", "windows"}.issubset(set(publish["needs"]))
+    condition = publish["if"]
+    assert "needs.images.result == 'success'" in condition
+    assert "needs.windows.result == 'success'" in condition
+
+
+def test_release_publish_gate_only_allows_successful_or_skipped_macos() -> None:
+    """Missing Apple secrets may skip macOS; a failed build must still block."""
+    workflow = yaml.safe_load(_read(".github/workflows/release.yml"))
+    condition = workflow["jobs"]["publish"]["if"]
+
+    assert "always()" in condition
+    assert "needs.macos.result == 'success'" in condition
+    assert "needs.macos.result == 'skipped'" in condition
 
 
 def test_native_launchers_use_isolated_runtime_paths() -> None:
@@ -436,6 +459,104 @@ def test_alembic_uses_sync_driver_for_sync_migration_url() -> None:
     assert "alembic stamp 0001" not in entrypoint
 
 
+def test_first_launch_creates_schema_before_migrations_and_seeds() -> None:
+    """An empty database must get its schema before Alembic and the seeds run.
+
+    The baseline revision is a no-op that assumes ``create_all`` already ran, so
+    on a genuinely empty database ``alembic upgrade head`` dies on the first
+    revision carrying real DDL. Alembic then never writes ``alembic_version``
+    and every seed below it runs against a schema-less database, which is how a
+    fresh install ends up with empty Policies, Connectors, and Workflows pages
+    while still reporting a successful launch.
+    """
+    entrypoint = _read("backend/entrypoint.sh")
+
+    assert "database_is_empty" in entrypoint
+    assert "python bootstrap_schema.py" in entrypoint
+
+    bootstrap_index = entrypoint.index("bootstrap_schema.py")
+    for seed in ("seed_policies.py", "seed_connectors.py", "seed_workflows.py"):
+        assert bootstrap_index < entrypoint.index(seed), (
+            f"{seed} must run after the schema is created"
+        )
+
+
+def test_schema_bootstrap_registers_every_model() -> None:
+    """The bootstrap must import the app, not a hand-maintained model list.
+
+    Re-listing model modules drifts the moment a new one is added, which is the
+    same class of omission that left tables missing in the first place.
+    """
+    bootstrap = _read("backend/bootstrap_schema.py")
+
+    assert "import main" in bootstrap
+    assert "Base.metadata.create_all" in bootstrap
+
+
+def test_both_platforms_ship_the_first_launch_schema_bootstrap() -> None:
+    """macOS and Windows must both carry the first-launch schema fix.
+
+    The two installers stage the backend by different mechanisms -- tar on
+    macOS, robocopy on Windows -- each with its own exclusion list. A file
+    dropped from one of them would ship a platform that still opens with empty
+    Policies, Connectors, and Workflows pages, which is exactly the bug this
+    guards. Neither exclusion list may omit the bootstrap or the entrypoint that
+    invokes it.
+    """
+    mac_bundle = _read("scripts/build_release_bundle.sh")
+    windows_build = _read("scripts/build_windows_installer.ps1")
+
+    # Both stage the whole backend tree; nothing may exclude the bootstrap.
+    assert "backend" in mac_bundle
+    assert 'Copy-Tree (Join-Path $Root "backend")' in windows_build
+    for excluded in ("bootstrap_schema", "entrypoint"):
+        assert excluded not in mac_bundle, (
+            f"macOS bundle excludes {excluded}; first launch would not seed"
+        )
+        assert f'"{excluded}' not in windows_build, (
+            f"Windows installer excludes {excluded}; first launch would not seed"
+        )
+
+def test_desktop_pages_never_ask_the_user_to_run_docker_seed_commands() -> None:
+    """Empty states must not hand a desktop user container commands.
+
+    Enkstein seeds this data itself at startup. Printing
+    ``docker compose exec backend ...`` presents a runtime bug as routine setup,
+    and the packaged app gives the user no shell in which to run it.
+    """
+    pages = (
+        "frontend/src/app/policies/page.tsx",
+        "frontend/src/app/connectors/page.tsx",
+        "frontend/src/app/orchestrations/page.tsx",
+        "frontend/src/app/policy-packs/page.tsx",
+    )
+    for page in pages:
+        assert "docker compose exec backend" not in _read(page), (
+            f"{page} still instructs the user to seed the database by hand"
+        )
+
+
+def test_data_pages_separate_load_failure_from_empty_results() -> None:
+    """A failed request must not render as "nothing configured yet".
+
+    Both states previously produced the same empty-state panel, so an API error
+    was indistinguishable from an empty database and pointed the user at a
+    seeding command that would not have helped.
+    """
+    pages = (
+        "frontend/src/app/policies/page.tsx",
+        "frontend/src/app/connectors/page.tsx",
+        "frontend/src/app/audit/page.tsx",
+        "frontend/src/app/events/page.tsx",
+        "frontend/src/app/orchestrations/page.tsx",
+        "frontend/src/app/policy-packs/page.tsx",
+    )
+    for page in pages:
+        source = _read(page)
+        assert "loadError" in source, f"{page} does not track a load failure"
+        assert "catch(console.error)" not in source, (
+            f"{page} still swallows load failures into the console"
+        )
 def test_native_packages_include_authenticated_brain_bridges() -> None:
     mac_build = _read("scripts/build_macos_pkg.sh")
     mac_launcher = _read("packaging/macos/launcher.sh")

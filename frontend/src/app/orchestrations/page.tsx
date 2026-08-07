@@ -373,11 +373,20 @@ function BuilderModal({ workflow, onSave, onClose }: {
 function RunHistoryPanel({ workflowId, onClose }: { workflowId: string; onClose: () => void }) {
   const [runs, setRuns]       = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
-    getWorkflowRuns(workflowId).then(setRuns).catch(console.error).finally(() => setLoading(false));
+  const loadWorkflowRuns = useCallback(() => {
+    setLoading(true);
+    getWorkflowRuns(workflowId)
+      .then(rows => { setRuns(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+      .finally(() => setLoading(false));
   }, [workflowId]);
+
+  useEffect(() => {
+    loadWorkflowRuns();
+  }, [loadWorkflowRuns]);
 
   return (
     <div className="fixed inset-y-0 right-0 z-40 w-full max-w-md shadow-2xl flex flex-col border-l"
@@ -394,6 +403,17 @@ function RunHistoryPanel({ workflowId, onClose }: { workflowId: string; onClose:
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {loading ? (
           <p className="text-sm text-center py-8" style={{ color: 'var(--rc-text-3)' }}>Loading runs…</p>
+        ) : loadError ? (
+          <div className="rounded-lg border border-red-700/40 p-5 text-center">
+            <p className="text-sm text-red-400 font-semibold mb-2">Could not load run history</p>
+            <p className="text-xs mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+            <button
+              onClick={loadWorkflowRuns}
+              className="px-3 py-1.5 rounded text-xs font-medium"
+              style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+              Retry
+            </button>
+          </div>
         ) : runs.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm" style={{ color: 'var(--rc-text-3)' }}>No runs yet.</p>
@@ -622,17 +642,21 @@ function WorkflowCard({ workflow, onEdit, onDelete, onRun, onViewRuns }: {
 export default function OrchestrationsPage() {
   const [workflows, setWorkflows]   = useState<any[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState<string | null>(null);
   const [showBuilder, setShowBuilder] = useState(false);
   const [editing, setEditing]       = useState<any | null>(null);
   const [viewingRuns, setViewingRuns] = useState<string | null>(null);
   const [filterCat, setFilterCat]   = useState('ALL');
 
-  const load = useCallback(() => {
+  const loadWorkflows = useCallback(() => {
     setLoading(true);
-    getWorkflows().then(setWorkflows).catch(console.error).finally(() => setLoading(false));
+    getWorkflows()
+      .then(rows => { setWorkflows(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadWorkflows(); }, [loadWorkflows]);
 
   const handleSave = (wf: any) => {
     setWorkflows(prev => {
@@ -753,25 +777,25 @@ export default function OrchestrationsPage() {
       {/* Workflow grid */}
       {loading ? (
         <p className="p-6 text-sm" style={{ color: 'var(--rc-text-3)' }}>Loading workflows…</p>
+      ) : loadError ? (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="text-red-400 font-semibold mb-2">Could not load workflows</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={loadWorkflows}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
       ) : workflows.length === 0 ? (
         <div className="rounded-xl border border-yellow-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
           <GitMerge className="w-10 h-10 mx-auto mb-3 text-yellow-500 opacity-50" />
           <p className="text-yellow-400 font-semibold mb-2">No workflows yet</p>
-          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>
-            Create one above, or load the example workflows:
+          <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>
+            Create one above. Enkstein also installs example workflows at startup — if none appear,
+            restart Enkstein so the runtime can finish preparing the database.
           </p>
-          <div className="space-y-2">
-            <div>
-              <code className="px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python migrate_workflows.py
-              </code>
-            </div>
-            <div>
-              <code className="px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python seed_workflows.py --reset
-              </code>
-            </div>
-          </div>
         </div>
       ) : shown.length === 0 ? (
         <div className="rounded-xl border p-6 text-center" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>

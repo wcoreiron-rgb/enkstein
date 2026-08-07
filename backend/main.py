@@ -111,6 +111,7 @@ from app.claws.customclaw.routes import router as customclaw_router
 from app.claws.terraclaw.routes import router as terraclaw_router
 from app.api.routes.remediation import router as remediation_router
 from app.api.routes.controls import router as controls_router
+from app.api.routes.runtime import router as runtime_router
 from app.core.swarm.routes import router as swarm_router
 from app.core.modelclaw.routes import router as modelclaw_router
 from app.core.marcellus.routes import router as marcellus_router
@@ -274,6 +275,7 @@ app.include_router(customclaw_router, prefix=PREFIX)
 app.include_router(terraclaw_router, prefix=PREFIX)
 app.include_router(remediation_router, prefix=PREFIX)
 app.include_router(controls_router, prefix=PREFIX)
+app.include_router(runtime_router, prefix=PREFIX)
 app.include_router(swarm_router, prefix=PREFIX)
 app.include_router(modelclaw_router, prefix=PREFIX)
 app.include_router(marcellus_router, prefix=PREFIX)

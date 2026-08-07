@@ -7,7 +7,7 @@ the same way `kubectl` talks to a cluster.
 ## Install
 
 ```bash
-pip install ./enkstein_cli-0.8.0-py3-none-any.whl
+pip install ./enkstein_cli-0.8.1-py3-none-any.whl
 # or from source:
 pip install ./cli
 ```

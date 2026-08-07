@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Package, Shield, CheckCircle2, XCircle, Clock,
   ChevronDown, ChevronRight, Zap, Eye,
@@ -288,13 +288,19 @@ function PackCard({ pack, onApply, onUnapply }: {
 export default function PolicyPacksPage() {
   const [packs, setPacks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadPolicyPacks = useCallback(() => {
+    setLoading(true);
     getPolicyPacks()
-      .then(setPacks)
-      .catch(console.error)
+      .then(rows => { setPacks(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadPolicyPacks();
+  }, [loadPolicyPacks]);
 
   const handleApply = async (id: string) => {
     const updated = await applyPolicyPack(id);
@@ -366,22 +372,24 @@ export default function PolicyPacksPage() {
       {/* Pack grid */}
       {loading ? (
         <p className="p-6 text-sm" style={{ color: 'var(--rc-text-3)' }}>Loading policy packs…</p>
+      ) : loadError ? (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="text-red-400 font-semibold mb-2">Could not load policy packs</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={loadPolicyPacks}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
       ) : packs.length === 0 ? (
         <div className="rounded-xl border border-yellow-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
           <p className="text-yellow-400 font-semibold mb-2">No policy packs loaded yet</p>
-          <p className="text-sm mb-3" style={{ color: 'var(--rc-text-2)' }}>Run the migration then seed script:</p>
-          <div className="space-y-2">
-            <div>
-              <code className="px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python migrate_policy_packs.py
-              </code>
-            </div>
-            <div>
-              <code className="px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python seed_policy_packs.py --reset
-              </code>
-            </div>
-          </div>
+          <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>
+            Enkstein installs its policy packs at startup. If this stays empty, restart Enkstein so
+            the runtime can finish preparing the database.
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

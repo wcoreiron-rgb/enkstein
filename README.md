@@ -24,7 +24,7 @@
 
 <p align="center">
   <sub>
-    <b>Current release: v0.8.0</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
+    <b>Current release: v0.8.1</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -225,9 +225,9 @@ the self-assessment as compliance certification.
 ### Download a release package
 
 The easiest installation path is a versioned bundle from
-[GitHub Releases](https://github.com/wcoreiron-rgb/enkstein/releases). Each
-release includes `.tar.gz` and `.zip` self-hosted bundles, Python package
-artifacts, and `SHA256SUMS` integrity checks.
+[GitHub Releases](https://github.com/wcoreiron-rgb/enkstein/releases). Release
+assets include a `.tar.gz` self-hosted bundle, Python package artifacts, and
+`SHA256SUMS` integrity checks.
 
 ```bash
 tar -xzf enkstein-VERSION.tar.gz
@@ -236,12 +236,14 @@ cd enkstein-VERSION
 ```
 
 The installer validates Docker Compose, creates a private `.env` with unique
-random secrets, builds the containers, and starts Enkstein. It never
-overwrites an existing `.env`. See [installation details](docs/installation.md).
+random secrets, and tries to pull the versioned backend and frontend images. If
+either image is unavailable, it builds both locally before starting Enkstein.
+It never overwrites an existing `.env`. See
+[installation details](docs/installation.md).
 
-### One-click desktop installers
+### Desktop installers
 
-GitHub Releases also provide native launchers:
+Native launcher assets use these names when they are included in a release:
 
 - **macOS:** install `Enkstein-VERSION-macos.pkg`; setup creates
   `/Applications/Enkstein.app` and launches a native Intel/Apple Silicon
@@ -253,9 +255,10 @@ Both launchers start Docker Desktop when necessary, generate unique local
 secrets, and start the Enkstein services. The macOS app displays startup
 progress, waits for the Cortex and UI health checks, and embeds the governed UI
 inside its own WebKit window instead of opening the browser. Docker Desktop is
-still required, and the first launch can take several minutes while local
-images build. Connector credentials are added afterward through the Connectors
-UI and remain encrypted in persistent local volumes. See
+required. The launcher tries published images first; if they are unavailable,
+the local build can take many minutes because the backend installs Prowler and
+its dependency tree. Connector credentials are added afterward through the
+Connectors UI and remain encrypted in persistent local volumes. See
 [native installer details](docs/native-installers.md).
 
 ### Local owner authentication and background runtime
@@ -276,7 +279,8 @@ reopen or lock the console. Authentication endpoints are under
 the persistent local secret volume.
 
 ### Prerequisites
-- Docker + Docker Compose installed
+- Desktop installers: Docker Desktop
+- Portable bundle: Docker Desktop or Docker Engine with Docker Compose v2
 - 4GB RAM available
 
 ### Run locally
@@ -299,7 +303,8 @@ The Docker frontend runs as a production Next.js server. The image builds the UI
 2. Go to **Connectors** → click any connector → enter your own API credentials
    - Credentials are encrypted at rest (Fernet AES-128) and never stored in plaintext
    - Each deployment auto-generates its own encryption key in `backend/.secrets/` (gitignored)
-3. Go to **Policies** → add preset policies (Block Shell Execution, etc.)
+3. Go to **Policies** → review the policies seeded at startup and add or update
+   policies as needed
 4. Go to **AI Security** → submit a test prompt (try including an API key to test detection)
 5. Watch the **Events** and **Audit** log populate
 6. Go to **Identity Security** → check identity inventory
@@ -383,14 +388,47 @@ with a scoped app registration is the correct posture for unattended scanning.
 
 ## Use it from your terminal & editor
 
-Enkstein ships in three installable forms beyond the web platform. All three talk to your running Enkstein server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
+### Guard your AI coding agent
+
+The fastest way to try Enkstein. Blocks secrets and destructive commands **before**
+Claude Code or Codex CLI runs them — no account, no backend, no Docker.
+
+```bash
+claude plugin marketplace add wcoreiron-rgb/enkstein
+claude plugin install enkstein-guard@enkstein
+```
+
+For Codex, use `codex plugin marketplace add` and `codex plugin add` with the same names.
+
+An AWS key headed for a config file, a `curl … | sh`, an `rm -rf /`, a `--force`
+push, a read of `~/.aws/credentials` — the tool call never executes, and the agent
+is told why so it corrects itself:
+
+```text
+Enkstein blocked this action.
+AWS access key (line 1): AKIA3Z…OPAS
+Rule: secret.aws_access_key (standalone policy)
+```
+
+It stays quiet about things that only look dangerous: `rm -rf ./build`,
+`git push --force-with-lease`, and placeholder credentials in an `.env.example`
+all pass without comment.
+
+Runs fully local by default. Set `ENKSTEIN_API_URL` and it also consults your
+Enkstein server, so tenant policy, approvals, and the console audit trail apply —
+the two combine strictest-wins, so connecting can only add enforcement.
+→ [plugin docs](plugins/enkstein-guard/README.md)
+
+### Server-backed tools
+
+The forms below talk to your running Enkstein server, so the **Trust Fabric governs every call** — policy, risk scoring, and audit apply server-side.
 
 ### MCP integration
 
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.8.0-py3-none-any.whl
+pip install ./enkstein_mcp-0.8.1-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -417,7 +455,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### CLI
 
 ```bash
-pip install ./enkstein_cli-0.8.0-py3-none-any.whl
+pip install ./enkstein_cli-0.8.1-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -430,7 +468,7 @@ enkstein evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.8.0-py3-none-any.whl
+pip install ./enkstein_core-0.8.1-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

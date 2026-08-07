@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Activity } from 'lucide-react';
 import RiskBadge from '@/components/RiskBadge';
 import { getEvents, getAnomalies } from '@/lib/api';
@@ -8,13 +8,22 @@ import ClientDate from '@/components/ClientDate';
 export default function EventsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<'all' | 'anomalies'>('all');
 
-  useEffect(() => {
+  const loadEvents = useCallback(() => {
     Promise.all([getEvents(), getAnomalies()])
-      .then(([e, a]) => { setEvents(e); setAnomalies(a); })
-      .catch(console.error);
+      .then(([events, anomalies]) => {
+        setEvents(events);
+        setAnomalies(anomalies);
+        setLoadError(null);
+      })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'));
   }, []);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   const shown = tab === 'all' ? events : anomalies;
 
@@ -36,6 +45,18 @@ export default function EventsPage() {
         ))}
       </div>
 
+      {loadError ? (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="text-red-400 font-semibold mb-2">Could not load events</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={loadEvents}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
+      ) : (
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -69,6 +90,7 @@ export default function EventsPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

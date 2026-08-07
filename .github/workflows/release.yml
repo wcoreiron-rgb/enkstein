@@ -11,7 +11,7 @@ permissions:
 jobs:
   images:
     name: Publish runtime images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:
       contents: read
@@ -42,8 +42,9 @@ jobs:
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
 
       # Built for both architectures so an Apple silicon Mac and an x86 PC can
-      # each pull rather than compile. amd64 is emulated here, which is slow in
-      # CI but spends the time once instead of on every user's first launch.
+      # each pull rather than compile. Prowler's arm64 dependency tree includes
+      # packages built from source, so keep that work native and emulate amd64,
+      # where the same dependencies have prebuilt wheels.
       - name: Build and push backend image
         uses: docker/build-push-action@v6
         with:
@@ -125,6 +126,8 @@ jobs:
     name: Build signed and notarized macOS package
     runs-on: macos-14
     timeout-minutes: 45
+    outputs:
+      signing_configured: ${{ steps.apple_signing.outputs.configured }}
 
     steps:
       - uses: actions/checkout@v4
@@ -270,10 +273,21 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [portable, macos, windows]
-    # Runs even when the macOS job skipped for want of Apple secrets, so a tag
-    # still produces downloadable Windows and portable assets.
-    if: always() && needs.portable.result == 'success'
+    needs: [images, portable, macos, windows]
+    # v0.8.0 published with no container images and no Windows installer because
+    # this gate only required the portable job: the image build was cancelled and
+    # the Windows runner failed to provision, yet the release still went public.
+    # Every asset a documented download path depends on must now succeed.
+    #
+    # macOS stays permissive on one axis only -- it legitimately *skips* when
+    # Apple signing secrets are absent (a fork or a secretless run). A macOS job
+    # that actually ran and failed still blocks publication.
+    if: >-
+      always()
+      && needs.images.result == 'success'
+      && needs.portable.result == 'success'
+      && needs.windows.result == 'success'
+      && (needs.macos.result == 'success' || needs.macos.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -305,6 +319,39 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 \
             | sort -z \
             | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Verify release completeness
+        env:
+          MACOS_RESULT: ${{ needs.macos.result }}
+          MACOS_SIGNING_CONFIGURED: ${{ needs.macos.outputs.signing_configured }}
+        run: |
+          cd release-assets
+          version="${GITHUB_REF_NAME#v}"
+          missing=0
+
+          require_file() {
+            if [ ! -f "$1" ]; then
+              echo "::error::Missing required release asset: $1"
+              missing=1
+            fi
+          }
+
+          require_file "Enkstein-${version}-windows-x64-setup.exe"
+          require_file "Enkstein-windows-x64-setup.exe"
+          require_file "enkstein-${version}.tar.gz"
+          require_file "SHA256SUMS"
+
+          if [ "$MACOS_SIGNING_CONFIGURED" = "true" ]; then
+            require_file "Enkstein-${version}-macos.pkg"
+            require_file "Enkstein-macos.pkg"
+          elif [ "$MACOS_SIGNING_CONFIGURED" = "false" ] || [ "$MACOS_RESULT" = "skipped" ]; then
+            echo "::notice::macOS assets are not required because CI signing was unavailable."
+          else
+            echo "::error::Could not determine whether macOS assets were required."
+            missing=1
+          fi
+
+          [ "$missing" -eq 0 ]
 
       - name: Publish GitHub Release assets
         env:

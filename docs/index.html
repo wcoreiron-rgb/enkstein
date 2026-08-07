@@ -595,7 +595,7 @@
   </div>
 
   <p class="hero-meta">
-    Current release: v0.8.0 &nbsp;&middot;&nbsp; macOS 14+ Developer ID signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64, unsigned for now &nbsp;&middot;&nbsp;
+    Current release: v0.8.1 &nbsp;&middot;&nbsp; macOS 14+ Developer ID signed and notarized &nbsp;&middot;&nbsp; Windows 10/11 x64 builds are unsigned for now &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest" target="_blank" rel="noopener">all downloads &amp; checksums</a>
   </p>
 </section>
@@ -1019,9 +1019,9 @@
     <div class="quickstart-wrapper">
       <div class="quickstart-text">
         <span class="section-tag">Quick Start</span>
-        <h2 class="section-title">Up and Running in Minutes</h2>
-        <p>Use the native macOS <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">.pkg</code> or Windows <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">setup.exe</code> for one-click startup, or use the portable release bundle. The launcher creates unique secrets and starts the backend API, production Next.js frontend, PostgreSQL, and Redis through Docker Desktop.</p>
-        <p>The universal macOS app presents startup progress, waits for the Cortex and UI to become healthy, and loads Enkstein inside a native desktop window. The frontend image builds once and runs with <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">next start</code>, with local <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">/api/v1/*</code> calls proxied to the backend service inside Docker.</p>
+        <h2 class="section-title">Install and Start Locally</h2>
+        <p>Use a native macOS <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">.pkg</code> or Windows <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:0.85em;">setup.exe</code> when that asset is present on the release, or use the portable bundle. The launcher creates unique secrets and starts the backend API, production Next.js frontend, PostgreSQL, and Redis through Docker Desktop.</p>
+        <p>The launcher tries versioned backend and frontend images first. If either image is unavailable, it builds both from the bundled source; the backend build can take many minutes while Prowler and its dependencies install. The universal macOS app waits for the Cortex and UI to become healthy before loading Enkstein in its native desktop window.</p>
         <p>The control plane is self-hosted. Connector credentials are encrypted in the local secret volume and are sent only to the provider endpoints those connectors authenticate against. Prompts leave the device only when you select a cloud, subscription, or browser Brain, subject to the active policy and redaction decision.</p>
         <p class="quickstart-security-note">
           <strong>Security:</strong> Never commit <code style="background:var(--surface2);padding:1px 5px;border-radius:3px;">backend/.secrets/</code> to git. This folder holds your encryption key and is gitignored by default. Each deployment generates its own isolated key on first run.

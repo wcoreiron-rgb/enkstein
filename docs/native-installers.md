@@ -1,6 +1,6 @@
 # Native Enkstein Installers
 
-Enkstein publishes native launchers around the self-hosted Docker runtime.
+Enkstein packages native launchers around the self-hosted Docker runtime.
 This provides a familiar installation and startup experience while preserving
 the same FastAPI, Next.js, PostgreSQL, Redis, Trust Fabric, and connector
 architecture used by the source deployment.
@@ -61,10 +61,12 @@ launches the app for the signed-in user. On first launch it:
    official installation page when it is missing. Retry and startup-log controls
    remain available while the engine becomes ready.
 3. Copies the versioned runtime to
-   `~/Library/Application Support/Enkstein/runtime` (the compatibility data
-   location retained during the Enkstein rename).
+   `~/Library/Application Support/Marcellus/runtime`, the compatibility data
+   location retained during the Enkstein rename.
 4. Generates unique application, PostgreSQL, and Redis secrets.
-5. Starts the production Compose stack only after Docker is healthy.
+5. Tries the versioned published backend and frontend images, then falls back to
+   a local build before starting the production Compose stack if either pull
+   fails.
 6. Waits for PostgreSQL, Redis, the backend health endpoint, and the frontend.
 7. Opens the governed UI inside a native WebKit desktop window.
 8. Requires the local owner to create a password, scan an Authenticator QR
@@ -74,13 +76,13 @@ launches the app for the signed-in user. On first launch it:
 
 The app is a universal Intel and Apple Silicon executable. External links open
 in the default browser, while Enkstein routes remain inside the app. The first
-launch can take several minutes because Docker may need to start and the runtime
-may build the local backend and frontend images. The app shows the current
-prerequisite/startup state instead of displaying the UI before the backend is
-ready. Startup diagnostics are written to:
+launch can take many minutes when the published images are unavailable because
+the local backend build installs Prowler and its dependency tree. The app shows
+Docker prerequisite and general startup states instead of displaying the UI
+before the backend is ready; pull and build details are written only to:
 
 ```text
-~/Library/Logs/Enkstein/launcher.log
+~/Library/Logs/Marcellus/launcher.log
 ```
 
 Upgrades replace application source while preserving `.env`, PostgreSQL data,
@@ -127,7 +129,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.8.0 verifies Codex with `codex login status` and Claude Code with
+Version 0.8.1 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -138,11 +140,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.8.0
-open dist/Enkstein-0.8.0-macos.pkg
+./scripts/build_macos_pkg.sh 0.8.1
+open dist/Enkstein-0.8.1-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.8.0-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.8.1-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 
@@ -177,9 +179,10 @@ base64 < developer-id-application.p12 | tr -d '\n'
 ```
 
 Never commit certificates, private keys, passwords, or Base64 certificate data.
-The release workflow fails before publication when required Apple secrets are
-missing. It signs the app, signs the installer, submits the package to Apple's
-notary service, staples the ticket, and validates Gatekeeper acceptance.
+When all required Apple secrets are configured, the release workflow signs the
+app and installer, submits the package to Apple's notary service, staples the
+ticket, and validates Gatekeeper acceptance. When those secrets are absent, the
+macOS job skips the package so a separately notarized package can be attached.
 
 ## Windows `.exe`
 
@@ -231,7 +234,8 @@ those checks pass, that is Windows shell rendering of the icon surface, not the
 Enkstein artwork. Do not add a square background to compensate: doing so would
 reintroduce the white box on dark taskbars and would fail the alpha checks above.
 
-Windows code signing is required by the tagged public-release workflow. Configure:
+The tagged release workflow applies Windows code signing when these secrets are
+configured:
 
 | Secret | Value |
 |---|---|
@@ -244,9 +248,10 @@ passes only its host-gateway endpoint and secret to Docker. Codex and Claude
 are detected from official host installations; missing or unauthenticated
 runtimes remain visibly unavailable.
 
-Without these secrets, native validation can still build a short-lived unsigned
-preview, but the public release is blocked. An Apple Developer account cannot
-sign a Windows executable; a separate Authenticode certificate is required.
+Without these secrets, the tagged release workflow and native validation can
+build an unsigned installer. Windows displays a publisher warning for that
+artifact. An Apple Developer account cannot sign a Windows executable; a
+separate Authenticode certificate is required.
 
 To create an unsigned Windows preview, run the **Native Package Validation**
 workflow manually from GitHub Actions. Its `windows-package` job runs on
@@ -260,7 +265,7 @@ On a Windows development machine with those tools installed, the equivalent
 local command is:
 
 ```powershell
-.\scripts\build_windows_installer.ps1 -Version 0.8.0
+.\scripts\build_windows_installer.ps1 -Version 0.8.1
 ```
 
 Release gate: the Windows launcher and installer are not considered verified
@@ -276,9 +281,13 @@ The release workflow is triggered by a semantic version tag. Package versions
 must exactly match the tag:
 
 ```bash
-git tag -a v0.8.0 -m "Enkstein v0.8.0"
-git push origin v0.8.0
+git tag -a v0.8.1 -m "Enkstein v0.8.1"
+git push origin v0.8.1
 ```
 
-The GitHub Release is created only after portable, Python, notarized macOS, and
-Windows builds finish. One `SHA256SUMS` file covers every published asset.
+The publish job requires the portable and Python package job to succeed. It runs
+after the native jobs finish or fail and downloads whichever native artifacts
+were produced; the runtime-image job is not a publication dependency. A
+complete release should be checked for both native installers, both stable
+aliases, both runtime-image manifests, and a `SHA256SUMS` entry for every
+published file.

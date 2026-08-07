@@ -367,6 +367,41 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.8.1 — First-launch database setup                      -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Guard the Agent You Already Use</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Coding Agents · Desktop · Data Pages</span>
+          <span class="release-date">August 6, 2026 &nbsp;·&nbsp; Enkstein v0.8.1</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein policy now runs inside Claude Code and Codex CLI, blocking secrets and destructive commands before the agent executes them &mdash; two commands to install, nothing else required. Separately, a brand-new install could open with empty Policies, Connectors, Workflows, and Policy Packs pages because the database had not been initialized; startup and the affected data pages now handle that correctly.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Enkstein Guard for Claude Code and Codex CLI:</strong> a plugin that enforces Enkstein policy inside the coding agent you already use. It runs before every file write and shell command, so an AWS key headed into a config file, a <code>curl &hellip; | sh</code>, a recursive delete of a protected path, a force push, or a read of <code>~/.aws/credentials</code> never executes. The agent is told why and corrects itself. Installs with two commands and runs entirely locally &mdash; no account, no backend, no Docker.</li>
+          <li><strong>Restraint is part of the design:</strong> <code>rm -rf ./build</code>, <code>git push --force-with-lease</code>, and placeholder credentials in an <code>.env.example</code> pass without comment. A guardrail that interrupts ordinary work gets uninstalled, so the pack deliberately declines to flag things that only resemble danger.</li>
+          <li><strong>Local and server policy combine, strictest wins:</strong> setting <code>ENKSTEIN_API_URL</code> adds tenant policy, approvals, and the console audit trail on top of local scanning rather than replacing it, so connecting a server can only ever increase enforcement. Blocked calls arrive in Events attributed to the agent and project that attempted them.</li>
+          <li><strong>Findings never echo the secret:</strong> a blocked AWS key is reported as <code>AKIA3Z&hellip;OPAS</code> &mdash; enough to locate it in the file, not enough to leak it into a transcript, a log, or the model's context.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Empty databases are initialized before migrations run:</strong> the Alembic baseline revision is a no-op that assumes the schema already exists. On an empty database, <code>alembic upgrade head</code> reached the first revision containing real DDL and failed, no migration version was recorded, and the seed scripts then ran without tables. The runtime now creates the schema first when the database is empty and stamps the migration state, allowing first-launch seeding to complete.</li>
+          <li><strong>Failed requests no longer look like empty data:</strong> Policies, Connectors, Workflows, and Policy Packs now distinguish an API failure from a successful response with no records. Their empty states also no longer tell desktop users to run <code>docker compose exec</code> seeding commands by hand.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.8.0 — Work you can leave, evidence you can trace        -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">

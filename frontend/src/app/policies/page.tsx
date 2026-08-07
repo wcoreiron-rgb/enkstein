@@ -251,13 +251,17 @@ function EditModal({ policy, onSave, onClose }: {
 export default function PoliciesPage() {
   const [policies, setPolicies]   = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [category, setCategory]   = useState('ALL');
   const [layer, setLayer]         = useState('ALL');
   const [editing, setEditing]     = useState<any | null>(null);
   const [toggling, setToggling]   = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    getPolicies().then(setPolicies).catch(console.error).finally(() => setLoading(false));
+    getPolicies()
+      .then(policies => { setPolicies(policies); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+      .finally(() => setLoading(false));
   }, []);
 
   // Reset layer filter when category changes
@@ -424,15 +428,41 @@ export default function PoliciesPage() {
       {/* ── Policy list ──────────────────────────────────────────────────────── */}
       {loading ? (
         <p className="p-6 text-sm" style={{ color: 'var(--rc-text-3)' }}>Loading policies…</p>
+      ) : loadError ? (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="text-red-400 font-semibold mb-2">Could not load policies</p>
+          <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={() => { setLoading(true); setLoadError(null);
+              getPolicies()
+                .then(policies => { setPolicies(policies); setLoadError(null); })
+                .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+                .finally(() => setLoading(false));
+            }}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
       ) : policies.length === 0 ? (
         <div className="rounded-xl border border-yellow-700/40 p-8 text-center" style={{ background: 'var(--rc-bg-surface)' }}>
           <p className="text-yellow-400 font-semibold mb-2">No policies loaded yet</p>
           <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>
-            Load all {Object.keys(LAYER_META).length} module policies:
+            Enkstein installs its {Object.keys(LAYER_META).length} module policies at startup. If this
+            stays empty, restart Enkstein so the runtime can finish preparing the database.
           </p>
-          <code className="px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-            docker compose exec backend python seed_policies.py --reset
-          </code>
+          <button
+            onClick={() => {
+              setLoading(true);
+              getPolicies()
+                .then(policies => { setPolicies(policies); setLoadError(null); })
+                .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+                .finally(() => setLoading(false));
+            }}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Check again
+          </button>
         </div>
       ) : shown.length === 0 ? (
         <div className="rounded-xl border p-6 text-center" style={{ background: 'var(--rc-bg-surface)', borderColor: 'var(--rc-border)' }}>

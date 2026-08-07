@@ -1,0 +1,18 @@
+{
+  "name": "enkstein",
+  "owner": {
+    "name": "William Coreiron",
+    "url": "https://github.com/wcoreiron-rgb"
+  },
+  "metadata": {
+    "description": "Governed AI security tooling from the Enkstein project.",
+    "version": "0.8.1"
+  },
+  "plugins": [
+    {
+      "name": "enkstein-guard",
+      "source": "./plugins/enkstein-guard",
+      "description": "Blocks secrets and destructive commands before your AI coding agent runs them. Works standalone; upgrades to full Trust Fabric policy when an Enkstein backend is running."
+    }
+  ]
+}

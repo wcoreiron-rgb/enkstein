@@ -1066,15 +1066,24 @@ const CATEGORY_ORDER = [
 export default function ConnectorsPage() {
   const [connectors, setConnectors]   = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
+  const [loadError, setLoadError]     = useState<string | null>(null);
   const [category, setCategory]       = useState('ALL');
   const [search, setSearch]           = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [configuring, setConfiguring] = useState<any | null>(null);
 
+  const loadConnectors = () => {
+    setLoading(true);
+    apiFetch<any[]>('/connectors')
+      .then(rows => { setConnectors(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     apiFetch<any[]>('/connectors')
-      .then(setConnectors)
-      .catch(console.error)
+      .then(rows => { setConnectors(rows); setLoadError(null); })
+      .catch(error => setLoadError(error?.message || 'Could not reach the Enkstein API.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -1169,7 +1178,20 @@ export default function ConnectorsPage() {
         </div>
       </div>
 
-      {!loading && connectors.length === 0 && (
+      {!loading && loadError && (
+        <div className="rounded-xl border border-red-700/40 p-8 text-center space-y-4" style={{ background: 'var(--rc-bg-surface)' }}>
+          <p className="font-semibold text-red-400">Could not load connectors</p>
+          <p className="text-sm" style={{ color: 'var(--rc-text-2)' }}>{loadError}</p>
+          <button
+            onClick={loadConnectors}
+            className="px-4 py-2 rounded text-sm font-medium"
+            style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {!loading && !loadError && connectors.length === 0 && (
         <div className="rounded-xl border border-slate-700/40 p-8 text-center space-y-6" style={{ background: 'var(--rc-bg-surface)' }}>
           {/* Logo preview grid */}
           <div>
@@ -1182,15 +1204,16 @@ export default function ConnectorsPage() {
           </div>
           <div>
             <p className="font-semibold text-yellow-400 mb-2">No connectors registered yet</p>
-            <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>Run the migration then seed 42 enterprise connectors:</p>
-            <div className="space-y-2 text-left max-w-lg mx-auto">
-              <code className="block px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python migrate_connectors_v2.py
-              </code>
-              <code className="block px-4 py-2 rounded text-green-400 text-sm" style={{ background: 'var(--rc-bg-elevated)' }}>
-                docker compose exec backend python seed_connectors.py
-              </code>
-            </div>
+            <p className="text-sm mb-4" style={{ color: 'var(--rc-text-2)' }}>
+              Enkstein registers its connector catalog at startup. If this stays empty, restart
+              Enkstein so the runtime can finish preparing the database.
+            </p>
+            <button
+              onClick={loadConnectors}
+              className="px-4 py-2 rounded text-sm font-medium"
+              style={{ background: 'var(--rc-bg-elevated)', color: 'var(--rc-text-1)', border: '1px solid var(--rc-border)' }}>
+              Check again
+            </button>
           </div>
         </div>
       )}

@@ -35,7 +35,45 @@ MSG
 fi
 
 echo "Submitting $(basename "$PKG")…"
-xcrun notarytool submit "$PKG" --keychain-profile "$PROFILE" --wait
+# --verbose prints each transfer/poll step, which is the only way to tell a slow
+# upload apart from a submission stuck on Apple's side. 0.8.0 hung until the same
+# artifact was resubmitted, so a timed first attempt gets one automatic retry.
+#
+# notarytool has also crashed (Bus error) partway through its S3 multipart
+# upload while the submission still registered and completed server-side.
+# Blindly resubmitting there wastes a full upload, so the submission id is
+# captured and polled before deciding anything.
+SUBMIT_LOG="$(mktemp -t enkstein-notary)"
+
+submit() {
+  xcrun notarytool submit "$PKG" \
+    --keychain-profile "$PROFILE" \
+    --timeout "${NOTARY_TIMEOUT:-30m}" \
+    --verbose \
+    --wait 2>&1 | tee "$SUBMIT_LOG"
+  return "${PIPESTATUS[0]}"
+}
+
+latest_submission_id() {
+  sed -n 's/^ *id: \([0-9a-f-]\{36\}\).*/\1/p' "$SUBMIT_LOG" | tail -1
+}
+
+if ! submit; then
+  ID="$(latest_submission_id)"
+  if [[ -n "$ID" ]]; then
+    echo
+    echo "Submission $ID already reached Apple; waiting on it instead of re-uploading…"
+    if xcrun notarytool wait "$ID" --keychain-profile "$PROFILE" --timeout "${NOTARY_TIMEOUT:-30m}"; then
+      ID=""  # accepted
+    fi
+  fi
+  if [[ -n "$ID" || -z "$(latest_submission_id)" ]]; then
+  echo
+  echo "First submission did not reach a terminal status. Resubmitting the same package…"
+  submit
+  fi
+fi
+
 xcrun stapler staple "$PKG"
 # Gatekeeper is the only check that matters; a stapled ticket still has to pass.
 spctl -a -vv -t install "$PKG"

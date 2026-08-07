@@ -1,0 +1,20 @@
+{
+  "name": "enkstein-guard",
+  "version": "0.8.1",
+  "description": "Blocks secrets and destructive commands before your AI coding agent runs them.",
+  "author": {
+    "name": "William Coreiron",
+    "url": "https://github.com/wcoreiron-rgb"
+  },
+  "homepage": "https://github.com/wcoreiron-rgb/enkstein#readme",
+  "repository": "https://github.com/wcoreiron-rgb/enkstein",
+  "license": "Apache-2.0",
+  "keywords": [
+    "security",
+    "secrets",
+    "policy",
+    "guardrails",
+    "hooks",
+    "trust-fabric"
+  ]
+}
