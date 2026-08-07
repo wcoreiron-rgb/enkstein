@@ -440,3 +440,84 @@ def test_connected_events_describe_shell_commands():
     sent = captured[0]
     assert sent["target"] == "npm run build"
     assert sent["target_type"] == "shell_command"
+
+
+# ── Prompt governance ──────────────────────────────────────────────────────────
+# Blocking a secret from reaching disk while letting the same value be typed into
+# chat governs the smaller hole. A pasted credential enters the provider's
+# context, logs, and retention the moment the turn is sent.
+
+BLOCKED_PROMPTS = [
+    ("private_key", "Here's my key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIEow"),
+    ("aws_key", "my access key is AKIA3ZK7QWERTYUIOPAS, is it valid?"),
+    ("prod_db_url", "postgresql://admin:hunter2pass@prod.internal.co/app"),
+    ("anthropic_key", "use sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWx for this"),
+    ("github_token", "token ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789"),
+    ("ssn_with_context", "the customer's SSN is 123-45-6789"),
+    ("payment_card", "charge card 4111111111111111 please"),
+    ("password", "login with password: correcthorsebattery"),
+]
+
+ALLOWED_PROMPTS = [
+    ("ordinary", "How do I configure an S3 bucket policy for cross-account access?"),
+    ("aws_doc_example", "Does AKIAIOSFODNN7EXAMPLE work? It's from the AWS docs."),
+    ("localhost_db", "my dev url is postgresql://user:pass@localhost/dev"),
+    ("placeholder_pw", "set password: your-password-here in the template"),
+    ("order_number", "order 1234567890123456 has not shipped"),
+    ("version_string", "we are on version 123-45-6789 of the schema"),
+    ("ticket_id", "see ticket 555-12-3456 for details"),
+    ("phone", "call the vendor at 303-555-1234"),
+    ("year_sequence", "compare 2024 2025 2026 2027 revenue"),
+    ("code_question", "why does `const k = process.env.API_KEY` return undefined?"),
+]
+
+
+@pytest.mark.parametrize("name,prompt", BLOCKED_PROMPTS, ids=[p[0] for p in BLOCKED_PROMPTS])
+def test_sensitive_prompts_are_stopped(name, prompt):
+    assert policy.scan_prompt(prompt).blocked, f"{name} should not reach the provider"
+
+
+@pytest.mark.parametrize("name,prompt", ALLOWED_PROMPTS, ids=[p[0] for p in ALLOWED_PROMPTS])
+def test_ordinary_prompts_are_untouched(name, prompt):
+    decision = policy.scan_prompt(prompt)
+    assert not decision.blocked, f"{name} false positive: {decision.reason()}"
+
+
+def test_payment_cards_require_a_valid_check_digit():
+    """Without Luhn, every long digit run in prose reads as a card."""
+    assert policy.scan_prompt("card 4111111111111111").blocked
+    assert not policy.scan_prompt("reference 4111111111111112").blocked
+
+
+def test_prompt_block_does_not_echo_the_secret():
+    secret = "AKIA3ZK7QWERTYUIOPAS"
+    reason = policy.scan_prompt(f"key {secret}").reason()
+    assert secret not in reason
+
+
+def test_hook_blocks_a_prompt_carrying_a_secret():
+    result = run_hook({
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "my key is AKIA3ZK7QWERTYUIOPAS",
+    })
+    assert result.returncode == 2
+    assert "before it was sent" in result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+
+
+def test_hook_allows_an_ordinary_prompt():
+    result = run_hook({
+        "hook_event_name": "UserPromptSubmit",
+        "prompt": "How do I configure an S3 bucket policy?",
+    })
+    assert result.returncode == 0
+
+
+def test_prompt_hook_is_registered():
+    hooks = json.loads((HOOKS / "hooks.json").read_text())
+    assert "UserPromptSubmit" in hooks["hooks"], (
+        "Prompt governance only applies if the event is registered."
+    )
+    command = hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+    assert "${CLAUDE_PLUGIN_ROOT}" in command

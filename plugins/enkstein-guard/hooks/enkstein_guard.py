@@ -244,9 +244,56 @@ def _block(decision: policy.Decision, mode: str) -> None:
     sys.exit(2)
 
 
+def _handle_prompt(event: dict) -> None:
+    """Govern what the user is about to send to a model provider.
+
+    A secret pasted into chat leaves your control the moment the turn is sent:
+    it enters the vendor's context, their logs, and usually their retention.
+    Blocking the write to disk but not the prompt leaves the larger hole open.
+    """
+    prompt = event.get("prompt") or event.get("user_prompt") or ""
+    if not isinstance(prompt, str) or not prompt.strip():
+        sys.exit(0)
+
+    decision = policy.scan_prompt(prompt)
+    if not decision.blocked:
+        sys.exit(0)
+
+    reason = decision.reason() or "sensitive data"
+    rules = ", ".join(sorted({f.rule_id for f in decision.findings}))
+    message = (
+        f"Enkstein stopped this message before it was sent.\n"
+        f"{reason}\n"
+        f"Rule: {rules}\n"
+        "This would have left your machine and entered the provider's "
+        "conversation history. Remove or replace the value and send again."
+    )
+
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": message,
+        },
+        "decision": "block",
+        "reason": message,
+        "systemMessage": f"Enkstein blocked a message: {reason}",
+    }))
+    print(message, file=sys.stderr)
+    sys.exit(2)
+
+
 def main() -> None:
     try:
         event = _read_event()
+
+        # UserPromptSubmit carries no tool, so it must be routed by event name.
+        if event.get("hook_event_name") == "UserPromptSubmit" or (
+            "prompt" in event and not _tool_name(event)
+        ):
+            _handle_prompt(event)
+            sys.exit(0)
+
         tool = _tool_name(event)
         if not tool:
             sys.exit(0)

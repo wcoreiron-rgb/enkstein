@@ -414,6 +414,10 @@ It stays quiet about things that only look dangerous: `rm -rf ./build`,
 `git push --force-with-lease`, and placeholder credentials in an `.env.example`
 all pass without comment.
 
+It governs what you type, too. A credential pasted into chat is out of your
+control the moment the turn is sent, so Guard scans the prompt itself and stops
+the message before it leaves your machine.
+
 Runs fully local by default. Set `ENKSTEIN_API_URL` and it also consults your
 Enkstein server, so tenant policy, approvals, and the console audit trail apply —
 the two combine strictest-wins, so connecting can only add enforcement.

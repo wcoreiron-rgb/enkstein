@@ -314,3 +314,109 @@ def check_destructive_delete(command: str) -> Finding | None:
                     detail=f"rm -r{'f' if force else ''} {operand}",
                 )
     return None
+
+
+# ── Prompt governance ─────────────────────────────────────────────────────────
+# A secret pasted into chat is already outside your control the moment the turn
+# is sent: it lands in the vendor's context, their logs, and often their
+# retention. Governing file writes but not prompts leaves the larger hole open,
+# since people paste .env files and customer records into chat far more readily
+# than they commit them.
+#
+# The prompt pack is deliberately *not* the same as the file pack. Two reasons:
+# a prompt is prose rather than source, so patterns that are noisy in code
+# (payment cards, national IDs) are meaningful here; and blocking is far more
+# disruptive mid-conversation, so most findings warn rather than deny.
+
+def _luhn_valid(digits: str) -> bool:
+    """Payment cards carry a check digit; without it every long number matches."""
+    total = 0
+    for index, char in enumerate(reversed(digits)):
+        value = int(char)
+        if index % 2 == 1:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
+
+
+PROMPT_RULES: list[tuple[str, str, str, str]] = [
+    ("prompt.private_key", "Private key material",
+     r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----", DENY),
+    ("prompt.aws_secret_pair", "AWS key with secret",
+     r"(?is)AKIA[0-9A-Z]{16}.{0,200}?(?:secret|sk)[^\n]{0,20}[:=]\s*['\"]?[A-Za-z0-9/+=]{40}", DENY),
+    ("prompt.connection_string", "Connection string with credentials",
+     r"(?i)\b(?:postgresql|postgres|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:@/]+:[^\s:@/]+@", DENY),
+    ("prompt.aws_access_key", "AWS access key",
+     r"AKIA[0-9A-Z]{16}", REQUIRE_APPROVAL),
+    ("prompt.provider_token", "AI provider API key",
+     r"\b(?:sk-ant-[A-Za-z0-9_\-]{20,}|sk-(?:proj-)?[A-Za-z0-9]{32,}|"
+     r"gh[pousr]_[A-Za-z0-9]{36,}|xox[abprs]-[A-Za-z0-9\-]{10,}|AIza[0-9A-Za-z_\-]{35})",
+     REQUIRE_APPROVAL),
+    # A bare NNN-NN-NNNN also describes ticket ids, part numbers, and version
+    # strings, so a nearby mention of what the number *is* is required. Missing a
+    # context-free SSN is a better failure than warning on every hyphenated id.
+    ("prompt.ssn", "US Social Security number",
+     r"(?i)\b(?:ssn|social security(?:\s+(?:number|no\.?|#))?|taxpayer id|tin)\b"
+     r"[^\n]{0,40}?\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b", REQUIRE_APPROVAL),
+    ("prompt.password_assignment", "Password value",
+     r"(?i)\b(?:password|passwd|pwd)\s*[:=]\s*['\"]?[^\s'\"]{8,}", REQUIRE_APPROVAL),
+    ("prompt.bearer_token", "Bearer token",
+     r"(?i)\bbearer\s+[A-Za-z0-9\-._~+/]{24,}", REQUIRE_APPROVAL),
+    ("prompt.private_key_body", "Base64 key body",
+     r"(?m)^MII[A-Za-z0-9+/]{40,}", REQUIRE_APPROVAL),
+]
+
+_PROMPT_COMPILED = [(rid, t, re.compile(rx), d) for rid, t, rx, d in PROMPT_RULES]
+
+# Prompt rules reuse the file pack's benign filters, but only where the rule
+# genuinely means the same thing. Rewriting the "prompt." prefix to "secret."
+# and hoping the names matched silently disabled the localhost exemption.
+_BENIGN_EQUIVALENT = {
+    "prompt.connection_string": "secret.connection_string",
+    "prompt.aws_access_key": "secret.aws_access_key",
+    "prompt.provider_token": "secret.generic_api_key",
+    "prompt.password_assignment": "secret.hardcoded_password",
+}
+
+# Long digit runs are common in prose (order numbers, timestamps, IDs), so a
+# payment card is only reported when it passes the Luhn check.
+_CARD = re.compile(r"\b(?:\d[ -]?){13,19}\b")
+
+
+def scan_prompt(text: str) -> Decision:
+    """Scan a user prompt before it is sent to a model provider."""
+    if not text:
+        return Decision(ALLOW)
+
+    findings: list[Finding] = []
+    for rule_id, title, pattern, decision in _PROMPT_COMPILED:
+        for match in pattern.finditer(text):
+            start = text.rfind("\n", 0, match.start()) + 1
+            end = text.find("\n", match.end())
+            line_text = text[start : end if end != -1 else len(text)]
+            if _is_benign(_BENIGN_EQUIVALENT.get(rule_id, rule_id), match.group(0), line_text):
+                continue
+            findings.append(Finding(
+                rule_id=rule_id,
+                title=title,
+                decision=decision,
+                detail=_describe(match.group(0)),
+                line=_line_of(text, match.start()),
+            ))
+            break
+
+    for match in _CARD.finditer(text):
+        digits = re.sub(r"\D", "", match.group(0))
+        if 13 <= len(digits) <= 19 and _luhn_valid(digits):
+            findings.append(Finding(
+                rule_id="prompt.payment_card",
+                title="Payment card number",
+                decision=REQUIRE_APPROVAL,
+                detail=f"{digits[:4]}\u2026{digits[-4:]}",
+                line=_line_of(text, match.start()),
+            ))
+            break
+
+    return Decision(_worst(f.decision for f in findings), findings)

@@ -27,6 +27,23 @@ so it can correct itself.
 | `curl … \| sh` | `sudo …`, `npm publish` |
 | `rm -rf /`, `rm -rf ~`, writes to `/dev/…` | |
 
+## It also governs what you type
+
+A secret pasted into chat leaves your control the moment you press enter — it
+enters the provider's context, their logs, and usually their retention. Guard
+runs on prompt submission too, so the message never leaves your machine:
+
+```text
+Enkstein stopped this message before it was sent.
+AWS access key (line 1): AKIA3Z…OPAS
+Rule: prompt.aws_access_key
+```
+
+Private keys and live connection strings are refused outright. Access keys,
+provider tokens, payment cards, passwords, and SSNs are held for your decision.
+Payment cards must pass a Luhn check, and an SSN needs nearby context, so order
+numbers and version strings don't trip it.
+
 It is deliberately quiet about things that only *look* dangerous:
 `rm -rf ./build`, `git push --force-with-lease`, `postgresql://user:pass@localhost/db`
 in an `.env.example`, and documented placeholders like `AKIAIOSFODNN7EXAMPLE`
