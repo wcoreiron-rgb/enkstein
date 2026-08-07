@@ -60,6 +60,12 @@ backend/.secrets/
 backend/.state/
 .state/
 
+# Private Enkstein Guard policy packs. Detection content you license separately
+# is generated into ~/.enkstein/policy-packs and stays out of this public repo.
+# These entries only catch a pack written into the tree by mistake.
+policy-packs/
+plugins/enkstein-guard/**/*.pack.json
+
 # Alembic
 backend/alembic/versions/__pycache__/
 

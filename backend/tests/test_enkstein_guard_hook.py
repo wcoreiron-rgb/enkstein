@@ -521,3 +521,311 @@ def test_prompt_hook_is_registered():
     )
     command = hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
     assert "${CLAUDE_PLUGIN_ROOT}" in command
+
+
+# ---------------------------------------------------------------------------
+# Private policy packs
+# ---------------------------------------------------------------------------
+# Proprietary detections are never committed to this public repository. They
+# load at runtime from a pack outside the tree, so these tests build a pack in
+# a temp directory rather than depending on one existing.
+
+PACK = {
+    "name": "testpack",
+    "version": 1,
+    "rules": [
+        {"id": "testpack.deny_badge", "title": "Badge id", "action": "deny",
+         "pattern": r"BADGE-[0-9]{8}", "scope": ["prompt", "content", "command"]},
+        {"id": "testpack.mask_dossier", "title": "Dossier id", "action": "mask",
+         "pattern": r"DOSSIER-[0-9]{6}", "scope": ["prompt", "content", "command"]},
+        {"id": "testpack.prompt_only", "title": "Chart number", "action": "deny",
+         "pattern": r"CHART-[0-9]{5}", "scope": ["prompt"]},
+    ],
+}
+
+
+@pytest.fixture
+def pack(tmp_path, monkeypatch):
+    path = tmp_path / "testpack.json"
+    path.write_text(json.dumps(PACK))
+    monkeypatch.setenv("ENKSTEIN_POLICY_PACK", str(tmp_path))
+    policy.load_packs.cache_clear()
+    yield tmp_path
+    policy.load_packs.cache_clear()
+
+
+def test_no_pack_rules_are_committed_to_this_repository():
+    """The engine is public; the rules are not.
+
+    A regex committed here is readable by anyone who clones the repo, which
+    defeats the entire point of a private pack.
+    """
+    for path in PLUGIN.rglob("*.json"):
+        data = json.loads(path.read_text())
+        if isinstance(data, dict) and "rules" in data:
+            pytest.fail(f"A policy pack is committed at {path}")
+
+
+def test_pack_rules_apply_to_file_content(pack):
+    decision = policy.scan_content("employee = 'BADGE-12345678'\n")
+    assert decision.decision == policy.DENY
+    assert any(f.rule_id == "testpack.deny_badge" for f in decision.findings)
+
+
+def test_pack_rules_apply_to_commands(pack):
+    decision = policy.scan_command("echo BADGE-12345678 >> /tmp/out")
+    assert decision.decision == policy.DENY
+
+
+def test_pack_rules_apply_to_prompts(pack):
+    decision = policy.scan_prompt("look up BADGE-12345678 for me")
+    assert decision.decision == policy.DENY
+
+
+def test_pack_scope_is_honoured(pack):
+    """A prompt-scoped rule must not fire on source code."""
+    assert policy.scan_prompt("patient CHART-12345").decision == policy.DENY
+    assert policy.scan_content("id = 'CHART-12345'").decision == policy.ALLOW
+
+
+def test_pack_never_weakens_the_built_in_pack(pack):
+    """Loading a pack adds enforcement; it cannot remove any."""
+    decision = policy.scan_content("aws = 'AKIA3ZK7QWERTYUIOPAS'\n")
+    assert decision.decision == policy.DENY
+
+
+def test_missing_pack_directory_is_not_an_error(tmp_path, monkeypatch):
+    monkeypatch.setenv("ENKSTEIN_POLICY_PACK", str(tmp_path / "absent"))
+    policy.load_packs.cache_clear()
+    assert policy.load_packs() == ()
+    assert policy.scan_content("x = 1").decision == policy.ALLOW
+    policy.load_packs.cache_clear()
+
+
+def test_malformed_pack_does_not_disable_the_guard(tmp_path, monkeypatch):
+    """A broken pack must not brick the editor or silently stop scanning."""
+    (tmp_path / "broken.json").write_text("{ not json")
+    (tmp_path / "bad_rule.json").write_text(json.dumps({
+        "name": "bad", "rules": [
+            {"id": "bad.unclosed", "pattern": "([unclosed", "action": "deny",
+             "scope": ["content"]},
+            {"id": "bad.good", "title": "Fine", "pattern": "SENTINEL-42",
+             "action": "deny", "scope": ["content"]},
+        ],
+    }))
+    monkeypatch.setenv("ENKSTEIN_POLICY_PACK", str(tmp_path))
+    policy.load_packs.cache_clear()
+
+    assert policy.scan_content("x = SENTINEL-42").decision == policy.DENY
+    assert policy.scan_content("aws = 'AKIA3ZK7QWERTYUIOPAS'").decision == policy.DENY
+    policy.load_packs.cache_clear()
+
+
+def test_unknown_action_degrades_to_monitor(tmp_path, monkeypatch):
+    (tmp_path / "p.json").write_text(json.dumps({
+        "name": "p", "rules": [{"id": "p.x", "pattern": "WIDGET-9", "title": "W",
+                                "action": "obliterate", "scope": ["content"]}],
+    }))
+    monkeypatch.setenv("ENKSTEIN_POLICY_PACK", str(tmp_path))
+    policy.load_packs.cache_clear()
+
+    decision = policy.scan_content("WIDGET-9")
+    assert decision.decision == policy.MONITOR
+    assert not decision.blocked
+    policy.load_packs.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# Masking
+# ---------------------------------------------------------------------------
+
+def test_mask_replaces_the_value_and_keeps_the_rest(pack):
+    text = "before\nref = 'DOSSIER-123456'\nafter\n"
+    masked, findings = policy.redact(text, "content")
+    assert "DOSSIER-123456" not in masked
+    assert "before" in masked and "after" in masked
+    assert [f.rule_id for f in findings] == ["testpack.mask_dossier"]
+
+
+def test_mask_leaves_content_without_findings_untouched(pack):
+    text = "def add(a, b):\n    return a + b\n"
+    masked, findings = policy.redact(text, "content")
+    assert masked == text
+    assert findings == []
+
+
+def test_mask_does_not_apply_to_deny_rules(pack):
+    """A deny rule must block, not be quietly rewritten."""
+    masked, findings = policy.redact("BADGE-12345678", "content")
+    assert masked == "BADGE-12345678"
+    assert findings == []
+
+
+def test_mask_ranks_below_approval_and_above_monitor():
+    assert policy._RANK[policy.MONITOR] < policy._RANK[policy.MASK]
+    assert policy._RANK[policy.MASK] < policy._RANK[policy.REQUIRE_APPROVAL]
+
+
+def test_prompt_mask_escalates_to_approval(pack):
+    """Claude Code exposes updatedInput on PreToolUse only.
+
+    A prompt cannot be rewritten, so reporting "masked" there would tell the
+    user their value was sanitized while the raw text still reached the
+    provider. It must escalate rather than silently pass.
+    """
+    decision = policy.scan_prompt("see DOSSIER-123456 for context")
+    assert decision.decision == policy.REQUIRE_APPROVAL
+    assert decision.blocked
+
+
+def test_masked_decision_is_not_treated_as_blocked():
+    decision = policy.Decision(policy.MASK, [])
+    assert decision.masked
+    assert not decision.blocked
+
+
+# ---------------------------------------------------------------------------
+# Masking through the hook process
+# ---------------------------------------------------------------------------
+
+def run_hook_with_pack(event: dict, pack_dir) -> subprocess.CompletedProcess:
+    import os
+    env = dict(os.environ, ENKSTEIN_POLICY_PACK=str(pack_dir))
+    return subprocess.run(
+        [sys.executable, str(HOOKS / "enkstein_guard.py")],
+        input=json.dumps(event),
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_hook_masks_a_write_and_lets_it_through(pack):
+    result = run_hook_with_pack({
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/tmp/x.py", "content": "ref = DOSSIER-123456\nkeep = 1\n"},
+    }, pack)
+
+    assert result.returncode == 0, "Masking must not block the call."
+    payload = json.loads(result.stdout)
+    output = payload["hookSpecificOutput"]
+    assert output["permissionDecision"] == "allow"
+
+    updated = output["updatedInput"]
+    assert "DOSSIER-123456" not in updated["content"]
+    assert "keep = 1" in updated["content"], "Unrelated content must survive."
+    assert updated["file_path"] == "/tmp/x.py", (
+        "Non-text fields must be preserved or the tool's schema check rejects "
+        "updatedInput and the edit is silently discarded."
+    )
+
+
+def test_hook_masks_a_command(pack):
+    result = run_hook_with_pack({
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo DOSSIER-123456 >> /tmp/out"},
+    }, pack)
+    assert result.returncode == 0
+    updated = json.loads(result.stdout)["hookSpecificOutput"]["updatedInput"]
+    assert "DOSSIER-123456" not in updated["command"]
+    assert "/tmp/out" in updated["command"]
+
+
+def test_deny_wins_over_mask(pack):
+    """A denied value must block even when a mask rule also matches."""
+    result = run_hook_with_pack({
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/tmp/y.py",
+                       "content": "a = BADGE-12345678\nb = DOSSIER-123456\n"},
+    }, pack)
+    assert result.returncode == 2
+
+
+def test_mask_message_never_echoes_the_value(pack):
+    result = run_hook_with_pack({
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/tmp/x.py", "content": "ref = DOSSIER-123456\n"},
+    }, pack)
+    assert "DOSSIER-123456" not in result.stdout.split('"updatedInput"')[0]
+
+
+def test_hook_masks_multiedit_entries(pack):
+    result = run_hook_with_pack({
+        "tool_name": "MultiEdit",
+        "tool_input": {"file_path": "/tmp/x.py", "edits": [
+            {"old_string": "a", "new_string": "ref = DOSSIER-123456"},
+            {"old_string": "b", "new_string": "safe = 2"},
+        ]},
+    }, pack)
+    assert result.returncode == 0
+    edits = json.loads(result.stdout)["hookSpecificOutput"]["updatedInput"]["edits"]
+    assert "DOSSIER-123456" not in edits[0]["new_string"]
+    assert edits[0]["old_string"] == "a", "Match targets must not be rewritten."
+    assert edits[1]["new_string"] == "safe = 2"
+
+
+def test_clean_write_produces_no_mask_output(pack):
+    result = run_hook_with_pack({
+        "tool_name": "Write",
+        "tool_input": {"file_path": "/tmp/x.py", "content": "print('hello')\n"},
+    }, pack)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", "A clean call must stay silent."
+
+
+# ---------------------------------------------------------------------------
+# Anchor prefilter
+# ---------------------------------------------------------------------------
+# A pack can carry hundreds of rules and the hook runs on every tool call, so
+# rules whose required literal is absent are skipped without running the regex.
+# The prefilter is only safe if it never skips a rule that would have matched.
+
+@pytest.mark.parametrize("pattern,expected", [
+    (r"AKIA[0-9A-Z]{16}", ("akia",)),
+    (r"\b(?:SIN|Social)[:\s#]*\d{3}", ("sin", "social")),
+    (r"(?:CLOUDFLARE_API_TOKEN|cf_api_token)[=:\s]+", ("cf_api_token", "cloudflare_api_token")),
+    # A trailing quantifier makes the last character optional.
+    (r"BADGES?-\d{4}", ("badge",)),
+    # Alternation that is not a leading group gives no safe anchor.
+    (r"\d{3}-(?:foo|\d{2})-\d{4}", None),
+    # Too short to be selective.
+    (r"ab\d{4}", None),
+])
+def test_anchor_extraction(pattern, expected):
+    assert policy._anchor_for(pattern) == expected
+
+
+def test_anchor_never_skips_a_real_match(pack):
+    """The prefilter must be a pure optimization.
+
+    Checked against this repository's own source rather than synthetic strings,
+    because the failure mode is a rule that quietly stops firing on real code.
+    """
+    import pathlib
+
+    corpus = [
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in list((REPO / "backend" / "app").rglob("*.py"))[:120]
+    ]
+    assert corpus, "Expected source files to test against."
+
+    for rule in policy.load_packs():
+        if not rule.anchor:
+            continue
+        for text in corpus:
+            if rule.pattern.search(text):
+                assert any(a in text.lower() for a in rule.anchor), (
+                    f"{rule.rule_id} matched but its anchor {rule.anchor} was "
+                    "absent, so the prefilter would have skipped a real finding."
+                )
+
+
+def test_pack_scanning_is_bounded(pack):
+    """A very large file must not stall the editor."""
+    import time
+
+    text = ("x = 1\n" * 200_000)[:1_000_000]
+    policy.scan_content(text)
+    start = time.perf_counter()
+    policy.scan_content(text)
+    assert (time.perf_counter() - start) < 1.0

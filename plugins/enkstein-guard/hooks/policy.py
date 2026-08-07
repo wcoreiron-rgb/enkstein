@@ -17,6 +17,9 @@ cloud credentials, private keys, and hardcoded passwords.
 
 from __future__ import annotations
 
+import functools
+import json
+import os
 import re
 import shlex
 from dataclasses import dataclass, field
@@ -26,6 +29,7 @@ from typing import Iterable
 # whether it is evaluated locally or by the Trust Fabric.
 DENY = "deny"
 REQUIRE_APPROVAL = "require_approval"
+MASK = "mask"
 MONITOR = "monitor"
 ALLOW = "allow"
 
@@ -47,6 +51,10 @@ class Decision:
     @property
     def blocked(self) -> bool:
         return self.decision in (DENY, REQUIRE_APPROVAL)
+
+    @property
+    def masked(self) -> bool:
+        return self.decision == MASK
 
     def reason(self) -> str:
         parts = []
@@ -121,7 +129,9 @@ COMMAND_RULES: list[tuple[str, str, str, str]] = [
 _SECRET_COMPILED = [(rid, t, re.compile(rx), d) for rid, t, rx, d in SECRET_RULES]
 _COMMAND_COMPILED = [(rid, t, re.compile(rx), d) for rid, t, rx, d in COMMAND_RULES]
 
-_RANK = {ALLOW: 0, MONITOR: 1, REQUIRE_APPROVAL: 2, DENY: 3}
+# Mask sits above monitor because it changes what reaches the model, and below
+# approval because it resolves the finding without interrupting the developer.
+_RANK = {ALLOW: 0, MONITOR: 1, MASK: 2, REQUIRE_APPROVAL: 3, DENY: 4}
 
 
 def _worst(decisions: Iterable[str]) -> str:
@@ -201,7 +211,10 @@ def scan_content(text: str) -> Decision:
             # secret on line 2 be caught when line 1 was a placeholder.
             break
 
-    return Decision(_worst(f.decision for f in findings), findings)
+    return combine(
+        Decision(_worst(f.decision for f in findings), findings),
+        scan_with_packs(text, "content"),
+    )
 
 
 def scan_command(command: str) -> Decision:
@@ -224,7 +237,10 @@ def scan_command(command: str) -> Decision:
     if destructive:
         findings.append(destructive)
 
-    return Decision(_worst(f.decision for f in findings), findings)
+    return combine(
+        Decision(_worst(f.decision for f in findings), findings),
+        scan_with_packs(command, "command"),
+    )
 
 
 # Destructive-delete detection is done structurally rather than with a regex.
@@ -419,4 +435,284 @@ def scan_prompt(text: str) -> Decision:
             ))
             break
 
+    # Claude Code exposes `updatedInput` on PreToolUse only, so a prompt can be
+    # stopped but not rewritten. A mask rule that fires here would otherwise
+    # report "masked" while the raw value still reached the provider, so it is
+    # escalated to approval: the developer decides, and nothing leaks silently.
+    pack = scan_with_packs(text, "prompt")
+    for finding in pack.findings:
+        if finding.decision == MASK:
+            finding.decision = REQUIRE_APPROVAL
+    pack.decision = _worst(f.decision for f in pack.findings)
+
+    return combine(Decision(_worst(f.decision for f in findings), findings), pack)
+
+
+# ---------------------------------------------------------------------------
+# Private policy packs
+# ---------------------------------------------------------------------------
+# This repository is public, so any rule committed here is readable by anyone,
+# and a client-side regex is extractable from an installed plugin no matter how
+# it is encoded. Obfuscating a shipped pack would buy the appearance of secrecy
+# and none of the substance.
+#
+# So proprietary detections are never committed. They load at runtime from a
+# pack outside the tree -- generated on the operator's own machine from a source
+# they already license -- and the loader below is the only public part.
+#
+# A pack is JSON:
+#   {"name": ..., "version": ..., "rules": [
+#      {"id": ..., "title": ..., "pattern": ..., "action": ..., "scope": [...]}
+#   ]}
+# `scope` selects which surfaces a rule applies to: "prompt", "content",
+# "command". Unknown actions degrade to MONITOR rather than failing closed on a
+# malformed pack, because a broken pack must not brick the developer's editor.
+
+PACK_SCOPES = ("prompt", "content", "command")
+_VALID_ACTIONS = {DENY, REQUIRE_APPROVAL, MASK, MONITOR, ALLOW}
+
+# A pack can hold hundreds of rules, and the hook runs on every tool call. On a
+# very large file the linear sweep becomes noticeable, so content is truncated
+# for pack evaluation. Secrets live in configuration and headers, not a hundred
+# kilobytes into a generated file, and the built-in pack still reads the whole
+# text: this bounds the imported rules, not the core ones.
+PACK_SCAN_LIMIT = 65_536
+
+# Ordered by precedence: an explicit path wins, then the user's Enkstein home.
+_PACK_ENV = "ENKSTEIN_POLICY_PACK"
+_PACK_DEFAULTS = (
+    os.path.join(os.path.expanduser("~"), ".enkstein", "policy-packs"),
+)
+
+
+@dataclass
+class PackRule:
+    rule_id: str
+    title: str
+    pattern: "re.Pattern[str]"
+    action: str
+    scopes: tuple[str, ...]
+    pack: str
+    # Lowercased literals, at least one of which must appear for the pattern to
+    # have any chance of matching. A substring test is far cheaper than a regex
+    # sweep, and across hundreds of rules that is the whole cost of the hook.
+    anchor: tuple[str, ...] | None = None
+
+
+# Literals a pattern requires in order to match. Testing for them first is far
+# cheaper than running the regex, and across a couple of hundred imported rules
+# that prefilter is most of the hook's cost.
+#
+# Two shapes qualify. A top-level literal outside any group is required
+# outright. A leading alternation whose every branch begins with a literal --
+# `(?:ABA|routing|RTN)...` -- is required as a set: if none of the branches
+# appears, the pattern cannot match. Anything else yields no anchor and the
+# rule is always evaluated, because a slower scan is acceptable and a missed
+# match is not.
+_TOP_LEVEL_LITERAL = re.compile(r"[A-Za-z][A-Za-z0-9_]{3,}")
+# Branches may be short country or scheme codes -- `(?:GB|DE|FR|...)` -- which
+# are individually weak but collectively selective, so a lower bound applies
+# inside an alternation than for a lone literal.
+_BRANCH_LITERAL = re.compile(r"[A-Za-z][A-Za-z0-9_]+")
+# Branch text may contain escapes such as `\s`, so only the structural
+# characters that would end the group are excluded.
+_LEADING_GROUP = re.compile(r"^(?:\\b)?\(\?:((?:[^()\[\]]|\\.)+?)\)")
+
+
+def _anchor_for(pattern: str) -> tuple[str, ...] | None:
+    group = _LEADING_GROUP.match(pattern)
+    if group:
+        branches = group.group(1).split("|")
+        literals = []
+        for branch in branches:
+            token = _BRANCH_LITERAL.match(branch.strip())
+            if not token:
+                literals = []
+                break
+            literals.append(token.group(0).lower())
+        if literals:
+            return tuple(sorted(set(literals)))
+
+    if "|" in pattern.replace(r"\|", ""):
+        return None
+
+    best: str | None = None
+    depth = 0
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\":
+            index += 2
+            continue
+        if char in "([":
+            depth += 1
+            index += 1
+            continue
+        if char in ")]":
+            depth = max(0, depth - 1)
+            index += 1
+            continue
+        if depth == 0:
+            match = _TOP_LEVEL_LITERAL.match(pattern, index)
+            if match:
+                token = match.group(0)
+                # `abcd?` makes only the final character optional, so the
+                # literal minus that character is still required.
+                if pattern[match.end():match.end() + 1] in "?*":
+                    token = token[:-1]
+                if len(token) >= 4 and (best is None or len(token) > len(best)):
+                    best = token
+                index = match.end()
+                continue
+        index += 1
+    return (best.lower(),) if best else None
+
+
+def _pack_paths() -> list[str]:
+    explicit = os.environ.get(_PACK_ENV, "").strip()
+    roots = [explicit] if explicit else list(_PACK_DEFAULTS)
+    found: list[str] = []
+    for root in roots:
+        if not root:
+            continue
+        if os.path.isfile(root):
+            found.append(root)
+        elif os.path.isdir(root):
+            found.extend(
+                os.path.join(root, name)
+                for name in sorted(os.listdir(root))
+                if name.endswith(".json")
+            )
+    return found
+
+
+def _compile_pack(raw: dict, source: str) -> list[PackRule]:
+    pack_name = str(raw.get("name") or os.path.basename(source))
+    rules: list[PackRule] = []
+    for entry in raw.get("rules") or []:
+        try:
+            pattern = re.compile(entry["pattern"], re.IGNORECASE)
+        except (KeyError, TypeError, re.error):
+            # One malformed rule must not discard the rest of the pack.
+            continue
+        action = entry.get("action", MONITOR)
+        if action not in _VALID_ACTIONS:
+            action = MONITOR
+        scopes = tuple(s for s in entry.get("scope", PACK_SCOPES) if s in PACK_SCOPES)
+        if not scopes:
+            continue
+        rules.append(PackRule(
+            rule_id=str(entry.get("id") or f"{pack_name}.rule"),
+            title=str(entry.get("title") or "Sensitive data"),
+            pattern=pattern,
+            action=action,
+            scopes=scopes,
+            pack=pack_name,
+            anchor=_anchor_for(entry["pattern"]),
+        ))
+    return rules
+
+
+@functools.lru_cache(maxsize=1)
+def load_packs() -> tuple[PackRule, ...]:
+    """Load private rule packs. Cached: a hook runs on every keystroke-fast call."""
+    rules: list[PackRule] = []
+    for path in _pack_paths():
+        try:
+            with open(path, encoding="utf-8") as handle:
+                raw = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if isinstance(raw, dict):
+            rules.extend(_compile_pack(raw, path))
+    return tuple(rules)
+
+
+def scan_with_packs(text: str, scope: str) -> Decision:
+    """Evaluate private pack rules for one surface."""
+    if not text:
+        return Decision(ALLOW)
+    text = text[:PACK_SCAN_LIMIT]
+
+    findings: list[Finding] = []
+    lowered = text.lower()
+    for rule in load_packs():
+        if scope not in rule.scopes:
+            continue
+        if rule.anchor and not any(a in lowered for a in rule.anchor):
+            continue
+        match = rule.pattern.search(text)
+        if not match:
+            continue
+        start = text.rfind("\n", 0, match.start()) + 1
+        end = text.find("\n", match.end())
+        line_text = text[start : end if end != -1 else len(text)]
+        if _is_benign(rule.rule_id, match.group(0), line_text):
+            continue
+        findings.append(Finding(
+            rule_id=rule.rule_id,
+            title=rule.title,
+            decision=rule.action,
+            detail=_describe(match.group(0)),
+            line=_line_of(text, match.start()),
+        ))
+
     return Decision(_worst(f.decision for f in findings), findings)
+
+
+def combine(*decisions: Decision) -> Decision:
+    """Merge decisions, strictest wins, keeping every finding for the reason."""
+    findings: list[Finding] = []
+    for decision in decisions:
+        findings.extend(decision.findings)
+    return Decision(_worst(d.decision for d in decisions), findings)
+
+
+def redact(text: str, scope: str) -> tuple[str, list[Finding]]:
+    """Replace values from MASK-action rules, leaving the rest of the text intact.
+
+    Masking only makes sense where the surface can be rewritten. Claude Code
+    accepts `updatedInput` on PreToolUse, so a file write or command can be
+    sanitized in flight; there is no equivalent for a submitted prompt, which is
+    why prompt-scope mask rules are treated as approval-required by the caller.
+    """
+    if not text:
+        return text, []
+
+    applied: list[Finding] = []
+    result = text
+    lowered = text.lower()
+    for rule in load_packs():
+        if scope not in rule.scopes or rule.action != MASK:
+            continue
+        if rule.anchor and not any(a in lowered for a in rule.anchor):
+            continue
+
+        hits: list[Finding] = []
+
+        def _swap(match: "re.Match[str]") -> str:
+            value = match.group(0)
+            start = result.rfind("\n", 0, match.start()) + 1
+            end = result.find("\n", match.end())
+            if _is_benign(rule.rule_id, value, result[start : end if end != -1 else len(result)]):
+                return value
+            hits.append(Finding(
+                rule_id=rule.rule_id,
+                title=rule.title,
+                decision=MASK,
+                detail=_describe(value),
+                line=_line_of(result, match.start()),
+            ))
+            return _mask_value(value)
+
+        result = rule.pattern.sub(_swap, result)
+        applied.extend(hits)
+
+    return result, applied
+
+
+def _mask_value(value: str) -> str:
+    """Keep the shape so the model can still reason about the code."""
+    if len(value) <= 8:
+        return "[REDACTED]"
+    return f"{value[:3]}[REDACTED:{len(value)}]{value[-2:]}"

@@ -187,6 +187,92 @@ def _local_decision(tool: str, payload: dict) -> policy.Decision:
     return policy.Decision(policy.ALLOW)
 
 
+# Fields that carry text a mask rule may rewrite. Keys are patched in place so
+# the returned object still satisfies the tool's own input schema, which Claude
+# Code validates before accepting `updatedInput`.
+_MASKABLE_KEYS = ("content", "new_string", "new_str", "text", "patch",
+                  "contents", "source", "command", "cmd", "script")
+
+
+def _apply_mask(tool: str, payload: dict) -> tuple[dict | None, list[policy.Finding]]:
+    """Rewrite flagged values inside the tool input, leaving structure intact.
+
+    Returns the updated payload and what was masked, or (None, []) if nothing
+    matched. Only string fields are touched: replacing a path or a line number
+    would fail the tool's schema and the edit would be discarded silently.
+    """
+    scope = "command" if tool in COMMAND_TOOLS else "content"
+    updated = dict(payload)
+    applied: list[policy.Finding] = []
+
+    for key in _MASKABLE_KEYS:
+        value = updated.get(key)
+        if not isinstance(value, str) or not value:
+            continue
+        masked, findings = policy.redact(value, scope)
+        if findings:
+            updated[key] = masked
+            applied.extend(findings)
+
+    edits = updated.get("edits")
+    if isinstance(edits, list):
+        rebuilt = []
+        for edit in edits:
+            if not isinstance(edit, dict):
+                rebuilt.append(edit)
+                continue
+            copy = dict(edit)
+            for key in ("new_string", "new_str", "content"):
+                value = copy.get(key)
+                if not isinstance(value, str) or not value:
+                    continue
+                masked, findings = policy.redact(value, scope)
+                if findings:
+                    copy[key] = masked
+                    applied.extend(findings)
+            rebuilt.append(copy)
+        if applied:
+            updated["edits"] = rebuilt
+
+    return (updated, applied) if applied else (None, [])
+
+
+def _mask(tool: str, payload: dict, mode: str) -> None:
+    """Let the call through with sensitive values replaced.
+
+    Masking is the right answer when the developer's intent is legitimate but
+    the payload carries something that should not travel: the work continues
+    and the value does not. Blocking here would be theatre, since the file is
+    already on disk in most cases.
+    """
+    updated, findings = _apply_mask(tool, payload)
+    if updated is None:
+        sys.exit(0)
+
+    summary = "; ".join(f"{f.title} (line {f.line})" if f.line else f.title
+                        for f in findings)
+    rules = ", ".join(sorted({f.rule_id for f in findings}))
+    note = (
+        f"Enkstein masked sensitive values before this ran.\n"
+        f"{summary}\n"
+        f"Rule: {rules} ({mode} policy)\n"
+        "The redacted placeholders are intentional. Do not try to restore the "
+        "original values."
+    )
+
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "allow",
+            "permissionDecisionReason": note,
+            "updatedInput": updated,
+            "additionalContext": note,
+        },
+        "systemMessage": f"Enkstein masked {len(findings)} value(s) in a tool call.",
+    }))
+    sys.exit(0)
+
+
 def _evaluate(tool: str, payload: dict) -> tuple[policy.Decision, str]:
     """Combine both tiers, taking whichever is stricter.
 
@@ -301,6 +387,8 @@ def main() -> None:
         decision, mode = _evaluate(tool, _tool_input(event))
         if decision.blocked:
             _block(decision, mode)
+        if decision.masked:
+            _mask(tool, _tool_input(event), mode)
     except SystemExit:
         raise
     except Exception:  # noqa: BLE001

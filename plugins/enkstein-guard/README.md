@@ -68,6 +68,52 @@ export ENKSTEIN_API_URL=http://localhost:8000
 export ENKSTEIN_TOKEN=…
 ```
 
+## Private policy packs
+
+The rules that ship in this repository are open, because a client-side regex is
+extractable from an installed plugin no matter how it is encoded. Shipping an
+obfuscated bundle would buy the appearance of secrecy and none of the substance.
+
+Detection content you license separately stays yours. A pack is generated on
+your own machine from a source you already have, written outside the repository,
+and loaded at runtime:
+
+```bash
+python3 tools/build_policy_pack.py --source /path/to/engine.py --name mypack
+# -> ~/.enkstein/policy-packs/mypack.json  (mode 0600, never committed)
+```
+
+Point `ENKSTEIN_POLICY_PACK` at a different file or directory to override the
+default location. Pack rules combine with the built-in pack, strictest wins, so
+a pack can only add enforcement.
+
+Before trusting a pack, measure it against real code:
+
+```bash
+python3 tools/build_policy_pack.py --source … --measure ~/src/your-repo
+```
+
+Any rule matching more than about 1% of ordinary source files belongs in
+`PROSE_ONLY` — it will fire on normal work, and a guard that cries wolf gets
+uninstalled. Rules the open pack already covers more carefully (SSN, payment
+cards) are never imported, because the imported forms are context-free and
+would undo tuning that took real false positives to get right.
+
+### Actions
+
+| Action | Effect |
+| --- | --- |
+| `deny` | The call is blocked. |
+| `require_approval` | The call is held for a human decision. |
+| `mask` | The value is replaced and the call proceeds. |
+| `monitor` | Recorded, never interrupts. |
+
+Masking rewrites the tool input through `updatedInput`, so a file write or shell
+command continues with the sensitive value replaced and everything else intact.
+That channel is `PreToolUse`-only: a submitted prompt cannot be rewritten, so a
+mask rule that fires on a prompt escalates to `require_approval` rather than
+reporting success while the raw text still reaches the provider.
+
 ## Design notes
 
 The hook fails **open**: a crash, malformed input, or unreachable backend exits
