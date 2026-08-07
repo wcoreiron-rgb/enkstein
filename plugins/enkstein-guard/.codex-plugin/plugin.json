@@ -1,7 +1,7 @@
 {
   "name": "enkstein-guard",
-  "version": "0.8.1",
-  "description": "Blocks secrets and destructive commands before your AI coding agent runs them.",
+  "version": "0.8.2",
+  "description": "Governs sensitive prompts, file writes, and commands before your AI coding agent runs them.",
   "author": {
     "name": "William Coreiron",
     "url": "https://github.com/wcoreiron-rgb"
@@ -19,14 +19,16 @@
   ],
   "interface": {
     "displayName": "Enkstein Guard",
-    "shortDescription": "Block secrets and destructive commands",
-    "longDescription": "Enforces Enkstein security policy on every file write and shell command your coding agent attempts. Runs fully locally with no account or backend; when an Enkstein runtime is reachable it defers to the full Trust Fabric for policy, approvals, and audit.",
+    "shortDescription": "Govern prompts, writes, and commands",
+    "longDescription": "Enforces Enkstein security policy on sensitive prompts, file writes, and shell commands. Runs locally with no account or backend; when an Enkstein runtime is reachable it adds Trust Fabric policy and audit.",
     "developerName": "William Coreiron",
     "category": "Security",
     "websiteURL": "https://github.com/wcoreiron-rgb/enkstein",
     "brandColor": "#E8622C",
     "capabilities": [
       "Secret detection",
+      "Prompt governance",
+      "Sensitive-value masking",
       "Destructive command blocking",
       "Credential exfiltration checks",
       "Policy enforcement",

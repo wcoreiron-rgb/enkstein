@@ -24,7 +24,7 @@
 
 <p align="center">
   <sub>
-    <b>Current release: v0.8.1</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
+    <b>Current release: v0.8.2</b> &nbsp;&middot;&nbsp; macOS 14+ (Apple silicon &amp; Intel), Developer ID signed and notarized &nbsp;&middot;&nbsp;
     Windows 10/11 x64, currently unsigned &mdash; SmartScreen shows a publisher warning &nbsp;&middot;&nbsp;
     <a href="https://github.com/wcoreiron-rgb/enkstein/releases/latest">All downloads &amp; checksums</a>
   </sub>
@@ -432,7 +432,7 @@ The forms below talk to your running Enkstein server, so the **Trust Fabric gove
 Let the AI agent in your editor call governed security tools — scan code for secrets, check posture, launch investigations.
 
 ```bash
-pip install ./enkstein_mcp-0.8.1-py3-none-any.whl
+pip install ./enkstein_mcp-0.8.2-py3-none-any.whl
 ```
 
 Add to `~/.cursor/mcp.json` (or your Claude Desktop / VS Code MCP config):
@@ -459,7 +459,7 @@ Tools exposed: `scan_text_for_secrets` · `get_security_posture` · `list_findin
 ### CLI
 
 ```bash
-pip install ./enkstein_cli-0.8.1-py3-none-any.whl
+pip install ./enkstein_cli-0.8.2-py3-none-any.whl
 export ENKSTEIN_API_URL=http://localhost:8000
 enkstein status dashboard
 enkstein connectors test okta
@@ -472,7 +472,7 @@ enkstein evidence collect --framework soc2
 Drop Enkstein's enforcement primitives into your own scripts, agents, or pre-commit hooks — runs in-process, only depends on `cryptography`.
 
 ```bash
-pip install ./enkstein_core-0.8.1-py3-none-any.whl
+pip install ./enkstein_core-0.8.2-py3-none-any.whl
 ```
 ```python
 from enkstein_core import classify_ring, evaluate_ring, scan_text, verify_package

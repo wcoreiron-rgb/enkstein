@@ -367,6 +367,42 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.8.2 — Private policy packs and safe masking             -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Private Policy Packs for Enkstein Guard</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-fix">Guard · Claude Code · Codex</span>
+          <span class="release-date">August 7, 2026 &nbsp;·&nbsp; Enkstein v0.8.2</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein Guard now governs sensitive chat prompts as well as file writes and commands, supports private operator-owned policy packs without publishing their detection rules, and can replace sensitive values in a tool call while allowing the safe remainder of the work to continue.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>Private policy packs:</strong> licensed detection content can be generated locally into <code>~/.enkstein/policy-packs</code> with owner-only permissions. The public plugin contains the loader and policy contract, never the private expressions.</li>
+          <li><strong>Prompt governance:</strong> the <code>UserPromptSubmit</code> hook stops detected credentials and sensitive records before they enter the model provider's conversation history.</li>
+          <li><strong>Mask and continue:</strong> mask rules use the agent's supported <code>updatedInput</code> channel for file writes and commands, replacing the sensitive value while preserving paths, structure, and unrelated content.</li>
+          <li><strong>Measured rule conversion:</strong> the private-pack builder can measure detections against real source trees, keeping prose-oriented rules out of file scanning when they would interrupt normal development.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Safety</div>
+        <ul class="change-list">
+          <li>Built-in and private decisions combine with strictest-wins semantics; loading a pack cannot weaken Enkstein's local protections.</li>
+          <li>A prompt cannot be rewritten by current agent hook APIs, so a prompt-scoped mask finding is held for approval instead of claiming the raw value was removed.</li>
+          <li>Malformed packs and unavailable connected services do not brick the coding agent, while built-in scanning remains active.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.8.1 — First-launch database setup                      -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
