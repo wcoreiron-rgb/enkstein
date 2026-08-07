@@ -9,19 +9,100 @@ permissions:
   contents: read
 
 jobs:
-  images:
-    name: Publish runtime images
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 90
+  # v0.8.1 never published because this work ran as a single job: the backend
+  # image took 42 minutes and the frontend 47, and the 90-minute job timeout
+  # cancelled it at 90:22. Both architectures were built on one arm64 runner,
+  # so every amd64 layer was emulated through QEMU. Each platform now builds on
+  # its own native runner in parallel and the manifest list is assembled after.
+  image-build:
+    name: Build ${{ matrix.image }} image (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, frontend]
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Resolve image tags
+        id: tags
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          owner=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          platform="${{ matrix.platform }}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "owner=$owner" >> "$GITHUB_OUTPUT"
+          echo "platform_pair=${platform//\//-}" >> "$GITHUB_OUTPUT"
+
+      # Pushed by digest with no tag, because two runners cannot each claim the
+      # same tag without the second overwriting the first. The merge job below
+      # binds the tags to a manifest list referencing both digests.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.image }}
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          outputs: type=image,name=ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ steps.tags.outputs.platform_pair }}
+          cache-to: type=gha,scope=${{ matrix.image }}-${{ steps.tags.outputs.platform_pair }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.image }}-${{ steps.tags.outputs.platform_pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  images:
+    name: Publish runtime images
+    needs: [image-build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [backend, frontend]
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -41,35 +122,40 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
 
-      # Built for both architectures so an Apple silicon Mac and an x86 PC can
-      # each pull rather than compile. Prowler's arm64 dependency tree includes
-      # packages built from source, so keep that work native and emulate amd64,
-      # where the same dependencies have prebuilt wheels.
-      - name: Build and push backend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: |
-            ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-backend:${{ steps.tags.outputs.version }}
-            ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-backend:latest
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,scope=backend,mode=max
+      # Both architectures are published under one tag so an Apple silicon Mac
+      # and an x86 PC each pull rather than compile.
+      - name: Create and push manifest list
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-${{ matrix.image }}
+          VERSION: ${{ steps.tags.outputs.version }}
+        run: |
+          count=$(find . -maxdepth 1 -type f | wc -l)
+          if [ "$count" -ne 2 ]; then
+            echo "::error::Expected 2 platform digests for ${IMAGE}, found ${count}"
+            exit 1
+          fi
+          refs=()
+          for digest in *; do
+            refs+=("${IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create \
+            -t "${IMAGE}:${VERSION}" \
+            -t "${IMAGE}:latest" \
+            "${refs[@]}"
 
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          platforms: linux/amd64,linux/arm64
-          push: true
-          provenance: false
-          tags: |
-            ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-frontend:${{ steps.tags.outputs.version }}
-            ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-frontend:latest
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,scope=frontend,mode=max
+      - name: Verify published manifest
+        env:
+          IMAGE: ghcr.io/${{ steps.tags.outputs.owner }}/enkstein-${{ matrix.image }}
+          VERSION: ${{ steps.tags.outputs.version }}
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}" | tee /tmp/manifest.txt
+          for platform in linux/amd64 linux/arm64; do
+            if ! grep -qE "Platform: +${platform}([[:space:]]|\$)" /tmp/manifest.txt; then
+              echo "::error::${IMAGE}:${VERSION} is missing ${platform}"
+              exit 1
+            fi
+          done
 
   portable:
     name: Build portable and Python packages
