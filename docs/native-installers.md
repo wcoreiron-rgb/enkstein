@@ -129,7 +129,7 @@ separately and the official Claude host runtime when present. Missing or
 unauthenticated runtimes appear as unavailable in Model Cortex. See
 [Brain Bridges](brain-bridges.md).
 
-Version 0.8.3 verifies Codex with `codex login status` and Claude Code with
+Version 0.8.4 verifies Codex with `codex login status` and Claude Code with
 `claude auth status`; finding an executable alone does not establish readiness.
 Codex and Claude prompts are written through stdin, Codex uses a read-only
 sandbox, and Claude receives an empty tool set. Brain Connections performs a
@@ -140,11 +140,11 @@ status responses.
 Build a local unsigned package for installation testing:
 
 ```bash
-./scripts/build_macos_pkg.sh 0.8.3
-open dist/Enkstein-0.8.3-macos.pkg
+./scripts/build_macos_pkg.sh 0.8.4
+open dist/Enkstein-0.8.4-macos.pkg
 ```
 
-The output is `dist/Enkstein-0.8.3-macos.pkg`. Local builds use ad-hoc app
+The output is `dist/Enkstein-0.8.4-macos.pkg`. Local builds use ad-hoc app
 signing and are not suitable for public distribution until Developer ID
 signing and notarization are configured.
 
@@ -265,7 +265,7 @@ On a Windows development machine with those tools installed, the equivalent
 local command is:
 
 ```powershell
-.\scripts\build_windows_installer.ps1 -Version 0.8.3
+.\scripts\build_windows_installer.ps1 -Version 0.8.4
 ```
 
 Release gate: the Windows launcher and installer are not considered verified
@@ -281,8 +281,8 @@ The release workflow is triggered by a semantic version tag. Package versions
 must exactly match the tag:
 
 ```bash
-git tag -a v0.8.3 -m "Enkstein v0.8.3"
-git push origin v0.8.3
+git tag -a v0.8.4 -m "Enkstein v0.8.4"
+git push origin v0.8.4
 ```
 
 The publish job requires the portable and Python package job to succeed. It runs

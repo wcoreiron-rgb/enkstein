@@ -27,7 +27,7 @@ audit. The MCP server itself holds no credentials and executes nothing locally.
 ## Install
 
 ```bash
-pip install ./enkstein_mcp-0.8.3-py3-none-any.whl
+pip install ./enkstein_mcp-0.8.4-py3-none-any.whl
 ```
 
 Download the wheel from the matching GitHub Release. PyPI publication is not

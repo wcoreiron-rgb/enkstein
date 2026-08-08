@@ -1,6 +1,6 @@
 {
   "name": "enkstein-guard",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "Governs sensitive prompts, file writes, and commands before your AI coding agent runs them.",
   "author": {
     "name": "William Coreiron",

@@ -255,8 +255,16 @@ def test_first_launch_prefers_published_images() -> None:
 
     assert "ghcr.io/wcoreiron-rgb/enkstein-backend" in compose
     assert "ghcr.io/wcoreiron-rgb/enkstein-frontend" in compose
-    assert "enkstein-backend:${{ steps.tags.outputs.version }}" in workflow
-    assert "linux/amd64,linux/arm64" in workflow
+    # Each architecture builds on its own native runner and is pushed by
+    # digest, then bound to the version tag through a manifest list. Assert the
+    # outcome rather than one literal build line, so the check survives a change
+    # in how the images are produced but still fails if a platform is dropped.
+    assert "enkstein-${{ matrix.image }}" in workflow
+    assert "${IMAGE}:${VERSION}" in workflow
+    for platform in ("linux/amd64", "linux/arm64"):
+        assert platform in workflow
+    assert "push-by-digest=true" in workflow
+    assert "imagetools create" in workflow
 
     # A failed or absent pull must still produce a working install.
     assert "up -d --build" in installer

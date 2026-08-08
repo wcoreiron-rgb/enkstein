@@ -13,6 +13,7 @@ import {
   MessageSquare, ShoppingBag, PanelLeftClose, ShieldAlert,
   Users2, Rocket, Container, BriefcaseBusiness, ShieldCheck,
   Plus, Search, FolderPlus, Loader2, Trash2, FolderInput, BrainCircuit, Folder, Pencil, Compass,
+  ArrowDownToLine,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { GLASS_LEVELS, useTheme } from '@/components/ThemeProvider';
@@ -649,6 +650,11 @@ export default function Sidebar() {
   const sidebarLogo = theme === 'dark' ? '/enkstein-icon-dark.png' : '/enkstein-icon.png';
   const [collapsed, setCollapsed] = useState(false);
   const [runtimeVersion, setRuntimeVersion] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{
+    latest: string;
+    releaseUrl: string | null;
+    downloadUrl: string | null;
+  } | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('security');
 
   useEffect(() => {
@@ -676,6 +682,31 @@ export default function Sidebar() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const platform = typeof navigator === 'undefined' ? '' : navigator.platform || '';
+    const isWindows = /win/i.test(platform);
+
+    // The backend caches this, so an unconditional call on mount costs one
+    // cheap local request rather than a GitHub API hit per page load.
+    fetch('/api/v1/runtime/update', { cache: 'no-store' })
+      .then(response => (response.ok ? response.json() : null))
+      .then(payload => {
+        if (!active || !payload?.update_available || !payload.latest_version) return;
+        setUpdateInfo({
+          latest: payload.latest_version,
+          releaseUrl: payload.release_url ?? null,
+          downloadUrl:
+            (isWindows ? payload.windows_download_url : payload.macos_download_url) ?? null,
+        });
+      })
+      .catch(() => {
+        // An unreachable release feed is normal for offline installs and must
+        // not surface as an error in a security console.
+      });
+    return () => { active = false; };
+  }, []);
+
   return (
     <aside
       className="min-h-screen flex flex-col border-r transition-all duration-300 flex-shrink-0"
@@ -692,9 +723,29 @@ export default function Sidebar() {
       >
         {collapsed ? (
           /* Collapsed — just the icon centred */
-          <button onClick={() => setCollapsed(false)} className="mx-auto" title="Expand sidebar">
+          <button
+            onClick={() => setCollapsed(false)}
+            className="mx-auto relative"
+            title={updateInfo ? `Enkstein ${updateInfo.latest} is available — expand to update` : 'Expand sidebar'}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={sidebarLogo} alt="Enkstein" width={40} height={40} style={{ display: 'block' }} />
+            {/* The update action lives in the expanded footer, so a collapsed
+                blade would otherwise hide a pending release entirely. */}
+            {updateInfo && (
+              <span
+                aria-label={`Update to v${updateInfo.latest} available`}
+                className="absolute rounded-full"
+                style={{
+                  top: -2,
+                  right: -2,
+                  width: 10,
+                  height: 10,
+                  background: 'var(--rc-accent, #f97316)',
+                  border: '2px solid var(--rc-bg-base)',
+                }}
+              />
+            )}
           </button>
         ) : (
           /* Expanded — logo centred on top, text below, collapse button top-right */
@@ -820,6 +871,23 @@ export default function Sidebar() {
             <p className="text-xs px-1" style={{ color: 'var(--rc-text-3)' }}>
               {runtimeVersion ? `v${runtimeVersion}` : 'version unavailable'} · {NAV_GROUPS.reduce((s, g) => s + g.items.length, 0)} modules
             </p>
+            {updateInfo && (
+              <a
+                href={updateInfo.downloadUrl ?? updateInfo.releaseUrl ?? '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
+                style={{
+                  background: 'var(--rc-bg-surface)',
+                  color: 'var(--rc-text-2)',
+                  border: '1px solid var(--rc-border)',
+                }}
+                title={`Enkstein ${updateInfo.latest} is available. Installing it replaces the app and preserves local data.`}
+              >
+                <ArrowDownToLine size={13} aria-hidden />
+                <span>Update to v{updateInfo.latest}</span>
+              </a>
+            )}
           </>
         )}
       </div>

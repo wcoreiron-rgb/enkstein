@@ -146,6 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     private var launcher: Process?
     private var outputBuffer = Data()
     private var updateCheck: URLSessionDataTask?
+    private var updateTimer: Timer?
+    private var installedVersionWatch: Timer?
+    private var relaunchPromptShown = false
     private var statusItem: NSStatusItem?
     /// Last theme reported by the web layer. Retained so the window can be
     /// re-evaluated when the system accessibility setting changes.
@@ -160,6 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         configureWindow()
         observeReduceTransparency()
         startRuntime()
+        scheduleBackgroundUpdateChecks()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -230,11 +234,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     }
 
     @objc private func checkForUpdates(_ sender: Any?) {
+        performUpdateCheck(userInitiated: true)
+    }
+
+    // Runs shortly after launch and then daily. A background check that finds
+    // nothing stays silent: an unprompted "you are up to date" dialog every
+    // morning trains people to dismiss update prompts without reading them.
+    private func scheduleBackgroundUpdateChecks() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in
+            self?.performUpdateCheck(userInitiated: false)
+        }
+        let timer = Timer.scheduledTimer(withTimeInterval: 24 * 60 * 60, repeats: true) { [weak self] _ in
+            self?.performUpdateCheck(userInitiated: false)
+        }
+        timer.tolerance = 60 * 60
+        updateTimer = timer
+
+        // Installing the new package replaces the bundle on disk while this
+        // process keeps running the old code, so the app silently stays on the
+        // previous version until the user happens to quit. Watch for that and
+        // offer the relaunch that actually completes the update.
+        let installWatch = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            self?.promptRelaunchIfBundleReplaced()
+        }
+        installWatch.tolerance = 10
+        installedVersionWatch = installWatch
+    }
+
+    private func promptRelaunchIfBundleReplaced() {
+        guard !relaunchPromptShown else { return }
+        let running = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let plistPath = Bundle.main.bundlePath + "/Contents/Info.plist"
+        guard let onDisk = NSDictionary(contentsOfFile: plistPath)?["CFBundleShortVersionString"] as? String,
+              !running.isEmpty,
+              onDisk != running,
+              onDisk.compare(running, options: .numeric) == .orderedDescending else { return }
+
+        relaunchPromptShown = true
+        let alert = NSAlert()
+        alert.messageText = "Enkstein \(onDisk) is installed"
+        alert.informativeText = "This window is still running \(running). Relaunch to finish updating. Your local data and running runtime are preserved."
+        alert.addButton(withTitle: "Relaunch Now")
+        alert.addButton(withTitle: "Later")
+        if alert.runModal() == .alertFirstButtonReturn {
+            relaunchApplication(nil)
+        }
+    }
+
+    private func performUpdateCheck(userInitiated: Bool) {
         guard updateCheck == nil else { return }
         guard let repository = Bundle.main.object(forInfoDictionaryKey: "EnksteinGitHubRepository") as? String,
               repository.split(separator: "/").count == 2,
               let url = URL(string: "https://api.github.com/repos/\(repository)/releases/latest") else {
-            showAlert(title: "Update feed unavailable", message: "This build does not have a valid GitHub release feed.")
+            if userInitiated {
+                showAlert(title: "Update feed unavailable", message: "This build does not have a valid GitHub release feed.")
+            }
             return
         }
 
@@ -248,7 +302,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                 guard let self else { return }
                 self.updateCheck = nil
                 if let error {
-                    self.showAlert(title: "Could not check for updates", message: error.localizedDescription)
+                    if userInitiated {
+                        self.showAlert(title: "Could not check for updates", message: error.localizedDescription)
+                    }
                     return
                 }
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -256,27 +312,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
                       let data,
                       let release = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                       let tag = release["tag_name"] as? String else {
-                    self.showAlert(
-                        title: "No published release feed",
-                        message: "Enkstein could not find a public GitHub Release. Publish a signed release in the configured repository and try again."
-                    )
+                    if userInitiated {
+                        self.showAlert(
+                            title: "No published release feed",
+                            message: "Enkstein could not find a public GitHub Release. Publish a signed release in the configured repository and try again."
+                        )
+                    }
                     return
                 }
-                self.presentUpdate(release: release, tag: tag)
+                self.presentUpdate(release: release, tag: tag, userInitiated: userInitiated)
             }
         }
         updateCheck?.resume()
     }
 
-    private func presentUpdate(release: [String: Any], tag: String) {
+    private func presentUpdate(release: [String: Any], tag: String, userInitiated: Bool) {
         let latest = tag.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
         guard latest.compare(current, options: .numeric) == .orderedDescending else {
-            showAlert(title: "Enkstein is up to date", message: "Version \(current) is the newest published release.")
+            if userInitiated {
+                showAlert(title: "Enkstein is up to date", message: "Version \(current) is the newest published release.")
+            }
             return
         }
 
+        // Offer each version once. Without this the daily timer would reopen
+        // the same dialog every day until the user installs.
+        if !userInitiated {
+            let key = "EnksteinDismissedUpdateVersion"
+            if UserDefaults.standard.string(forKey: key) == latest { return }
+            UserDefaults.standard.set(latest, forKey: key)
+        }
+
         let expectedNames = [
+            "Enkstein-macos.pkg",
             "Enkstein-\(latest)-macos.pkg",
             "Enkstein-\(tag)-macos.pkg",
             "Marcellus-\(latest)-macos.pkg",

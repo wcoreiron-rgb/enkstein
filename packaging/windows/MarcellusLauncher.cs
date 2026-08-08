@@ -318,6 +318,38 @@ internal sealed class EnksteinWindow : Form
         StartRuntimeAsync();
     }
 
+    /// Ctrl+R restarts this window, matching the macOS app's Relaunch action.
+    /// Only the host process restarts: the governed runtime keeps running in
+    /// Docker, so no local data or in-flight work is discarded.
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.R))
+        {
+            RelaunchHost();
+            return true;
+        }
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private void RelaunchHost()
+    {
+        try
+        {
+            string executable = Application.ExecutablePath;
+            if (String.IsNullOrEmpty(executable) || !File.Exists(executable)) return;
+            Process.Start(new ProcessStartInfo { FileName = executable, UseShellExecute = true });
+            Close();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Enkstein could not relaunch: " + ex.Message,
+                AppIdentity.ProductName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
     private void OpenDocker()
     {
         foreach (string candidate in DockerDesktopCandidates())

@@ -367,6 +367,47 @@
 <!-- ── MAIN ── -->
 <main class="container">
   <!-- ════════════════════════════════════════════════════════════════════ -->
+  <!--  Enkstein v0.8.4 — Update notifications and relaunch                -->
+  <!-- ════════════════════════════════════════════════════════════════════ -->
+  <div class="release">
+    <div class="release-dot" style="background: var(--red);"></div>
+    <div class="release-header">
+      <div>
+        <div class="release-title">Update Notifications and Relaunch</div>
+        <div class="release-meta" style="margin-top:6px;">
+          <span class="tag tag-new">Desktop · macOS · Windows</span>
+          <span class="release-date">August 7, 2026 &nbsp;·&nbsp; Enkstein v0.8.4</span>
+        </div>
+      </div>
+    </div>
+    <div class="release-body">
+      <div class="release-description">Enkstein now tells you when a newer release is published, in the console itself rather than only in the macOS menu bar, and offers the relaunch that completes an install. A failed or unreachable release feed stays silent, so offline and air-gapped installs are unaffected.</div>
+      <div class="change-section">
+        <div class="change-section-title">Added</div>
+        <ul class="change-list">
+          <li><strong>In-app update notice:</strong> a new <code>/api/v1/runtime/update</code> endpoint compares the running runtime against the latest published GitHub Release, and the console shows an update action beside the version number. A collapsed sidebar shows a marker on the app icon so a pending release is never hidden.</li>
+          <li><strong>Automatic checks on macOS:</strong> the desktop app now checks shortly after launch and daily thereafter, where previously it checked only when the menu item was opened. A check that finds nothing stays silent, and each version is offered once.</li>
+          <li><strong>Relaunch after install:</strong> installing a package replaces the app bundle while the running window keeps the previous code. Enkstein detects that and offers to relaunch. Windows gains <code>Ctrl+R</code> to match the existing macOS <code>Cmd+R</code>.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Fixed</div>
+        <ul class="change-list">
+          <li><strong>Release publication:</strong> v0.8.1 never published because both architectures built serially on one runner with amd64 emulated, exceeding the job timeout. Each platform now builds on its own native runner and the manifest list is verified to contain both, so a missing architecture fails the release rather than shipping.</li>
+          <li><strong>Windows download link:</strong> the documented Windows installer link returned 404 because no release had completed since v0.8.0.</li>
+        </ul>
+      </div>
+      <div class="change-section">
+        <div class="change-section-title">Notes</div>
+        <ul class="change-list">
+          <li>Update checks read only public release metadata. The repository is validated before any request, and the endpoint is never given a caller-supplied URL.</li>
+          <li>Existing installs at v0.8.3 and earlier have no notifier and must update once manually; v0.8.4 is the first release that announces its successor.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════ -->
   <!--  Enkstein v0.8.3 — Complete Guard policy coverage                   -->
   <!-- ════════════════════════════════════════════════════════════════════ -->
   <div class="release">
