@@ -9,7 +9,7 @@ psycopg2-binary==2.9.9
 pydantic==2.7.1
 pydantic-settings==2.2.1
 redis==5.0.4
-PyJWT==2.13.0
+PyJWT==2.15.0
 passlib[bcrypt]==1.7.4
 # bcrypt 4.x breaks passlib 1.7.4's version detection (__about__ removed).
 # 3.2.2 is the last version fully compatible with passlib 1.7.4.
@@ -24,7 +24,7 @@ email-validator==2.1.1
 # Microsoft Agent Governance Toolkit — compliance/audit/scanning layer
 agent-governance-toolkit==3.2.2
 # Credential encryption
-cryptography==49.0.0
+cryptography==50.0.0
 # Office document rendering for Cowork (.docx/.pptx/.xlsx). Brains can only
 # return text, so Enkstein renders real binaries locally from their markdown.
 python-docx==1.1.2
